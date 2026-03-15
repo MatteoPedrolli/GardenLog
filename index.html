@@ -1,0 +1,1314 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<meta name="theme-color" content="#1a3a1a">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="GiardinoApp">
+<title>GiardinoApp</title>
+<link rel="manifest" href="manifest.json">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@400;600;700&family=DM+Sans:wght@300;400;500;600&display=swap" rel="stylesheet">
+<style>
+:root {
+  --green-deep: #1a3a1a;
+  --green-mid: #2d6a2d;
+  --green-light: #4a9e4a;
+  --green-pale: #d4edda;
+  --green-mist: #eef7ee;
+  --earth: #8B6914;
+  --earth-light: #f5ecd7;
+  --cream: #faf8f3;
+  --white: #ffffff;
+  --text: #1a1a1a;
+  --text-mid: #444;
+  --text-light: #888;
+  --border: #dde8dd;
+  --red: #c0392b;
+  --yellow: #e67e22;
+  --radius: 16px;
+  --radius-sm: 10px;
+  --shadow: 0 4px 24px rgba(26,58,26,0.10);
+  --shadow-lg: 0 8px 40px rgba(26,58,26,0.16);
+  --font-display: 'Playfair Display', serif;
+  --font-body: 'DM Sans', sans-serif;
+  --nav-h: 64px;
+  --top-h: 60px;
+}
+
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+html, body {
+  height: 100%;
+  background: var(--cream);
+  font-family: var(--font-body);
+  color: var(--text);
+  overflow: hidden;
+}
+
+/* ── LAYOUT ── */
+#app { display: flex; flex-direction: column; height: 100dvh; }
+
+#topbar {
+  height: var(--top-h);
+  background: var(--green-deep);
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 0 18px;
+  flex-shrink: 0;
+  position: relative;
+  z-index: 10;
+}
+#topbar h1 {
+  font-family: var(--font-display);
+  color: var(--white);
+  font-size: 1.25rem;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+}
+#topbar .leaf { font-size: 1.4rem; }
+.topbar-action {
+  background: rgba(255,255,255,0.15);
+  border: none; color: var(--white);
+  width: 36px; height: 36px; border-radius: 50%;
+  font-size: 1.2rem; cursor: pointer;
+  display: flex; align-items: center; justify-content: center;
+  transition: background 0.2s;
+}
+.topbar-action:hover { background: rgba(255,255,255,0.25); }
+
+#content {
+  flex: 1;
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+  padding-bottom: calc(var(--nav-h) + 16px);
+}
+
+#navbar {
+  height: var(--nav-h);
+  background: var(--white);
+  border-top: 1px solid var(--border);
+  display: flex;
+  flex-shrink: 0;
+  position: relative;
+  z-index: 10;
+  box-shadow: 0 -2px 12px rgba(0,0,0,0.06);
+}
+.nav-item {
+  flex: 1; display: flex; flex-direction: column;
+  align-items: center; justify-content: center;
+  gap: 3px; background: none; border: none;
+  cursor: pointer; transition: all 0.2s;
+  font-family: var(--font-body);
+  color: var(--text-light);
+  font-size: 0.62rem; font-weight: 500;
+  letter-spacing: 0.03em; text-transform: uppercase;
+}
+.nav-item .icon { font-size: 1.35rem; transition: transform 0.2s; }
+.nav-item.active { color: var(--green-mid); }
+.nav-item.active .icon { transform: scale(1.15); }
+.nav-item:hover .icon { transform: scale(1.1); }
+
+/* ── PAGES ── */
+.page { display: none; }
+.page.active { display: block; }
+
+/* ── SHARED COMPONENTS ── */
+.section-title {
+  font-family: var(--font-display);
+  font-size: 1.4rem;
+  font-weight: 600;
+  color: var(--green-deep);
+  padding: 20px 18px 12px;
+}
+
+.card {
+  background: var(--white);
+  border-radius: var(--radius);
+  margin: 0 14px 12px;
+  padding: 16px;
+  box-shadow: var(--shadow);
+  border: 1px solid var(--border);
+}
+
+.card-title {
+  font-family: var(--font-display);
+  font-size: 1rem;
+  font-weight: 600;
+  color: var(--green-deep);
+  margin-bottom: 4px;
+}
+.card-sub { font-size: 0.8rem; color: var(--text-light); }
+
+.btn {
+  display: inline-flex; align-items: center; justify-content: center; gap: 6px;
+  padding: 12px 20px; border-radius: var(--radius-sm);
+  border: none; cursor: pointer;
+  font-family: var(--font-body); font-size: 0.9rem; font-weight: 500;
+  transition: all 0.2s; width: 100%;
+}
+.btn-primary { background: var(--green-mid); color: var(--white); }
+.btn-primary:hover { background: var(--green-deep); transform: translateY(-1px); }
+.btn-secondary { background: var(--green-mist); color: var(--green-mid); border: 1px solid var(--green-pale); }
+.btn-danger { background: #fdecea; color: var(--red); }
+.btn-sm { padding: 8px 14px; font-size: 0.8rem; width: auto; }
+
+.fab {
+  position: fixed; bottom: calc(var(--nav-h) + 16px); right: 18px;
+  width: 54px; height: 54px; border-radius: 50%;
+  background: var(--green-mid); color: var(--white);
+  border: none; font-size: 1.6rem; cursor: pointer;
+  box-shadow: var(--shadow-lg);
+  display: flex; align-items: center; justify-content: center;
+  transition: all 0.2s; z-index: 5;
+}
+.fab:hover { background: var(--green-deep); transform: scale(1.08); }
+
+/* ── FORM ── */
+.form-group { margin-bottom: 14px; }
+.form-label {
+  display: block; font-size: 0.78rem; font-weight: 600;
+  color: var(--green-deep); text-transform: uppercase;
+  letter-spacing: 0.05em; margin-bottom: 6px;
+}
+.form-control {
+  width: 100%; padding: 12px 14px;
+  border: 1.5px solid var(--border); border-radius: var(--radius-sm);
+  font-family: var(--font-body); font-size: 0.95rem; color: var(--text);
+  background: var(--white); transition: border-color 0.2s;
+  -webkit-appearance: none; appearance: none;
+}
+.form-control:focus { outline: none; border-color: var(--green-light); box-shadow: 0 0 0 3px rgba(74,158,74,0.12); }
+select.form-control { background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8' viewBox='0 0 12 8'%3E%3Cpath d='M1 1l5 5 5-5' stroke='%23888' stroke-width='1.5' fill='none' stroke-linecap='round'/%3E%3C/svg%3E"); background-repeat: no-repeat; background-position: right 14px center; padding-right: 36px; }
+
+.form-row { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+.form-hint { font-size: 0.74rem; color: var(--text-light); margin-top: 4px; }
+
+.toggle-row {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 12px 0;
+}
+.toggle-label { font-size: 0.9rem; font-weight: 500; }
+.toggle {
+  width: 44px; height: 24px; background: var(--border);
+  border-radius: 12px; position: relative; cursor: pointer;
+  transition: background 0.25s; border: none; flex-shrink: 0;
+}
+.toggle.on { background: var(--green-mid); }
+.toggle::after {
+  content: ''; position: absolute;
+  width: 18px; height: 18px; background: white;
+  border-radius: 50%; top: 3px; left: 3px;
+  transition: transform 0.25s; box-shadow: 0 1px 4px rgba(0,0,0,0.2);
+}
+.toggle.on::after { transform: translateX(20px); }
+
+/* ── MODAL / DRAWER ── */
+.overlay {
+  display: none; position: fixed; inset: 0;
+  background: rgba(0,0,0,0.45); z-index: 100;
+  align-items: flex-end; justify-content: center;
+}
+.overlay.open { display: flex; }
+.drawer {
+  background: var(--cream); width: 100%; max-width: 600px;
+  border-radius: 24px 24px 0 0;
+  max-height: 92dvh; overflow-y: auto;
+  padding: 0 0 32px;
+  animation: slideUp 0.3s ease;
+}
+@keyframes slideUp { from { transform: translateY(100%); } to { transform: translateY(0); } }
+.drawer-handle {
+  width: 40px; height: 4px; background: var(--border);
+  border-radius: 2px; margin: 12px auto 0;
+}
+.drawer-title {
+  font-family: var(--font-display);
+  font-size: 1.2rem; font-weight: 600; color: var(--green-deep);
+  padding: 16px 20px 0;
+}
+.drawer-body { padding: 16px 20px 0; }
+
+/* ── HOME ── */
+.hero {
+  background: linear-gradient(135deg, var(--green-deep) 0%, var(--green-mid) 100%);
+  padding: 24px 18px 28px;
+  position: relative; overflow: hidden;
+}
+.hero::before {
+  content: '🌿';
+  position: absolute; right: -10px; top: -10px;
+  font-size: 120px; opacity: 0.08;
+  transform: rotate(-20deg);
+}
+.hero-date { color: rgba(255,255,255,0.65); font-size: 0.8rem; margin-bottom: 6px; }
+.hero-greeting {
+  font-family: var(--font-display);
+  color: var(--white); font-size: 1.6rem; font-weight: 700;
+  line-height: 1.2; margin-bottom: 16px;
+}
+.hero-stats { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 10px; }
+.stat-box {
+  background: rgba(255,255,255,0.12);
+  border-radius: 12px; padding: 12px 10px; text-align: center;
+  backdrop-filter: blur(4px);
+}
+.stat-num { color: var(--white); font-size: 1.5rem; font-weight: 700; line-height: 1; }
+.stat-lbl { color: rgba(255,255,255,0.7); font-size: 0.68rem; margin-top: 3px; text-transform: uppercase; letter-spacing: 0.04em; }
+
+.quick-actions { padding: 0 14px; margin-top: 16px; }
+.quick-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+.quick-card {
+  background: var(--white); border-radius: var(--radius);
+  padding: 16px 14px; border: 1px solid var(--border);
+  cursor: pointer; transition: all 0.2s;
+  display: flex; align-items: center; gap: 12px;
+  box-shadow: var(--shadow);
+}
+.quick-card:hover { transform: translateY(-2px); box-shadow: var(--shadow-lg); }
+.quick-icon { font-size: 1.6rem; }
+.quick-label { font-size: 0.85rem; font-weight: 600; color: var(--green-deep); }
+.quick-sub { font-size: 0.72rem; color: var(--text-light); }
+
+.recent-title {
+  padding: 20px 18px 8px;
+  font-family: var(--font-display);
+  font-size: 1.1rem; font-weight: 600; color: var(--green-deep);
+}
+.visit-item {
+  background: var(--white); margin: 0 14px 8px;
+  border-radius: var(--radius-sm); padding: 14px;
+  border: 1px solid var(--border); cursor: pointer;
+  display: flex; align-items: center; gap: 12px;
+  transition: all 0.15s;
+}
+.visit-item:hover { box-shadow: var(--shadow); }
+.visit-dot {
+  width: 10px; height: 10px; border-radius: 50%;
+  background: var(--green-light); flex-shrink: 0;
+}
+.visit-name { font-weight: 500; font-size: 0.9rem; }
+.visit-meta { font-size: 0.75rem; color: var(--text-light); }
+.visit-date { font-size: 0.75rem; color: var(--text-light); margin-left: auto; text-align: right; }
+
+/* ── CLIENTI ── */
+.search-bar {
+  margin: 12px 14px;
+  position: relative;
+}
+.search-input {
+  width: 100%; padding: 12px 14px 12px 40px;
+  border: 1.5px solid var(--border); border-radius: var(--radius-sm);
+  font-family: var(--font-body); font-size: 0.9rem;
+  background: var(--white); -webkit-appearance: none;
+}
+.search-input:focus { outline: none; border-color: var(--green-light); }
+.search-icon {
+  position: absolute; left: 14px; top: 50%;
+  transform: translateY(-50%); font-size: 1rem; pointer-events: none;
+}
+
+.client-card {
+  background: var(--white); margin: 0 14px 10px;
+  border-radius: var(--radius); padding: 16px;
+  border: 1px solid var(--border);
+  cursor: pointer; transition: all 0.2s;
+  box-shadow: var(--shadow);
+  display: flex; align-items: center; gap: 14px;
+}
+.client-card:hover { transform: translateY(-1px); box-shadow: var(--shadow-lg); }
+.client-avatar {
+  width: 44px; height: 44px; border-radius: 50%;
+  background: var(--green-pale); color: var(--green-mid);
+  display: flex; align-items: center; justify-content: center;
+  font-family: var(--font-display); font-size: 1.1rem; font-weight: 700;
+  flex-shrink: 0;
+}
+.client-name { font-weight: 600; font-size: 0.95rem; }
+.client-city { font-size: 0.78rem; color: var(--text-light); }
+.client-badges { display: flex; gap: 4px; margin-top: 4px; flex-wrap: wrap; }
+.badge {
+  font-size: 0.65rem; font-weight: 600; padding: 2px 7px;
+  border-radius: 20px; text-transform: uppercase; letter-spacing: 0.03em;
+}
+.badge-prato { background: var(--green-pale); color: var(--green-mid); }
+.badge-fascia { background: var(--earth-light); color: var(--earth); }
+
+/* ── PRATI REPORT ── */
+.semaforo {
+  width: 14px; height: 14px; border-radius: 50%; flex-shrink: 0;
+  display: inline-block;
+}
+.semaforo.verde { background: #27ae60; box-shadow: 0 0 6px rgba(39,174,96,0.4); }
+.semaforo.giallo { background: #f39c12; box-shadow: 0 0 6px rgba(243,156,18,0.4); }
+.semaforo.rosso { background: #e74c3c; box-shadow: 0 0 6px rgba(231,76,60,0.4); }
+
+.prato-card {
+  background: var(--white); margin: 0 14px 10px;
+  border-radius: var(--radius); padding: 16px;
+  border: 1px solid var(--border); box-shadow: var(--shadow);
+}
+.prato-header { display: flex; align-items: center; gap: 10px; margin-bottom: 12px; }
+.prato-name { font-weight: 600; font-size: 0.95rem; flex: 1; }
+.prato-fascia { font-size: 0.72rem; color: var(--text-light); }
+.prato-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+.prato-stat {
+  background: var(--green-mist); border-radius: 10px; padding: 10px;
+  text-align: center;
+}
+.prato-stat-num { font-size: 1.1rem; font-weight: 700; color: var(--green-deep); }
+.prato-stat-lbl { font-size: 0.68rem; color: var(--text-light); text-transform: uppercase; letter-spacing: 0.03em; margin-top: 2px; }
+.prato-bar { margin-top: 10px; }
+.prato-bar-label { display: flex; justify-content: space-between; font-size: 0.72rem; color: var(--text-light); margin-bottom: 4px; }
+.bar-track { height: 8px; background: var(--border); border-radius: 4px; overflow: hidden; }
+.bar-fill { height: 100%; border-radius: 4px; transition: width 0.5s ease; }
+.bar-fill.verde { background: #27ae60; }
+.bar-fill.giallo { background: #f39c12; }
+.bar-fill.rosso { background: #e74c3c; }
+.prato-ops { margin-top: 12px; display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 6px; }
+.prato-op-item { font-size: 0.72rem; text-align: center; }
+.prato-op-date { font-weight: 600; color: var(--green-deep); font-size: 0.78rem; }
+.prato-op-label { color: var(--text-light); font-size: 0.65rem; text-transform: uppercase; letter-spacing: 0.02em; }
+
+/* ── VISITE ── */
+.visit-card {
+  background: var(--white); margin: 0 14px 10px;
+  border-radius: var(--radius); padding: 16px;
+  border: 1px solid var(--border); box-shadow: var(--shadow);
+  cursor: pointer; transition: all 0.15s;
+}
+.visit-card:hover { transform: translateY(-1px); }
+.visit-card-header { display: flex; align-items: flex-start; gap: 10px; }
+.visit-card-icon { font-size: 1.4rem; }
+.visit-card-title { font-weight: 600; font-size: 0.95rem; }
+.visit-card-date { font-size: 0.78rem; color: var(--text-light); }
+.visit-ops { display: flex; flex-wrap: wrap; gap: 5px; margin-top: 10px; }
+.op-tag {
+  font-size: 0.7rem; padding: 3px 9px; border-radius: 20px;
+  background: var(--green-pale); color: var(--green-deep); font-weight: 500;
+}
+.op-tag.prato { background: var(--earth-light); color: var(--earth); }
+.next-int {
+  margin-top: 10px; padding: 8px 10px;
+  background: var(--green-mist); border-radius: 8px;
+  font-size: 0.78rem; color: var(--green-mid);
+  display: flex; align-items: center; gap: 6px;
+}
+
+/* ── LOADING / EMPTY ── */
+.loading {
+  display: flex; flex-direction: column;
+  align-items: center; justify-content: center;
+  padding: 60px 20px; color: var(--text-light); gap: 12px;
+}
+.spinner {
+  width: 32px; height: 32px; border: 3px solid var(--border);
+  border-top-color: var(--green-mid); border-radius: 50%;
+  animation: spin 0.7s linear infinite;
+}
+@keyframes spin { to { transform: rotate(360deg); } }
+.empty { text-align: center; padding: 50px 20px; color: var(--text-light); }
+.empty-icon { font-size: 3rem; margin-bottom: 12px; }
+.empty-text { font-size: 0.9rem; }
+
+/* ── TOAST ── */
+#toast {
+  position: fixed; bottom: calc(var(--nav-h) + 80px); left: 50%;
+  transform: translateX(-50%) translateY(20px);
+  background: var(--green-deep); color: white;
+  padding: 10px 20px; border-radius: 24px;
+  font-size: 0.85rem; font-weight: 500;
+  opacity: 0; transition: all 0.3s; z-index: 200;
+  white-space: nowrap; pointer-events: none;
+}
+#toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
+
+/* ── ADDRESS SUGGESTIONS ── */
+.suggestions {
+  position: absolute; left: 0; right: 0; top: 100%;
+  background: var(--white); border: 1.5px solid var(--border);
+  border-top: none; border-radius: 0 0 var(--radius-sm) var(--radius-sm);
+  z-index: 50; max-height: 200px; overflow-y: auto;
+}
+.suggestion-item {
+  padding: 10px 14px; font-size: 0.85rem; cursor: pointer;
+  border-bottom: 1px solid var(--border); transition: background 0.15s;
+}
+.suggestion-item:hover { background: var(--green-mist); }
+.suggestion-item:last-child { border-bottom: none; }
+.addr-wrapper { position: relative; }
+
+/* ── DETAIL VIEWS ── */
+.detail-header {
+  background: linear-gradient(135deg, var(--green-deep) 0%, var(--green-mid) 100%);
+  padding: 20px 18px;
+}
+.detail-back {
+  background: none; border: none; color: rgba(255,255,255,0.8);
+  font-size: 0.85rem; cursor: pointer; display: flex; align-items: center; gap: 6px;
+  margin-bottom: 12px; font-family: var(--font-body);
+}
+.detail-name {
+  font-family: var(--font-display); color: white;
+  font-size: 1.4rem; font-weight: 700;
+}
+.detail-city { color: rgba(255,255,255,0.7); font-size: 0.85rem; margin-top: 4px; }
+
+.info-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 14px; }
+.info-item { background: var(--green-mist); border-radius: 10px; padding: 12px; }
+.info-label { font-size: 0.68rem; text-transform: uppercase; letter-spacing: 0.05em; color: var(--text-light); margin-bottom: 4px; }
+.info-value { font-size: 0.95rem; font-weight: 600; color: var(--green-deep); }
+
+.divider { height: 1px; background: var(--border); margin: 16px 0; }
+
+/* scrollbar */
+::-webkit-scrollbar { width: 4px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: var(--border); border-radius: 2px; }
+</style>
+</head>
+<body>
+<div id="app">
+  <div id="topbar">
+    <span class="leaf">🌿</span>
+    <h1 id="topbar-title">GiardinoApp</h1>
+    <button class="topbar-action" id="topbar-action-btn" onclick="topbarAction()" title="Aggiungi">＋</button>
+  </div>
+
+  <div id="content">
+    <!-- HOME -->
+    <div id="page-home" class="page active">
+      <div class="hero">
+        <div class="hero-date" id="hero-date"></div>
+        <div class="hero-greeting">Buongiorno! 👋</div>
+        <div class="hero-stats">
+          <div class="stat-box"><div class="stat-num" id="stat-clienti">–</div><div class="stat-lbl">Clienti</div></div>
+          <div class="stat-box"><div class="stat-num" id="stat-visite">–</div><div class="stat-lbl">Visite</div></div>
+          <div class="stat-box"><div class="stat-num" id="stat-prati">–</div><div class="stat-lbl">Prati</div></div>
+        </div>
+      </div>
+      <div class="quick-actions">
+        <div class="quick-grid">
+          <div class="quick-card" onclick="navTo('visite'); openNuovaVisita()">
+            <span class="quick-icon">📋</span>
+            <div><div class="quick-label">Nuova visita</div><div class="quick-sub">Registra intervento</div></div>
+          </div>
+          <div class="quick-card" onclick="navTo('clienti'); openNuovoCliente()">
+            <span class="quick-icon">👤</span>
+            <div><div class="quick-label">Nuovo cliente</div><div class="quick-sub">Aggiungi anagrafica</div></div>
+          </div>
+          <div class="quick-card" onclick="navTo('prati')">
+            <span class="quick-icon">🌱</span>
+            <div><div class="quick-label">Report prati</div><div class="quick-sub">Stato concimazione</div></div>
+          </div>
+          <div class="quick-card" onclick="navTo('visite')">
+            <span class="quick-icon">📅</span>
+            <div><div class="quick-label">Prossimi interventi</div><div class="quick-sub">Pianifica lavori</div></div>
+          </div>
+        </div>
+      </div>
+      <div class="recent-title">Ultime visite</div>
+      <div id="home-visite-list"></div>
+    </div>
+
+    <!-- CLIENTI -->
+    <div id="page-clienti" class="page">
+      <div class="search-bar">
+        <span class="search-icon">🔍</span>
+        <input type="search" class="search-input" id="search-clienti" placeholder="Cerca cliente..." oninput="filterClienti()">
+      </div>
+      <div id="clienti-list"></div>
+    </div>
+
+    <!-- VISITE -->
+    <div id="page-visite" class="page">
+      <div class="section-title">Registro Visite</div>
+      <div id="visite-list"></div>
+    </div>
+
+    <!-- PRATI -->
+    <div id="page-prati" class="page">
+      <div class="section-title">Report Prati 🌱</div>
+      <div id="prati-list"></div>
+    </div>
+  </div>
+
+  <nav id="navbar">
+    <button class="nav-item active" id="nav-home" onclick="navTo('home')">
+      <span class="icon">🏠</span><span>Home</span>
+    </button>
+    <button class="nav-item" id="nav-clienti" onclick="navTo('clienti')">
+      <span class="icon">👥</span><span>Clienti</span>
+    </button>
+    <button class="nav-item" id="nav-visite" onclick="navTo('visite')">
+      <span class="icon">📋</span><span>Visite</span>
+    </button>
+    <button class="nav-item" id="nav-prati" onclick="navTo('prati')">
+      <span class="icon">🌱</span><span>Prati</span>
+    </button>
+  </nav>
+</div>
+
+<!-- TOAST -->
+<div id="toast"></div>
+
+<!-- DRAWER NUOVO CLIENTE -->
+<div class="overlay" id="overlay-cliente">
+  <div class="drawer">
+    <div class="drawer-handle"></div>
+    <div class="drawer-title" id="drawer-cliente-title">Nuovo Cliente</div>
+    <div class="drawer-body">
+      <input type="hidden" id="cliente-edit-id">
+      <div class="form-group">
+        <label class="form-label">Nome e Cognome *</label>
+        <input type="text" class="form-control" id="f-cliente-nome" placeholder="Es. Mario Rossi">
+      </div>
+      <div class="form-group">
+        <label class="form-label">Indirizzo</label>
+        <div class="addr-wrapper">
+          <input type="text" class="form-control" id="f-cliente-indirizzo" placeholder="Cerca indirizzo..." autocomplete="off" oninput="searchAddress(this.value)" onfocus="searchAddress(this.value)">
+          <div class="suggestions" id="addr-suggestions" style="display:none"></div>
+        </div>
+        <div class="form-hint">Digita per cercare o usa GPS 📍</div>
+      </div>
+      <div class="form-group">
+        <button type="button" class="btn btn-secondary btn-sm" onclick="useGPS()">📍 Usa posizione attuale</button>
+      </div>
+      <div class="form-row">
+        <div class="form-group">
+          <label class="form-label">Città</label>
+          <input type="text" class="form-control" id="f-cliente-citta">
+        </div>
+        <div class="form-group">
+          <label class="form-label">Coordinate</label>
+          <input type="text" class="form-control" id="f-cliente-coords" placeholder="lat, lng" readonly style="font-size:0.75rem; color:var(--text-light)">
+        </div>
+      </div>
+      <div class="form-group">
+        <div class="toggle-row">
+          <span class="toggle-label">🌱 Ha il prato</span>
+          <button type="button" class="toggle" id="toggle-prato" onclick="togglePrato()"></button>
+        </div>
+      </div>
+      <div id="prato-fields" style="display:none">
+        <div class="form-row">
+          <div class="form-group">
+            <label class="form-label">Superficie (mq)</label>
+            <input type="number" class="form-control" id="f-cliente-mq" placeholder="Es. 150">
+          </div>
+          <div class="form-group">
+            <label class="form-label">Fascia qualità</label>
+            <select class="form-control" id="f-cliente-fascia">
+              <option value="">– scegli –</option>
+              <option value="1">Fascia 1 – Alta (N:250 K:150)</option>
+              <option value="2">Fascia 2 – Media (N:150 K:50)</option>
+              <option value="3">Fascia 3 – Non concimato</option>
+            </select>
+          </div>
+        </div>
+      </div>
+      <div class="form-group">
+        <label class="form-label">Note</label>
+        <textarea class="form-control" id="f-cliente-note" rows="2" placeholder="Note aggiuntive..."></textarea>
+      </div>
+      <button class="btn btn-primary" onclick="saveCliente()">💾 Salva Cliente</button>
+      <div style="height:8px"></div>
+      <button class="btn btn-secondary" onclick="closeDrawer('overlay-cliente')">Annulla</button>
+    </div>
+  </div>
+</div>
+
+<!-- DRAWER NUOVA VISITA -->
+<div class="overlay" id="overlay-visita">
+  <div class="drawer">
+    <div class="drawer-handle"></div>
+    <div class="drawer-title">Nuova Visita</div>
+    <div class="drawer-body">
+      <div class="form-group">
+        <label class="form-label">Cliente *</label>
+        <select class="form-control" id="f-visita-cliente">
+          <option value="">– scegli cliente –</option>
+        </select>
+      </div>
+      <div class="form-row">
+        <div class="form-group">
+          <label class="form-label">Data *</label>
+          <input type="date" class="form-control" id="f-visita-data">
+        </div>
+        <div class="form-group">
+          <label class="form-label">Ore lavoro</label>
+          <input type="number" class="form-control" id="f-visita-ore" placeholder="Es. 3" step="0.5">
+        </div>
+      </div>
+      <div class="form-group">
+        <label class="form-label">Note visita</label>
+        <textarea class="form-control" id="f-visita-note" rows="2" placeholder="Cosa hai fatto..."></textarea>
+      </div>
+      <div class="form-group">
+        <label class="form-label">Prossimo intervento</label>
+        <input type="text" class="form-control" id="f-visita-prossimo" placeholder="Es. Siepe, prato...">
+      </div>
+      <div class="form-row">
+        <div class="form-group">
+          <label class="form-label">Mese previsto</label>
+          <select class="form-control" id="f-visita-mese">
+            <option value="">–</option>
+            <option value="01">Gennaio</option><option value="02">Febbraio</option>
+            <option value="03">Marzo</option><option value="04">Aprile</option>
+            <option value="05">Maggio</option><option value="06">Giugno</option>
+            <option value="07">Luglio</option><option value="08">Agosto</option>
+            <option value="09">Settembre</option><option value="10">Ottobre</option>
+            <option value="11">Novembre</option><option value="12">Dicembre</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label class="form-label">Anno previsto</label>
+          <input type="number" class="form-control" id="f-visita-anno" placeholder="2026" min="2024" max="2030">
+        </div>
+      </div>
+
+      <!-- OPERAZIONI -->
+      <div style="margin-top: 8px; margin-bottom: 8px;">
+        <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:8px">
+          <span style="font-size:0.78rem; font-weight:700; text-transform:uppercase; letter-spacing:0.05em; color:var(--green-deep)">Operazioni</span>
+          <button class="btn btn-secondary btn-sm" onclick="addOperazione()">+ Aggiungi</button>
+        </div>
+        <div id="operazioni-list"></div>
+      </div>
+
+      <button class="btn btn-primary" onclick="saveVisita()">💾 Salva Visita</button>
+      <div style="height:8px"></div>
+      <button class="btn btn-secondary" onclick="closeDrawer('overlay-visita')">Annulla</button>
+    </div>
+  </div>
+</div>
+
+<!-- DRAWER OPERAZIONE -->
+<div class="overlay" id="overlay-operazione">
+  <div class="drawer">
+    <div class="drawer-handle"></div>
+    <div class="drawer-title">Operazione</div>
+    <div class="drawer-body">
+      <input type="hidden" id="op-index">
+      <div class="form-group">
+        <label class="form-label">Tipo operazione *</label>
+        <select class="form-control" id="f-op-tipo" onchange="onTipoOpChange()">
+          <option value="">– scegli –</option>
+          <option value="Potatura">✂️ Potatura</option>
+          <option value="Concimazione">🌿 Concimazione</option>
+          <option value="Semina">🌱 Semina</option>
+          <option value="Arieggiatura">💨 Arieggiatura</option>
+          <option value="Diserbo">🚫 Diserbo</option>
+          <option value="Trattamento fitosanitario">💊 Trattamento fitosanitario</option>
+          <option value="Altro">📝 Altro</option>
+        </select>
+      </div>
+      <div class="form-group">
+        <label class="form-label">Descrizione</label>
+        <input type="text" class="form-control" id="f-op-desc" placeholder="Es. Kiwi, rose...">
+      </div>
+      <div id="op-prato-toggle-wrap" style="display:none">
+        <div class="form-group">
+          <div class="toggle-row">
+            <span class="toggle-label">🌱 Operazione su prato</span>
+            <button type="button" class="toggle" id="toggle-op-prato" onclick="toggleOpPrato()"></button>
+          </div>
+        </div>
+      </div>
+      <div id="op-concime-wrap" style="display:none">
+        <div class="form-group">
+          <label class="form-label">Concime</label>
+          <select class="form-control" id="f-op-concime">
+            <option value="">– scegli –</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label class="form-label">Dose (kg)</label>
+          <input type="number" class="form-control" id="f-op-dose" placeholder="Es. 5" step="0.1">
+        </div>
+      </div>
+      <div id="op-semente-wrap" style="display:none">
+        <div class="form-group">
+          <label class="form-label">Semente</label>
+          <select class="form-control" id="f-op-semente">
+            <option value="">– scegli –</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label class="form-label">Dose (kg)</label>
+          <input type="number" class="form-control" id="f-op-dose-s" placeholder="Es. 2" step="0.1">
+        </div>
+      </div>
+      <div id="op-fitofarmaco-wrap" style="display:none">
+        <div class="form-group">
+          <label class="form-label">Fitofarmaco</label>
+          <select class="form-control" id="f-op-fitofarmaco">
+            <option value="">– scegli –</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label class="form-label">Dose (kg/l)</label>
+          <input type="number" class="form-control" id="f-op-dose-f" placeholder="Es. 0.5" step="0.01">
+        </div>
+      </div>
+      <button class="btn btn-primary" onclick="saveOperazione()">✅ Conferma Operazione</button>
+      <div style="height:8px"></div>
+      <button class="btn btn-secondary" onclick="closeDrawer('overlay-operazione')">Annulla</button>
+    </div>
+  </div>
+</div>
+
+<script>
+const API = 'https://script.google.com/macros/s/AKfycbx8vlMzgRiJYJqHQwPOdT-aDy0tMOFdHx8G3citRM1dO2gWyIUcvo1zj3YhNC-PGoEI/exec';
+
+// ── STATE ──
+let DB = { clienti: [], visite: [], operazioni: [], concimi: [], sementi: [], fitofarmaci: [], fasce: [] };
+let currentPage = 'home';
+let pratoEnabled = false;
+let opPratoEnabled = false;
+let pendingOperazioni = [];
+let pendingOpIndex = null;
+let addrLat = null, addrLng = null;
+let addrTimeout = null;
+
+// ── INIT ──
+async function init() {
+  document.getElementById('hero-date').textContent = new Date().toLocaleDateString('it-IT', { weekday:'long', day:'numeric', month:'long' });
+  document.getElementById('f-visita-data').value = new Date().toISOString().split('T')[0];
+  await loadAll();
+  renderHome();
+  renderClienti();
+  renderVisite();
+  renderPrati();
+}
+
+async function api(params) {
+  const url = API + '?' + new URLSearchParams(params);
+  const r = await fetch(url);
+  return r.json();
+}
+
+async function apiPost(data) {
+  const r = await fetch(API, { method:'POST', body: JSON.stringify(data) });
+  return r.json();
+}
+
+async function loadAll() {
+  try {
+    const [clienti, visite, operazioni, concimi, sementi, fitofarmaci, fasce] = await Promise.all([
+      api({action:'getAll', foglio:'CLIENTI'}),
+      api({action:'getAll', foglio:'VISITE'}),
+      api({action:'getAll', foglio:'OPERAZIONI'}),
+      api({action:'getAll', foglio:'CONCIMI'}),
+      api({action:'getAll', foglio:'SEMENTI'}),
+      api({action:'getAll', foglio:'FITOFARMACI'}),
+      api({action:'getAll', foglio:'FASCE'}),
+    ]);
+    DB.clienti = clienti || [];
+    DB.visite = visite || [];
+    DB.operazioni = operazioni || [];
+    DB.concimi = concimi || [];
+    DB.sementi = sementi || [];
+    DB.fitofarmaci = fitofarmaci || [];
+    DB.fasce = fasce || [];
+    updateStats();
+  } catch(e) {
+    showToast('⚠️ Errore caricamento dati');
+  }
+}
+
+function updateStats() {
+  document.getElementById('stat-clienti').textContent = DB.clienti.length;
+  document.getElementById('stat-visite').textContent = DB.visite.length;
+  document.getElementById('stat-prati').textContent = DB.clienti.filter(c => c.Ha_prato === 'Sì').length;
+}
+
+// ── NAVIGATION ──
+function navTo(page) {
+  document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
+  document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
+  document.getElementById('page-'+page).classList.add('active');
+  document.getElementById('nav-'+page).classList.add('active');
+  currentPage = page;
+  const titles = { home:'GiardinoApp', clienti:'Clienti', visite:'Visite', prati:'Prati' };
+  document.getElementById('topbar-title').textContent = titles[page];
+  document.getElementById('topbar-action-btn').style.display = (page === 'prati') ? 'none' : 'flex';
+}
+
+function topbarAction() {
+  if (currentPage === 'clienti') openNuovoCliente();
+  else if (currentPage === 'visite') openNuovaVisita();
+  else if (currentPage === 'home') openNuovaVisita();
+}
+
+// ── HOME ──
+function renderHome() {
+  const list = document.getElementById('home-visite-list');
+  const recent = [...DB.visite].reverse().slice(0, 5);
+  if (!recent.length) { list.innerHTML = '<div class="empty"><div class="empty-icon">📋</div><div class="empty-text">Nessuna visita ancora</div></div>'; return; }
+  list.innerHTML = recent.map(v => {
+    const c = DB.clienti.find(x => x.ClienteID == v.ClienteID);
+    const nome = c ? c.Cliente : v.ClienteID;
+    const data = v.Data ? new Date(v.Data).toLocaleDateString('it-IT', {day:'numeric', month:'short'}) : '';
+    return `<div class="visit-item" onclick="navTo('visite')">
+      <div class="visit-dot"></div>
+      <div><div class="visit-name">${nome}</div><div class="visit-meta">${v.Ore_Visita ? v.Ore_Visita+'h' : ''}</div></div>
+      <div class="visit-date">${data}</div>
+    </div>`;
+  }).join('');
+}
+
+// ── CLIENTI ──
+function renderClienti(filter = '') {
+  const list = document.getElementById('clienti-list');
+  let items = DB.clienti.filter(c => !filter || c.Cliente?.toLowerCase().includes(filter.toLowerCase()) || c.Citta?.toLowerCase().includes(filter.toLowerCase()));
+  if (!items.length) { list.innerHTML = '<div class="empty"><div class="empty-icon">👥</div><div class="empty-text">Nessun cliente trovato</div></div>'; return; }
+  list.innerHTML = items.map(c => {
+    const initials = (c.Cliente || '?').split(' ').map(w => w[0]).join('').slice(0,2).toUpperCase();
+    const badges = [];
+    if (c.Ha_prato === 'Sì') badges.push(`<span class="badge badge-prato">🌱 Prato</span>`);
+    if (c.FasciaID) badges.push(`<span class="badge badge-fascia">Fascia ${c.FasciaID}</span>`);
+    const addr = [c.Indirizzo, c.Citta].filter(Boolean).join(', ');
+    return `<div class="client-card" onclick="showCliente('${c.ClienteID}')">
+      <div class="client-avatar">${initials}</div>
+      <div style="flex:1">
+        <div class="client-name">${c.Cliente}</div>
+        <div class="client-city">${addr || '–'}</div>
+        ${badges.length ? `<div class="client-badges">${badges.join('')}</div>` : ''}
+      </div>
+      ${c.Lat && c.Lng ? `<a href="https://maps.google.com/?q=${c.Lat},${c.Lng}" target="_blank" onclick="event.stopPropagation()" style="font-size:1.3rem; text-decoration:none">📍</a>` : ''}
+    </div>`;
+  }).join('');
+}
+
+function filterClienti() {
+  renderClienti(document.getElementById('search-clienti').value);
+}
+
+function showCliente(id) {
+  const c = DB.clienti.find(x => x.ClienteID == id);
+  if (!c) return;
+  const visite = DB.visite.filter(v => v.ClienteID == id);
+  const page = document.getElementById('page-clienti');
+  page.innerHTML = `
+    <div class="detail-header">
+      <button class="detail-back" onclick="renderClientiPage()">← Clienti</button>
+      <div class="detail-name">${c.Cliente}</div>
+      <div class="detail-city">${[c.Indirizzo, c.Citta].filter(Boolean).join(', ') || 'Indirizzo non inserito'}</div>
+    </div>
+    <div style="padding:16px 14px 0">
+      <div class="info-grid">
+        <div class="info-item"><div class="info-label">Prato</div><div class="info-value">${c.Ha_prato || 'No'}</div></div>
+        <div class="info-item"><div class="info-label">Superficie</div><div class="info-value">${c.Mq_prato ? c.Mq_prato+' mq' : '–'}</div></div>
+        <div class="info-item"><div class="info-label">Fascia</div><div class="info-value">${c.FasciaID ? 'Fascia '+c.FasciaID : '–'}</div></div>
+        <div class="info-item"><div class="info-label">Visite totali</div><div class="info-value">${visite.length}</div></div>
+      </div>
+      ${c.Ha_prato === 'Sì' ? `<div class="info-grid">
+        <div class="info-item"><div class="info-label">Target N</div><div class="info-value">${c.Target_N_g_m2_anno || '–'} g/m²</div></div>
+        <div class="info-item"><div class="info-label">Target K</div><div class="info-value">${c.Target_K_g_m2_anno || '–'} g/m²</div></div>
+      </div>` : ''}
+      ${c.Lat && c.Lng ? `<a href="https://maps.google.com/?q=${c.Lat},${c.Lng}" target="_blank" class="btn btn-secondary" style="margin-bottom:14px">📍 Apri su Maps</a>` : ''}
+      <button class="btn btn-secondary" onclick="editCliente('${c.ClienteID}')" style="margin-bottom:8px">✏️ Modifica</button>
+      <div class="recent-title">Storico visite</div>
+      ${visite.length ? visite.reverse().map(v => {
+        const ops = DB.operazioni.filter(o => o.VisitaID == v.VisitaID);
+        const data = v.Data ? new Date(v.Data).toLocaleDateString('it-IT') : '';
+        return `<div class="visit-card">
+          <div class="visit-card-header">
+            <span class="visit-card-icon">📋</span>
+            <div><div class="visit-card-title">${data}</div><div class="visit-card-date">${v.Ore_Visita ? v.Ore_Visita+'h di lavoro' : ''}</div></div>
+          </div>
+          ${v.Note_visita ? `<div style="font-size:0.82rem; color:var(--text-mid); margin-top:8px">${v.Note_visita}</div>` : ''}
+          ${ops.length ? `<div class="visit-ops">${ops.map(o => `<span class="op-tag ${o.Flag_prato==='Sì'?'prato':''}">${o.Tipo_operazione}${o.Descrizione?' – '+o.Descrizione:''}</span>`).join('')}</div>` : ''}
+          ${v.Prossimo_intervento ? `<div class="next-int">📅 Prossimo: ${v.Prossimo_intervento} ${v.Mese_prossimo_intervento?'('+meseNome(v.Mese_prossimo_intervento)+' '+v.Anno_prossimo_intervento+')':''}</div>` : ''}
+        </div>`;
+      }).join('') : '<div class="empty"><div class="empty-text">Nessuna visita</div></div>'}
+    </div>`;
+}
+
+function renderClientiPage() {
+  document.getElementById('page-clienti').innerHTML = `
+    <div class="search-bar">
+      <span class="search-icon">🔍</span>
+      <input type="search" class="search-input" id="search-clienti" placeholder="Cerca cliente..." oninput="filterClienti()">
+    </div>
+    <div id="clienti-list"></div>`;
+  renderClienti();
+}
+
+// ── VISITE ──
+function renderVisite() {
+  const list = document.getElementById('visite-list');
+  if (!list) return;
+  if (!DB.visite.length) { list.innerHTML = '<div class="empty"><div class="empty-icon">📋</div><div class="empty-text">Nessuna visita</div></div>'; return; }
+  list.innerHTML = [...DB.visite].reverse().map(v => {
+    const c = DB.clienti.find(x => x.ClienteID == v.ClienteID);
+    const nome = c ? c.Cliente : v.ClienteID;
+    const ops = DB.operazioni.filter(o => o.VisitaID == v.VisitaID);
+    const data = v.Data ? new Date(v.Data).toLocaleDateString('it-IT', {day:'numeric', month:'long', year:'numeric'}) : '';
+    return `<div class="visit-card">
+      <div class="visit-card-header">
+        <span class="visit-card-icon">🌿</span>
+        <div style="flex:1"><div class="visit-card-title">${nome}</div><div class="visit-card-date">${data}${v.Ore_Visita ? ' · '+v.Ore_Visita+'h' : ''}</div></div>
+      </div>
+      ${v.Note_visita ? `<div style="font-size:0.82rem; color:var(--text-mid); margin-top:8px">${v.Note_visita}</div>` : ''}
+      ${ops.length ? `<div class="visit-ops">${ops.map(o => `<span class="op-tag ${o.Flag_prato==='Sì'?'prato':''}">${o.Tipo_operazione}${o.Descrizione?' – '+o.Descrizione:''}</span>`).join('')}</div>` : ''}
+      ${v.Prossimo_intervento ? `<div class="next-int">📅 ${v.Prossimo_intervento} ${v.Mese_prossimo_intervento?'→ '+meseNome(v.Mese_prossimo_intervento)+' '+v.Anno_prossimo_intervento:''}</div>` : ''}
+    </div>`;
+  }).join('');
+}
+
+// ── PRATI REPORT ──
+function renderPrati() {
+  const list = document.getElementById('prati-list');
+  if (!list) return;
+  const pratiClienti = DB.clienti.filter(c => c.Ha_prato === 'Sì');
+  if (!pratiClienti.length) { list.innerHTML = '<div class="empty"><div class="empty-icon">🌱</div><div class="empty-text">Nessun cliente con prato</div></div>'; return; }
+
+  const anno = new Date().getFullYear();
+  list.innerHTML = pratiClienti.map(c => {
+    const targetN = parseFloat(c.Target_N_g_m2_anno) || 0;
+    const targetK = parseFloat(c.Target_K_g_m2_anno) || 0;
+    const mq = parseFloat(c.Mq_prato) || 0;
+
+    // visite del cliente
+    const visitIds = DB.visite.filter(v => v.ClienteID == c.ClienteID && v.Data && new Date(v.Data).getFullYear() == anno).map(v => v.VisitaID);
+    const opsCliente = DB.operazioni.filter(o => visitIds.includes(o.VisitaID));
+
+    // calcolo N e K somministrati
+    let nSomm = 0, kSomm = 0;
+    opsCliente.filter(o => o.Tipo_operazione === 'Concimazione' && o.Flag_prato === 'Sì').forEach(o => {
+      nSomm += parseFloat(o.N_g_m2) || 0;
+      kSomm += parseFloat(o.K_g_m2) || 0;
+    });
+
+    // semaforo
+    const pctN = targetN > 0 ? Math.min(nSomm / targetN, 1) : 0;
+    const pct = targetN > 0 ? pctN : 0;
+    let sem = 'rosso', semLabel = 'Da avviare';
+    if (pct >= 0.8) { sem = 'verde'; semLabel = 'In target'; }
+    else if (pct >= 0.4) { sem = 'giallo'; semLabel = 'In corso'; }
+
+    // ultime operazioni prato
+    const lastOp = (tipo) => {
+      const ops = opsCliente.filter(o => o.Flag_prato === 'Sì' && o.Tipo_operazione === tipo);
+      if (!ops.length) return '–';
+      const v = DB.visite.find(vv => vv.VisitaID == ops[ops.length-1].VisitaID);
+      return v?.Data ? new Date(v.Data).toLocaleDateString('it-IT', {day:'numeric', month:'short'}) : '–';
+    };
+    const lastConc = lastOp('Concimazione');
+    const lastSemina = lastOp('Semina');
+    const lastArie = lastOp('Arieggiatura');
+    const lastConc_prod = (() => {
+      const ops = opsCliente.filter(o => o.Flag_prato === 'Sì' && o.Tipo_operazione === 'Concimazione' && o.ConcimeID);
+      if (!ops.length) return '';
+      const conc = DB.concimi.find(cc => cc.ConcimeID == ops[ops.length-1].ConcimeID);
+      return conc ? conc.Concime : '';
+    })();
+
+    return `<div class="prato-card">
+      <div class="prato-header">
+        <div class="semaforo ${sem}"></div>
+        <div style="flex:1">
+          <div class="prato-name">${c.Cliente}</div>
+          <div class="prato-fascia">Fascia ${c.FasciaID} · ${mq} mq · ${semLabel}</div>
+        </div>
+      </div>
+      ${targetN > 0 ? `
+      <div class="prato-grid">
+        <div class="prato-stat">
+          <div class="prato-stat-num">${nSomm.toFixed(0)}<span style="font-size:0.65rem;font-weight:400"> g/m²</span></div>
+          <div class="prato-stat-lbl">N somministrato</div>
+        </div>
+        <div class="prato-stat">
+          <div class="prato-stat-num">${targetN}<span style="font-size:0.65rem;font-weight:400"> g/m²</span></div>
+          <div class="prato-stat-lbl">Target N/anno</div>
+        </div>
+        <div class="prato-stat">
+          <div class="prato-stat-num">${kSomm.toFixed(0)}<span style="font-size:0.65rem;font-weight:400"> g/m²</span></div>
+          <div class="prato-stat-lbl">K somministrato</div>
+        </div>
+        <div class="prato-stat">
+          <div class="prato-stat-num">${targetK}<span style="font-size:0.65rem;font-weight:400"> g/m²</span></div>
+          <div class="prato-stat-lbl">Target K/anno</div>
+        </div>
+      </div>
+      <div class="prato-bar">
+        <div class="prato-bar-label"><span>Azoto ${anno}</span><span>${Math.round(pctN*100)}%</span></div>
+        <div class="bar-track"><div class="bar-fill ${sem}" style="width:${Math.round(pctN*100)}%"></div></div>
+      </div>` : ''}
+      <div class="prato-ops">
+        <div class="prato-op-item"><div class="prato-op-date">${lastConc}</div><div class="prato-op-label">Ult. concimazione${lastConc_prod ? '<br>'+lastConc_prod : ''}</div></div>
+        <div class="prato-op-item"><div class="prato-op-date">${lastSemina}</div><div class="prato-op-label">Ult. semina</div></div>
+        <div class="prato-op-item"><div class="prato-op-date">${lastArie}</div><div class="prato-op-label">Ult. arieggiatura</div></div>
+      </div>
+    </div>`;
+  }).join('');
+}
+
+// ── DRAWER CLIENTE ──
+function openNuovoCliente() {
+  pratoEnabled = false;
+  addrLat = null; addrLng = null;
+  document.getElementById('drawer-cliente-title').textContent = 'Nuovo Cliente';
+  document.getElementById('cliente-edit-id').value = '';
+  ['f-cliente-nome','f-cliente-indirizzo','f-cliente-citta','f-cliente-coords','f-cliente-note'].forEach(id => document.getElementById(id).value = '');
+  document.getElementById('f-cliente-mq').value = '';
+  document.getElementById('f-cliente-fascia').value = '';
+  document.getElementById('toggle-prato').classList.remove('on');
+  document.getElementById('prato-fields').style.display = 'none';
+  document.getElementById('addr-suggestions').style.display = 'none';
+  document.getElementById('overlay-cliente').classList.add('open');
+}
+
+function editCliente(id) {
+  const c = DB.clienti.find(x => x.ClienteID == id);
+  if (!c) return;
+  pratoEnabled = c.Ha_prato === 'Sì';
+  addrLat = c.Lat || null; addrLng = c.Lng || null;
+  document.getElementById('drawer-cliente-title').textContent = 'Modifica Cliente';
+  document.getElementById('cliente-edit-id').value = c.ClienteID;
+  document.getElementById('f-cliente-nome').value = c.Cliente || '';
+  document.getElementById('f-cliente-indirizzo').value = c.Indirizzo || '';
+  document.getElementById('f-cliente-citta').value = c.Citta || '';
+  document.getElementById('f-cliente-coords').value = c.Lat && c.Lng ? c.Lat+', '+c.Lng : '';
+  document.getElementById('f-cliente-note').value = c.Note_cliente || '';
+  document.getElementById('f-cliente-mq').value = c.Mq_prato || '';
+  document.getElementById('f-cliente-fascia').value = c.FasciaID || '';
+  document.getElementById('toggle-prato').classList.toggle('on', pratoEnabled);
+  document.getElementById('prato-fields').style.display = pratoEnabled ? 'block' : 'none';
+  document.getElementById('overlay-cliente').classList.add('open');
+}
+
+function togglePrato() {
+  pratoEnabled = !pratoEnabled;
+  document.getElementById('toggle-prato').classList.toggle('on', pratoEnabled);
+  document.getElementById('prato-fields').style.display = pratoEnabled ? 'block' : 'none';
+}
+
+async function saveCliente() {
+  const nome = document.getElementById('f-cliente-nome').value.trim();
+  if (!nome) { showToast('⚠️ Inserisci il nome'); return; }
+  const editId = document.getElementById('cliente-edit-id').value;
+  const data = {
+    Cliente: nome,
+    Indirizzo: document.getElementById('f-cliente-indirizzo').value.trim(),
+    Citta: document.getElementById('f-cliente-citta').value.trim(),
+    Lat: addrLat || '',
+    Lng: addrLng || '',
+    Ha_prato: pratoEnabled ? 'Sì' : '',
+    Mq_prato: pratoEnabled ? document.getElementById('f-cliente-mq').value : '',
+    FasciaID: pratoEnabled ? document.getElementById('f-cliente-fascia').value : '',
+    Note_cliente: document.getElementById('f-cliente-note').value.trim(),
+  };
+  try {
+    if (editId) {
+      await apiPost({ action:'update', foglio:'CLIENTI', id:editId, idField:'ClienteID', data });
+      showToast('✅ Cliente aggiornato');
+    } else {
+      data.ClienteID = generateID();
+      await apiPost({ action:'insert', foglio:'CLIENTI', data });
+      showToast('✅ Cliente salvato');
+    }
+    closeDrawer('overlay-cliente');
+    await loadAll();
+    renderClienti(); renderHome(); renderPrati();
+  } catch(e) { showToast('❌ Errore salvataggio'); }
+}
+
+// ── ADDRESS SEARCH ──
+async function searchAddress(q) {
+  clearTimeout(addrTimeout);
+  const sug = document.getElementById('addr-suggestions');
+  if (!q || q.length < 3) { sug.style.display = 'none'; return; }
+  addrTimeout = setTimeout(async () => {
+    try {
+      const url = `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(q)}&limit=5&countrycodes=it`;
+      const r = await fetch(url, {headers:{'Accept-Language':'it'}});
+      const results = await r.json();
+      if (!results.length) { sug.style.display = 'none'; return; }
+      sug.innerHTML = results.map(res => `<div class="suggestion-item" onclick="selectAddress('${res.display_name.replace(/'/g,"\\'")}', ${res.lat}, ${res.lon})">${res.display_name}</div>`).join('');
+      sug.style.display = 'block';
+    } catch(e) { sug.style.display = 'none'; }
+  }, 400);
+}
+
+function selectAddress(display, lat, lon) {
+  addrLat = lat; addrLng = lon;
+  const parts = display.split(',');
+  document.getElementById('f-cliente-indirizzo').value = parts.slice(0,2).join(',').trim();
+  if (parts.length > 2) document.getElementById('f-cliente-citta').value = parts[2].trim();
+  document.getElementById('f-cliente-coords').value = parseFloat(lat).toFixed(5)+', '+parseFloat(lon).toFixed(5);
+  document.getElementById('addr-suggestions').style.display = 'none';
+}
+
+function useGPS() {
+  if (!navigator.geolocation) { showToast('⚠️ GPS non disponibile'); return; }
+  showToast('📍 Rilevamento posizione...');
+  navigator.geolocation.getCurrentPosition(async pos => {
+    addrLat = pos.coords.latitude; addrLng = pos.coords.longitude;
+    document.getElementById('f-cliente-coords').value = addrLat.toFixed(5)+', '+addrLng.toFixed(5);
+    try {
+      const url = `https://nominatim.openstreetmap.org/reverse?format=json&lat=${addrLat}&lon=${addrLng}`;
+      const r = await fetch(url, {headers:{'Accept-Language':'it'}});
+      const res = await r.json();
+      if (res.address) {
+        const road = res.address.road || '';
+        const num = res.address.house_number || '';
+        document.getElementById('f-cliente-indirizzo').value = [road, num].filter(Boolean).join(' ');
+        document.getElementById('f-cliente-citta').value = res.address.city || res.address.town || res.address.village || '';
+      }
+    } catch(e) {}
+    showToast('✅ Posizione rilevata');
+  }, () => showToast('❌ GPS non autorizzato'));
+}
+
+// ── DRAWER VISITA ──
+function openNuovaVisita() {
+  pendingOperazioni = [];
+  document.getElementById('f-visita-note').value = '';
+  document.getElementById('f-visita-ore').value = '';
+  document.getElementById('f-visita-prossimo').value = '';
+  document.getElementById('f-visita-mese').value = '';
+  document.getElementById('f-visita-anno').value = '';
+  document.getElementById('f-visita-data').value = new Date().toISOString().split('T')[0];
+  // popola select clienti
+  const sel = document.getElementById('f-visita-cliente');
+  sel.innerHTML = '<option value="">– scegli cliente –</option>' + DB.clienti.map(c => `<option value="${c.ClienteID}">${c.Cliente}</option>`).join('');
+  renderOperazioniList();
+  document.getElementById('overlay-visita').classList.add('open');
+}
+
+async function saveVisita() {
+  const cid = document.getElementById('f-visita-cliente').value;
+  const data = document.getElementById('f-visita-data').value;
+  if (!cid || !data) { showToast('⚠️ Seleziona cliente e data'); return; }
+  const visitaID = generateID();
+  const visita = {
+    VisitaID: visitaID,
+    Data: data,
+    Ore_Visita: document.getElementById('f-visita-ore').value,
+    ClienteID: cid,
+    Note_visita: document.getElementById('f-visita-note').value.trim(),
+    Prossimo_intervento: document.getElementById('f-visita-prossimo').value.trim(),
+    Mese_prossimo_intervento: document.getElementById('f-visita-mese').value,
+    Anno_prossimo_intervento: document.getElementById('f-visita-anno').value,
+  };
+  try {
+    await apiPost({ action:'insert', foglio:'VISITE', data: visita });
+    // salva operazioni
+    for (const op of pendingOperazioni) {
+      const opData = { ...op, OperazioneID: generateID(), VisitaID: visitaID };
+      await apiPost({ action:'insert', foglio:'OPERAZIONI', data: opData });
+    }
+    showToast('✅ Visita salvata');
+    closeDrawer('overlay-visita');
+    await loadAll();
+    renderHome(); renderVisite(); renderPrati();
+  } catch(e) { showToast('❌ Errore salvataggio'); }
+}
+
+// ── OPERAZIONI ──
+function addOperazione() {
+  pendingOpIndex = null;
+  ['f-op-tipo','f-op-desc','f-op-concime','f-op-semente','f-op-fitofarmaco'].forEach(id => { const el = document.getElementById(id); if(el) el.value = ''; });
+  ['f-op-dose','f-op-dose-s','f-op-dose-f'].forEach(id => { const el = document.getElementById(id); if(el) el.value = ''; });
+  opPratoEnabled = false;
+  document.getElementById('toggle-op-prato')?.classList.remove('on');
+  // popola select
+  populateOpSelects();
+  onTipoOpChange();
+  document.getElementById('overlay-operazione').classList.add('open');
+}
+
+function populateOpSelects() {
+  const sc = document.getElementById('f-op-concime');
+  sc.innerHTML = '<option value="">– scegli –</option>' + DB.concimi.map(c => `<option value="${c.ConcimeID}">${c.Concime} (N:${c.N_percento}% K:${c.K_percento}%)</option>`).join('');
+  const ss = document.getElementById('f-op-semente');
+  ss.innerHTML = '<option value="">– scegli –</option>' + DB.sementi.map(s => `<option value="${s.SementeID}">${s.Nome_commerciale}</option>`).join('');
+  const sf = document.getElementById('f-op-fitofarmaco');
+  sf.innerHTML = '<option value="">– scegli –</option>' + DB.fitofarmaci.map(f => `<option value="${f.FitofarmacaID}">${f.Nome_commerciale} (${f.Tipo})</option>`).join('');
+}
+
+function onTipoOpChange() {
+  const tipo = document.getElementById('f-op-tipo').value;
+  const showPrato = !['Potatura','Altro',''].includes(tipo);
+  document.getElementById('op-prato-toggle-wrap').style.display = showPrato ? 'block' : 'none';
+  document.getElementById('op-concime-wrap').style.display = tipo === 'Concimazione' ? 'block' : 'none';
+  document.getElementById('op-semente-wrap').style.display = tipo === 'Semina' ? 'block' : 'none';
+  document.getElementById('op-fitofarmaco-wrap').style.display = ['Diserbo','Trattamento fitosanitario'].includes(tipo) ? 'block' : 'none';
+  // auto flag prato per arieggiatura
+  if (tipo === 'Arieggiatura') {
+    opPratoEnabled = true;
+    document.getElementById('toggle-op-prato').classList.add('on');
+  }
+}
+
+function toggleOpPrato() {
+  opPratoEnabled = !opPratoEnabled;
+  document.getElementById('toggle-op-prato').classList.toggle('on', opPratoEnabled);
+}
+
+function saveOperazione() {
+  const tipo = document.getElementById('f-op-tipo').value;
+  if (!tipo) { showToast('⚠️ Seleziona il tipo'); return; }
+  const op = {
+    Tipo_operazione: tipo,
+    Descrizione: document.getElementById('f-op-desc').value.trim(),
+    Flag_prato: opPratoEnabled || tipo === 'Arieggiatura' ? 'Sì' : '',
+    ConcimeID: document.getElementById('f-op-concime').value,
+    SementeID: document.getElementById('f-op-semente').value,
+    FitofarmacaID: document.getElementById('f-op-fitofarmaco').value,
+    Dose_kg: document.getElementById('f-op-dose').value || document.getElementById('f-op-dose-s').value || document.getElementById('f-op-dose-f').value,
+    Note_operazione: '',
+    N_tot_g: 0, K_tot_g: 0, N_g_m2: 0, K_g_m2: 0,
+  };
+  if (pendingOpIndex !== null) pendingOperazioni[pendingOpIndex] = op;
+  else pendingOperazioni.push(op);
+  closeDrawer('overlay-operazione');
+  renderOperazioniList();
+}
+
+function renderOperazioniList() {
+  const list = document.getElementById('operazioni-list');
+  if (!pendingOperazioni.length) { list.innerHTML = '<div style="font-size:0.8rem;color:var(--text-light);padding:4px 0">Nessuna operazione aggiunta</div>'; return; }
+  list.innerHTML = pendingOperazioni.map((op, i) => `
+    <div style="display:flex; align-items:center; gap:8px; padding:8px 10px; background:var(--green-mist); border-radius:8px; margin-bottom:6px; font-size:0.82rem">
+      <span>${op.Flag_prato==='Sì'?'🌱':'✂️'}</span>
+      <span style="flex:1;font-weight:500">${op.Tipo_operazione}${op.Descrizione?' – '+op.Descrizione:''}</span>
+      <button onclick="pendingOperazioni.splice(${i},1); renderOperazioniList()" style="background:none;border:none;cursor:pointer;font-size:1rem;color:var(--red)">✕</button>
+    </div>`).join('');
+}
+
+// ── UTILS ──
+function generateID() {
+  return Math.random().toString(36).substr(2, 8);
+}
+
+function meseNome(m) {
+  const mesi = ['','Gen','Feb','Mar','Apr','Mag','Giu','Lug','Ago','Set','Ott','Nov','Dic'];
+  return mesi[parseInt(m)] || m;
+}
+
+function closeDrawer(id) {
+  document.getElementById(id).classList.remove('open');
+}
+
+function showToast(msg) {
+  const t = document.getElementById('toast');
+  t.textContent = msg;
+  t.classList.add('show');
+  setTimeout(() => t.classList.remove('show'), 2500);
+}
+
+// click fuori drawer
+document.querySelectorAll('.overlay').forEach(o => {
+  o.addEventListener('click', e => { if(e.target === o) o.classList.remove('open'); });
+});
+
+init();
+</script>
+</body>
+</html>
