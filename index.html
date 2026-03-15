@@ -503,7 +503,7 @@ select.form-control { background-image: url("data:image/svg+xml,%3Csvg xmlns='ht
             <span class="quick-icon">🌱</span>
             <div><div class="quick-label">Report prati</div><div class="quick-sub">Stato concimazione</div></div>
           </div>
-          <div class="quick-card" onclick="navTo('visite')">
+          <div class="quick-card" onclick="navTo('prossimi')">
             <span class="quick-icon">📅</span>
             <div><div class="quick-label">Prossimi interventi</div><div class="quick-sub">Pianifica lavori</div></div>
           </div>
@@ -528,6 +528,12 @@ select.form-control { background-image: url("data:image/svg+xml,%3Csvg xmlns='ht
       <div id="visite-list"></div>
     </div>
 
+    <!-- PROSSIMI INTERVENTI -->
+    <div id="page-prossimi" class="page">
+      <div class="section-title">Prossimi Interventi 📅</div>
+      <div id="prossimi-list"></div>
+    </div>
+
     <!-- PRATI -->
     <div id="page-prati" class="page">
       <div class="section-title">Report Prati 🌱</div>
@@ -543,7 +549,10 @@ select.form-control { background-image: url("data:image/svg+xml,%3Csvg xmlns='ht
       <span class="icon">👥</span><span>Clienti</span>
     </button>
     <button class="nav-item" id="nav-visite" onclick="navTo('visite')">
-      <span class="icon">📋</span><span>Visite</span>
+      <span class="icon">📋</span><span>Registro</span>
+    </button>
+    <button class="nav-item" id="nav-prossimi" onclick="navTo('prossimi')">
+      <span class="icon">📅</span><span>Prossimi</span>
     </button>
     <button class="nav-item" id="nav-prati" onclick="navTo('prati')">
       <span class="icon">🌱</span><span>Prati</span>
@@ -627,10 +636,19 @@ select.form-control { background-image: url("data:image/svg+xml,%3Csvg xmlns='ht
     <div class="drawer-title">Nuova Visita</div>
     <div class="drawer-body">
       <div class="form-group">
-        <label class="form-label">Cliente *</label>
-        <select class="form-control" id="f-visita-cliente">
-          <option value="">– scegli cliente –</option>
-        </select>
+        <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:6px">
+          <label class="form-label" style="margin-bottom:0">Cliente *</label>
+          <button type="button" class="btn btn-secondary btn-sm" onclick="closeDrawer('overlay-visita'); openNuovoCliente(); pendingFromVisita=true;">+ Nuovo cliente</button>
+        </div>
+        <div class="addr-wrapper">
+          <input type="text" class="form-control" id="f-visita-cliente-search" placeholder="Cerca cliente..." autocomplete="off" oninput="filterVisitaClienti(this.value)" onfocus="filterVisitaClienti(this.value)">
+          <div class="suggestions" id="visita-cliente-suggestions" style="display:none"></div>
+        </div>
+        <input type="hidden" id="f-visita-cliente">
+        <div id="f-visita-cliente-selected" style="display:none; margin-top:6px; padding:8px 12px; background:var(--green-mist); border-radius:8px; font-size:0.85rem; font-weight:500; color:var(--green-deep)">
+          <span id="f-visita-cliente-nome"></span>
+          <button onclick="clearVisitaCliente()" style="background:none;border:none;cursor:pointer;color:var(--text-light);font-size:1rem;float:right">✕</button>
+        </div>
       </div>
       <div class="form-row">
         <div class="form-group">
@@ -781,6 +799,7 @@ async function init() {
   renderHome();
   renderClienti();
   renderVisite();
+  renderProssimi();
   renderPrati();
 }
 
@@ -832,9 +851,9 @@ function navTo(page) {
   document.getElementById('page-'+page).classList.add('active');
   document.getElementById('nav-'+page).classList.add('active');
   currentPage = page;
-  const titles = { home:'GiardinoApp', clienti:'Clienti', visite:'Visite', prati:'Prati' };
+  const titles = { home:'GiardinoApp', clienti:'Clienti', visite:'Registro Visite', prossimi:'Prossimi Interventi', prati:'Prati' };
   document.getElementById('topbar-title').textContent = titles[page];
-  document.getElementById('topbar-action-btn').style.display = (page === 'prati') ? 'none' : 'flex';
+  document.getElementById('topbar-action-btn').style.display = (page === 'prati' || page === 'prossimi') ? 'none' : 'flex';
 }
 
 function topbarAction() {
@@ -955,7 +974,66 @@ function renderVisite() {
       </div>
       ${v.Note_visita ? `<div style="font-size:0.82rem; color:var(--text-mid); margin-top:8px">${v.Note_visita}</div>` : ''}
       ${ops.length ? `<div class="visit-ops">${ops.map(o => `<span class="op-tag ${o.Flag_prato==='Sì'?'prato':''}">${o.Tipo_operazione}${o.Descrizione?' – '+o.Descrizione:''}</span>`).join('')}</div>` : ''}
-      ${v.Prossimo_intervento ? `<div class="next-int">📅 ${v.Prossimo_intervento} ${v.Mese_prossimo_intervento?'→ '+meseNome(v.Mese_prossimo_intervento)+' '+v.Anno_prossimo_intervento:''}</div>` : ''}
+    </div>`;
+  }).join('');
+}
+
+// ── PROSSIMI INTERVENTI ──
+function renderProssimi() {
+  const list = document.getElementById('prossimi-list');
+  if (!list) return;
+  // collect visite with prossimo intervento
+  const items = DB.visite
+    .filter(v => v.Prossimo_intervento || v.Mese_prossimo_intervento)
+    .map(v => {
+      const c = DB.clienti.find(x => x.ClienteID == v.ClienteID);
+      const mese = parseInt(v.Mese_prossimo_intervento) || 13;
+      const anno = parseInt(v.Anno_prossimo_intervento) || 9999;
+      return { v, c, sortKey: anno * 100 + mese };
+    })
+    // keep only the latest visita per client (most recent prossimo)
+    .reduce((acc, item) => {
+      const existing = acc.find(x => x.c?.ClienteID === item.c?.ClienteID);
+      if (!existing) acc.push(item);
+      else if (item.v.Data > existing.v.Data) {
+        acc[acc.indexOf(existing)] = item;
+      }
+      return acc;
+    }, [])
+    .sort((a, b) => a.sortKey - b.sortKey);
+
+  if (!items.length) {
+    list.innerHTML = '<div class="empty"><div class="empty-icon">📅</div><div class="empty-text">Nessun intervento pianificato</div></div>';
+    return;
+  }
+
+  const oggi = new Date();
+  list.innerHTML = items.map(({ v, c }) => {
+    const nome = c ? c.Cliente : v.ClienteID;
+    const citta = c?.Citta || '';
+    const mese = v.Mese_prossimo_intervento;
+    const anno = v.Anno_prossimo_intervento;
+    const dataStr = mese ? meseNome(mese) + (anno ? ' ' + anno : '') : '';
+    // check urgency
+    let urgClass = '', urgLabel = '';
+    if (mese && anno) {
+      const target = new Date(parseInt(anno), parseInt(mese) - 1, 1);
+      const diffDays = (target - oggi) / 86400000;
+      if (diffDays < 0) { urgClass = 'rosso'; urgLabel = 'Scaduto'; }
+      else if (diffDays < 30) { urgClass = 'giallo'; urgLabel = 'Imminente'; }
+      else { urgClass = 'verde'; urgLabel = dataStr; }
+    }
+    return `<div class="card" style="display:flex; align-items:center; gap:14px">
+      <div class="semaforo ${urgClass}" style="width:12px;height:12px;flex-shrink:0"></div>
+      <div style="flex:1">
+        <div style="font-weight:600; font-size:0.95rem">${nome}</div>
+        <div style="font-size:0.78rem; color:var(--text-light)">${citta}</div>
+        <div style="font-size:0.82rem; color:var(--text-mid); margin-top:4px">${v.Prossimo_intervento || ''}</div>
+      </div>
+      <div style="text-align:right; flex-shrink:0">
+        <div style="font-size:0.82rem; font-weight:600; color:var(--green-deep)">${dataStr}</div>
+        ${urgClass === 'rosso' ? '<div style="font-size:0.68rem;color:var(--red);font-weight:600">SCADUTO</div>' : ''}
+      </div>
     </div>`;
   }).join('');
 }
@@ -1115,6 +1193,13 @@ async function saveCliente() {
     closeDrawer('overlay-cliente');
     await loadAll();
     renderClienti(); renderHome(); renderPrati();
+    if (pendingFromVisita) {
+      pendingFromVisita = false;
+      // pre-select the new client
+      const newCliente = DB.clienti[DB.clienti.length - 1];
+      openNuovaVisita();
+      if (newCliente) setTimeout(() => selectVisitaCliente(newCliente.ClienteID, newCliente.Cliente), 100);
+    }
   } catch(e) { showToast('❌ Errore salvataggio'); }
 }
 
@@ -1166,6 +1251,8 @@ function useGPS() {
 }
 
 // ── DRAWER VISITA ──
+let pendingFromVisita = false;
+
 function openNuovaVisita() {
   pendingOperazioni = [];
   document.getElementById('f-visita-note').value = '';
@@ -1174,11 +1261,34 @@ function openNuovaVisita() {
   document.getElementById('f-visita-mese').value = '';
   document.getElementById('f-visita-anno').value = '';
   document.getElementById('f-visita-data').value = new Date().toISOString().split('T')[0];
-  // popola select clienti
-  const sel = document.getElementById('f-visita-cliente');
-  sel.innerHTML = '<option value="">– scegli cliente –</option>' + DB.clienti.map(c => `<option value="${c.ClienteID}">${c.Cliente}</option>`).join('');
+  clearVisitaCliente();
   renderOperazioniList();
   document.getElementById('overlay-visita').classList.add('open');
+}
+
+function filterVisitaClienti(q) {
+  const sug = document.getElementById('visita-cliente-suggestions');
+  if (!q || q.length < 1) { sug.style.display = 'none'; return; }
+  const matches = DB.clienti.filter(c => c.Cliente?.toLowerCase().includes(q.toLowerCase())).slice(0, 6);
+  if (!matches.length) { sug.style.display = 'none'; return; }
+  sug.innerHTML = matches.map(c => `<div class="suggestion-item" onclick="selectVisitaCliente('${c.ClienteID}', '${c.Cliente.replace(/'/g,"\'")}')">${c.Cliente}<span style="float:right;font-size:0.72rem;color:var(--text-light)">${c.Citta||''}</span></div>`).join('');
+  sug.style.display = 'block';
+}
+
+function selectVisitaCliente(id, nome) {
+  document.getElementById('f-visita-cliente').value = id;
+  document.getElementById('f-visita-cliente-nome').textContent = nome;
+  document.getElementById('f-visita-cliente-selected').style.display = 'block';
+  document.getElementById('f-visita-cliente-search').style.display = 'none';
+  document.getElementById('visita-cliente-suggestions').style.display = 'none';
+}
+
+function clearVisitaCliente() {
+  document.getElementById('f-visita-cliente').value = '';
+  document.getElementById('f-visita-cliente-search').value = '';
+  document.getElementById('f-visita-cliente-search').style.display = 'block';
+  document.getElementById('f-visita-cliente-selected').style.display = 'none';
+  document.getElementById('visita-cliente-suggestions').style.display = 'none';
 }
 
 async function saveVisita() {
@@ -1206,7 +1316,7 @@ async function saveVisita() {
     showToast('✅ Visita salvata');
     closeDrawer('overlay-visita');
     await loadAll();
-    renderHome(); renderVisite(); renderPrati();
+    renderHome(); renderVisite(); renderProssimi(); renderPrati();
   } catch(e) { showToast('❌ Errore salvataggio'); }
 }
 
