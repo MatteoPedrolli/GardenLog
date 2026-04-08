@@ -390,6 +390,7 @@ select.form-control { background-image: url("data:image/svg+xml,%3Csvg xmlns='ht
   background: var(--green-pale); color: var(--green-deep); font-weight: 500;
 }
 .op-tag.prato { background: var(--earth-light); color: var(--earth); }
+.op-tag.siepe { background: #e8f4f0; color: #2a7a5a; }
 .next-int {
   margin-top: 10px; padding: 8px 10px;
   background: var(--green-mist); border-radius: 8px;
@@ -619,6 +620,39 @@ select.form-control { background-image: url("data:image/svg+xml,%3Csvg xmlns='ht
         </div>
       </div>
       <div class="form-group">
+        <div class="toggle-row">
+          <span class="toggle-label">🌿 Ha la siepe</span>
+          <button type="button" class="toggle" id="toggle-siepe" onclick="toggleSiepe()"></button>
+        </div>
+      </div>
+      <div id="siepe-fields" style="display:none">
+        <div class="form-group">
+          <label class="form-label">Specie</label>
+          <select class="form-control" id="f-cliente-siepe-specie">
+            <option value="">– scegli –</option>
+            <option value="Leilandi">Leilandi</option>
+            <option value="Photinia">Photinia</option>
+            <option value="Lauroceraso">Lauroceraso</option>
+            <option value="Eleagno">Eleagno</option>
+            <option value="Altra">Altra (vedi note)</option>
+          </select>
+        </div>
+        <div class="form-row">
+          <div class="form-group">
+            <label class="form-label">Lunghezza (m)</label>
+            <input type="number" class="form-control" id="f-cliente-siepe-lunghezza" placeholder="Es. 20" step="0.5">
+          </div>
+          <div class="form-group">
+            <label class="form-label">Altezza (m)</label>
+            <input type="number" class="form-control" id="f-cliente-siepe-altezza" placeholder="Es. 2" step="0.1">
+          </div>
+        </div>
+        <div class="form-group">
+          <label class="form-label">Larghezza (m)</label>
+          <input type="number" class="form-control" id="f-cliente-siepe-larghezza" placeholder="Es. 1" step="0.1">
+        </div>
+      </div>
+      <div class="form-group">
         <label class="form-label">Note</label>
         <textarea class="form-control" id="f-cliente-note" rows="2" placeholder="Note aggiuntive..."></textarea>
       </div>
@@ -727,6 +761,14 @@ select.form-control { background-image: url("data:image/svg+xml,%3Csvg xmlns='ht
         <label class="form-label">Descrizione</label>
         <input type="text" class="form-control" id="f-op-desc" placeholder="Es. Kiwi, rose...">
       </div>
+      <div id="op-siepe-toggle-wrap" style="display:none">
+        <div class="form-group">
+          <div class="toggle-row">
+            <span class="toggle-label">🌿 Potatura siepe</span>
+            <button type="button" class="toggle" id="toggle-op-siepe" onclick="toggleOpSiepe()"></button>
+          </div>
+        </div>
+      </div>
       <div id="op-prato-toggle-wrap" style="display:none">
         <div class="form-group">
           <div class="toggle-row">
@@ -785,7 +827,9 @@ const API = 'https://script.google.com/macros/s/AKfycbx8vlMzgRiJYJqHQwPOdT-aDy0t
 let DB = { clienti: [], visite: [], operazioni: [], concimi: [], sementi: [], fitofarmaci: [], fasce: [] };
 let currentPage = 'home';
 let pratoEnabled = false;
+let siepeEnabled = false;
 let opPratoEnabled = false;
+let opSiepeEnabled = false;
 let pendingOperazioni = [];
 let pendingOpIndex = null;
 let addrLat = null, addrLng = null;
@@ -889,6 +933,8 @@ function renderClienti(filter = '') {
     const badges = [];
     if (c.Ha_prato === 'Sì') badges.push(`<span class="badge badge-prato">🌱 Prato</span>`);
     if (c.FasciaID) badges.push(`<span class="badge badge-fascia">Fascia ${c.FasciaID}</span>`);
+    if (c.Ha_siepe === 'Sì') badges.push(`<span class="badge" style="background:#e8f4f0;color:#2a7a5a">🌿 Siepe</span>`);
+    if (c.Siepe_specie) badges.push(`<span class="badge" style="background:#f0f4e8;color:#5a6a2a">${c.Siepe_specie}</span>`);
     const addr = [c.Indirizzo, c.Citta].filter(Boolean).join(', ');
     return `<div class="client-card" onclick="showCliente('${c.ClienteID}')">
       <div class="client-avatar">${initials}</div>
@@ -911,6 +957,27 @@ function showCliente(id) {
   if (!c) return;
   const visite = DB.visite.filter(v => v.ClienteID == id);
   const page = document.getElementById('page-clienti');
+  // calcola N/K anno corrente per prato
+  const annoCorr = new Date().getFullYear();
+  const visitIdsCliente = visite.filter(v => v.Data && new Date(v.Data).getFullYear() == annoCorr).map(v => v.VisitaID);
+  const opsCliente = DB.operazioni.filter(o => visitIdsCliente.includes(o.VisitaID));
+  let nSomm = 0, kSomm = 0;
+  opsCliente.filter(o => o.Tipo_operazione === 'Concimazione' && o.Flag_prato === 'Sì').forEach(o => {
+    const conc = DB.concimi.find(cc => cc.ConcimeID == o.ConcimeID);
+    if (conc && o.Dose_kg && c.Mq_prato) {
+      const dose = parseFloat(o.Dose_kg) || 0;
+      const mq = parseFloat(c.Mq_prato) || 1;
+      nSomm += (dose * parseFloat(conc.N_percento) / 100 * 1000) / mq;
+      kSomm += (dose * parseFloat(conc.K_percento) / 100 * 1000) / mq;
+    }
+  });
+  // ultima potatura siepe
+  const opsAll = DB.operazioni.filter(o => DB.visite.find(vv => vv.VisitaID == o.VisitaID && vv.ClienteID == c.ClienteID));
+  const ultimaSiepe = opsAll.filter(o => o.Tipo_operazione === 'Potatura' && o.Flag_siepe === 'Sì').map(o => {
+    const vv = DB.visite.find(vv => vv.VisitaID == o.VisitaID);
+    return vv?.Data ? new Date(vv.Data) : null;
+  }).filter(Boolean).sort((a,b) => b-a)[0];
+
   page.innerHTML = `
     <div class="detail-header">
       <button class="detail-back" onclick="renderClientiPage()">← Clienti</button>
@@ -919,29 +986,47 @@ function showCliente(id) {
     </div>
     <div style="padding:16px 14px 0">
       <div class="info-grid">
-        <div class="info-item"><div class="info-label">Prato</div><div class="info-value">${c.Ha_prato || 'No'}</div></div>
-        <div class="info-item"><div class="info-label">Superficie</div><div class="info-value">${c.Mq_prato ? c.Mq_prato+' mq' : '–'}</div></div>
-        <div class="info-item"><div class="info-label">Fascia</div><div class="info-value">${c.FasciaID ? 'Fascia '+c.FasciaID : '–'}</div></div>
         <div class="info-item"><div class="info-label">Visite totali</div><div class="info-value">${visite.length}</div></div>
+        ${c.Lat && c.Lng ? `<div class="info-item" style="cursor:pointer" onclick="window.open('https://maps.google.com/?q=${c.Lat},${c.Lng}','_blank')"><div class="info-label">Posizione</div><div class="info-value">📍 Maps</div></div>` : '<div class="info-item"><div class="info-label">Posizione</div><div class="info-value">–</div></div>'}
       </div>
-      ${c.Ha_prato === 'Sì' ? `<div class="info-grid">
-        <div class="info-item"><div class="info-label">Target N</div><div class="info-value">${c.Target_N_g_m2_anno || '–'} g/m²</div></div>
-        <div class="info-item"><div class="info-label">Target K</div><div class="info-value">${c.Target_K_g_m2_anno || '–'} g/m²</div></div>
+
+      ${c.Ha_prato === 'Sì' ? `
+      <div style="background:var(--green-mist); border-radius:var(--radius); padding:14px; margin-bottom:14px; border:1px solid var(--green-pale)">
+        <div style="font-family:var(--font-display); font-size:0.95rem; font-weight:600; color:var(--green-deep); margin-bottom:10px">🌱 Riepilogo Prato</div>
+        <div class="info-grid" style="margin-bottom:8px">
+          <div class="info-item"><div class="info-label">Superficie</div><div class="info-value">${c.Mq_prato} mq</div></div>
+          <div class="info-item"><div class="info-label">Fascia</div><div class="info-value">${c.FasciaID ? 'Fascia '+c.FasciaID : '–'}</div></div>
+          <div class="info-item"><div class="info-label">N somm. ${annoCorr}</div><div class="info-value">${nSomm.toFixed(1)} g/m²</div></div>
+          <div class="info-item"><div class="info-label">Target N</div><div class="info-value">${c.Target_N_g_m2_anno || '–'} g/m²</div></div>
+          <div class="info-item"><div class="info-label">K somm. ${annoCorr}</div><div class="info-value">${kSomm.toFixed(1)} g/m²</div></div>
+          <div class="info-item"><div class="info-label">Target K</div><div class="info-value">${c.Target_K_g_m2_anno || '–'} g/m²</div></div>
+        </div>
       </div>` : ''}
-      ${c.Lat && c.Lng ? `<a href="https://maps.google.com/?q=${c.Lat},${c.Lng}" target="_blank" class="btn btn-secondary" style="margin-bottom:14px">📍 Apri su Maps</a>` : ''}
-      <button class="btn btn-secondary" onclick="editCliente('${c.ClienteID}')" style="margin-bottom:8px">✏️ Modifica</button>
+
+      ${c.Ha_siepe === 'Sì' ? `
+      <div style="background:#eef7f2; border-radius:var(--radius); padding:14px; margin-bottom:14px; border:1px solid #c8e8d8">
+        <div style="font-family:var(--font-display); font-size:0.95rem; font-weight:600; color:#1a3a2a; margin-bottom:10px">🌿 Riepilogo Siepe</div>
+        <div class="info-grid">
+          <div class="info-item"><div class="info-label">Specie</div><div class="info-value">${c.Siepe_specie || '–'}</div></div>
+          <div class="info-item"><div class="info-label">Ultima potatura</div><div class="info-value">${ultimaSiepe ? ultimaSiepe.toLocaleDateString('it-IT', {day:'numeric', month:'short', year:'numeric'}) : '–'}</div></div>
+          <div class="info-item"><div class="info-label">Lunghezza</div><div class="info-value">${c.Siepe_lunghezza ? c.Siepe_lunghezza+' m' : '–'}</div></div>
+          <div class="info-item"><div class="info-label">H × L</div><div class="info-value">${c.Siepe_altezza||'–'} × ${c.Siepe_larghezza||'–'} m</div></div>
+        </div>
+      </div>` : ''}
+
+      <button class="btn btn-secondary" onclick="editCliente('${c.ClienteID}')" style="margin-bottom:14px">✏️ Modifica cliente</button>
+
       <div class="recent-title">Storico visite</div>
-      ${visite.length ? visite.reverse().map(v => {
+      ${visite.length ? [...visite].sort((a,b) => new Date(b.Data)-new Date(a.Data)).map(v => {
         const ops = DB.operazioni.filter(o => o.VisitaID == v.VisitaID);
-        const data = v.Data ? new Date(v.Data).toLocaleDateString('it-IT') : '';
+        const data = v.Data ? new Date(v.Data).toLocaleDateString('it-IT', {day:'numeric', month:'long', year:'numeric'}) : '';
         return `<div class="visit-card">
           <div class="visit-card-header">
             <span class="visit-card-icon">📋</span>
             <div><div class="visit-card-title">${data}</div><div class="visit-card-date">${v.Ore_Visita ? v.Ore_Visita+'h di lavoro' : ''}</div></div>
           </div>
           ${v.Note_visita ? `<div style="font-size:0.82rem; color:var(--text-mid); margin-top:8px">${v.Note_visita}</div>` : ''}
-          ${ops.length ? `<div class="visit-ops">${ops.map(o => `<span class="op-tag ${o.Flag_prato==='Sì'?'prato':''}">${o.Tipo_operazione}${o.Descrizione?' – '+o.Descrizione:''}</span>`).join('')}</div>` : ''}
-          ${v.Prossimo_intervento ? `<div class="next-int">📅 Prossimo: ${v.Prossimo_intervento} ${v.Mese_prossimo_intervento?'('+meseNome(v.Mese_prossimo_intervento)+' '+v.Anno_prossimo_intervento+')':''}</div>` : ''}
+          ${ops.length ? `<div class="visit-ops">${ops.map(o => `<span class="op-tag ${o.Flag_prato==='Sì'?'prato':''} ${o.Flag_siepe==='Sì'?'siepe':''}">${o.Tipo_operazione}${o.Descrizione?' – '+o.Descrizione:''}</span>`).join('')}</div>` : ''}
         </div>`;
       }).join('') : '<div class="empty"><div class="empty-text">Nessuna visita</div></div>'}
     </div>`;
@@ -1023,17 +1108,20 @@ function renderProssimi() {
       else if (diffDays < 30) { urgClass = 'giallo'; urgLabel = 'Imminente'; }
       else { urgClass = 'verde'; urgLabel = dataStr; }
     }
-    return `<div class="card" style="display:flex; align-items:center; gap:14px">
-      <div class="semaforo ${urgClass}" style="width:12px;height:12px;flex-shrink:0"></div>
-      <div style="flex:1">
-        <div style="font-weight:600; font-size:0.95rem">${nome}</div>
-        <div style="font-size:0.78rem; color:var(--text-light)">${citta}</div>
-        <div style="font-size:0.82rem; color:var(--text-mid); margin-top:4px">${v.Prossimo_intervento || ''}</div>
+    return `<div class="card" style="padding:14px">
+      <div style="display:flex; align-items:center; gap:12px">
+        <div class="semaforo ${urgClass}" style="width:12px;height:12px;flex-shrink:0"></div>
+        <div style="flex:1">
+          <div style="font-weight:600; font-size:0.95rem">${nome}</div>
+          <div style="font-size:0.78rem; color:var(--text-light)">${citta}</div>
+          <div style="font-size:0.82rem; color:var(--text-mid); margin-top:3px">${v.Prossimo_intervento || ''}</div>
+        </div>
+        <div style="text-align:right; flex-shrink:0">
+          <div style="font-size:0.82rem; font-weight:600; color:var(--green-deep)">${dataStr}</div>
+          ${urgClass === 'rosso' ? '<div style="font-size:0.68rem;color:var(--red);font-weight:600">SCADUTO</div>' : ''}
+        </div>
       </div>
-      <div style="text-align:right; flex-shrink:0">
-        <div style="font-size:0.82rem; font-weight:600; color:var(--green-deep)">${dataStr}</div>
-        ${urgClass === 'rosso' ? '<div style="font-size:0.68rem;color:var(--red);font-weight:600">SCADUTO</div>' : ''}
-      </div>
+      <button class="btn btn-secondary btn-sm" style="margin-top:10px;width:100%" onclick="segnaFatto('${v.VisitaID}')">✓ Fatto — cancella prossimo intervento</button>
     </div>`;
   }).join('');
 }
@@ -1055,11 +1143,19 @@ function renderPrati() {
     const visitIds = DB.visite.filter(v => v.ClienteID == c.ClienteID && v.Data && new Date(v.Data).getFullYear() == anno).map(v => v.VisitaID);
     const opsCliente = DB.operazioni.filter(o => visitIds.includes(o.VisitaID));
 
-    // calcolo N e K somministrati
+    // calcolo N e K somministrati (da N_tot_g / mq se N_g_m2 non presente)
     let nSomm = 0, kSomm = 0;
     opsCliente.filter(o => o.Tipo_operazione === 'Concimazione' && o.Flag_prato === 'Sì').forEach(o => {
-      nSomm += parseFloat(o.N_g_m2) || 0;
-      kSomm += parseFloat(o.K_g_m2) || 0;
+      if (parseFloat(o.N_g_m2) > 0) {
+        nSomm += parseFloat(o.N_g_m2);
+        kSomm += parseFloat(o.K_g_m2) || 0;
+      } else if (o.ConcimeID && o.Dose_kg && mq > 0) {
+        const conc = DB.concimi.find(cc => cc.ConcimeID == o.ConcimeID);
+        if (conc) {
+          nSomm += (parseFloat(o.Dose_kg) * parseFloat(conc.N_percento) / 100 * 1000) / mq;
+          kSomm += (parseFloat(o.Dose_kg) * parseFloat(conc.K_percento) / 100 * 1000) / mq;
+        }
+      }
     });
 
     // semaforo
@@ -1137,6 +1233,9 @@ function openNuovoCliente() {
   document.getElementById('f-cliente-fascia').value = '';
   document.getElementById('toggle-prato').classList.remove('on');
   document.getElementById('prato-fields').style.display = 'none';
+  siepeEnabled = false;
+  document.getElementById('toggle-siepe').classList.remove('on');
+  document.getElementById('siepe-fields').style.display = 'none';
   document.getElementById('addr-suggestions').style.display = 'none';
   document.getElementById('overlay-cliente').classList.add('open');
 }
@@ -1157,6 +1256,13 @@ function editCliente(id) {
   document.getElementById('f-cliente-fascia').value = c.FasciaID || '';
   document.getElementById('toggle-prato').classList.toggle('on', pratoEnabled);
   document.getElementById('prato-fields').style.display = pratoEnabled ? 'block' : 'none';
+  siepeEnabled = c.Ha_siepe === 'Sì';
+  document.getElementById('toggle-siepe').classList.toggle('on', siepeEnabled);
+  document.getElementById('siepe-fields').style.display = siepeEnabled ? 'block' : 'none';
+  document.getElementById('f-cliente-siepe-specie').value = c.Siepe_specie || '';
+  document.getElementById('f-cliente-siepe-lunghezza').value = c.Siepe_lunghezza || '';
+  document.getElementById('f-cliente-siepe-altezza').value = c.Siepe_altezza || '';
+  document.getElementById('f-cliente-siepe-larghezza').value = c.Siepe_larghezza || '';
   document.getElementById('overlay-cliente').classList.add('open');
 }
 
@@ -1164,6 +1270,12 @@ function togglePrato() {
   pratoEnabled = !pratoEnabled;
   document.getElementById('toggle-prato').classList.toggle('on', pratoEnabled);
   document.getElementById('prato-fields').style.display = pratoEnabled ? 'block' : 'none';
+}
+
+function toggleSiepe() {
+  siepeEnabled = !siepeEnabled;
+  document.getElementById('toggle-siepe').classList.toggle('on', siepeEnabled);
+  document.getElementById('siepe-fields').style.display = siepeEnabled ? 'block' : 'none';
 }
 
 async function saveCliente() {
@@ -1179,6 +1291,11 @@ async function saveCliente() {
     Ha_prato: pratoEnabled ? 'Sì' : '',
     Mq_prato: pratoEnabled ? document.getElementById('f-cliente-mq').value : '',
     FasciaID: pratoEnabled ? document.getElementById('f-cliente-fascia').value : '',
+    Ha_siepe: siepeEnabled ? 'Sì' : '',
+    Siepe_specie: siepeEnabled ? document.getElementById('f-cliente-siepe-specie').value : '',
+    Siepe_lunghezza: siepeEnabled ? document.getElementById('f-cliente-siepe-lunghezza').value : '',
+    Siepe_altezza: siepeEnabled ? document.getElementById('f-cliente-siepe-altezza').value : '',
+    Siepe_larghezza: siepeEnabled ? document.getElementById('f-cliente-siepe-larghezza').value : '',
     Note_cliente: document.getElementById('f-cliente-note').value.trim(),
   };
   try {
@@ -1308,9 +1425,15 @@ async function saveVisita() {
   };
   try {
     await apiPost({ action:'insert', foglio:'VISITE', data: visita });
-    // salva operazioni
+    // salva operazioni (con calcolo N_g_m2 / K_g_m2 se prato)
+    const cObj = DB.clienti.find(cc => cc.ClienteID == cid);
+    const mq = parseFloat(cObj?.Mq_prato) || 0;
     for (const op of pendingOperazioni) {
-      const opData = { ...op, OperazioneID: generateID(), VisitaID: visitaID };
+      const nTot = parseFloat(op.N_tot_g) || 0;
+      const kTot = parseFloat(op.K_tot_g) || 0;
+      const nM2 = (op.Flag_prato === 'Sì' && mq > 0) ? (nTot / mq).toFixed(2) : 0;
+      const kM2 = (op.Flag_prato === 'Sì' && mq > 0) ? (kTot / mq).toFixed(2) : 0;
+      const opData = { ...op, OperazioneID: generateID(), VisitaID: visitaID, N_g_m2: nM2, K_g_m2: kM2 };
       await apiPost({ action:'insert', foglio:'OPERAZIONI', data: opData });
     }
     showToast('✅ Visita salvata');
@@ -1326,7 +1449,9 @@ function addOperazione() {
   ['f-op-tipo','f-op-desc','f-op-concime','f-op-semente','f-op-fitofarmaco'].forEach(id => { const el = document.getElementById(id); if(el) el.value = ''; });
   ['f-op-dose','f-op-dose-s','f-op-dose-f'].forEach(id => { const el = document.getElementById(id); if(el) el.value = ''; });
   opPratoEnabled = false;
+  opSiepeEnabled = false;
   document.getElementById('toggle-op-prato')?.classList.remove('on');
+  document.getElementById('toggle-op-siepe')?.classList.remove('on');
   // popola select
   populateOpSelects();
   onTipoOpChange();
@@ -1345,14 +1470,18 @@ function populateOpSelects() {
 function onTipoOpChange() {
   const tipo = document.getElementById('f-op-tipo').value;
   const showPrato = !['Potatura','Altro',''].includes(tipo);
+  document.getElementById('op-siepe-toggle-wrap').style.display = tipo === 'Potatura' ? 'block' : 'none';
   document.getElementById('op-prato-toggle-wrap').style.display = showPrato ? 'block' : 'none';
   document.getElementById('op-concime-wrap').style.display = tipo === 'Concimazione' ? 'block' : 'none';
   document.getElementById('op-semente-wrap').style.display = tipo === 'Semina' ? 'block' : 'none';
   document.getElementById('op-fitofarmaco-wrap').style.display = ['Diserbo','Trattamento fitosanitario'].includes(tipo) ? 'block' : 'none';
-  // auto flag prato per arieggiatura
   if (tipo === 'Arieggiatura') {
     opPratoEnabled = true;
     document.getElementById('toggle-op-prato').classList.add('on');
+  }
+  if (tipo !== 'Potatura') {
+    opSiepeEnabled = false;
+    document.getElementById('toggle-op-siepe').classList.remove('on');
   }
 }
 
@@ -1361,19 +1490,36 @@ function toggleOpPrato() {
   document.getElementById('toggle-op-prato').classList.toggle('on', opPratoEnabled);
 }
 
+function toggleOpSiepe() {
+  opSiepeEnabled = !opSiepeEnabled;
+  document.getElementById('toggle-op-siepe').classList.toggle('on', opSiepeEnabled);
+}
+
 function saveOperazione() {
   const tipo = document.getElementById('f-op-tipo').value;
   if (!tipo) { showToast('⚠️ Seleziona il tipo'); return; }
+  const concimeID = document.getElementById('f-op-concime').value;
+  const dose = parseFloat(document.getElementById('f-op-dose').value) || 0;
+  // calcola N e K in base al concime e alla dose (da completare con mq cliente al salvataggio)
+  let nTot = 0, kTot = 0;
+  if (concimeID && dose) {
+    const conc = DB.concimi.find(cc => cc.ConcimeID == concimeID);
+    if (conc) {
+      nTot = dose * parseFloat(conc.N_percento) / 100 * 1000; // grammi totali
+      kTot = dose * parseFloat(conc.K_percento) / 100 * 1000;
+    }
+  }
   const op = {
     Tipo_operazione: tipo,
     Descrizione: document.getElementById('f-op-desc').value.trim(),
     Flag_prato: opPratoEnabled || tipo === 'Arieggiatura' ? 'Sì' : '',
-    ConcimeID: document.getElementById('f-op-concime').value,
+    Flag_siepe: opSiepeEnabled && tipo === 'Potatura' ? 'Sì' : '',
+    ConcimeID: concimeID,
     SementeID: document.getElementById('f-op-semente').value,
     FitofarmacaID: document.getElementById('f-op-fitofarmaco').value,
-    Dose_kg: document.getElementById('f-op-dose').value || document.getElementById('f-op-dose-s').value || document.getElementById('f-op-dose-f').value,
+    Dose_kg: dose || document.getElementById('f-op-dose-s').value || document.getElementById('f-op-dose-f').value,
     Note_operazione: '',
-    N_tot_g: 0, K_tot_g: 0, N_g_m2: 0, K_g_m2: 0,
+    N_tot_g: nTot.toFixed(0), K_tot_g: kTot.toFixed(0), N_g_m2: 0, K_g_m2: 0,
   };
   if (pendingOpIndex !== null) pendingOperazioni[pendingOpIndex] = op;
   else pendingOperazioni.push(op);
@@ -1393,6 +1539,20 @@ function renderOperazioniList() {
 }
 
 // ── UTILS ──
+async function segnaFatto(visitaID) {
+  try {
+    await apiPost({ action:'update', foglio:'VISITE', id:visitaID, idField:'VisitaID', data:{
+      Prossimo_intervento: '',
+      Mese_prossimo_intervento: '',
+      Anno_prossimo_intervento: ''
+    }});
+    showToast('✅ Intervento segnato come fatto');
+    await loadAll();
+    renderProssimi();
+    renderVisite();
+  } catch(e) { showToast('❌ Errore'); }
+}
+
 function generateID() {
   return Math.random().toString(36).substr(2, 8);
 }
