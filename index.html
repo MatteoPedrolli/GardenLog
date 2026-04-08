@@ -1127,6 +1127,71 @@ function renderProssimi() {
 }
 
 // ── PRATI REPORT ──
+function calcPratoData(c, anno) {
+  const targetN = parseFloat(c.Target_N_g_m2_anno) || 0;
+  const targetK = parseFloat(c.Target_K_g_m2_anno) || 0;
+  const mq = parseFloat(c.Mq_prato) || 0;
+  const visitIds = DB.visite
+    .filter(v => v.ClienteID == c.ClienteID && v.Data && new Date(v.Data).getFullYear() == anno)
+    .map(v => v.VisitaID);
+  const opsCliente = DB.operazioni.filter(o => visitIds.includes(o.VisitaID));
+
+  // concimazioni con dettaglio
+  const concimazioni = opsCliente
+    .filter(o => o.Tipo_operazione === 'Concimazione' && o.Flag_prato === 'Sì')
+    .map(o => {
+      const conc = DB.concimi.find(cc => cc.ConcimeID == o.ConcimeID);
+      const v = DB.visite.find(vv => vv.VisitaID == o.VisitaID);
+      let nM2 = parseFloat(o.N_g_m2) || 0;
+      let kM2 = parseFloat(o.K_g_m2) || 0;
+      if (!nM2 && conc && o.Dose_kg && mq > 0) {
+        nM2 = (parseFloat(o.Dose_kg) * parseFloat(conc.N_percento) / 100 * 1000) / mq;
+        kM2 = (parseFloat(o.Dose_kg) * parseFloat(conc.K_percento) / 100 * 1000) / mq;
+      }
+      return {
+        data: v?.Data ? new Date(v.Data) : null,
+        concime: conc?.Concime || '–',
+        dose: o.Dose_kg || '–',
+        nM2, kM2
+      };
+    })
+    .sort((a,b) => (a.data||0) - (b.data||0));
+
+  const nSomm = concimazioni.reduce((s, o) => s + o.nM2, 0);
+  const kSomm = concimazioni.reduce((s, o) => s + o.kM2, 0);
+
+  const pctN = targetN > 0 ? Math.min(nSomm / targetN, 1) : 0;
+  let sem = 'rosso', semLabel = 'Da avviare';
+  if (nSomm > 0 && pctN < 0.4) { sem = 'rosso'; semLabel = 'In corso'; }
+  if (pctN >= 0.4) { sem = 'giallo'; semLabel = 'In corso'; }
+  if (pctN >= 0.8) { sem = 'verde'; semLabel = 'In target'; }
+  if (targetN === 0) { sem = 'rosso'; semLabel = 'Nessun target'; }
+
+  const lastOpDate = (tipo) => {
+    const ops = opsCliente.filter(o => o.Flag_prato === 'Sì' && o.Tipo_operazione === tipo);
+    if (!ops.length) return '–';
+    const v = DB.visite.find(vv => vv.VisitaID == ops[ops.length-1].VisitaID);
+    return v?.Data ? new Date(v.Data).toLocaleDateString('it-IT', {day:'numeric', month:'short'}) : '–';
+  };
+
+  return { targetN, targetK, mq, nSomm, kSomm, pctN, sem, semLabel, concimazioni,
+    lastConc: lastOpDate('Concimazione'),
+    lastSemina: lastOpDate('Semina'),
+    lastArie: lastOpDate('Arieggiatura') };
+}
+
+function togglePratoDettaglio(id) {
+  const el = document.getElementById('prato-dettaglio-' + id);
+  const btn = document.getElementById('prato-dettaglio-btn-' + id);
+  if (el.style.display === 'none') {
+    el.style.display = 'block';
+    btn.textContent = '▲ Chiudi dettaglio';
+  } else {
+    el.style.display = 'none';
+    btn.textContent = '▼ Dettaglio concimazioni';
+  }
+}
+
 function renderPrati() {
   const list = document.getElementById('prati-list');
   if (!list) return;
@@ -1135,88 +1200,76 @@ function renderPrati() {
 
   const anno = new Date().getFullYear();
   list.innerHTML = pratiClienti.map(c => {
-    const targetN = parseFloat(c.Target_N_g_m2_anno) || 0;
-    const targetK = parseFloat(c.Target_K_g_m2_anno) || 0;
-    const mq = parseFloat(c.Mq_prato) || 0;
+    const d = calcPratoData(c, anno);
+    const safeId = c.ClienteID.replace(/[^a-z0-9]/gi, '_');
 
-    // visite del cliente
-    const visitIds = DB.visite.filter(v => v.ClienteID == c.ClienteID && v.Data && new Date(v.Data).getFullYear() == anno).map(v => v.VisitaID);
-    const opsCliente = DB.operazioni.filter(o => visitIds.includes(o.VisitaID));
-
-    // calcolo N e K somministrati (da N_tot_g / mq se N_g_m2 non presente)
-    let nSomm = 0, kSomm = 0;
-    opsCliente.filter(o => o.Tipo_operazione === 'Concimazione' && o.Flag_prato === 'Sì').forEach(o => {
-      if (parseFloat(o.N_g_m2) > 0) {
-        nSomm += parseFloat(o.N_g_m2);
-        kSomm += parseFloat(o.K_g_m2) || 0;
-      } else if (o.ConcimeID && o.Dose_kg && mq > 0) {
-        const conc = DB.concimi.find(cc => cc.ConcimeID == o.ConcimeID);
-        if (conc) {
-          nSomm += (parseFloat(o.Dose_kg) * parseFloat(conc.N_percento) / 100 * 1000) / mq;
-          kSomm += (parseFloat(o.Dose_kg) * parseFloat(conc.K_percento) / 100 * 1000) / mq;
-        }
-      }
-    });
-
-    // semaforo
-    const pctN = targetN > 0 ? Math.min(nSomm / targetN, 1) : 0;
-    const pct = targetN > 0 ? pctN : 0;
-    let sem = 'rosso', semLabel = 'Da avviare';
-    if (pct >= 0.8) { sem = 'verde'; semLabel = 'In target'; }
-    else if (pct >= 0.4) { sem = 'giallo'; semLabel = 'In corso'; }
-
-    // ultime operazioni prato
-    const lastOp = (tipo) => {
-      const ops = opsCliente.filter(o => o.Flag_prato === 'Sì' && o.Tipo_operazione === tipo);
-      if (!ops.length) return '–';
-      const v = DB.visite.find(vv => vv.VisitaID == ops[ops.length-1].VisitaID);
-      return v?.Data ? new Date(v.Data).toLocaleDateString('it-IT', {day:'numeric', month:'short'}) : '–';
-    };
-    const lastConc = lastOp('Concimazione');
-    const lastSemina = lastOp('Semina');
-    const lastArie = lastOp('Arieggiatura');
-    const lastConc_prod = (() => {
-      const ops = opsCliente.filter(o => o.Flag_prato === 'Sì' && o.Tipo_operazione === 'Concimazione' && o.ConcimeID);
-      if (!ops.length) return '';
-      const conc = DB.concimi.find(cc => cc.ConcimeID == ops[ops.length-1].ConcimeID);
-      return conc ? conc.Concime : '';
-    })();
+    const dettaglioRows = d.concimazioni.length ? d.concimazioni.map((o, i) => {
+      const dataStr = o.data ? o.data.toLocaleDateString('it-IT', {day:'numeric', month:'short'}) : '–';
+      const nCum = d.concimazioni.slice(0, i+1).reduce((s,x) => s+x.nM2, 0);
+      const kCum = d.concimazioni.slice(0, i+1).reduce((s,x) => s+x.kM2, 0);
+      return `<div style="display:grid;grid-template-columns:60px 1fr 52px 52px 52px;gap:4px;align-items:center;padding:7px 0;border-bottom:1px solid var(--border);font-size:0.78rem">
+        <span style="color:var(--text-light)">${dataStr}</span>
+        <span style="font-weight:500">${o.concime}</span>
+        <span style="text-align:center;color:var(--text-light)">${o.dose} kg</span>
+        <span style="text-align:center;color:var(--green-deep);font-weight:600">+${o.nM2.toFixed(1)}</span>
+        <span style="text-align:center;color:var(--earth);font-weight:600">${nCum.toFixed(1)}</span>
+      </div>`;
+    }).join('') + `<div style="display:grid;grid-template-columns:60px 1fr 52px 52px 52px;gap:4px;padding:8px 0 2px;font-size:0.72rem;color:var(--text-light)">
+        <span></span><span></span><span style="text-align:center">Dose</span><span style="text-align:center">N +</span><span style="text-align:center">N cum.</span>
+      </div>`
+    : '<div style="font-size:0.82rem;color:var(--text-light);padding:8px 0">Nessuna concimazione registrata per il '+anno+'</div>';
 
     return `<div class="prato-card">
       <div class="prato-header">
-        <div class="semaforo ${sem}"></div>
+        <div class="semaforo ${d.sem}"></div>
         <div style="flex:1">
           <div class="prato-name">${c.Cliente}</div>
-          <div class="prato-fascia">Fascia ${c.FasciaID} · ${mq} mq · ${semLabel}</div>
+          <div class="prato-fascia">Fascia ${c.FasciaID || '–'} · ${d.mq} mq</div>
+        </div>
+        <div style="text-align:right;flex-shrink:0">
+          <span style="font-size:0.72rem;font-weight:600;padding:3px 8px;border-radius:20px;background:${d.sem==='verde'?'#d4edda':d.sem==='giallo'?'#fef3cd':'#fdecea'};color:${d.sem==='verde'?'#155724':d.sem==='giallo'?'#856404':'#721c24'}">${d.semLabel}</span>
         </div>
       </div>
-      ${targetN > 0 ? `
+      ${d.targetN > 0 ? `
       <div class="prato-grid">
         <div class="prato-stat">
-          <div class="prato-stat-num">${nSomm.toFixed(0)}<span style="font-size:0.65rem;font-weight:400"> g/m²</span></div>
+          <div class="prato-stat-num">${d.nSomm.toFixed(0)}<span style="font-size:0.65rem;font-weight:400"> g/m²</span></div>
           <div class="prato-stat-lbl">N somministrato</div>
         </div>
         <div class="prato-stat">
-          <div class="prato-stat-num">${targetN}<span style="font-size:0.65rem;font-weight:400"> g/m²</span></div>
+          <div class="prato-stat-num">${d.targetN}<span style="font-size:0.65rem;font-weight:400"> g/m²</span></div>
           <div class="prato-stat-lbl">Target N/anno</div>
         </div>
         <div class="prato-stat">
-          <div class="prato-stat-num">${kSomm.toFixed(0)}<span style="font-size:0.65rem;font-weight:400"> g/m²</span></div>
+          <div class="prato-stat-num">${d.kSomm.toFixed(0)}<span style="font-size:0.65rem;font-weight:400"> g/m²</span></div>
           <div class="prato-stat-lbl">K somministrato</div>
         </div>
         <div class="prato-stat">
-          <div class="prato-stat-num">${targetK}<span style="font-size:0.65rem;font-weight:400"> g/m²</span></div>
+          <div class="prato-stat-num">${d.targetK}<span style="font-size:0.65rem;font-weight:400"> g/m²</span></div>
           <div class="prato-stat-lbl">Target K/anno</div>
         </div>
       </div>
       <div class="prato-bar">
-        <div class="prato-bar-label"><span>Azoto ${anno}</span><span>${Math.round(pctN*100)}%</span></div>
-        <div class="bar-track"><div class="bar-fill ${sem}" style="width:${Math.round(pctN*100)}%"></div></div>
-      </div>` : ''}
+        <div class="prato-bar-label"><span>Azoto ${anno}</span><span>${Math.round(d.pctN*100)}% del target</span></div>
+        <div class="bar-track"><div class="bar-fill ${d.sem}" style="width:${Math.round(d.pctN*100)}%"></div></div>
+      </div>
+      <button id="prato-dettaglio-btn-${safeId}" onclick="togglePratoDettaglio('${safeId}')"
+        style="width:100%;margin-top:10px;padding:8px;background:none;border:1px solid var(--border);border-radius:8px;font-size:0.78rem;color:var(--green-mid);cursor:pointer;font-family:var(--font-body)">
+        ▼ Dettaglio concimazioni
+      </button>
+      <div id="prato-dettaglio-${safeId}" style="display:none;margin-top:8px;padding:8px 10px;background:var(--green-mist);border-radius:10px">
+        <div style="font-size:0.72rem;font-weight:700;color:var(--green-deep);margin-bottom:4px;text-transform:uppercase;letter-spacing:0.04em">Concimazioni ${anno}</div>
+        ${dettaglioRows}
+        <div style="margin-top:10px;padding-top:8px;border-top:2px solid var(--green-pale);display:flex;justify-content:space-between;font-size:0.82rem">
+          <span style="font-weight:600;color:var(--green-deep)">Totale N: ${d.nSomm.toFixed(1)} / ${d.targetN} g/m²</span>
+          <span style="font-weight:600;color:var(--earth)">Totale K: ${d.kSomm.toFixed(1)} / ${d.targetK} g/m²</span>
+        </div>
+        <div style="margin-top:6px;font-size:0.78rem;color:var(--text-light)">Manca: N ${Math.max(0, d.targetN - d.nSomm).toFixed(1)} g/m² · K ${Math.max(0, d.targetK - d.kSomm).toFixed(1)} g/m²</div>
+      </div>` : '<div style="font-size:0.8rem;color:var(--text-light);margin-bottom:8px">Nessun target impostato — inserisci mq e fascia nel cliente</div>'}
       <div class="prato-ops">
-        <div class="prato-op-item"><div class="prato-op-date">${lastConc}</div><div class="prato-op-label">Ult. concimazione${lastConc_prod ? '<br>'+lastConc_prod : ''}</div></div>
-        <div class="prato-op-item"><div class="prato-op-date">${lastSemina}</div><div class="prato-op-label">Ult. semina</div></div>
-        <div class="prato-op-item"><div class="prato-op-date">${lastArie}</div><div class="prato-op-label">Ult. arieggiatura</div></div>
+        <div class="prato-op-item"><div class="prato-op-date">${d.lastConc}</div><div class="prato-op-label">Ult. concimazione</div></div>
+        <div class="prato-op-item"><div class="prato-op-date">${d.lastSemina}</div><div class="prato-op-label">Ult. semina</div></div>
+        <div class="prato-op-item"><div class="prato-op-date">${d.lastArie}</div><div class="prato-op-label">Ult. arieggiatura</div></div>
       </div>
     </div>`;
   }).join('');
