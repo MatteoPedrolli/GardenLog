@@ -2,1636 +2,1019 @@
 <html lang="it">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-<meta name="theme-color" content="#1a3a1a">
-<meta name="mobile-web-app-capable" content="yes">
-<meta name="apple-mobile-web-app-capable" content="yes">
-<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-<meta name="apple-mobile-web-app-title" content="GiardinoApp">
-<title>GiardinoApp</title>
-<link rel="manifest" href="manifest.json">
-<link rel="preconnect" href="https://fonts.googleapis.com">
-<link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@400;600;700&family=DM+Sans:wght@300;400;500;600&display=swap" rel="stylesheet">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>盆栽 Bonsai Manager</title>
+<link href="https://fonts.googleapis.com/css2?family=Noto+Serif+JP:wght@300;400;600&family=DM+Mono:ital,wght@0,300;0,400;0,500;1,300&display=swap" rel="stylesheet">
 <style>
-:root {
-  --green-deep: #1a3a1a;
-  --green-mid: #2d6a2d;
-  --green-light: #4a9e4a;
-  --green-pale: #d4edda;
-  --green-mist: #eef7ee;
-  --earth: #8B6914;
-  --earth-light: #f5ecd7;
-  --cream: #faf8f3;
-  --white: #ffffff;
-  --text: #1a1a1a;
-  --text-mid: #444;
-  --text-light: #888;
-  --border: #dde8dd;
-  --red: #c0392b;
-  --yellow: #e67e22;
-  --radius: 16px;
-  --radius-sm: 10px;
-  --shadow: 0 4px 24px rgba(26,58,26,0.10);
-  --shadow-lg: 0 8px 40px rgba(26,58,26,0.16);
-  --font-display: 'Playfair Display', serif;
-  --font-body: 'DM Sans', sans-serif;
-  --nav-h: 64px;
-  --top-h: 60px;
+:root{
+  --moss:#2d5016;--sage:#5a8a2e;--bamboo:#8aab4a;
+  --paper:#f5f0e8;--mist:#e8efe0;--border:#c8d9b0;
+  --ink:#1a1a18;--amber:#c17f24;--shadow:rgba(45,80,22,0.13);--err:#c0392b;
 }
-
-*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
-
-html, body {
-  height: 100%;
-  background: var(--cream);
-  font-family: var(--font-body);
-  color: var(--text);
-  overflow: hidden;
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+body{font-family:'DM Mono',monospace;background:var(--paper);color:var(--ink);min-height:100vh;
+  background-image:radial-gradient(ellipse at 8% 15%,rgba(90,138,46,.07) 0%,transparent 55%),
+    radial-gradient(ellipse at 92% 85%,rgba(45,80,22,.05) 0%,transparent 55%);}
+#loader{position:fixed;inset:0;background:rgba(245,240,232,.9);display:flex;flex-direction:column;
+  align-items:center;justify-content:center;z-index:999;gap:16px;transition:opacity .3s}
+#loader.hidden{opacity:0;pointer-events:none}
+.spinner{width:40px;height:40px;border:3px solid var(--border);border-top-color:var(--sage);
+  border-radius:50%;animation:spin .8s linear infinite}
+@keyframes spin{to{transform:rotate(360deg)}}
+#loader p{font-size:11px;letter-spacing:1.5px;color:var(--sage);text-transform:uppercase}
+header{background:var(--moss);position:sticky;top:0;z-index:200;box-shadow:0 2px 20px var(--shadow)}
+.h-inner{display:flex;flex-direction:column}
+.h-brand{padding:14px 24px;display:flex;align-items:center;gap:14px}
+.h-kanji{font-family:'Noto Serif JP',serif;font-size:24px;color:var(--bamboo);line-height:1}
+.h-texts{display:flex;flex-direction:column}
+.h-title{font-family:'Noto Serif JP',serif;font-size:13px;color:#fff;font-weight:600;letter-spacing:2px;text-transform:uppercase}
+.h-sub{font-size:9px;color:var(--bamboo);letter-spacing:1px;font-weight:300}
+nav{display:flex;align-items:stretch;overflow-x:auto;border-top:1px solid rgba(255,255,255,.1);background:rgba(0,0,0,.15)}
+nav button{background:none;border:none;color:rgba(255,255,255,.6);font-family:'DM Mono',monospace;
+  font-size:10px;letter-spacing:1px;text-transform:uppercase;padding:10px 18px;cursor:pointer;
+  transition:all .2s;border-bottom:3px solid transparent;white-space:nowrap;flex:1;min-width:60px}
+nav button .ico{display:block;font-size:14px;margin-bottom:2px;text-align:center}
+nav button:hover{color:#fff;background:rgba(255,255,255,.06)}
+nav button.active{color:var(--bamboo);border-bottom-color:var(--bamboo);background:rgba(255,255,255,.04)}
+main{max-width:1180px;margin:0 auto;padding:28px 20px}
+.section{display:none;animation:fadeIn .3s ease}
+.section.active{display:block}
+@keyframes fadeIn{from{opacity:0;transform:translateY(5px)}to{opacity:1;transform:none}}
+.sec-hdr{display:flex;align-items:baseline;gap:14px;margin-bottom:24px;padding-bottom:12px;border-bottom:2px solid var(--border)}
+.sec-title{font-family:'Noto Serif JP',serif;font-size:20px;font-weight:600;color:var(--moss)}
+.sec-badge{font-size:10px;color:var(--sage);background:var(--mist);padding:3px 10px;border-radius:20px;border:1px solid var(--border);letter-spacing:.8px}
+.fcard{background:#fff;border-radius:12px;border:1px solid var(--border);box-shadow:0 4px 20px var(--shadow);overflow:hidden;margin-bottom:24px}
+.fcard-hdr{background:linear-gradient(135deg,var(--moss) 0%,var(--sage) 100%);padding:14px 22px;display:flex;align-items:center;gap:10px}
+.fcard-hdr span{font-size:18px}
+.fcard-hdr h3{font-family:'Noto Serif JP',serif;font-size:13px;color:#fff;font-weight:600;letter-spacing:1px}
+.fcard-body{padding:22px}
+.fgrid{display:grid;grid-template-columns:repeat(auto-fit,minmax(190px,1fr));gap:16px}
+.fg{display:flex;flex-direction:column;gap:5px}
+.fg.full{grid-column:1/-1}
+.fg label{font-size:9px;letter-spacing:1.2px;text-transform:uppercase;color:var(--sage);font-weight:500}
+.fg input,.fg select,.fg textarea{font-family:'DM Mono',monospace;font-size:12px;border:1.5px solid var(--border);
+  border-radius:6px;padding:8px 11px;background:var(--paper);color:var(--ink);outline:none;transition:border-color .2s,box-shadow .2s}
+.fg input:focus,.fg select:focus,.fg textarea:focus{border-color:var(--sage);box-shadow:0 0 0 3px rgba(90,138,46,.11);background:#fff}
+.fg input[readonly]{color:var(--moss);font-weight:500;cursor:default;background:var(--mist)}
+.fg textarea{resize:vertical;min-height:65px}
+/* TERRICCI */
+.terr-block{margin-top:20px;background:var(--mist);border-radius:10px;border:1px solid var(--border);padding:18px 20px}
+.terr-title{font-size:9px;letter-spacing:1.2px;text-transform:uppercase;color:var(--sage);font-weight:500;margin-bottom:16px}
+.terr-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(155px,1fr));gap:12px}
+.terr-item{background:#fff;border-radius:8px;border:1px solid var(--border);padding:13px 13px 10px;display:flex;flex-direction:column;gap:5px}
+.terr-name{font-size:10px;font-weight:500;color:var(--moss)}
+.terr-price{font-size:9px;color:#aaa}
+.terr-item input{font-family:'DM Mono',monospace;font-size:13px;border:1.5px solid var(--border);
+  border-radius:5px;padding:6px 9px;background:var(--paper);color:var(--ink);outline:none;width:100%;transition:border-color .2s}
+.terr-item input:focus{border-color:var(--sage);background:#fff}
+.terr-totals{margin-top:14px;display:flex;gap:10px;flex-wrap:wrap}
+.terr-tot{background:#fff;border-radius:6px;border:1px solid var(--border);padding:8px 14px}
+.terr-tot-lbl{font-size:9px;letter-spacing:.8px;text-transform:uppercase;color:#aaa;margin-bottom:3px}
+.terr-tot-val{font-size:13px;font-weight:500;color:var(--moss)}
+/* INFO */
+.info-box{background:var(--mist);border:1px solid var(--border);border-radius:8px;padding:12px 16px;
+  font-size:11px;color:var(--sage);margin-bottom:20px;display:flex;gap:8px;line-height:1.5}
+/* BUTTONS */
+.btn-row{display:flex;justify-content:flex-end;gap:9px;margin-top:18px}
+.btn{font-family:'DM Mono',monospace;font-size:10px;letter-spacing:1px;text-transform:uppercase;
+  padding:9px 20px;border-radius:6px;border:none;cursor:pointer;transition:all .2s;font-weight:500}
+.btn-p{background:var(--moss);color:#fff}
+.btn-p:hover{background:var(--sage);transform:translateY(-1px);box-shadow:0 4px 12px var(--shadow)}
+.btn-p:disabled{background:#aaa;cursor:not-allowed;transform:none;box-shadow:none}
+.btn-s{background:var(--mist);color:var(--moss);border:1.5px solid var(--border)}
+.btn-s:hover{background:var(--border)}
+.btn-d{background:#fdecea;color:var(--err);border:1.5px solid #f5b7b1;padding:4px 11px;font-size:9px}
+.btn-d:hover{background:#f5b7b1}
+/* TABLE */
+.twrap{background:#fff;border-radius:12px;border:1px solid var(--border);overflow:auto;box-shadow:0 4px 20px var(--shadow)}
+.twrap table{width:100%;border-collapse:collapse;font-size:11px;min-width:600px}
+.twrap table caption{display:none}
+.twrap thead tr{background:var(--moss)}
+.twrap thead th{font-family:'Noto Serif JP',serif;font-size:9px;font-weight:600;color:rgba(255,255,255,.85);
+  letter-spacing:1px;text-transform:uppercase;padding:13px 14px;text-align:left;white-space:nowrap}
+.twrap tbody tr{border-bottom:1px solid #f0ebe0;transition:background .15s}
+.twrap tbody tr:last-child{border-bottom:none}
+.twrap tbody tr:hover{background:var(--mist)}
+.twrap tbody td{padding:10px 14px;vertical-align:middle}
+.cb{font-family:'DM Mono',monospace;font-size:10px;font-weight:500;background:var(--mist);color:var(--moss);
+  border:1px solid var(--border);padding:2px 7px;border-radius:4px;letter-spacing:.8px;white-space:nowrap}
+.sb{display:inline-flex;align-items:center;font-size:9px;padding:2px 9px;border-radius:20px;font-weight:500;letter-spacing:.5px}
+.sb-a{background:#e8f5e1;color:var(--sage);border:1px solid var(--border)}
+.sb-l{background:#fff3dc;color:var(--amber);border:1px solid #f5d58a}
+.sb-ar{background:#f0f0f0;color:#888;border:1px solid #ddd}
+.empty{text-align:center;padding:40px;color:#bbb;font-size:11px;letter-spacing:1px}
+.empty .eico{font-size:36px;opacity:.45;margin-bottom:10px}
+/* KPI */
+.kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:14px;margin-bottom:24px}
+.kpi{background:#fff;border-radius:10px;border:1px solid var(--border);padding:18px 20px;box-shadow:0 2px 10px var(--shadow)}
+.kpi-lbl{font-size:9px;letter-spacing:1.2px;text-transform:uppercase;color:#999;margin-bottom:6px}
+.kpi-val{font-family:'Noto Serif JP',serif;font-size:26px;font-weight:600;color:var(--moss);line-height:1}
+.kpi-sub{font-size:10px;color:var(--sage);margin-top:4px}
+#toast{position:fixed;bottom:24px;right:24px;background:var(--moss);color:#fff;padding:11px 20px;
+  border-radius:8px;font-size:11px;letter-spacing:.5px;box-shadow:0 8px 24px var(--shadow);
+  opacity:0;transform:translateY(8px);transition:all .3s;z-index:9999}
+#toast.show{opacity:1;transform:none}
+#toast.err{background:var(--err)}
+/* STATO BADGES SPERIMENTALE/PRODUZIONE */
+.sb-sp{background:#e8f0fe;color:#1a5276;border:1px solid #aac4e8}
+.sb-pr{background:#e8f5e1;color:var(--sage);border:1px solid var(--border)}
+/* PROGRESS BAR attecchimento */
+.pbar-wrap{background:#f0f0f0;border-radius:20px;height:8px;overflow:hidden;min-width:80px}
+.pbar{height:100%;border-radius:20px;background:linear-gradient(90deg,var(--sage),var(--bamboo));transition:width .4s}
+/* MODAL PROMOZIONE */
+.modal-bg{position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:500;display:flex;align-items:center;justify-content:center;padding:20px}
+.modal-bg.hidden{display:none}
+.modal{background:#fff;border-radius:14px;padding:28px;max-width:420px;width:100%;box-shadow:0 20px 60px rgba(0,0,0,.25)}
+.modal h3{font-family:'Noto Serif JP',serif;font-size:16px;color:var(--moss);margin-bottom:6px}
+.modal p{font-size:11px;color:#888;margin-bottom:20px;line-height:1.6}
+.modal .fgrid{margin-bottom:16px}
+.btn-promo{background:linear-gradient(135deg,var(--moss),var(--sage));color:#fff;font-size:11px;
+  padding:11px 24px;border-radius:7px;border:none;cursor:pointer;font-family:'DM Mono',monospace;
+  letter-spacing:1px;text-transform:uppercase;width:100%;margin-top:8px;transition:opacity .2s}
+.btn-promo:hover{opacity:.88}
+/* VARIANTE CARD nella sperimentazione */
+.var-card{background:var(--mist);border:1px solid var(--border);border-radius:10px;padding:16px 18px;margin-bottom:12px}
+.var-card-hdr{display:flex;align-items:center;justify-content:space-between;margin-bottom:10px}
+.var-tag{font-family:'DM Mono',monospace;font-size:11px;font-weight:500;color:var(--moss);
+  background:#fff;border:1px solid var(--border);padding:2px 8px;border-radius:4px}
+.var-pct{font-family:'Noto Serif JP',serif;font-size:18px;font-weight:600;color:var(--sage)}
+.var-conclusione{font-size:11px;color:#666;margin-top:8px;font-style:italic;line-height:1.5}
+/* LOG CARD */
+.log-card{background:#fff;border:1px solid var(--border);border-radius:10px;padding:18px 20px;margin-bottom:14px;box-shadow:0 2px 8px var(--shadow)}
+.log-card-hdr{display:flex;align-items:baseline;gap:10px;margin-bottom:12px;padding-bottom:10px;border-bottom:1px solid var(--border)}
+.log-lotto{font-family:'DM Mono',monospace;font-size:12px;font-weight:500;color:var(--moss)}
+.log-specie{font-size:11px;color:#888}
+@media(max-width:640px){
+  .h-brand{padding:10px 16px}
+  .h-kanji{font-size:20px}
+  .h-title{font-size:11px}
+  nav button{padding:8px 10px;font-size:9px;letter-spacing:.5px}
+  nav button .ico{font-size:13px}
+  main{padding:14px 12px}
+  .fgrid,.terr-grid{grid-template-columns:1fr 1fr}
 }
-
-/* ── LAYOUT ── */
-#app { display: flex; flex-direction: column; height: 100dvh; }
-
-#topbar {
-  height: var(--top-h);
-  background: var(--green-deep);
-  display: flex; align-items: center; justify-content: space-between;
-  padding: 0 18px;
-  flex-shrink: 0;
-  position: relative;
-  z-index: 10;
-}
-#topbar h1 {
-  font-family: var(--font-display);
-  color: var(--white);
-  font-size: 1.25rem;
-  font-weight: 600;
-  letter-spacing: 0.02em;
-}
-#topbar .leaf { font-size: 1.4rem; }
-.topbar-action {
-  background: rgba(255,255,255,0.15);
-  border: none; color: var(--white);
-  width: 36px; height: 36px; border-radius: 50%;
-  font-size: 1.2rem; cursor: pointer;
-  display: flex; align-items: center; justify-content: center;
-  transition: background 0.2s;
-}
-.topbar-action:hover { background: rgba(255,255,255,0.25); }
-
-#content {
-  flex: 1;
-  overflow-y: auto;
-  -webkit-overflow-scrolling: touch;
-  padding-bottom: calc(var(--nav-h) + 16px);
-}
-
-#navbar {
-  height: var(--nav-h);
-  background: var(--white);
-  border-top: 1px solid var(--border);
-  display: flex;
-  flex-shrink: 0;
-  position: relative;
-  z-index: 10;
-  box-shadow: 0 -2px 12px rgba(0,0,0,0.06);
-}
-.nav-item {
-  flex: 1; display: flex; flex-direction: column;
-  align-items: center; justify-content: center;
-  gap: 3px; background: none; border: none;
-  cursor: pointer; transition: all 0.2s;
-  font-family: var(--font-body);
-  color: var(--text-light);
-  font-size: 0.62rem; font-weight: 500;
-  letter-spacing: 0.03em; text-transform: uppercase;
-}
-.nav-item .icon { font-size: 1.35rem; transition: transform 0.2s; }
-.nav-item.active { color: var(--green-mid); }
-.nav-item.active .icon { transform: scale(1.15); }
-.nav-item:hover .icon { transform: scale(1.1); }
-
-/* ── PAGES ── */
-.page { display: none; }
-.page.active { display: block; }
-
-/* ── SHARED COMPONENTS ── */
-.section-title {
-  font-family: var(--font-display);
-  font-size: 1.4rem;
-  font-weight: 600;
-  color: var(--green-deep);
-  padding: 20px 18px 12px;
-}
-
-.card {
-  background: var(--white);
-  border-radius: var(--radius);
-  margin: 0 14px 12px;
-  padding: 16px;
-  box-shadow: var(--shadow);
-  border: 1px solid var(--border);
-}
-
-.card-title {
-  font-family: var(--font-display);
-  font-size: 1rem;
-  font-weight: 600;
-  color: var(--green-deep);
-  margin-bottom: 4px;
-}
-.card-sub { font-size: 0.8rem; color: var(--text-light); }
-
-.btn {
-  display: inline-flex; align-items: center; justify-content: center; gap: 6px;
-  padding: 12px 20px; border-radius: var(--radius-sm);
-  border: none; cursor: pointer;
-  font-family: var(--font-body); font-size: 0.9rem; font-weight: 500;
-  transition: all 0.2s; width: 100%;
-}
-.btn-primary { background: var(--green-mid); color: var(--white); }
-.btn-primary:hover { background: var(--green-deep); transform: translateY(-1px); }
-.btn-secondary { background: var(--green-mist); color: var(--green-mid); border: 1px solid var(--green-pale); }
-.btn-danger { background: #fdecea; color: var(--red); }
-.btn-sm { padding: 8px 14px; font-size: 0.8rem; width: auto; }
-
-.fab {
-  position: fixed; bottom: calc(var(--nav-h) + 16px); right: 18px;
-  width: 54px; height: 54px; border-radius: 50%;
-  background: var(--green-mid); color: var(--white);
-  border: none; font-size: 1.6rem; cursor: pointer;
-  box-shadow: var(--shadow-lg);
-  display: flex; align-items: center; justify-content: center;
-  transition: all 0.2s; z-index: 5;
-}
-.fab:hover { background: var(--green-deep); transform: scale(1.08); }
-
-/* ── FORM ── */
-.form-group { margin-bottom: 14px; }
-.form-label {
-  display: block; font-size: 0.78rem; font-weight: 600;
-  color: var(--green-deep); text-transform: uppercase;
-  letter-spacing: 0.05em; margin-bottom: 6px;
-}
-.form-control {
-  width: 100%; padding: 12px 14px;
-  border: 1.5px solid var(--border); border-radius: var(--radius-sm);
-  font-family: var(--font-body); font-size: 0.95rem; color: var(--text);
-  background: var(--white); transition: border-color 0.2s;
-  -webkit-appearance: none; appearance: none;
-}
-.form-control:focus { outline: none; border-color: var(--green-light); box-shadow: 0 0 0 3px rgba(74,158,74,0.12); }
-select.form-control { background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8' viewBox='0 0 12 8'%3E%3Cpath d='M1 1l5 5 5-5' stroke='%23888' stroke-width='1.5' fill='none' stroke-linecap='round'/%3E%3C/svg%3E"); background-repeat: no-repeat; background-position: right 14px center; padding-right: 36px; }
-
-.form-row { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
-.form-hint { font-size: 0.74rem; color: var(--text-light); margin-top: 4px; }
-
-.toggle-row {
-  display: flex; align-items: center; justify-content: space-between;
-  padding: 12px 0;
-}
-.toggle-label { font-size: 0.9rem; font-weight: 500; }
-.toggle {
-  width: 44px; height: 24px; background: var(--border);
-  border-radius: 12px; position: relative; cursor: pointer;
-  transition: background 0.25s; border: none; flex-shrink: 0;
-}
-.toggle.on { background: var(--green-mid); }
-.toggle::after {
-  content: ''; position: absolute;
-  width: 18px; height: 18px; background: white;
-  border-radius: 50%; top: 3px; left: 3px;
-  transition: transform 0.25s; box-shadow: 0 1px 4px rgba(0,0,0,0.2);
-}
-.toggle.on::after { transform: translateX(20px); }
-
-/* ── MODAL / DRAWER ── */
-.overlay {
-  display: none; position: fixed; inset: 0;
-  background: rgba(0,0,0,0.45); z-index: 100;
-  align-items: flex-end; justify-content: center;
-}
-.overlay.open { display: flex; }
-.drawer {
-  background: var(--cream); width: 100%; max-width: 600px;
-  border-radius: 24px 24px 0 0;
-  max-height: 92dvh; overflow-y: auto;
-  padding: 0 0 32px;
-  animation: slideUp 0.3s ease;
-}
-@keyframes slideUp { from { transform: translateY(100%); } to { transform: translateY(0); } }
-.drawer-handle {
-  width: 40px; height: 4px; background: var(--border);
-  border-radius: 2px; margin: 12px auto 0;
-}
-.drawer-title {
-  font-family: var(--font-display);
-  font-size: 1.2rem; font-weight: 600; color: var(--green-deep);
-  padding: 16px 20px 0;
-}
-.drawer-body { padding: 16px 20px 0; }
-
-/* ── HOME ── */
-.hero {
-  background: linear-gradient(135deg, var(--green-deep) 0%, var(--green-mid) 100%);
-  padding: 24px 18px 28px;
-  position: relative; overflow: hidden;
-}
-.hero::before {
-  content: '🌿';
-  position: absolute; right: -10px; top: -10px;
-  font-size: 120px; opacity: 0.08;
-  transform: rotate(-20deg);
-}
-.hero-date { color: rgba(255,255,255,0.65); font-size: 0.8rem; margin-bottom: 6px; }
-.hero-greeting {
-  font-family: var(--font-display);
-  color: var(--white); font-size: 1.6rem; font-weight: 700;
-  line-height: 1.2; margin-bottom: 16px;
-}
-.hero-stats { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 10px; }
-.stat-box {
-  background: rgba(255,255,255,0.12);
-  border-radius: 12px; padding: 12px 10px; text-align: center;
-  backdrop-filter: blur(4px);
-}
-.stat-num { color: var(--white); font-size: 1.5rem; font-weight: 700; line-height: 1; }
-.stat-lbl { color: rgba(255,255,255,0.7); font-size: 0.68rem; margin-top: 3px; text-transform: uppercase; letter-spacing: 0.04em; }
-
-.quick-actions { padding: 0 14px; margin-top: 16px; }
-.quick-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
-.quick-card {
-  background: var(--white); border-radius: var(--radius);
-  padding: 16px 14px; border: 1px solid var(--border);
-  cursor: pointer; transition: all 0.2s;
-  display: flex; align-items: center; gap: 12px;
-  box-shadow: var(--shadow);
-}
-.quick-card:hover { transform: translateY(-2px); box-shadow: var(--shadow-lg); }
-.quick-icon { font-size: 1.6rem; }
-.quick-label { font-size: 0.85rem; font-weight: 600; color: var(--green-deep); }
-.quick-sub { font-size: 0.72rem; color: var(--text-light); }
-
-.recent-title {
-  padding: 20px 18px 8px;
-  font-family: var(--font-display);
-  font-size: 1.1rem; font-weight: 600; color: var(--green-deep);
-}
-.visit-item {
-  background: var(--white); margin: 0 14px 8px;
-  border-radius: var(--radius-sm); padding: 14px;
-  border: 1px solid var(--border); cursor: pointer;
-  display: flex; align-items: center; gap: 12px;
-  transition: all 0.15s;
-}
-.visit-item:hover { box-shadow: var(--shadow); }
-.visit-dot {
-  width: 10px; height: 10px; border-radius: 50%;
-  background: var(--green-light); flex-shrink: 0;
-}
-.visit-name { font-weight: 500; font-size: 0.9rem; }
-.visit-meta { font-size: 0.75rem; color: var(--text-light); }
-.visit-date { font-size: 0.75rem; color: var(--text-light); margin-left: auto; text-align: right; }
-
-/* ── CLIENTI ── */
-.search-bar {
-  margin: 12px 14px;
-  position: relative;
-}
-.search-input {
-  width: 100%; padding: 12px 14px 12px 40px;
-  border: 1.5px solid var(--border); border-radius: var(--radius-sm);
-  font-family: var(--font-body); font-size: 0.9rem;
-  background: var(--white); -webkit-appearance: none;
-}
-.search-input:focus { outline: none; border-color: var(--green-light); }
-.search-icon {
-  position: absolute; left: 14px; top: 50%;
-  transform: translateY(-50%); font-size: 1rem; pointer-events: none;
-}
-
-.client-card {
-  background: var(--white); margin: 0 14px 10px;
-  border-radius: var(--radius); padding: 16px;
-  border: 1px solid var(--border);
-  cursor: pointer; transition: all 0.2s;
-  box-shadow: var(--shadow);
-  display: flex; align-items: center; gap: 14px;
-}
-.client-card:hover { transform: translateY(-1px); box-shadow: var(--shadow-lg); }
-.client-avatar {
-  width: 44px; height: 44px; border-radius: 50%;
-  background: var(--green-pale); color: var(--green-mid);
-  display: flex; align-items: center; justify-content: center;
-  font-family: var(--font-display); font-size: 1.1rem; font-weight: 700;
-  flex-shrink: 0;
-}
-.client-name { font-weight: 600; font-size: 0.95rem; }
-.client-city { font-size: 0.78rem; color: var(--text-light); }
-.client-badges { display: flex; gap: 4px; margin-top: 4px; flex-wrap: wrap; }
-.badge {
-  font-size: 0.65rem; font-weight: 600; padding: 2px 7px;
-  border-radius: 20px; text-transform: uppercase; letter-spacing: 0.03em;
-}
-.badge-prato { background: var(--green-pale); color: var(--green-mid); }
-.badge-fascia { background: var(--earth-light); color: var(--earth); }
-
-/* ── PRATI REPORT ── */
-.semaforo {
-  width: 14px; height: 14px; border-radius: 50%; flex-shrink: 0;
-  display: inline-block;
-}
-.semaforo.verde { background: #27ae60; box-shadow: 0 0 6px rgba(39,174,96,0.4); }
-.semaforo.giallo { background: #f39c12; box-shadow: 0 0 6px rgba(243,156,18,0.4); }
-.semaforo.rosso { background: #e74c3c; box-shadow: 0 0 6px rgba(231,76,60,0.4); }
-
-.prato-card {
-  background: var(--white); margin: 0 14px 10px;
-  border-radius: var(--radius); padding: 16px;
-  border: 1px solid var(--border); box-shadow: var(--shadow);
-}
-.prato-header { display: flex; align-items: center; gap: 10px; margin-bottom: 12px; }
-.prato-name { font-weight: 600; font-size: 0.95rem; flex: 1; }
-.prato-fascia { font-size: 0.72rem; color: var(--text-light); }
-.prato-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
-.prato-stat {
-  background: var(--green-mist); border-radius: 10px; padding: 10px;
-  text-align: center;
-}
-.prato-stat-num { font-size: 1.1rem; font-weight: 700; color: var(--green-deep); }
-.prato-stat-lbl { font-size: 0.68rem; color: var(--text-light); text-transform: uppercase; letter-spacing: 0.03em; margin-top: 2px; }
-.prato-bar { margin-top: 10px; }
-.prato-bar-label { display: flex; justify-content: space-between; font-size: 0.72rem; color: var(--text-light); margin-bottom: 4px; }
-.bar-track { height: 8px; background: var(--border); border-radius: 4px; overflow: hidden; }
-.bar-fill { height: 100%; border-radius: 4px; transition: width 0.5s ease; }
-.bar-fill.verde { background: #27ae60; }
-.bar-fill.giallo { background: #f39c12; }
-.bar-fill.rosso { background: #e74c3c; }
-.prato-ops { margin-top: 12px; display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 6px; }
-.prato-op-item { font-size: 0.72rem; text-align: center; }
-.prato-op-date { font-weight: 600; color: var(--green-deep); font-size: 0.78rem; }
-.prato-op-label { color: var(--text-light); font-size: 0.65rem; text-transform: uppercase; letter-spacing: 0.02em; }
-
-/* ── VISITE ── */
-.visit-card {
-  background: var(--white); margin: 0 14px 10px;
-  border-radius: var(--radius); padding: 16px;
-  border: 1px solid var(--border); box-shadow: var(--shadow);
-  cursor: pointer; transition: all 0.15s;
-}
-.visit-card:hover { transform: translateY(-1px); }
-.visit-card-header { display: flex; align-items: flex-start; gap: 10px; }
-.visit-card-icon { font-size: 1.4rem; }
-.visit-card-title { font-weight: 600; font-size: 0.95rem; }
-.visit-card-date { font-size: 0.78rem; color: var(--text-light); }
-.visit-ops { display: flex; flex-wrap: wrap; gap: 5px; margin-top: 10px; }
-.op-tag {
-  font-size: 0.7rem; padding: 3px 9px; border-radius: 20px;
-  background: var(--green-pale); color: var(--green-deep); font-weight: 500;
-}
-.op-tag.prato { background: var(--earth-light); color: var(--earth); }
-.op-tag.siepe { background: #e8f4f0; color: #2a7a5a; }
-.next-int {
-  margin-top: 10px; padding: 8px 10px;
-  background: var(--green-mist); border-radius: 8px;
-  font-size: 0.78rem; color: var(--green-mid);
-  display: flex; align-items: center; gap: 6px;
-}
-
-/* ── LOADING / EMPTY ── */
-.loading {
-  display: flex; flex-direction: column;
-  align-items: center; justify-content: center;
-  padding: 60px 20px; color: var(--text-light); gap: 12px;
-}
-.spinner {
-  width: 32px; height: 32px; border: 3px solid var(--border);
-  border-top-color: var(--green-mid); border-radius: 50%;
-  animation: spin 0.7s linear infinite;
-}
-@keyframes spin { to { transform: rotate(360deg); } }
-.empty { text-align: center; padding: 50px 20px; color: var(--text-light); }
-.empty-icon { font-size: 3rem; margin-bottom: 12px; }
-.empty-text { font-size: 0.9rem; }
-
-/* ── TOAST ── */
-#toast {
-  position: fixed; bottom: calc(var(--nav-h) + 80px); left: 50%;
-  transform: translateX(-50%) translateY(20px);
-  background: var(--green-deep); color: white;
-  padding: 10px 20px; border-radius: 24px;
-  font-size: 0.85rem; font-weight: 500;
-  opacity: 0; transition: all 0.3s; z-index: 200;
-  white-space: nowrap; pointer-events: none;
-}
-#toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
-
-/* ── ADDRESS SUGGESTIONS ── */
-.suggestions {
-  position: absolute; left: 0; right: 0; top: 100%;
-  background: var(--white); border: 1.5px solid var(--border);
-  border-top: none; border-radius: 0 0 var(--radius-sm) var(--radius-sm);
-  z-index: 50; max-height: 200px; overflow-y: auto;
-}
-.suggestion-item {
-  padding: 10px 14px; font-size: 0.85rem; cursor: pointer;
-  border-bottom: 1px solid var(--border); transition: background 0.15s;
-}
-.suggestion-item:hover { background: var(--green-mist); }
-.suggestion-item:last-child { border-bottom: none; }
-.addr-wrapper { position: relative; }
-
-/* ── DETAIL VIEWS ── */
-.detail-header {
-  background: linear-gradient(135deg, var(--green-deep) 0%, var(--green-mid) 100%);
-  padding: 20px 18px;
-}
-.detail-back {
-  background: none; border: none; color: rgba(255,255,255,0.8);
-  font-size: 0.85rem; cursor: pointer; display: flex; align-items: center; gap: 6px;
-  margin-bottom: 12px; font-family: var(--font-body);
-}
-.detail-name {
-  font-family: var(--font-display); color: white;
-  font-size: 1.4rem; font-weight: 700;
-}
-.detail-city { color: rgba(255,255,255,0.7); font-size: 0.85rem; margin-top: 4px; }
-
-.info-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 14px; }
-.info-item { background: var(--green-mist); border-radius: 10px; padding: 12px; }
-.info-label { font-size: 0.68rem; text-transform: uppercase; letter-spacing: 0.05em; color: var(--text-light); margin-bottom: 4px; }
-.info-value { font-size: 0.95rem; font-weight: 600; color: var(--green-deep); }
-
-.divider { height: 1px; background: var(--border); margin: 16px 0; }
-
-/* scrollbar */
-::-webkit-scrollbar { width: 4px; }
-::-webkit-scrollbar-track { background: transparent; }
-::-webkit-scrollbar-thumb { background: var(--border); border-radius: 2px; }
 </style>
 </head>
 <body>
-<div id="app">
-  <div id="topbar">
-    <span class="leaf">🌿</span>
-    <h1 id="topbar-title">GiardinoApp</h1>
-    <button class="topbar-action" id="topbar-action-btn" onclick="topbarAction()" title="Aggiungi">＋</button>
-  </div>
+<div id="loader"><div class="spinner"></div><p>Connessione al database…</p></div>
 
-  <div id="content">
-    <!-- HOME -->
-    <div id="page-home" class="page active">
-      <div class="hero">
-        <div class="hero-date" id="hero-date"></div>
-        <div class="hero-greeting">Buongiorno! 👋</div>
-        <div class="hero-stats">
-          <div class="stat-box"><div class="stat-num" id="stat-clienti">–</div><div class="stat-lbl">Clienti</div></div>
-          <div class="stat-box"><div class="stat-num" id="stat-visite">–</div><div class="stat-lbl">Visite</div></div>
-          <div class="stat-box"><div class="stat-num" id="stat-prati">–</div><div class="stat-lbl">Prati</div></div>
-        </div>
-      </div>
-      <div class="quick-actions">
-        <div class="quick-grid">
-          <div class="quick-card" onclick="navTo('visite'); openNuovaVisita()">
-            <span class="quick-icon">📋</span>
-            <div><div class="quick-label">Nuova visita</div><div class="quick-sub">Registra intervento</div></div>
-          </div>
-          <div class="quick-card" onclick="navTo('clienti'); openNuovoCliente()">
-            <span class="quick-icon">👤</span>
-            <div><div class="quick-label">Nuovo cliente</div><div class="quick-sub">Aggiungi anagrafica</div></div>
-          </div>
-          <div class="quick-card" onclick="navTo('prati')">
-            <span class="quick-icon">🌱</span>
-            <div><div class="quick-label">Report prati</div><div class="quick-sub">Stato concimazione</div></div>
-          </div>
-          <div class="quick-card" onclick="navTo('prossimi')">
-            <span class="quick-icon">📅</span>
-            <div><div class="quick-label">Prossimi interventi</div><div class="quick-sub">Pianifica lavori</div></div>
-          </div>
-        </div>
-      </div>
-      <div class="recent-title">Ultime visite</div>
-      <div id="home-visite-list"></div>
-    </div>
-
-    <!-- CLIENTI -->
-    <div id="page-clienti" class="page">
-      <div class="search-bar">
-        <span class="search-icon">🔍</span>
-        <input type="search" class="search-input" id="search-clienti" placeholder="Cerca cliente..." oninput="filterClienti()">
-      </div>
-      <div id="clienti-list"></div>
-    </div>
-
-    <!-- VISITE -->
-    <div id="page-visite" class="page">
-      <div class="section-title">Registro Visite</div>
-      <div id="visite-list"></div>
-    </div>
-
-    <!-- PROSSIMI INTERVENTI -->
-    <div id="page-prossimi" class="page">
-      <div class="section-title">Prossimi Interventi 📅</div>
-      <div id="prossimi-list"></div>
-    </div>
-
-    <!-- PRATI -->
-    <div id="page-prati" class="page">
-      <div class="section-title">Report Prati 🌱</div>
-      <div id="prati-list"></div>
+<header><div class="h-inner">
+  <div class="h-brand">
+    <div class="h-kanji">盆栽</div>
+    <div class="h-texts">
+      <span class="h-title">Bonsai Manager</span>
+      <span class="h-sub">Gestione Inventario Lotti</span>
     </div>
   </div>
-
-  <nav id="navbar">
-    <button class="nav-item active" id="nav-home" onclick="navTo('home')">
-      <span class="icon">🏠</span><span>Home</span>
-    </button>
-    <button class="nav-item" id="nav-clienti" onclick="navTo('clienti')">
-      <span class="icon">👥</span><span>Clienti</span>
-    </button>
-    <button class="nav-item" id="nav-visite" onclick="navTo('visite')">
-      <span class="icon">📋</span><span>Registro</span>
-    </button>
-    <button class="nav-item" id="nav-prossimi" onclick="navTo('prossimi')">
-      <span class="icon">📅</span><span>Prossimi</span>
-    </button>
-    <button class="nav-item" id="nav-prati" onclick="navTo('prati')">
-      <span class="icon">🌱</span><span>Prati</span>
-    </button>
+  <nav>
+    <button class="active" onclick="showTab('lotti')"><span class="ico">🌿</span>Lotti</button>
+    <button onclick="showTab('sperimentazione')"><span class="ico">🔬</span>Sperim.</button>
+    <button onclick="showTab('rinvaso')"><span class="ico">🪴</span>Rinvaso</button>
+    <button onclick="showTab('potatura')"><span class="ico">✂️</span>Potatura</button>
+    <button onclick="showTab('legatura')"><span class="ico">🔗</span>Legatura</button>
+    <button onclick="showTab('materiali')"><span class="ico">🏷️</span>Materiali</button>
+    <button onclick="showTab('riepilogo')"><span class="ico">📊</span>Riepilogo</button>
   </nav>
+</div></header>
+
+<main>
+
+<!-- LOTTI -->
+<section id="sec-lotti" class="section active">
+  <div class="sec-hdr"><h2 class="sec-title">Registro Lotti</h2><span class="sec-badge" id="cnt-lotti">—</span></div>
+  <div class="fcard">
+    <div class="fcard-hdr"><span>➕</span><h3>Nuovo Lotto</h3></div>
+    <div class="fcard-body">
+      <div class="fgrid">
+        <div class="fg"><label>Specie (3 lettere)</label><input id="l-sp3" maxlength="6" placeholder="es. ACE, JP01…" oninput="genCodice()"></div>
+        <div class="fg"><label>Anno (2 cifre)</label><input id="l-yr" maxlength="2" placeholder="25" oninput="genCodice()"></div>
+        <div class="fg"><label>Progressivo</label><input id="l-prog" maxlength="6" placeholder="001" oninput="genCodice()"></div>
+        <div class="fg"><label>Codice Lotto (anteprima)</label><input id="l-cod" readonly placeholder="ACE-25-001"></div>
+        <div class="fg"><label>Nome Specie</label><input id="l-nome" placeholder="Acer palmatum"></div>
+        <div class="fg"><label>Quantità Piante</label><input id="l-qty" type="number" min="1" placeholder="10"></div>
+        <div class="fg"><label>Data Ingresso</label><input id="l-data" type="date"></div>
+        <div class="fg"><label>Provenienza</label><input id="l-prov" placeholder="Vivaio / Importazione…"></div>
+        <div class="fg"><label>Stato</label><select id="l-stato"><option>Sperimentale</option><option>Produzione</option><option>Archiviato</option></select></div>
+        <div class="fg full"><label>Note</label><textarea id="l-note" placeholder="Osservazioni…"></textarea></div>
+      </div>
+      <div class="btn-row">
+        <button class="btn btn-s" onclick="cancelEdit()">Pulisci</button>
+        <button class="btn btn-p" id="btn-save-lotto" onclick="saveLotto()">💾 Salva Lotto</button>
+      </div>
+    </div>
+  </div>
+  <div class="twrap"><table>
+    <thead><tr><th>Codice</th><th>Specie</th><th>Anno</th><th>Piante</th><th>Ingresso</th><th>Provenienza</th><th>Stato</th><th></th></tr></thead>
+    <tbody id="tb-lotti"></tbody>
+  </table></div>
+</section>
+
+<!-- SPERIMENTAZIONE -->
+<section id="sec-sperimentazione" class="section">
+  <div class="sec-hdr"><h2 class="sec-title">Sperimentazione</h2><span class="sec-badge" id="cnt-sperim">—</span></div>
+
+  <div class="fcard">
+    <div class="fcard-hdr"><span>🔬</span><h3>Registra Variante Sperimentale</h3></div>
+    <div class="fcard-body">
+      <div class="fgrid">
+        <div class="fg"><label>Lotto (solo Sperimentali)</label><select id="sp-lotto"><option value="">— seleziona —</option></select></div>
+        <div class="fg"><label>Variante (A, B, C…)</label><input id="sp-var" maxlength="4" placeholder="A" oninput="this.value=this.value.toUpperCase()"></div>
+        <div class="fg"><label>Nome Variabile Testata</label><input id="sp-nome" placeholder="es. Substrato torba pura"></div>
+        <div class="fg"><label>Talee Inserite</label><input id="sp-ins" type="number" min="0" placeholder="100" oninput="calcAttecch()"></div>
+        <div class="fg"><label>Talee Attecchite</label><input id="sp-att" type="number" min="0" placeholder="72" oninput="calcAttecch()"></div>
+        <div class="fg"><label>% Attecchimento</label><input id="sp-pct" readonly placeholder="calcolato auto"></div>
+        <div class="fg"><label>Data Inizio</label><input id="sp-d1" type="date"></div>
+        <div class="fg"><label>Data Fine / Verifica</label><input id="sp-d2" type="date"></div>
+        <div class="fg full"><label>Descrizione Variabile</label><input id="sp-desc" placeholder="Dettagli del parametro testato…"></div>
+        <div class="fg full"><label>Conclusioni</label><textarea id="sp-concl" placeholder="Risultati, osservazioni, cosa hai imparato da questa variante…"></textarea></div>
+      </div>
+      <div class="btn-row">
+        <button class="btn btn-s" onclick="resetForm('sp')">Pulisci</button>
+        <button class="btn btn-p" id="btn-save-sperim" onclick="saveSperim()">💾 Salva Variante</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- LOG PER LOTTO -->
+  <div id="sperim-log"></div>
+</section>
+
+<!-- MODAL PROMOZIONE -->
+<div class="modal-bg hidden" id="modal-promo">
+  <div class="modal">
+    <h3>🌱 Promuovi a Produzione</h3>
+    <p id="modal-promo-desc">Indica quante piante hanno attecchito e passano in fase di produzione.</p>
+    <div class="fgrid">
+      <div class="fg"><label>Piante che passano in produzione</label><input id="promo-qty" type="number" min="1" placeholder="es. 80"></div>
+      <div class="fg"><label>Note promozione</label><input id="promo-note" placeholder="Osservazioni finali…"></div>
+    </div>
+    <button class="btn-promo" onclick="confermaPromozione()">✅ Conferma Promozione</button>
+    <div style="text-align:center;margin-top:12px">
+      <button class="btn btn-s" style="font-size:10px" onclick="chiudiModal()">Annulla</button>
+    </div>
+  </div>
 </div>
 
-<!-- TOAST -->
+<!-- RINVASO -->
+<section id="sec-rinvaso" class="section">
+  <div class="sec-hdr"><h2 class="sec-title">Operazioni di Rinvaso</h2><span class="sec-badge" id="cnt-rinvaso">—</span></div>
+  <div class="fcard">
+    <div class="fcard-hdr"><span>🪴</span><h3>Registra Rinvaso</h3></div>
+    <div class="fcard-body">
+      <div class="fgrid">
+        <div class="fg"><label>Codice Lotto</label><select id="r-lotto"><option value="">— seleziona —</option></select></div>
+        <div class="fg"><label>Data</label><input id="r-data" type="date"></div>
+        <div class="fg"><label>Diametro Vaso (cm)</label><input id="r-diam" type="number" step="0.5" min="1" placeholder="es. 14"></div>
+        <div class="fg"><label>Costo Vaso / Altri (€)</label><input id="r-costo-altri" type="number" step="0.01" placeholder="0.00" oninput="calcRinvaso()"></div>
+        <div class="fg"><label>Ore Spese</label><input id="r-ore" type="number" step="0.5" min="0" placeholder="0.0"></div>
+      </div>
+
+      <div class="terr-block">
+        <div class="terr-title">🌱 Quantità Terricci Utilizzati</div>
+        <div class="terr-grid" id="terr-inputs">
+          <!-- generato da JS -->
+        </div>
+        <div class="terr-totals">
+          <div class="terr-tot"><div class="terr-tot-lbl">Litri Totali</div><div class="terr-tot-val" id="tot-litri">0.00 L</div></div>
+          <div class="terr-tot"><div class="terr-tot-lbl">Costo Terricci</div><div class="terr-tot-val" id="tot-costo-terr">0.00 €</div></div>
+          <div class="terr-tot"><div class="terr-tot-lbl">Costo Totale Rinvaso</div><div class="terr-tot-val" id="tot-costo-rin" style="color:var(--amber)">0.00 €</div></div>
+        </div>
+      </div>
+
+      <div class="fgrid" style="margin-top:16px">
+        <div class="fg full"><label>Note</label><textarea id="r-note" placeholder="Osservazioni sul rinvaso…"></textarea></div>
+      </div>
+      <div class="btn-row">
+        <button class="btn btn-s" onclick="resetForm('r')">Pulisci</button>
+        <button class="btn btn-p" id="btn-save-rinvaso" onclick="saveRinvaso()">💾 Salva Rinvaso</button>
+      </div>
+    </div>
+  </div>
+  <div class="twrap"><table>
+    <thead><tr><th>ID</th><th>Lotto</th><th>Data</th><th>Ø cm</th><th>Akadama L</th><th>Kiryu L</th><th>Pomice L</th><th>2ª Mano L</th><th>Tot. L</th><th>Costo Terricci €</th><th>Costo Totale €</th><th>Ore</th><th></th></tr></thead>
+    <tbody id="tb-rinvaso"></tbody>
+  </table></div>
+</section>
+
+<!-- POTATURA -->
+<section id="sec-potatura" class="section">
+  <div class="sec-hdr"><h2 class="sec-title">Operazioni di Potatura</h2><span class="sec-badge" id="cnt-potatura">—</span></div>
+  <div class="fcard">
+    <div class="fcard-hdr"><span>✂️</span><h3>Registra Potatura</h3></div>
+    <div class="fcard-body">
+      <div class="fgrid">
+        <div class="fg"><label>Codice Lotto</label><select id="p-lotto"><option value="">— seleziona —</option></select></div>
+        <div class="fg"><label>Data</label><input id="p-data" type="date"></div>
+        <div class="fg"><label>Tipo Potatura</label><select id="p-tipo"><option>Potatura di pulizia</option><option>Potatura stilistica</option><option>Potatura di mantenimento</option><option>Pinzatura</option></select></div>
+        <div class="fg"><label>Ore Spese</label><input id="p-ore" type="number" step="0.5" min="0" placeholder="0.0"></div>
+        <div class="fg full"><label>Note</label><textarea id="p-note" placeholder="Rami eliminati, impostazione…"></textarea></div>
+      </div>
+      <div class="btn-row">
+        <button class="btn btn-s" onclick="resetForm('p')">Pulisci</button>
+        <button class="btn btn-p" id="btn-save-potatura" onclick="savePotatura()">💾 Salva Potatura</button>
+      </div>
+    </div>
+  </div>
+  <div class="twrap"><table>
+    <thead><tr><th>ID</th><th>Lotto</th><th>Data</th><th>Tipo</th><th>Ore</th><th></th></tr></thead>
+    <tbody id="tb-potatura"></tbody>
+  </table></div>
+</section>
+
+<!-- LEGATURA -->
+<section id="sec-legatura" class="section">
+  <div class="sec-hdr"><h2 class="sec-title">Operazioni di Legatura</h2><span class="sec-badge" id="cnt-legatura">—</span></div>
+  <div class="fcard">
+    <div class="fcard-hdr"><span>🔗</span><h3>Registra Legatura</h3></div>
+    <div class="fcard-body">
+      <div class="fgrid">
+        <div class="fg"><label>Codice Lotto</label><select id="g-lotto"><option value="">— seleziona —</option></select></div>
+        <div class="fg"><label>Data</label><input id="g-data" type="date"></div>
+        <div class="fg"><label>Tipo Filo</label><select id="g-tipo"><option>Alluminio</option><option>Rame</option></select></div>
+        <div class="fg"><label>Calibro (mm)</label><input id="g-cal" type="number" step="0.5" min="0.5" placeholder="2.0"></div>
+        <div class="fg"><label>Fili Stimati (m)</label><input id="g-mt" type="number" step="1" min="0" placeholder="15" oninput="calcLeg()"></div>
+        <div class="fg"><label>Costo Filo €/m</label><input id="g-cm" type="number" step="0.01" placeholder="0.08" oninput="calcLeg()"></div>
+        <div class="fg"><label>Ore Spese</label><input id="g-ore" type="number" step="0.5" min="0" placeholder="2.0"></div>
+        <div class="fg"><label>Costo Fili (€)</label><input id="g-costo" readonly placeholder="calcolato auto"></div>
+        <div class="fg full"><label>Note</label><textarea id="g-note" placeholder="Rami infilati, tecnica…"></textarea></div>
+      </div>
+      <div class="btn-row">
+        <button class="btn btn-s" onclick="resetForm('g')">Pulisci</button>
+        <button class="btn btn-p" id="btn-save-legatura" onclick="saveLegatura()">💾 Salva Legatura</button>
+      </div>
+    </div>
+  </div>
+  <div class="twrap"><table>
+    <thead><tr><th>ID</th><th>Lotto</th><th>Data</th><th>Filo</th><th>mm</th><th>Metri</th><th>€/m</th><th>Costo €</th><th>Ore</th><th></th></tr></thead>
+    <tbody id="tb-legatura"></tbody>
+  </table></div>
+</section>
+
+<!-- MATERIALI -->
+<section id="sec-materiali" class="section">
+  <div class="sec-hdr"><h2 class="sec-title">Listino Materiali</h2><span class="sec-badge" id="cnt-materiali">—</span></div>
+  <div class="info-box">ℹ️&nbsp; I prezzi qui impostati vengono usati automaticamente nel Rinvaso per calcolare il costo in base ai litri utilizzati. I nomi devono corrispondere esattamente: <strong>Akadama</strong>, <strong>Kiryu</strong>, <strong>Pomice</strong>, <strong>Terriccio 2ª Mano</strong>.</div>
+  <div class="fcard">
+    <div class="fcard-hdr"><span>➕</span><h3>Aggiungi / Aggiorna Materiale</h3></div>
+    <div class="fcard-body">
+      <div class="fgrid">
+        <div class="fg"><label>Nome Materiale</label><input id="mat-nome" placeholder="es. Akadama"></div>
+        <div class="fg"><label>Prezzo (€/L)</label><input id="mat-prezzo" type="number" step="0.01" min="0" placeholder="0.00"></div>
+        <div class="fg"><label>Unità</label><input id="mat-unita" value="L" placeholder="L"></div>
+        <div class="fg"><label>Note</label><input id="mat-note" placeholder="Fornitore, qualità…"></div>
+      </div>
+      <div class="btn-row">
+        <button class="btn btn-s" onclick="resetForm('mat')">Pulisci</button>
+        <button class="btn btn-p" id="btn-save-mat" onclick="saveMateriale()">💾 Salva Materiale</button>
+      </div>
+    </div>
+  </div>
+  <div class="twrap"><table>
+    <thead><tr><th>Nome</th><th>Prezzo €/L</th><th>Unità</th><th>Note</th><th></th></tr></thead>
+    <tbody id="tb-materiali"></tbody>
+  </table></div>
+</section>
+
+<!-- RIEPILOGO -->
+<section id="sec-riepilogo" class="section">
+  <div class="sec-hdr"><h2 class="sec-title">Riepilogo Costi</h2><span class="sec-badge" id="cnt-riepilogo">—</span></div>
+
+  <div class="fcard" style="margin-bottom:24px">
+    <div class="fcard-hdr"><span>⏱️</span><h3>Costo Orario Manodopera</h3></div>
+    <div class="fcard-body">
+      <div class="fgrid">
+        <div class="fg"><label>Tariffa Oraria (€/h)</label>
+          <input id="rie-tariffa" type="number" step="0.01" value="25.00" oninput="renderRiepilogo()" style="font-size:18px;font-weight:500;color:var(--moss)">
+        </div>
+        <div class="fg" style="justify-content:flex-end;padding-top:18px">
+          <span style="font-size:10px;color:#aaa;letter-spacing:.8px">Applicata a tutte le ore di rinvaso, potatura e legatura per ogni lotto</span>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="kpis" id="kpis"></div>
+  <div class="twrap"><table>
+    <thead><tr><th>Codice</th><th>Piante</th><th>Ore Tot.</th><th>Costo Ore €</th><th>Costo Materiali €</th><th>Totale €</th><th>€/Pianta</th><th>Stato</th></tr></thead>
+    <tbody id="tb-riepilogo"></tbody>
+  </table></div>
+</section>
+
+</main>
 <div id="toast"></div>
 
-<!-- DRAWER NUOVO CLIENTE -->
-<div class="overlay" id="overlay-cliente">
-  <div class="drawer">
-    <div class="drawer-handle"></div>
-    <div class="drawer-title" id="drawer-cliente-title">Nuovo Cliente</div>
-    <div class="drawer-body">
-      <input type="hidden" id="cliente-edit-id">
-      <div class="form-group">
-        <label class="form-label">Nome e Cognome *</label>
-        <input type="text" class="form-control" id="f-cliente-nome" placeholder="Es. Mario Rossi">
-      </div>
-      <div class="form-group">
-        <label class="form-label">Indirizzo</label>
-        <div class="addr-wrapper">
-          <input type="text" class="form-control" id="f-cliente-indirizzo" placeholder="Cerca indirizzo..." autocomplete="off" oninput="searchAddress(this.value)" onfocus="searchAddress(this.value)">
-          <div class="suggestions" id="addr-suggestions" style="display:none"></div>
-        </div>
-        <div class="form-hint">Digita per cercare o usa GPS 📍</div>
-      </div>
-      <div class="form-group">
-        <button type="button" class="btn btn-secondary btn-sm" onclick="useGPS()">📍 Usa posizione attuale</button>
-      </div>
-      <div class="form-row">
-        <div class="form-group">
-          <label class="form-label">Città</label>
-          <input type="text" class="form-control" id="f-cliente-citta">
-        </div>
-        <div class="form-group">
-          <label class="form-label">Coordinate</label>
-          <input type="text" class="form-control" id="f-cliente-coords" placeholder="lat, lng" readonly style="font-size:0.75rem; color:var(--text-light)">
-        </div>
-      </div>
-      <div class="form-group">
-        <div class="toggle-row">
-          <span class="toggle-label">🌱 Ha il prato</span>
-          <button type="button" class="toggle" id="toggle-prato" onclick="togglePrato()"></button>
-        </div>
-      </div>
-      <div id="prato-fields" style="display:none">
-        <div class="form-row">
-          <div class="form-group">
-            <label class="form-label">Superficie (mq)</label>
-            <input type="number" class="form-control" id="f-cliente-mq" placeholder="Es. 150">
-          </div>
-          <div class="form-group">
-            <label class="form-label">Fascia qualità</label>
-            <select class="form-control" id="f-cliente-fascia">
-              <option value="">– scegli –</option>
-              <option value="1">Fascia 1 – Alta (N:250 K:150)</option>
-              <option value="2">Fascia 2 – Media (N:150 K:50)</option>
-              <option value="3">Fascia 3 – Non concimato</option>
-            </select>
-          </div>
-        </div>
-      </div>
-      <div class="form-group">
-        <div class="toggle-row">
-          <span class="toggle-label">🌿 Ha la siepe</span>
-          <button type="button" class="toggle" id="toggle-siepe" onclick="toggleSiepe()"></button>
-        </div>
-      </div>
-      <div id="siepe-fields" style="display:none">
-        <div class="form-group">
-          <label class="form-label">Specie</label>
-          <select class="form-control" id="f-cliente-siepe-specie">
-            <option value="">– scegli –</option>
-            <option value="Leilandi">Leilandi</option>
-            <option value="Photinia">Photinia</option>
-            <option value="Lauroceraso">Lauroceraso</option>
-            <option value="Eleagno">Eleagno</option>
-            <option value="Altra">Altra (vedi note)</option>
-          </select>
-        </div>
-        <div class="form-row">
-          <div class="form-group">
-            <label class="form-label">Lunghezza (m)</label>
-            <input type="number" class="form-control" id="f-cliente-siepe-lunghezza" placeholder="Es. 20" step="0.5">
-          </div>
-          <div class="form-group">
-            <label class="form-label">Altezza (m)</label>
-            <input type="number" class="form-control" id="f-cliente-siepe-altezza" placeholder="Es. 2" step="0.1">
-          </div>
-        </div>
-        <div class="form-group">
-          <label class="form-label">Larghezza (m)</label>
-          <input type="number" class="form-control" id="f-cliente-siepe-larghezza" placeholder="Es. 1" step="0.1">
-        </div>
-      </div>
-      <div class="form-group">
-        <label class="form-label">Note</label>
-        <textarea class="form-control" id="f-cliente-note" rows="2" placeholder="Note aggiuntive..."></textarea>
-      </div>
-      <button class="btn btn-primary" onclick="saveCliente()">💾 Salva Cliente</button>
-      <div style="height:8px"></div>
-      <button class="btn btn-secondary" onclick="closeDrawer('overlay-cliente')">Annulla</button>
-    </div>
-  </div>
-</div>
-
-<!-- DRAWER NUOVA VISITA -->
-<div class="overlay" id="overlay-visita">
-  <div class="drawer">
-    <div class="drawer-handle"></div>
-    <div class="drawer-title">Nuova Visita</div>
-    <div class="drawer-body">
-      <div class="form-group">
-        <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:6px">
-          <label class="form-label" style="margin-bottom:0">Cliente *</label>
-          <button type="button" class="btn btn-secondary btn-sm" onclick="closeDrawer('overlay-visita'); openNuovoCliente(); pendingFromVisita=true;">+ Nuovo cliente</button>
-        </div>
-        <div class="addr-wrapper">
-          <input type="text" class="form-control" id="f-visita-cliente-search" placeholder="Cerca cliente..." autocomplete="off" oninput="filterVisitaClienti(this.value)" onfocus="filterVisitaClienti(this.value)">
-          <div class="suggestions" id="visita-cliente-suggestions" style="display:none"></div>
-        </div>
-        <input type="hidden" id="f-visita-cliente">
-        <div id="f-visita-cliente-selected" style="display:none; margin-top:6px; padding:8px 12px; background:var(--green-mist); border-radius:8px; font-size:0.85rem; font-weight:500; color:var(--green-deep)">
-          <span id="f-visita-cliente-nome"></span>
-          <button onclick="clearVisitaCliente()" style="background:none;border:none;cursor:pointer;color:var(--text-light);font-size:1rem;float:right">✕</button>
-        </div>
-      </div>
-      <div class="form-row">
-        <div class="form-group">
-          <label class="form-label">Data *</label>
-          <input type="date" class="form-control" id="f-visita-data">
-        </div>
-        <div class="form-group">
-          <label class="form-label">Ore lavoro</label>
-          <input type="number" class="form-control" id="f-visita-ore" placeholder="Es. 3" step="0.5">
-        </div>
-      </div>
-      <div class="form-group">
-        <label class="form-label">Note visita</label>
-        <textarea class="form-control" id="f-visita-note" rows="2" placeholder="Cosa hai fatto..."></textarea>
-      </div>
-      <div class="form-group">
-        <label class="form-label">Prossimo intervento</label>
-        <input type="text" class="form-control" id="f-visita-prossimo" placeholder="Es. Siepe, prato...">
-      </div>
-      <div class="form-row">
-        <div class="form-group">
-          <label class="form-label">Mese previsto</label>
-          <select class="form-control" id="f-visita-mese">
-            <option value="">–</option>
-            <option value="01">Gennaio</option><option value="02">Febbraio</option>
-            <option value="03">Marzo</option><option value="04">Aprile</option>
-            <option value="05">Maggio</option><option value="06">Giugno</option>
-            <option value="07">Luglio</option><option value="08">Agosto</option>
-            <option value="09">Settembre</option><option value="10">Ottobre</option>
-            <option value="11">Novembre</option><option value="12">Dicembre</option>
-          </select>
-        </div>
-        <div class="form-group">
-          <label class="form-label">Anno previsto</label>
-          <input type="number" class="form-control" id="f-visita-anno" placeholder="2026" min="2024" max="2030">
-        </div>
-      </div>
-
-      <!-- OPERAZIONI -->
-      <div style="margin-top: 8px; margin-bottom: 8px;">
-        <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:8px">
-          <span style="font-size:0.78rem; font-weight:700; text-transform:uppercase; letter-spacing:0.05em; color:var(--green-deep)">Operazioni</span>
-          <button class="btn btn-secondary btn-sm" onclick="addOperazione()">+ Aggiungi</button>
-        </div>
-        <div id="operazioni-list"></div>
-      </div>
-
-      <button class="btn btn-primary" onclick="saveVisita()">💾 Salva Visita</button>
-      <div style="height:8px"></div>
-      <button class="btn btn-secondary" onclick="closeDrawer('overlay-visita')">Annulla</button>
-    </div>
-  </div>
-</div>
-
-<!-- DRAWER OPERAZIONE -->
-<div class="overlay" id="overlay-operazione">
-  <div class="drawer">
-    <div class="drawer-handle"></div>
-    <div class="drawer-title">Operazione</div>
-    <div class="drawer-body">
-      <input type="hidden" id="op-index">
-      <div class="form-group">
-        <label class="form-label">Tipo operazione *</label>
-        <select class="form-control" id="f-op-tipo" onchange="onTipoOpChange()">
-          <option value="">– scegli –</option>
-          <option value="Potatura">✂️ Potatura</option>
-          <option value="Concimazione">🌿 Concimazione</option>
-          <option value="Semina">🌱 Semina</option>
-          <option value="Arieggiatura">💨 Arieggiatura</option>
-          <option value="Diserbo">🚫 Diserbo</option>
-          <option value="Trattamento fitosanitario">💊 Trattamento fitosanitario</option>
-          <option value="Altro">📝 Altro</option>
-        </select>
-      </div>
-      <div class="form-group">
-        <label class="form-label">Descrizione</label>
-        <input type="text" class="form-control" id="f-op-desc" placeholder="Es. Kiwi, rose...">
-      </div>
-      <div id="op-siepe-toggle-wrap" style="display:none">
-        <div class="form-group">
-          <div class="toggle-row">
-            <span class="toggle-label">🌿 Potatura siepe</span>
-            <button type="button" class="toggle" id="toggle-op-siepe" onclick="toggleOpSiepe()"></button>
-          </div>
-        </div>
-      </div>
-      <div id="op-prato-toggle-wrap" style="display:none">
-        <div class="form-group">
-          <div class="toggle-row">
-            <span class="toggle-label">🌱 Operazione su prato</span>
-            <button type="button" class="toggle" id="toggle-op-prato" onclick="toggleOpPrato()"></button>
-          </div>
-        </div>
-      </div>
-      <div id="op-concime-wrap" style="display:none">
-        <div class="form-group">
-          <label class="form-label">Concime</label>
-          <select class="form-control" id="f-op-concime">
-            <option value="">– scegli –</option>
-          </select>
-        </div>
-        <div class="form-group">
-          <label class="form-label">Dose (kg)</label>
-          <input type="number" class="form-control" id="f-op-dose" placeholder="Es. 5" step="0.1">
-        </div>
-      </div>
-      <div id="op-semente-wrap" style="display:none">
-        <div class="form-group">
-          <label class="form-label">Semente</label>
-          <select class="form-control" id="f-op-semente">
-            <option value="">– scegli –</option>
-          </select>
-        </div>
-        <div class="form-group">
-          <label class="form-label">Dose (kg)</label>
-          <input type="number" class="form-control" id="f-op-dose-s" placeholder="Es. 2" step="0.1">
-        </div>
-      </div>
-      <div id="op-fitofarmaco-wrap" style="display:none">
-        <div class="form-group">
-          <label class="form-label">Fitofarmaco</label>
-          <select class="form-control" id="f-op-fitofarmaco">
-            <option value="">– scegli –</option>
-          </select>
-        </div>
-        <div class="form-group">
-          <label class="form-label">Dose (kg/l)</label>
-          <input type="number" class="form-control" id="f-op-dose-f" placeholder="Es. 0.5" step="0.01">
-        </div>
-      </div>
-      <button class="btn btn-primary" onclick="saveOperazione()">✅ Conferma Operazione</button>
-      <div style="height:8px"></div>
-      <button class="btn btn-secondary" onclick="closeDrawer('overlay-operazione')">Annulla</button>
-    </div>
-  </div>
-</div>
-
 <script>
-const API = 'https://script.google.com/macros/s/AKfycbx8vlMzgRiJYJqHQwPOdT-aDy0tMOFdHx8G3citRM1dO2gWyIUcvo1zj3YhNC-PGoEI/exec';
+const API='https://script.google.com/macros/s/AKfycbxb8EgliaeIkXOFFdgjL61bG8ZggeLGyCpOY4RIzpEO0lV3hcLlFD2VcWeDcbjZYYXV/exec';
 
-// ── STATE ──
-let DB = { clienti: [], visite: [], operazioni: [], concimi: [], sementi: [], fitofarmaci: [], fasce: [] };
-let currentPage = 'home';
-let pratoEnabled = false;
-let siepeEnabled = false;
-let opPratoEnabled = false;
-let opSiepeEnabled = false;
-let pendingOperazioni = [];
-let pendingOpIndex = null;
-let addrLat = null, addrLng = null;
-let addrTimeout = null;
+// I 4 terricci fissi — le chiavi corrispondono alle colonne del foglio Rinvaso
+const TERRICCI=[
+  {key:'LitriAkadama',     label:'Akadama',            ico:'🟤'},
+  {key:'LitriKiryu',       label:'Kiryu',              ico:'⚪'},
+  {key:'LitriPomice',      label:'Pomice',             ico:'🔵'},
+  {key:'LitriSecondaMano', label:'Terriccio 2ª Mano',  ico:'⬛'},
+];
 
-// ── INIT ──
-async function init() {
-  document.getElementById('hero-date').textContent = new Date().toLocaleDateString('it-IT', { weekday:'long', day:'numeric', month:'long' });
-  document.getElementById('f-visita-data').value = new Date().toISOString().split('T')[0];
-  await loadAll();
-  renderHome();
-  renderClienti();
-  renderVisite();
-  renderProssimi();
-  renderPrati();
+const DB={Lotti:[],Sperimentazione:[],Rinvaso:[],Potatura:[],Legatura:[],Materiali:[]};
+let promoLottoIndex=-1;
+const TABS=['lotti','sperimentazione','rinvaso','potatura','legatura','materiali','riepilogo'];
+let counters={Rinvaso:1,Potatura:1,Legatura:1,Sperimentazione:1};
+let editingLottoIndex=-1; // -1 = nuovo lotto, >= 0 = modifica
+
+function toast(msg,err=false){
+  const t=document.getElementById('toast');
+  t.textContent=msg;t.className='show'+(err?' err':'');
+  clearTimeout(t._t);t._t=setTimeout(()=>t.className='',3000);
+}
+function fmt(n){return(isNaN(n)||n==null||n==='')?'—':Number(n).toFixed(2).replace('.',',')+' €';}
+function fmtL(n){return(isNaN(n)||n==null||n===''||Number(n)===0)?'—':Number(n).toFixed(2)+' L';}
+function loader(on){document.getElementById('loader').classList.toggle('hidden',!on);}
+function busy(id,on,lbl){
+  const b=document.getElementById(id);if(!b)return;
+  b.disabled=on;
+  if(on){b.dataset.lbl=b.textContent;b.textContent='⏳ Salvataggio…';}
+  else b.textContent=lbl||b.dataset.lbl||b.textContent;
 }
 
-async function api(params) {
-  const url = API + '?' + new URLSearchParams(params);
-  const r = await fetch(url);
-  return r.json();
+async function apiGet(sheet){const r=await fetch(`${API}?sheet=${sheet}`);return r.json();}
+async function apiPost(body){
+  // Apps Script cross-origin: inviamo i dati come parametro GET codificato
+  // doGet legge ?action=...&data=... e delega a doPost logic
+  const params=new URLSearchParams({
+    action:body.action,
+    data:JSON.stringify(body)
+  });
+  const r=await fetch(`${API}?${params.toString()}`,{redirect:'follow'});
+  const text=await r.text();
+  try{return JSON.parse(text);}catch(e){return{status:'ok'};}
 }
 
-async function apiPost(data) {
-  const r = await fetch(API, { method:'POST', body: JSON.stringify(data) });
-  return r.json();
-}
-
-async function loadAll() {
-  try {
-    const [clienti, visite, operazioni, concimi, sementi, fitofarmaci, fasce] = await Promise.all([
-      api({action:'getAll', foglio:'CLIENTI'}),
-      api({action:'getAll', foglio:'VISITE'}),
-      api({action:'getAll', foglio:'OPERAZIONI'}),
-      api({action:'getAll', foglio:'CONCIMI'}),
-      api({action:'getAll', foglio:'SEMENTI'}),
-      api({action:'getAll', foglio:'FITOFARMACI'}),
-      api({action:'getAll', foglio:'FASCE'}),
+async function loadAll(){
+  loader(true);
+  try{
+    const[L,S,R,P,G,M]=await Promise.all([
+      apiGet('Lotti'),apiGet('Sperimentazione'),apiGet('Rinvaso'),apiGet('Potatura'),apiGet('Legatura'),apiGet('Materiali')
     ]);
-    DB.clienti = clienti || [];
-    DB.visite = visite || [];
-    DB.operazioni = operazioni || [];
-    DB.concimi = concimi || [];
-    DB.sementi = sementi || [];
-    DB.fitofarmaci = fitofarmaci || [];
-    DB.fasce = fasce || [];
-    updateStats();
-  } catch(e) {
-    showToast('⚠️ Errore caricamento dati');
+    DB.Lotti=L||[];DB.Sperimentazione=S||[];DB.Rinvaso=R||[];DB.Potatura=P||[];DB.Legatura=G||[];DB.Materiali=M||[];
+    const maxN=(arr,k)=>arr.reduce((m,r)=>{const n=parseInt((String(r[k]||'')).split('-').pop()||0);return n>m?n:m;},0);
+    counters.Rinvaso=maxN(DB.Rinvaso,'ID')+1;
+    counters.Potatura=maxN(DB.Potatura,'ID')+1;
+    counters.Legatura=maxN(DB.Legatura,'ID')+1;
+    counters.Sperimentazione=maxN(DB.Sperimentazione,'VarianteLotto')+1;
+    renderAll();
+  }catch(e){toast('⚠ Errore connessione al database',true);console.error(e);}
+  loader(false);
+}
+
+function renderAll(){
+  renderLotti();renderSperim();buildTerrInputs();renderRinvaso();
+  renderPotatura();renderLegatura();renderMateriali();
+  refreshSelects();genCodice();
+}
+
+function showTab(id){
+  TABS.forEach((t,i)=>{
+    document.getElementById('sec-'+t).classList.toggle('active',t===id);
+    document.querySelectorAll('nav button')[i].classList.toggle('active',t===id);
+  });
+  if(id==='riepilogo')renderRiepilogo();
+  if(id==='rinvaso')buildTerrInputs();
+  if(id==='sperimentazione')renderSperim();
+}
+
+function genCodice(){
+  const sp=document.getElementById('l-sp3').value||'___';
+  const yr=(document.getElementById('l-yr').value||'__').padStart(2,'0').substring(0,2);
+  const prog=(document.getElementById('l-prog').value||'___');
+  document.getElementById('l-cod').value=`${sp}-${yr}-${prog}`;
+}
+
+// ── TERRICCI ─────────────────────────────────────────────
+function buildTerrInputs(){
+  const c=document.getElementById('terr-inputs');
+  c.innerHTML='';
+  TERRICCI.forEach(t=>{
+    const mat=DB.Materiali.find(m=>(m.Nome||'').trim().toLowerCase()===t.label.toLowerCase());
+    const prezzo=mat?Number(mat.PrezzoLitro||0):0;
+    const ptxt=prezzo>0?`${prezzo.toFixed(2)} €/L`:'— prezzo non impostato';
+    c.innerHTML+=`
+      <div class="terr-item">
+        <div class="terr-name">${t.ico} ${t.label}</div>
+        <div class="terr-price">${ptxt}</div>
+        <input type="number" id="r-${t.key}" step="0.1" min="0" placeholder="0.0 L"
+          oninput="calcRinvaso()" data-prezzo="${prezzo}">
+      </div>`;
+  });
+  calcRinvaso();
+}
+
+function calcRinvaso(){
+  let totL=0,totC=0;
+  TERRICCI.forEach(t=>{
+    const inp=document.getElementById('r-'+t.key);
+    if(!inp)return;
+    const l=parseFloat(inp.value)||0;
+    const p=parseFloat(inp.dataset.prezzo)||0;
+    totL+=l;totC+=l*p;
+  });
+  const altri=parseFloat(document.getElementById('r-costo-altri').value)||0;
+  document.getElementById('tot-litri').textContent=totL.toFixed(2)+' L';
+  document.getElementById('tot-costo-terr').textContent=totC.toFixed(2)+' €';
+  document.getElementById('tot-costo-rin').textContent=(totC+altri).toFixed(2)+' €';
+}
+
+
+function calcLeg(){
+  const m=parseFloat(document.getElementById('g-mt').value)||0;
+  const c=parseFloat(document.getElementById('g-cm').value)||0;
+  document.getElementById('g-costo').value=(m*c).toFixed(2);
+}
+
+function refreshSelects(){
+  // Rinvaso/Potatura/Legatura: solo lotti in Produzione
+  ['r-lotto','p-lotto','g-lotto'].forEach(id=>{
+    const sel=document.getElementById(id),cur=sel.value;
+    sel.innerHTML='<option value="">— seleziona —</option>';
+    DB.Lotti.filter(l=>l.Stato==='Produzione').forEach(l=>{
+      const o=document.createElement('option');
+      o.value=l.Codice;o.textContent=`${l.Codice} — ${l.Specie||''}`;
+      sel.appendChild(o);
+    });
+    sel.value=cur;
+  });
+  // Sperimentazione: solo lotti Sperimentali
+  const spSel=document.getElementById('sp-lotto');
+  if(spSel){
+    const cur=spSel.value;
+    spSel.innerHTML='<option value="">— seleziona —</option>';
+    DB.Lotti.filter(l=>l.Stato==='Sperimentale').forEach(l=>{
+      const o=document.createElement('option');
+      o.value=l.Codice;o.textContent=`${l.Codice} — ${l.Specie||''}`;
+      spSel.appendChild(o);
+    });
+    spSel.value=cur;
   }
 }
 
-function updateStats() {
-  document.getElementById('stat-clienti').textContent = DB.clienti.length;
-  document.getElementById('stat-visite').textContent = DB.visite.length;
-  document.getElementById('stat-prati').textContent = DB.clienti.filter(c => c.Ha_prato === 'Sì').length;
-}
-
-// ── NAVIGATION ──
-function navTo(page) {
-  document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
-  document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
-  document.getElementById('page-'+page).classList.add('active');
-  document.getElementById('nav-'+page).classList.add('active');
-  currentPage = page;
-  const titles = { home:'GiardinoApp', clienti:'Clienti', visite:'Registro Visite', prossimi:'Prossimi Interventi', prati:'Prati' };
-  document.getElementById('topbar-title').textContent = titles[page];
-  document.getElementById('topbar-action-btn').style.display = (page === 'prati' || page === 'prossimi') ? 'none' : 'flex';
-}
-
-function topbarAction() {
-  if (currentPage === 'clienti') openNuovoCliente();
-  else if (currentPage === 'visite') openNuovaVisita();
-  else if (currentPage === 'home') openNuovaVisita();
-}
-
-// ── HOME ──
-function renderHome() {
-  const list = document.getElementById('home-visite-list');
-  const recent = [...DB.visite].reverse().slice(0, 5);
-  if (!recent.length) { list.innerHTML = '<div class="empty"><div class="empty-icon">📋</div><div class="empty-text">Nessuna visita ancora</div></div>'; return; }
-  list.innerHTML = recent.map(v => {
-    const c = DB.clienti.find(x => x.ClienteID == v.ClienteID);
-    const nome = c ? c.Cliente : v.ClienteID;
-    const data = v.Data ? new Date(v.Data).toLocaleDateString('it-IT', {day:'numeric', month:'short'}) : '';
-    return `<div class="visit-item" onclick="navTo('visite')">
-      <div class="visit-dot"></div>
-      <div><div class="visit-name">${nome}</div><div class="visit-meta">${v.Ore_Visita ? v.Ore_Visita+'h' : ''}</div></div>
-      <div class="visit-date">${data}</div>
-    </div>`;
-  }).join('');
-}
-
-// ── CLIENTI ──
-function renderClienti(filter = '') {
-  const list = document.getElementById('clienti-list');
-  let items = DB.clienti.filter(c => !filter || c.Cliente?.toLowerCase().includes(filter.toLowerCase()) || c.Citta?.toLowerCase().includes(filter.toLowerCase()));
-  if (!items.length) { list.innerHTML = '<div class="empty"><div class="empty-icon">👥</div><div class="empty-text">Nessun cliente trovato</div></div>'; return; }
-  list.innerHTML = items.map(c => {
-    const initials = (c.Cliente || '?').split(' ').map(w => w[0]).join('').slice(0,2).toUpperCase();
-    const badges = [];
-    if (c.Ha_prato === 'Sì') badges.push(`<span class="badge badge-prato">🌱 Prato</span>`);
-    if (c.FasciaID) badges.push(`<span class="badge badge-fascia">Fascia ${c.FasciaID}</span>`);
-    if (c.Ha_siepe === 'Sì') badges.push(`<span class="badge" style="background:#e8f4f0;color:#2a7a5a">🌿 Siepe</span>`);
-    if (c.Siepe_specie) badges.push(`<span class="badge" style="background:#f0f4e8;color:#5a6a2a">${c.Siepe_specie}</span>`);
-    const addr = [c.Indirizzo, c.Citta].filter(Boolean).join(', ');
-    return `<div class="client-card" onclick="showCliente('${c.ClienteID}')">
-      <div class="client-avatar">${initials}</div>
-      <div style="flex:1">
-        <div class="client-name">${c.Cliente}</div>
-        <div class="client-city">${addr || '–'}</div>
-        ${badges.length ? `<div class="client-badges">${badges.join('')}</div>` : ''}
-      </div>
-      ${c.Lat && c.Lng ? `<a href="https://maps.google.com/?q=${c.Lat},${c.Lng}" target="_blank" onclick="event.stopPropagation()" style="font-size:1.3rem; text-decoration:none">📍</a>` : ''}
-    </div>`;
-  }).join('');
-}
-
-function filterClienti() {
-  renderClienti(document.getElementById('search-clienti').value);
-}
-
-function showCliente(id) {
-  const c = DB.clienti.find(x => x.ClienteID == id);
-  if (!c) return;
-  const visite = DB.visite.filter(v => v.ClienteID == id);
-  const page = document.getElementById('page-clienti');
-  // calcola N/K anno corrente per prato
-  const annoCorr = new Date().getFullYear();
-  const visitIdsCliente = visite.filter(v => v.Data && new Date(v.Data).getFullYear() == annoCorr).map(v => v.VisitaID);
-  const opsCliente = DB.operazioni.filter(o => visitIdsCliente.includes(o.VisitaID));
-  let nSomm = 0, kSomm = 0;
-  opsCliente.filter(o => o.Tipo_operazione === 'Concimazione' && o.Flag_prato === 'Sì').forEach(o => {
-    const conc = DB.concimi.find(cc => cc.ConcimeID == o.ConcimeID);
-    if (conc && o.Dose_kg && c.Mq_prato) {
-      const dose = parseFloat(o.Dose_kg) || 0;
-      const mq = parseFloat(c.Mq_prato) || 1;
-      nSomm += (dose * parseFloat(conc.N_percento) / 100 * 1000) / mq;
-      kSomm += (dose * parseFloat(conc.K_percento) / 100 * 1000) / mq;
-    }
+function resetForm(pfx){
+  document.querySelectorAll(`[id^="${pfx}-"]`).forEach(el=>{
+    if(el.tagName==='SELECT')el.selectedIndex=0;
+    else if(el.type==='range')el.value=el.defaultValue;
+    else el.value='';
   });
-  // ultima potatura siepe
-  const opsAll = DB.operazioni.filter(o => DB.visite.find(vv => vv.VisitaID == o.VisitaID && vv.ClienteID == c.ClienteID));
-  const ultimaSiepe = opsAll.filter(o => o.Tipo_operazione === 'Potatura' && o.Flag_siepe === 'Sì').map(o => {
-    const vv = DB.visite.find(vv => vv.VisitaID == o.VisitaID);
-    return vv?.Data ? new Date(vv.Data) : null;
-  }).filter(Boolean).sort((a,b) => b-a)[0];
-
-  page.innerHTML = `
-    <div class="detail-header">
-      <button class="detail-back" onclick="renderClientiPage()">← Clienti</button>
-      <div class="detail-name">${c.Cliente}</div>
-      <div class="detail-city">${[c.Indirizzo, c.Citta].filter(Boolean).join(', ') || 'Indirizzo non inserito'}</div>
-    </div>
-    <div style="padding:16px 14px 0">
-      <div class="info-grid">
-        <div class="info-item"><div class="info-label">Visite totali</div><div class="info-value">${visite.length}</div></div>
-        ${c.Lat && c.Lng ? `<div class="info-item" style="cursor:pointer" onclick="window.open('https://maps.google.com/?q=${c.Lat},${c.Lng}','_blank')"><div class="info-label">Posizione</div><div class="info-value">📍 Maps</div></div>` : '<div class="info-item"><div class="info-label">Posizione</div><div class="info-value">–</div></div>'}
-      </div>
-
-      ${c.Ha_prato === 'Sì' ? `
-      <div style="background:var(--green-mist); border-radius:var(--radius); padding:14px; margin-bottom:14px; border:1px solid var(--green-pale)">
-        <div style="font-family:var(--font-display); font-size:0.95rem; font-weight:600; color:var(--green-deep); margin-bottom:10px">🌱 Riepilogo Prato</div>
-        <div class="info-grid" style="margin-bottom:8px">
-          <div class="info-item"><div class="info-label">Superficie</div><div class="info-value">${c.Mq_prato} mq</div></div>
-          <div class="info-item"><div class="info-label">Fascia</div><div class="info-value">${c.FasciaID ? 'Fascia '+c.FasciaID : '–'}</div></div>
-          <div class="info-item"><div class="info-label">N somm. ${annoCorr}</div><div class="info-value">${nSomm.toFixed(1)} g/m²</div></div>
-          <div class="info-item"><div class="info-label">Target N</div><div class="info-value">${c.Target_N_g_m2_anno || '–'} g/m²</div></div>
-          <div class="info-item"><div class="info-label">K somm. ${annoCorr}</div><div class="info-value">${kSomm.toFixed(1)} g/m²</div></div>
-          <div class="info-item"><div class="info-label">Target K</div><div class="info-value">${c.Target_K_g_m2_anno || '–'} g/m²</div></div>
-        </div>
-      </div>` : ''}
-
-      ${c.Ha_siepe === 'Sì' ? `
-      <div style="background:#eef7f2; border-radius:var(--radius); padding:14px; margin-bottom:14px; border:1px solid #c8e8d8">
-        <div style="font-family:var(--font-display); font-size:0.95rem; font-weight:600; color:#1a3a2a; margin-bottom:10px">🌿 Riepilogo Siepe</div>
-        <div class="info-grid">
-          <div class="info-item"><div class="info-label">Specie</div><div class="info-value">${c.Siepe_specie || '–'}</div></div>
-          <div class="info-item"><div class="info-label">Ultima potatura</div><div class="info-value">${ultimaSiepe ? ultimaSiepe.toLocaleDateString('it-IT', {day:'numeric', month:'short', year:'numeric'}) : '–'}</div></div>
-          <div class="info-item"><div class="info-label">Lunghezza</div><div class="info-value">${c.Siepe_lunghezza ? c.Siepe_lunghezza+' m' : '–'}</div></div>
-          <div class="info-item"><div class="info-label">H × L</div><div class="info-value">${c.Siepe_altezza||'–'} × ${c.Siepe_larghezza||'–'} m</div></div>
-        </div>
-      </div>` : ''}
-
-      <button class="btn btn-secondary" onclick="editCliente('${c.ClienteID}')" style="margin-bottom:14px">✏️ Modifica cliente</button>
-
-      <div class="recent-title">Storico visite</div>
-      ${visite.length ? [...visite].sort((a,b) => new Date(b.Data)-new Date(a.Data)).map(v => {
-        const ops = DB.operazioni.filter(o => o.VisitaID == v.VisitaID);
-        const data = v.Data ? new Date(v.Data).toLocaleDateString('it-IT', {day:'numeric', month:'long', year:'numeric'}) : '';
-        return `<div class="visit-card">
-          <div class="visit-card-header">
-            <span class="visit-card-icon">📋</span>
-            <div><div class="visit-card-title">${data}</div><div class="visit-card-date">${v.Ore_Visita ? v.Ore_Visita+'h di lavoro' : ''}</div></div>
-          </div>
-          ${v.Note_visita ? `<div style="font-size:0.82rem; color:var(--text-mid); margin-top:8px">${v.Note_visita}</div>` : ''}
-          ${ops.length ? `<div class="visit-ops">${ops.map(o => `<span class="op-tag ${o.Flag_prato==='Sì'?'prato':''} ${o.Flag_siepe==='Sì'?'siepe':''}">${o.Tipo_operazione}${o.Descrizione?' – '+o.Descrizione:''}</span>`).join('')}</div>` : ''}
-        </div>`;
-      }).join('') : '<div class="empty"><div class="empty-text">Nessuna visita</div></div>'}
-    </div>`;
+  if(pfx==='r')calcRinvaso();
+  if(pfx==='p')calcPot();
+  if(pfx==='g')calcLeg();
 }
 
-function renderClientiPage() {
-  document.getElementById('page-clienti').innerHTML = `
-    <div class="search-bar">
-      <span class="search-icon">🔍</span>
-      <input type="search" class="search-input" id="search-clienti" placeholder="Cerca cliente..." oninput="filterClienti()">
-    </div>
-    <div id="clienti-list"></div>`;
-  renderClienti();
+// ── LOTTI ────────────────────────────────────────────────
+function editLotto(i){
+  const l=DB.Lotti[i];
+  editingLottoIndex=i;
+  // Popola il form con i dati del lotto
+  document.getElementById('l-sp3').value=l.Specie?.substring(0,3)||l.Codice?.substring(0,3)||'';
+  document.getElementById('l-yr').value=l.Anno||'';
+  document.getElementById('l-prog').value=l.Progressivo||l.Codice?.split('-')[2]||'';
+  document.getElementById('l-nome').value=l.Specie||'';
+  document.getElementById('l-qty').value=l['Quantità']||'';
+  document.getElementById('l-data').value=l.DataIngresso||'';
+  document.getElementById('l-prov').value=l.Provenienza||'';
+  document.getElementById('l-stato').value=l.Stato||'Attivo';
+
+  document.getElementById('l-note').value=l.Note||'';
+  genCodice();
+  // Aggiorna UI form in modalità modifica
+  document.getElementById('btn-save-lotto').textContent='💾 Aggiorna Lotto';
+  document.getElementById('btn-save-lotto').style.background='var(--amber)';
+  document.querySelector('.fcard-hdr h3').textContent='Modifica Lotto: '+l.Codice;
+  window.scrollTo({top:0,behavior:'smooth'});
 }
 
-// ── VISITE ──
-function renderVisite() {
-  const list = document.getElementById('visite-list');
-  if (!list) return;
-  if (!DB.visite.length) { list.innerHTML = '<div class="empty"><div class="empty-icon">📋</div><div class="empty-text">Nessuna visita</div></div>'; return; }
-  list.innerHTML = [...DB.visite].reverse().map(v => {
-    const c = DB.clienti.find(x => x.ClienteID == v.ClienteID);
-    const nome = c ? c.Cliente : v.ClienteID;
-    const ops = DB.operazioni.filter(o => o.VisitaID == v.VisitaID);
-    const data = v.Data ? new Date(v.Data).toLocaleDateString('it-IT', {day:'numeric', month:'long', year:'numeric'}) : '';
-    return `<div class="visit-card">
-      <div class="visit-card-header">
-        <span class="visit-card-icon">🌿</span>
-        <div style="flex:1"><div class="visit-card-title">${nome}</div><div class="visit-card-date">${data}${v.Ore_Visita ? ' · '+v.Ore_Visita+'h' : ''}</div></div>
-      </div>
-      ${v.Note_visita ? `<div style="font-size:0.82rem; color:var(--text-mid); margin-top:8px">${v.Note_visita}</div>` : ''}
-      ${ops.length ? `<div class="visit-ops">${ops.map(o => `<span class="op-tag ${o.Flag_prato==='Sì'?'prato':''}">${o.Tipo_operazione}${o.Descrizione?' – '+o.Descrizione:''}</span>`).join('')}</div>` : ''}
-    </div>`;
-  }).join('');
+function cancelEdit(){
+  editingLottoIndex=-1;
+  resetForm('l');
+  document.getElementById('btn-save-lotto').textContent='💾 Salva Lotto';
+  document.getElementById('btn-save-lotto').style.background='';
+  document.querySelector('.fcard-hdr h3').textContent='Nuovo Lotto';
 }
 
-// ── PROSSIMI INTERVENTI ──
-function renderProssimi() {
-  const list = document.getElementById('prossimi-list');
-  if (!list) return;
-  // collect visite with prossimo intervento
-  const items = DB.visite
-    .filter(v => v.Prossimo_intervento || v.Mese_prossimo_intervento)
-    .map(v => {
-      const c = DB.clienti.find(x => x.ClienteID == v.ClienteID);
-      const mese = parseInt(v.Mese_prossimo_intervento) || 13;
-      const anno = parseInt(v.Anno_prossimo_intervento) || 9999;
-      return { v, c, sortKey: anno * 100 + mese };
-    })
-    // keep only the latest visita per client (most recent prossimo)
-    .reduce((acc, item) => {
-      const existing = acc.find(x => x.c?.ClienteID === item.c?.ClienteID);
-      if (!existing) acc.push(item);
-      else if (item.v.Data > existing.v.Data) {
-        acc[acc.indexOf(existing)] = item;
-      }
-      return acc;
-    }, [])
-    .sort((a, b) => a.sortKey - b.sortKey);
+async function saveLotto(){
+  const cod=document.getElementById('l-cod').value;
+  const progVal=document.getElementById('l-prog').value.trim();
+  if(!document.getElementById('l-sp3').value||document.getElementById('l-yr').value.length<2){toast('⚠ Compila specie e anno!',true);return;}
+  if(!progVal){toast('⚠ Inserisci il progressivo!',true);return;}
+  const qty=parseInt(document.getElementById('l-qty').value);
+  if(!qty||qty<1){toast('⚠ Inserisci quantità piante!',true);return;}
+  const yr=document.getElementById('l-yr').value;
+  const prog=document.getElementById('l-prog').value.trim();
+  const row=[cod,document.getElementById('l-nome').value||'—',yr,prog,qty,
+    document.getElementById('l-data').value,document.getElementById('l-prov').value||'—',
+    document.getElementById('l-stato').value,document.getElementById('l-note').value];
+  busy('btn-save-lotto',true);
+  try{
+    if(editingLottoIndex>=0){
+      // Modifica: elimina vecchia riga e inserisce quella aggiornata
+      const oldCod=DB.Lotti[editingLottoIndex].Codice;
+      await apiPost({action:'delete',sheet:'Lotti',keyCol:1,keyVal:oldCod});
+      await apiPost({action:'append',sheet:'Lotti',row});
+      DB.Lotti[editingLottoIndex]={Codice:cod,Specie:row[1],Anno:yr,Progressivo:prog,'Quantità':qty,
+        DataIngresso:row[5],Provenienza:row[6],Stato:row[7],Note:row[8]};
+      toast('✓ Lotto aggiornato');
+    } else {
+      // Nuovo lotto
+      await apiPost({action:'append',sheet:'Lotti',row});
+      DB.Lotti.push({Codice:cod,Specie:row[1],Anno:yr,Progressivo:prog,'Quantità':qty,
+        DataIngresso:row[5],Provenienza:row[6],Stato:row[7],Note:row[8]});
+      toast('✓ Lotto salvato');
+    }
+    cancelEdit();
+    renderLotti();refreshSelects();
+  }catch(e){toast('⚠ Errore salvataggio',true);}
+  busy('btn-save-lotto',false, editingLottoIndex>=0?'💾 Aggiorna Lotto':'💾 Salva Lotto');
+}
+function renderLotti(){
+  const tb=document.getElementById('tb-lotti');
+  document.getElementById('cnt-lotti').textContent=DB.Lotti.length+' lott'+(DB.Lotti.length===1?'o':'i');
+  if(!DB.Lotti.length){tb.innerHTML='<tr><td colspan="8" class="empty"><div class="eico">🌱</div>Nessun lotto registrato</td></tr>';return;}
+  tb.innerHTML=DB.Lotti.map((l,i)=>{
+    const statoCls=l.Stato==='Sperimentale'?'sb-sp':l.Stato==='Produzione'?'sb-pr':'sb-ar';
+    const promoBtn=l.Stato==='Sperimentale'
+      ?`<button class="btn" style="padding:4px 10px;font-size:9px;margin-right:4px;background:#e8f0fe;color:#1a5276;border:1px solid #aac4e8" onclick="apriModal(${i})">🌱 Promuovi</button>`:'';
+    return`<tr>
+    <td><span class="cb">${l.Codice}</span></td><td>${l.Specie||'—'}</td><td>${l.Anno||'—'}</td>
+<td style="text-align:center;font-weight:500">${l['Quantità']||'—'}</td>
+    <td>${l.DataIngresso||'—'}</td><td>${l.Provenienza||'—'}</td>
+    <td><span class="sb ${statoCls}">${l.Stato||'—'}</span></td>
+    <td style="white-space:nowrap">
+      ${promoBtn}
+      <button class="btn btn-s" style="padding:4px 10px;font-size:9px;margin-right:4px" onclick="editLotto(${i})">✏️ Modifica</button>
+      <button class="btn btn-d" onclick="deleteLotto(${i},'${l.Codice}')">Elimina</button>
+    </td>
+  </tr>`;}).join('');
+}
+async function deleteLotto(i,cod){
+  if(!confirm(`Eliminare il lotto ${cod}?`))return;
+  try{
+    await apiPost({action:'delete',sheet:'Lotti',keyCol:1,keyVal:cod});
+    DB.Lotti.splice(i,1);renderLotti();refreshSelects();genCodice();toast('Lotto eliminato');
+  }catch(e){toast('⚠ Errore eliminazione',true);}
+}
 
-  if (!items.length) {
-    list.innerHTML = '<div class="empty"><div class="empty-icon">📅</div><div class="empty-text">Nessun intervento pianificato</div></div>';
+// ── SPERIMENTAZIONE ──────────────────────────────────────
+function calcAttecch(){
+  const ins=parseFloat(document.getElementById('sp-ins').value)||0;
+  const att=parseFloat(document.getElementById('sp-att').value)||0;
+  document.getElementById('sp-pct').value=ins>0?(att/ins*100).toFixed(1)+'%':'';
+}
+
+async function saveSperim(){
+  const lotto=document.getElementById('sp-lotto').value;
+  if(!lotto){toast('⚠ Seleziona un lotto!',true);return;}
+  const varVal=document.getElementById('sp-var').value.trim();
+  if(!varVal){toast('⚠ Inserisci la variante (A, B…)',true);return;}
+  const ins=parseFloat(document.getElementById('sp-ins').value)||0;
+  const att=parseFloat(document.getElementById('sp-att').value)||0;
+  const pct=ins>0?(att/ins*100).toFixed(1):0;
+  const id=`${lotto}-${varVal}`;
+  const row=[id,lotto,document.getElementById('sp-nome').value,
+    document.getElementById('sp-desc').value,ins,att,pct,
+    document.getElementById('sp-d1').value,document.getElementById('sp-d2').value,
+    document.getElementById('sp-concl').value];
+  busy('btn-save-sperim',true);
+  try{
+    // se esiste già questa variante, sostituisci
+    const ex=DB.Sperimentazione.findIndex(s=>s.VarianteLotto===id);
+    if(ex>=0){
+      await apiPost({action:'delete',sheet:'Sperimentazione',keyCol:1,keyVal:id});
+      DB.Sperimentazione.splice(ex,1);
+    }
+    await apiPost({action:'append',sheet:'Sperimentazione',row});
+    DB.Sperimentazione.push({VarianteLotto:id,Lotto:lotto,NomeVariabile:row[2],
+      Descrizione:row[3],TaleeInserite:ins,TaleeAttecchite:att,PctAttecchimento:pct,
+      DataInizio:row[7],DataFine:row[8],Conclusioni:row[9]});
+    renderSperim();resetForm('sp');toast('✓ Variante salvata');
+  }catch(e){toast('⚠ Errore salvataggio',true);}
+  busy('btn-save-sperim',false,'💾 Salva Variante');
+}
+
+function renderSperim(){
+  const container=document.getElementById('sperim-log');
+  if(!container)return;
+  const lottiSp=DB.Lotti.filter(l=>l.Stato==='Sperimentale');
+  const lottiConDati=[...new Set(DB.Sperimentazione.map(s=>s.Lotto))];
+  const tuttiLotti=[...new Set([...lottiSp.map(l=>l.Codice),...lottiConDati])];
+  document.getElementById('cnt-sperim').textContent=DB.Sperimentazione.length+' varianti';
+  if(!tuttiLotti.length){
+    container.innerHTML='<div class="empty"><div class="eico">🔬</div>Nessun lotto sperimentale — crea un lotto con stato "Sperimentale"</div>';
     return;
   }
-
-  const oggi = new Date();
-  list.innerHTML = items.map(({ v, c }) => {
-    const nome = c ? c.Cliente : v.ClienteID;
-    const citta = c?.Citta || '';
-    const mese = v.Mese_prossimo_intervento;
-    const anno = v.Anno_prossimo_intervento;
-    const dataStr = mese ? meseNome(mese) + (anno ? ' ' + anno : '') : '';
-    // check urgency
-    let urgClass = '', urgLabel = '';
-    if (mese && anno) {
-      const target = new Date(parseInt(anno), parseInt(mese) - 1, 1);
-      const diffDays = (target - oggi) / 86400000;
-      if (diffDays < 0) { urgClass = 'rosso'; urgLabel = 'Scaduto'; }
-      else if (diffDays < 30) { urgClass = 'giallo'; urgLabel = 'Imminente'; }
-      else { urgClass = 'verde'; urgLabel = dataStr; }
-    }
-    return `<div class="card" style="padding:14px">
-      <div style="display:flex; align-items:center; gap:12px">
-        <div class="semaforo ${urgClass}" style="width:12px;height:12px;flex-shrink:0"></div>
-        <div style="flex:1">
-          <div style="font-weight:600; font-size:0.95rem">${nome}</div>
-          <div style="font-size:0.78rem; color:var(--text-light)">${citta}</div>
-          <div style="font-size:0.82rem; color:var(--text-mid); margin-top:3px">${v.Prossimo_intervento || ''}</div>
+  container.innerHTML=tuttiLotti.map(cod=>{
+    const lotto=DB.Lotti.find(l=>l.Codice===cod);
+    const varianti=DB.Sperimentazione.filter(s=>s.Lotto===cod);
+    const varHtml=varianti.length?varianti.map(v=>{
+      const pct=parseFloat(v.PctAttecchimento)||0;
+      const barColor=pct>=70?'var(--sage)':pct>=40?'var(--amber)':'var(--err)';
+      return`<div class="var-card">
+        <div class="var-card-hdr">
+          <div>
+            <span class="var-tag">Variante ${v.VarianteLotto.split('-').pop()}</span>
+            <span style="font-size:10px;color:#888;margin-left:8px">${v.NomeVariabile||''}</span>
+          </div>
+          <span class="var-pct" style="color:${barColor}">${pct.toFixed(1)}%</span>
         </div>
-        <div style="text-align:right; flex-shrink:0">
-          <div style="font-size:0.82rem; font-weight:600; color:var(--green-deep)">${dataStr}</div>
-          ${urgClass === 'rosso' ? '<div style="font-size:0.68rem;color:var(--red);font-weight:600">SCADUTO</div>' : ''}
-        </div>
-      </div>
-      <button class="btn btn-secondary btn-sm" style="margin-top:10px;width:100%" onclick="segnaFatto('${v.VisitaID}')">✓ Fatto — cancella prossimo intervento</button>
-    </div>`;
-  }).join('');
-}
-
-// ── PRATI REPORT ──
-function calcPratoData(c, anno) {
-  const targetN = parseFloat(c.Target_N_g_m2_anno) || 0;
-  const targetK = parseFloat(c.Target_K_g_m2_anno) || 0;
-  const mq = parseFloat(c.Mq_prato) || 0;
-  const visitIds = DB.visite
-    .filter(v => v.ClienteID == c.ClienteID && v.Data && new Date(v.Data).getFullYear() == anno)
-    .map(v => v.VisitaID);
-  const opsCliente = DB.operazioni.filter(o => visitIds.includes(o.VisitaID));
-
-  // concimazioni con dettaglio
-  const concimazioni = opsCliente
-    .filter(o => o.Tipo_operazione === 'Concimazione' && o.Flag_prato === 'Sì')
-    .map(o => {
-      const conc = DB.concimi.find(cc => cc.ConcimeID == o.ConcimeID);
-      const v = DB.visite.find(vv => vv.VisitaID == o.VisitaID);
-      let nM2 = parseFloat(o.N_g_m2) || 0;
-      let kM2 = parseFloat(o.K_g_m2) || 0;
-      if (!nM2 && conc && o.Dose_kg && mq > 0) {
-        nM2 = (parseFloat(o.Dose_kg) * parseFloat(conc.N_percento) / 100 * 1000) / mq;
-        kM2 = (parseFloat(o.Dose_kg) * parseFloat(conc.K_percento) / 100 * 1000) / mq;
-      }
-      return {
-        data: v?.Data ? new Date(v.Data) : null,
-        concime: conc?.Concime || '–',
-        dose: o.Dose_kg || '–',
-        nM2, kM2
-      };
-    })
-    .sort((a,b) => (a.data||0) - (b.data||0));
-
-  const nSomm = concimazioni.reduce((s, o) => s + o.nM2, 0);
-  const kSomm = concimazioni.reduce((s, o) => s + o.kM2, 0);
-
-  const pctN = targetN > 0 ? Math.min(nSomm / targetN, 1) : 0;
-  let sem = 'rosso', semLabel = 'Da avviare';
-  if (nSomm > 0 && pctN < 0.4) { sem = 'rosso'; semLabel = 'In corso'; }
-  if (pctN >= 0.4) { sem = 'giallo'; semLabel = 'In corso'; }
-  if (pctN >= 0.8) { sem = 'verde'; semLabel = 'In target'; }
-  if (targetN === 0) { sem = 'rosso'; semLabel = 'Nessun target'; }
-
-  const lastOpDate = (tipo) => {
-    const ops = opsCliente.filter(o => o.Flag_prato === 'Sì' && o.Tipo_operazione === tipo);
-    if (!ops.length) return '–';
-    const v = DB.visite.find(vv => vv.VisitaID == ops[ops.length-1].VisitaID);
-    return v?.Data ? new Date(v.Data).toLocaleDateString('it-IT', {day:'numeric', month:'short'}) : '–';
-  };
-
-  return { targetN, targetK, mq, nSomm, kSomm, pctN, sem, semLabel, concimazioni,
-    lastConc: lastOpDate('Concimazione'),
-    lastSemina: lastOpDate('Semina'),
-    lastArie: lastOpDate('Arieggiatura') };
-}
-
-function togglePratoDettaglio(id) {
-  const el = document.getElementById('prato-dettaglio-' + id);
-  const btn = document.getElementById('prato-dettaglio-btn-' + id);
-  if (el.style.display === 'none') {
-    el.style.display = 'block';
-    btn.textContent = '▲ Chiudi dettaglio';
-  } else {
-    el.style.display = 'none';
-    btn.textContent = '▼ Dettaglio concimazioni';
-  }
-}
-
-function renderPrati() {
-  const list = document.getElementById('prati-list');
-  if (!list) return;
-  const pratiClienti = DB.clienti.filter(c => c.Ha_prato === 'Sì');
-  if (!pratiClienti.length) { list.innerHTML = '<div class="empty"><div class="empty-icon">🌱</div><div class="empty-text">Nessun cliente con prato</div></div>'; return; }
-
-  const anno = new Date().getFullYear();
-  list.innerHTML = pratiClienti.map(c => {
-    const d = calcPratoData(c, anno);
-    const safeId = c.ClienteID.replace(/[^a-z0-9]/gi, '_');
-
-    const dettaglioRows = d.concimazioni.length ? d.concimazioni.map((o, i) => {
-      const dataStr = o.data ? o.data.toLocaleDateString('it-IT', {day:'numeric', month:'short'}) : '–';
-      const nCum = d.concimazioni.slice(0, i+1).reduce((s,x) => s+x.nM2, 0);
-      const kCum = d.concimazioni.slice(0, i+1).reduce((s,x) => s+x.kM2, 0);
-      return `<div style="display:grid;grid-template-columns:60px 1fr 52px 52px 52px;gap:4px;align-items:center;padding:7px 0;border-bottom:1px solid var(--border);font-size:0.78rem">
-        <span style="color:var(--text-light)">${dataStr}</span>
-        <span style="font-weight:500">${o.concime}</span>
-        <span style="text-align:center;color:var(--text-light)">${o.dose} kg</span>
-        <span style="text-align:center;color:var(--green-deep);font-weight:600">+${o.nM2.toFixed(1)}</span>
-        <span style="text-align:center;color:var(--earth);font-weight:600">${nCum.toFixed(1)}</span>
+        <div style="font-size:10px;color:#aaa;margin-bottom:6px">${v.TaleeAttecchite||0} / ${v.TaleeInserite||0} talee attecchite ${v.DataInizio?'· '+v.DataInizio:''} ${v.DataFine?'→ '+v.DataFine:''}</div>
+        <div class="pbar-wrap"><div class="pbar" style="width:${Math.min(pct,100)}%;background:linear-gradient(90deg,${barColor},${barColor}99)"></div></div>
+        ${v.Descrizione?`<div style="font-size:10px;color:#888;margin-top:6px">📋 ${v.Descrizione}</div>`:''}
+        ${v.Conclusioni?`<div class="var-conclusione">💡 ${v.Conclusioni}</div>`:''}
       </div>`;
-    }).join('') + `<div style="display:grid;grid-template-columns:60px 1fr 52px 52px 52px;gap:4px;padding:8px 0 2px;font-size:0.72rem;color:var(--text-light)">
-        <span></span><span></span><span style="text-align:center">Dose</span><span style="text-align:center">N +</span><span style="text-align:center">N cum.</span>
-      </div>`
-    : '<div style="font-size:0.82rem;color:var(--text-light);padding:8px 0">Nessuna concimazione registrata per il '+anno+'</div>';
-
-    return `<div class="prato-card">
-      <div class="prato-header">
-        <div class="semaforo ${d.sem}"></div>
-        <div style="flex:1">
-          <div class="prato-name">${c.Cliente}</div>
-          <div class="prato-fascia">Fascia ${c.FasciaID || '–'} · ${d.mq} mq</div>
-        </div>
-        <div style="text-align:right;flex-shrink:0">
-          <span style="font-size:0.72rem;font-weight:600;padding:3px 8px;border-radius:20px;background:${d.sem==='verde'?'#d4edda':d.sem==='giallo'?'#fef3cd':'#fdecea'};color:${d.sem==='verde'?'#155724':d.sem==='giallo'?'#856404':'#721c24'}">${d.semLabel}</span>
-        </div>
+    }).join(''):'<div style="font-size:11px;color:#bbb;padding:12px 0">Nessuna variante registrata ancora.</div>';
+    return`<div class="log-card">
+      <div class="log-card-hdr">
+        <span class="log-lotto">${cod}</span>
+        <span class="log-specie">${lotto?.Specie||''}</span>
+        <span class="sb sb-sp" style="margin-left:auto">${lotto?.Stato||'Sperimentale'}</span>
       </div>
-      ${d.targetN > 0 ? `
-      <div class="prato-grid">
-        <div class="prato-stat">
-          <div class="prato-stat-num">${d.nSomm.toFixed(0)}<span style="font-size:0.65rem;font-weight:400"> g/m²</span></div>
-          <div class="prato-stat-lbl">N somministrato</div>
-        </div>
-        <div class="prato-stat">
-          <div class="prato-stat-num">${d.targetN}<span style="font-size:0.65rem;font-weight:400"> g/m²</span></div>
-          <div class="prato-stat-lbl">Target N/anno</div>
-        </div>
-        <div class="prato-stat">
-          <div class="prato-stat-num">${d.kSomm.toFixed(0)}<span style="font-size:0.65rem;font-weight:400"> g/m²</span></div>
-          <div class="prato-stat-lbl">K somministrato</div>
-        </div>
-        <div class="prato-stat">
-          <div class="prato-stat-num">${d.targetK}<span style="font-size:0.65rem;font-weight:400"> g/m²</span></div>
-          <div class="prato-stat-lbl">Target K/anno</div>
-        </div>
-      </div>
-      <div class="prato-bar">
-        <div class="prato-bar-label"><span>Azoto ${anno}</span><span>${Math.round(d.pctN*100)}% del target</span></div>
-        <div class="bar-track"><div class="bar-fill ${d.sem}" style="width:${Math.round(d.pctN*100)}%"></div></div>
-      </div>
-      <button id="prato-dettaglio-btn-${safeId}" onclick="togglePratoDettaglio('${safeId}')"
-        style="width:100%;margin-top:10px;padding:8px;background:none;border:1px solid var(--border);border-radius:8px;font-size:0.78rem;color:var(--green-mid);cursor:pointer;font-family:var(--font-body)">
-        ▼ Dettaglio concimazioni
-      </button>
-      <div id="prato-dettaglio-${safeId}" style="display:none;margin-top:8px;padding:8px 10px;background:var(--green-mist);border-radius:10px">
-        <div style="font-size:0.72rem;font-weight:700;color:var(--green-deep);margin-bottom:4px;text-transform:uppercase;letter-spacing:0.04em">Concimazioni ${anno}</div>
-        ${dettaglioRows}
-        <div style="margin-top:10px;padding-top:8px;border-top:2px solid var(--green-pale);display:flex;justify-content:space-between;font-size:0.82rem">
-          <span style="font-weight:600;color:var(--green-deep)">Totale N: ${d.nSomm.toFixed(1)} / ${d.targetN} g/m²</span>
-          <span style="font-weight:600;color:var(--earth)">Totale K: ${d.kSomm.toFixed(1)} / ${d.targetK} g/m²</span>
-        </div>
-        <div style="margin-top:6px;font-size:0.78rem;color:var(--text-light)">Manca: N ${Math.max(0, d.targetN - d.nSomm).toFixed(1)} g/m² · K ${Math.max(0, d.targetK - d.kSomm).toFixed(1)} g/m²</div>
-      </div>` : '<div style="font-size:0.8rem;color:var(--text-light);margin-bottom:8px">Nessun target impostato — inserisci mq e fascia nel cliente</div>'}
-      <div class="prato-ops">
-        <div class="prato-op-item"><div class="prato-op-date">${d.lastConc}</div><div class="prato-op-label">Ult. concimazione</div></div>
-        <div class="prato-op-item"><div class="prato-op-date">${d.lastSemina}</div><div class="prato-op-label">Ult. semina</div></div>
-        <div class="prato-op-item"><div class="prato-op-date">${d.lastArie}</div><div class="prato-op-label">Ult. arieggiatura</div></div>
-      </div>
+      ${varHtml}
     </div>`;
   }).join('');
 }
 
-// ── DRAWER CLIENTE ──
-function openNuovoCliente() {
-  pratoEnabled = false;
-  addrLat = null; addrLng = null;
-  document.getElementById('drawer-cliente-title').textContent = 'Nuovo Cliente';
-  document.getElementById('cliente-edit-id').value = '';
-  ['f-cliente-nome','f-cliente-indirizzo','f-cliente-citta','f-cliente-coords','f-cliente-note'].forEach(id => document.getElementById(id).value = '');
-  document.getElementById('f-cliente-mq').value = '';
-  document.getElementById('f-cliente-fascia').value = '';
-  document.getElementById('toggle-prato').classList.remove('on');
-  document.getElementById('prato-fields').style.display = 'none';
-  siepeEnabled = false;
-  document.getElementById('toggle-siepe').classList.remove('on');
-  document.getElementById('siepe-fields').style.display = 'none';
-  document.getElementById('addr-suggestions').style.display = 'none';
-  document.getElementById('overlay-cliente').classList.add('open');
+// ── MODAL PROMOZIONE ──────────────────────────────────────
+function apriModal(i){
+  promoLottoIndex=i;
+  const l=DB.Lotti[i];
+  document.getElementById('modal-promo-desc').textContent=
+    `Lotto ${l.Codice} — ${l.Specie||''}. Inserisci quante piante hanno attecchito e passano in produzione.`;
+  document.getElementById('promo-qty').value='';
+  document.getElementById('promo-note').value='';
+  document.getElementById('modal-promo').classList.remove('hidden');
+}
+function chiudiModal(){
+  document.getElementById('modal-promo').classList.add('hidden');
+  promoLottoIndex=-1;
+}
+async function confermaPromozione(){
+  const qty=parseInt(document.getElementById('promo-qty').value);
+  if(!qty||qty<1){toast('⚠ Inserisci il numero di piante!',true);return;}
+  if(promoLottoIndex<0)return;
+  const l=DB.Lotti[promoLottoIndex];
+  const oldCod=l.Codice;
+  // aggiorna DB locale
+  DB.Lotti[promoLottoIndex]['Quantità']=qty;
+  DB.Lotti[promoLottoIndex].Stato='Produzione';
+  DB.Lotti[promoLottoIndex].Note=(l.Note?l.Note+' | ':'')+'Promosso: '+document.getElementById('promo-note').value;
+  const updated=DB.Lotti[promoLottoIndex];
+  const row=[updated.Codice,updated.Specie,updated.Anno,updated.Progressivo,qty,
+    updated.DataIngresso,updated.Provenienza,'Produzione',updated.Note];
+  try{
+    await apiPost({action:'delete',sheet:'Lotti',keyCol:1,keyVal:oldCod});
+    await apiPost({action:'append',sheet:'Lotti',row});
+    chiudiModal();
+    renderLotti();refreshSelects();renderSperim();
+    toast('✅ Lotto promosso a Produzione!');
+  }catch(e){toast('⚠ Errore aggiornamento',true);}
 }
 
-function editCliente(id) {
-  const c = DB.clienti.find(x => x.ClienteID == id);
-  if (!c) return;
-  pratoEnabled = c.Ha_prato === 'Sì';
-  addrLat = c.Lat || null; addrLng = c.Lng || null;
-  document.getElementById('drawer-cliente-title').textContent = 'Modifica Cliente';
-  document.getElementById('cliente-edit-id').value = c.ClienteID;
-  document.getElementById('f-cliente-nome').value = c.Cliente || '';
-  document.getElementById('f-cliente-indirizzo').value = c.Indirizzo || '';
-  document.getElementById('f-cliente-citta').value = c.Citta || '';
-  document.getElementById('f-cliente-coords').value = c.Lat && c.Lng ? c.Lat+', '+c.Lng : '';
-  document.getElementById('f-cliente-note').value = c.Note_cliente || '';
-  document.getElementById('f-cliente-mq').value = c.Mq_prato || '';
-  document.getElementById('f-cliente-fascia').value = c.FasciaID || '';
-  document.getElementById('toggle-prato').classList.toggle('on', pratoEnabled);
-  document.getElementById('prato-fields').style.display = pratoEnabled ? 'block' : 'none';
-  siepeEnabled = c.Ha_siepe === 'Sì';
-  document.getElementById('toggle-siepe').classList.toggle('on', siepeEnabled);
-  document.getElementById('siepe-fields').style.display = siepeEnabled ? 'block' : 'none';
-  document.getElementById('f-cliente-siepe-specie').value = c.Siepe_specie || '';
-  document.getElementById('f-cliente-siepe-lunghezza').value = c.Siepe_lunghezza || '';
-  document.getElementById('f-cliente-siepe-altezza').value = c.Siepe_altezza || '';
-  document.getElementById('f-cliente-siepe-larghezza').value = c.Siepe_larghezza || '';
-  document.getElementById('overlay-cliente').classList.add('open');
+// ── RINVASO ──────────────────────────────────────────────
+async function saveRinvaso(){
+  const lotto=document.getElementById('r-lotto').value;
+  if(!lotto){toast('⚠ Seleziona un lotto!',true);return;}
+  let totL=0,costoTerr=0;
+  const litri={};
+  TERRICCI.forEach(t=>{
+    const inp=document.getElementById('r-'+t.key);
+    const l=parseFloat(inp?.value)||0;
+    const p=parseFloat(inp?.dataset.prezzo)||0;
+    litri[t.key]=l;totL+=l;costoTerr+=l*p;
+  });
+  const altri=parseFloat(document.getElementById('r-costo-altri').value)||0;
+  const costoTot=costoTerr+altri;
+  const id='RIN-'+String(counters.Rinvaso++).padStart(3,'0');
+  const diam=document.getElementById('r-diam').value;
+  const ore=parseFloat(document.getElementById('r-ore').value)||0;
+  const row=[id,lotto,document.getElementById('r-data').value,diam,
+    litri.LitriAkadama,litri.LitriKiryu,litri.LitriPomice,litri.LitriSecondaMano,
+    totL,costoTerr,costoTot,ore,document.getElementById('r-note').value];
+  busy('btn-save-rinvaso',true);
+  try{
+    await apiPost({action:'append',sheet:'Rinvaso',row});
+    DB.Rinvaso.push({ID:id,Lotto:lotto,Data:row[2],DiametroVaso:diam,
+      LitriAkadama:litri.LitriAkadama,LitriKiryu:litri.LitriKiryu,
+      LitriPomice:litri.LitriPomice,LitriSecondaMano:litri.LitriSecondaMano,
+      LitriTotali:totL,CostoTerricci:costoTerr,CostoMateriali:costoTot,Ore:ore,Note:row[12]});
+    renderRinvaso();resetForm('r');calcRinvaso();toast('✓ Rinvaso salvato');
+  }catch(e){toast('⚠ Errore salvataggio',true);}
+  busy('btn-save-rinvaso',false,'💾 Salva Rinvaso');
+}
+function renderRinvaso(){
+  const tb=document.getElementById('tb-rinvaso');
+  document.getElementById('cnt-rinvaso').textContent=DB.Rinvaso.length+' op.';
+  if(!DB.Rinvaso.length){tb.innerHTML='<tr><td colspan="12" class="empty"><div class="eico">🪴</div>Nessun rinvaso registrato</td></tr>';return;}
+  tb.innerHTML=DB.Rinvaso.map((r,i)=>`<tr>
+    <td><span class="cb">${r.ID}</span></td><td><span class="cb">${r.Lotto}</span></td>
+    <td>${r.Data||'—'}</td><td style="text-align:center">${r.DiametroVaso||'—'} cm</td>
+    <td style="text-align:center">${fmtL(r.LitriAkadama)}</td>
+    <td style="text-align:center">${fmtL(r.LitriKiryu)}</td>
+    <td style="text-align:center">${fmtL(r.LitriPomice)}</td>
+    <td style="text-align:center">${fmtL(r.LitriSecondaMano)}</td>
+    <td style="text-align:center;font-weight:500">${fmtL(r.LitriTotali)}</td>
+    <td style="text-align:right">${fmt(r.CostoTerricci)}</td>
+    <td style="text-align:right;font-weight:500">${fmt(r.CostoMateriali)}</td>
+    <td style="text-align:center">${r.Ore||0}h</td>
+    <td><button class="btn btn-d" onclick="deleteOp('Rinvaso',${i},'${r.ID}')">Elimina</button></td>
+  </tr>`).join('');
 }
 
-function togglePrato() {
-  pratoEnabled = !pratoEnabled;
-  document.getElementById('toggle-prato').classList.toggle('on', pratoEnabled);
-  document.getElementById('prato-fields').style.display = pratoEnabled ? 'block' : 'none';
+// ── POTATURA ─────────────────────────────────────────────
+async function savePotatura(){
+  const lotto=document.getElementById('p-lotto').value;
+  if(!lotto){toast('⚠ Seleziona un lotto!',true);return;}
+  const ore=parseFloat(document.getElementById('p-ore').value)||0;
+  if(!ore){toast('⚠ Inserisci le ore spese!',true);return;}
+  const id='POT-'+String(counters.Potatura++).padStart(3,'0');
+  const row=[id,lotto,document.getElementById('p-data').value,
+    document.getElementById('p-tipo').value,ore,document.getElementById('p-note').value];
+  busy('btn-save-potatura',true);
+  try{
+    await apiPost({action:'append',sheet:'Potatura',row});
+    DB.Potatura.push({ID:id,Lotto:lotto,Data:row[2],TipoPotatura:row[3],Ore:ore,Note:row[5]});
+    renderPotatura();resetForm('p');toast('✓ Potatura salvata');
+  }catch(e){toast('⚠ Errore salvataggio',true);}
+  busy('btn-save-potatura',false,'💾 Salva Potatura');
+}
+function renderPotatura(){
+  const tb=document.getElementById('tb-potatura');
+  document.getElementById('cnt-potatura').textContent=DB.Potatura.length+' op.';
+  if(!DB.Potatura.length){tb.innerHTML='<tr><td colspan="8" class="empty"><div class="eico">✂️</div>Nessuna potatura registrata</td></tr>';return;}
+  tb.innerHTML=DB.Potatura.map((p,i)=>`<tr>
+    <td><span class="cb">${p.ID}</span></td><td><span class="cb">${p.Lotto}</span></td>
+    <td>${p.Data||'—'}</td><td>${p.TipoPotatura}</td>
+    <td style="text-align:center">${p.Ore}h</td>
+    <td><button class="btn btn-d" onclick="deleteOp('Potatura',${i},'${p.ID}')">Elimina</button></td>
+  </tr>`).join('');
 }
 
-function toggleSiepe() {
-  siepeEnabled = !siepeEnabled;
-  document.getElementById('toggle-siepe').classList.toggle('on', siepeEnabled);
-  document.getElementById('siepe-fields').style.display = siepeEnabled ? 'block' : 'none';
+// ── LEGATURA ─────────────────────────────────────────────
+async function saveLegatura(){
+  const lotto=document.getElementById('g-lotto').value;
+  if(!lotto){toast('⚠ Seleziona un lotto!',true);return;}
+  const mt=parseFloat(document.getElementById('g-mt').value)||0;
+  const cm=parseFloat(document.getElementById('g-cm').value)||0;
+  const costo=mt*cm;
+  const id='LEG-'+String(counters.Legatura++).padStart(3,'0');
+  const row=[id,lotto,document.getElementById('g-data').value,
+    document.getElementById('g-tipo').value,document.getElementById('g-cal').value,
+    mt,cm,costo,parseFloat(document.getElementById('g-ore').value)||0,
+    document.getElementById('g-note').value];
+  busy('btn-save-legatura',true);
+  try{
+    await apiPost({action:'append',sheet:'Legatura',row});
+    DB.Legatura.push({ID:id,Lotto:lotto,Data:row[2],TipoFilo:row[3],Calibro:row[4],
+      MetriStimati:mt,CostoFiloMetro:cm,CostoFili:costo,Ore:row[8],Note:row[9]});
+    renderLegatura();resetForm('g');toast('✓ Legatura salvata');
+  }catch(e){toast('⚠ Errore salvataggio',true);}
+  busy('btn-save-legatura',false,'💾 Salva Legatura');
+}
+function renderLegatura(){
+  const tb=document.getElementById('tb-legatura');
+  document.getElementById('cnt-legatura').textContent=DB.Legatura.length+' op.';
+  if(!DB.Legatura.length){tb.innerHTML='<tr><td colspan="10" class="empty"><div class="eico">🔗</div>Nessuna legatura registrata</td></tr>';return;}
+  tb.innerHTML=DB.Legatura.map((g,i)=>`<tr>
+    <td><span class="cb">${g.ID}</span></td><td><span class="cb">${g.Lotto}</span></td>
+    <td>${g.Data||'—'}</td><td>${g.TipoFilo}</td>
+    <td style="text-align:center">${g.Calibro||'—'}</td>
+    <td style="text-align:center">${g.MetriStimati}m</td>
+    <td style="text-align:right">${fmt(g.CostoFiloMetro)}</td>
+    <td style="text-align:right;font-weight:500">${fmt(g.CostoFili)}</td>
+    <td style="text-align:center">${g.Ore}h</td>
+    <td><button class="btn btn-d" onclick="deleteOp('Legatura',${i},'${g.ID}')">Elimina</button></td>
+  </tr>`).join('');
 }
 
-async function saveCliente() {
-  const nome = document.getElementById('f-cliente-nome').value.trim();
-  if (!nome) { showToast('⚠️ Inserisci il nome'); return; }
-  const editId = document.getElementById('cliente-edit-id').value;
-  const data = {
-    Cliente: nome,
-    Indirizzo: document.getElementById('f-cliente-indirizzo').value.trim(),
-    Citta: document.getElementById('f-cliente-citta').value.trim(),
-    Lat: addrLat || '',
-    Lng: addrLng || '',
-    Ha_prato: pratoEnabled ? 'Sì' : '',
-    Mq_prato: pratoEnabled ? document.getElementById('f-cliente-mq').value : '',
-    FasciaID: pratoEnabled ? document.getElementById('f-cliente-fascia').value : '',
-    Ha_siepe: siepeEnabled ? 'Sì' : '',
-    Siepe_specie: siepeEnabled ? document.getElementById('f-cliente-siepe-specie').value : '',
-    Siepe_lunghezza: siepeEnabled ? document.getElementById('f-cliente-siepe-lunghezza').value : '',
-    Siepe_altezza: siepeEnabled ? document.getElementById('f-cliente-siepe-altezza').value : '',
-    Siepe_larghezza: siepeEnabled ? document.getElementById('f-cliente-siepe-larghezza').value : '',
-    Note_cliente: document.getElementById('f-cliente-note').value.trim(),
-  };
-  try {
-    if (editId) {
-      await apiPost({ action:'update', foglio:'CLIENTI', id:editId, idField:'ClienteID', data });
-      showToast('✅ Cliente aggiornato');
-    } else {
-      data.ClienteID = generateID();
-      await apiPost({ action:'insert', foglio:'CLIENTI', data });
-      showToast('✅ Cliente salvato');
+// ── MATERIALI ────────────────────────────────────────────
+async function saveMateriale(){
+  const nome=document.getElementById('mat-nome').value.trim();
+  if(!nome){toast('⚠ Inserisci il nome del materiale!',true);return;}
+  const prezzo=parseFloat(document.getElementById('mat-prezzo').value)||0;
+  const unita=document.getElementById('mat-unita').value||'L';
+  const note=document.getElementById('mat-note').value;
+  const existing=DB.Materiali.findIndex(m=>(m.Nome||'').toLowerCase()===nome.toLowerCase());
+  busy('btn-save-mat',true);
+  try{
+    if(existing>=0){
+      await apiPost({action:'delete',sheet:'Materiali',keyCol:1,keyVal:DB.Materiali[existing].Nome});
+      DB.Materiali.splice(existing,1);
     }
-    closeDrawer('overlay-cliente');
-    await loadAll();
-    renderClienti(); renderHome(); renderPrati();
-    if (pendingFromVisita) {
-      pendingFromVisita = false;
-      // pre-select the new client
-      const newCliente = DB.clienti[DB.clienti.length - 1];
-      openNuovaVisita();
-      if (newCliente) setTimeout(() => selectVisitaCliente(newCliente.ClienteID, newCliente.Cliente), 100);
-    }
-  } catch(e) { showToast('❌ Errore salvataggio'); }
+    await apiPost({action:'append',sheet:'Materiali',row:[nome,prezzo,unita,note]});
+    DB.Materiali.push({Nome:nome,PrezzoLitro:prezzo,'Unità':unita,Note:note});
+    renderMateriali();buildTerrInputs();resetForm('mat');
+    toast(existing>=0?'✓ Materiale aggiornato':'✓ Materiale salvato');
+  }catch(e){toast('⚠ Errore salvataggio',true);}
+  busy('btn-save-mat',false,'💾 Salva Materiale');
 }
-
-// ── ADDRESS SEARCH ──
-async function searchAddress(q) {
-  clearTimeout(addrTimeout);
-  const sug = document.getElementById('addr-suggestions');
-  if (!q || q.length < 3) { sug.style.display = 'none'; return; }
-  addrTimeout = setTimeout(async () => {
-    try {
-      const url = `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(q)}&limit=5&countrycodes=it`;
-      const r = await fetch(url, {headers:{'Accept-Language':'it'}});
-      const results = await r.json();
-      if (!results.length) { sug.style.display = 'none'; return; }
-      sug.innerHTML = results.map(res => `<div class="suggestion-item" onclick="selectAddress('${res.display_name.replace(/'/g,"\\'")}', ${res.lat}, ${res.lon})">${res.display_name}</div>`).join('');
-      sug.style.display = 'block';
-    } catch(e) { sug.style.display = 'none'; }
-  }, 400);
-}
-
-function selectAddress(display, lat, lon) {
-  addrLat = lat; addrLng = lon;
-  const parts = display.split(',');
-  document.getElementById('f-cliente-indirizzo').value = parts.slice(0,2).join(',').trim();
-  if (parts.length > 2) document.getElementById('f-cliente-citta').value = parts[2].trim();
-  document.getElementById('f-cliente-coords').value = parseFloat(lat).toFixed(5)+', '+parseFloat(lon).toFixed(5);
-  document.getElementById('addr-suggestions').style.display = 'none';
-}
-
-function useGPS() {
-  if (!navigator.geolocation) { showToast('⚠️ GPS non disponibile'); return; }
-  showToast('📍 Rilevamento posizione...');
-  navigator.geolocation.getCurrentPosition(async pos => {
-    addrLat = pos.coords.latitude; addrLng = pos.coords.longitude;
-    document.getElementById('f-cliente-coords').value = addrLat.toFixed(5)+', '+addrLng.toFixed(5);
-    try {
-      const url = `https://nominatim.openstreetmap.org/reverse?format=json&lat=${addrLat}&lon=${addrLng}`;
-      const r = await fetch(url, {headers:{'Accept-Language':'it'}});
-      const res = await r.json();
-      if (res.address) {
-        const road = res.address.road || '';
-        const num = res.address.house_number || '';
-        document.getElementById('f-cliente-indirizzo').value = [road, num].filter(Boolean).join(' ');
-        document.getElementById('f-cliente-citta').value = res.address.city || res.address.town || res.address.village || '';
-      }
-    } catch(e) {}
-    showToast('✅ Posizione rilevata');
-  }, () => showToast('❌ GPS non autorizzato'));
-}
-
-// ── DRAWER VISITA ──
-let pendingFromVisita = false;
-
-function openNuovaVisita() {
-  pendingOperazioni = [];
-  document.getElementById('f-visita-note').value = '';
-  document.getElementById('f-visita-ore').value = '';
-  document.getElementById('f-visita-prossimo').value = '';
-  document.getElementById('f-visita-mese').value = '';
-  document.getElementById('f-visita-anno').value = '';
-  document.getElementById('f-visita-data').value = new Date().toISOString().split('T')[0];
-  clearVisitaCliente();
-  renderOperazioniList();
-  document.getElementById('overlay-visita').classList.add('open');
-}
-
-function filterVisitaClienti(q) {
-  const sug = document.getElementById('visita-cliente-suggestions');
-  if (!q || q.length < 1) { sug.style.display = 'none'; return; }
-  const matches = DB.clienti.filter(c => c.Cliente?.toLowerCase().includes(q.toLowerCase())).slice(0, 6);
-  if (!matches.length) { sug.style.display = 'none'; return; }
-  sug.innerHTML = matches.map(c => `<div class="suggestion-item" onclick="selectVisitaCliente('${c.ClienteID}', '${c.Cliente.replace(/'/g,"\'")}')">${c.Cliente}<span style="float:right;font-size:0.72rem;color:var(--text-light)">${c.Citta||''}</span></div>`).join('');
-  sug.style.display = 'block';
-}
-
-function selectVisitaCliente(id, nome) {
-  document.getElementById('f-visita-cliente').value = id;
-  document.getElementById('f-visita-cliente-nome').textContent = nome;
-  document.getElementById('f-visita-cliente-selected').style.display = 'block';
-  document.getElementById('f-visita-cliente-search').style.display = 'none';
-  document.getElementById('visita-cliente-suggestions').style.display = 'none';
-}
-
-function clearVisitaCliente() {
-  document.getElementById('f-visita-cliente').value = '';
-  document.getElementById('f-visita-cliente-search').value = '';
-  document.getElementById('f-visita-cliente-search').style.display = 'block';
-  document.getElementById('f-visita-cliente-selected').style.display = 'none';
-  document.getElementById('visita-cliente-suggestions').style.display = 'none';
-}
-
-async function saveVisita() {
-  const cid = document.getElementById('f-visita-cliente').value;
-  const data = document.getElementById('f-visita-data').value;
-  if (!cid || !data) { showToast('⚠️ Seleziona cliente e data'); return; }
-  const visitaID = generateID();
-  const visita = {
-    VisitaID: visitaID,
-    Data: data,
-    Ore_Visita: document.getElementById('f-visita-ore').value,
-    ClienteID: cid,
-    Note_visita: document.getElementById('f-visita-note').value.trim(),
-    Prossimo_intervento: document.getElementById('f-visita-prossimo').value.trim(),
-    Mese_prossimo_intervento: document.getElementById('f-visita-mese').value,
-    Anno_prossimo_intervento: document.getElementById('f-visita-anno').value,
-  };
-  try {
-    await apiPost({ action:'insert', foglio:'VISITE', data: visita });
-    // salva operazioni (con calcolo N_g_m2 / K_g_m2 se prato)
-    const cObj = DB.clienti.find(cc => cc.ClienteID == cid);
-    const mq = parseFloat(cObj?.Mq_prato) || 0;
-    for (const op of pendingOperazioni) {
-      const nTot = parseFloat(op.N_tot_g) || 0;
-      const kTot = parseFloat(op.K_tot_g) || 0;
-      const nM2 = (op.Flag_prato === 'Sì' && mq > 0) ? (nTot / mq).toFixed(2) : 0;
-      const kM2 = (op.Flag_prato === 'Sì' && mq > 0) ? (kTot / mq).toFixed(2) : 0;
-      const opData = { ...op, OperazioneID: generateID(), VisitaID: visitaID, N_g_m2: nM2, K_g_m2: kM2 };
-      await apiPost({ action:'insert', foglio:'OPERAZIONI', data: opData });
-    }
-    showToast('✅ Visita salvata');
-    closeDrawer('overlay-visita');
-    await loadAll();
-    renderHome(); renderVisite(); renderProssimi(); renderPrati();
-  } catch(e) { showToast('❌ Errore salvataggio'); }
-}
-
-// ── OPERAZIONI ──
-function addOperazione() {
-  pendingOpIndex = null;
-  ['f-op-tipo','f-op-desc','f-op-concime','f-op-semente','f-op-fitofarmaco'].forEach(id => { const el = document.getElementById(id); if(el) el.value = ''; });
-  ['f-op-dose','f-op-dose-s','f-op-dose-f'].forEach(id => { const el = document.getElementById(id); if(el) el.value = ''; });
-  opPratoEnabled = false;
-  opSiepeEnabled = false;
-  document.getElementById('toggle-op-prato')?.classList.remove('on');
-  document.getElementById('toggle-op-siepe')?.classList.remove('on');
-  // popola select
-  populateOpSelects();
-  onTipoOpChange();
-  document.getElementById('overlay-operazione').classList.add('open');
-}
-
-function populateOpSelects() {
-  const sc = document.getElementById('f-op-concime');
-  sc.innerHTML = '<option value="">– scegli –</option>' + DB.concimi.map(c => `<option value="${c.ConcimeID}">${c.Concime} (N:${c.N_percento}% K:${c.K_percento}%)</option>`).join('');
-  const ss = document.getElementById('f-op-semente');
-  ss.innerHTML = '<option value="">– scegli –</option>' + DB.sementi.map(s => `<option value="${s.SementeID}">${s.Nome_commerciale}</option>`).join('');
-  const sf = document.getElementById('f-op-fitofarmaco');
-  sf.innerHTML = '<option value="">– scegli –</option>' + DB.fitofarmaci.map(f => `<option value="${f.FitofarmacaID}">${f.Nome_commerciale} (${f.Tipo})</option>`).join('');
-}
-
-function onTipoOpChange() {
-  const tipo = document.getElementById('f-op-tipo').value;
-  const showPrato = !['Potatura','Altro',''].includes(tipo);
-  document.getElementById('op-siepe-toggle-wrap').style.display = tipo === 'Potatura' ? 'block' : 'none';
-  document.getElementById('op-prato-toggle-wrap').style.display = showPrato ? 'block' : 'none';
-  document.getElementById('op-concime-wrap').style.display = tipo === 'Concimazione' ? 'block' : 'none';
-  document.getElementById('op-semente-wrap').style.display = tipo === 'Semina' ? 'block' : 'none';
-  document.getElementById('op-fitofarmaco-wrap').style.display = ['Diserbo','Trattamento fitosanitario'].includes(tipo) ? 'block' : 'none';
-  if (tipo === 'Arieggiatura') {
-    opPratoEnabled = true;
-    document.getElementById('toggle-op-prato').classList.add('on');
+function renderMateriali(){
+  const tb=document.getElementById('tb-materiali');
+  document.getElementById('cnt-materiali').textContent=DB.Materiali.length+' materiali';
+  if(!DB.Materiali.length){
+    tb.innerHTML='<tr><td colspan="5" class="empty"><div class="eico">🏷️</div>Nessun materiale — aggiungi Akadama, Kiryu, Pomice e Terriccio 2ª Mano con i rispettivi prezzi</td></tr>';
+    return;
   }
-  if (tipo !== 'Potatura') {
-    opSiepeEnabled = false;
-    document.getElementById('toggle-op-siepe').classList.remove('on');
+  tb.innerHTML=DB.Materiali.map((m,i)=>`<tr>
+    <td style="font-weight:500">${m.Nome||'—'}</td>
+    <td style="text-align:right;font-weight:500;color:var(--moss)">${fmt(m.PrezzoLitro)}</td>
+    <td style="text-align:center">${m['Unità']||'L'}</td>
+    <td>${m.Note||'—'}</td>
+    <td style="white-space:nowrap">
+      <button class="btn btn-s" style="padding:4px 10px;font-size:9px;margin-right:4px" onclick="prefillMat(${i})">✏️ Modifica</button>
+      <button class="btn btn-d" onclick="deleteMat(${i},'${(m.Nome||'').replace(/'/g,"\\'")}')">Elimina</button>
+    </td>
+  </tr>`).join('');
+}
+function prefillMat(i){
+  const m=DB.Materiali[i];
+  document.getElementById('mat-nome').value=m.Nome||'';
+  document.getElementById('mat-prezzo').value=m.PrezzoLitro||'';
+  document.getElementById('mat-unita').value=m['Unità']||'L';
+  document.getElementById('mat-note').value=m.Note||'';
+  window.scrollTo({top:0,behavior:'smooth'});
+}
+async function deleteMat(i,nome){
+  if(!confirm(`Eliminare "${nome}" dal listino?`))return;
+  try{
+    await apiPost({action:'delete',sheet:'Materiali',keyCol:1,keyVal:nome});
+    DB.Materiali.splice(i,1);renderMateriali();buildTerrInputs();toast('Materiale eliminato');
+  }catch(e){toast('⚠ Errore eliminazione',true);}
+}
+
+// ── DELETE GENERICA ──────────────────────────────────────
+async function deleteOp(sheet,i,id){
+  if(!confirm(`Eliminare l'operazione ${id}?`))return;
+  try{
+    await apiPost({action:'delete',sheet,keyCol:1,keyVal:id});
+    DB[sheet].splice(i,1);
+    if(sheet==='Rinvaso')renderRinvaso();
+    else if(sheet==='Potatura')renderPotatura();
+    else renderLegatura();
+    toast('Operazione eliminata');
+  }catch(e){toast('⚠ Errore eliminazione',true);}
+}
+
+// ── RIEPILOGO ────────────────────────────────────────────
+function renderRiepilogo(){
+  if(!DB.Lotti.length){
+    document.getElementById('kpis').innerHTML='';
+    document.getElementById('tb-riepilogo').innerHTML='<tr><td colspan="8" class="empty"><div class="eico">📊</div>Aggiungi lotti per vedere il riepilogo</td></tr>';
+    document.getElementById('cnt-riepilogo').textContent='0 lotti';
+    return;
   }
+  const tariffa=parseFloat(document.getElementById('rie-tariffa')?.value)||0;
+  let totC=0,totP=0;
+  const rows=DB.Lotti.filter(l=>l.Stato==='Produzione').map(l=>{
+    // ore totali per lotto (rinvaso + potatura + legatura)
+    const oreR=DB.Rinvaso.filter(x=>x.Lotto===l.Codice).reduce((s,x)=>s+Number(x.Ore||0),0);
+    const oreP=DB.Potatura.filter(x=>x.Lotto===l.Codice).reduce((s,x)=>s+Number(x.Ore||0),0);
+    const oreG=DB.Legatura.filter(x=>x.Lotto===l.Codice).reduce((s,x)=>s+Number(x.Ore||0),0);
+    const oreTot=oreR+oreP+oreG;
+    const costoOre=oreTot*tariffa;
+    // costi materiali (terricci+vaso rinvaso, fili legatura)
+    const matR=DB.Rinvaso.filter(x=>x.Lotto===l.Codice).reduce((s,x)=>s+Number(x.CostoMateriali||0),0);
+    const matG=DB.Legatura.filter(x=>x.Lotto===l.Codice).reduce((s,x)=>s+Number(x.CostoFili||0),0);
+    const costoMat=matR+matG;
+    const tot=costoOre+costoMat;
+    const qty=Number(l['Quantità']||0);
+    totC+=tot;totP+=qty;
+    return{l,oreTot,costoOre,costoMat,tot,qty,marg:qty?tot/qty:null};
+  });
+  document.getElementById('cnt-riepilogo').textContent=rows.length+' lott'+(rows.length===1?'o':'i');
+  const totOre=rows.reduce((s,r)=>s+r.oreTot,0);
+  document.getElementById('kpis').innerHTML=`
+    <div class="kpi"><div class="kpi-lbl">Lotti Totali</div><div class="kpi-val">${rows.length}</div><div class="kpi-sub">${DB.Lotti.filter(l=>l.Stato==='Attivo').length} attivi</div></div>
+    <div class="kpi"><div class="kpi-lbl">Piante Totali</div><div class="kpi-val">${totP}</div><div class="kpi-sub">in tutti i lotti</div></div>
+    <div class="kpi"><div class="kpi-lbl">Ore Totali</div><div class="kpi-val">${totOre.toFixed(1)}h</div><div class="kpi-sub">a ${tariffa.toFixed(2)} €/h</div></div>
+    <div class="kpi"><div class="kpi-lbl">Costo Totale</div><div class="kpi-val">${totC.toFixed(0)} €</div><div class="kpi-sub">${DB.Rinvaso.length+DB.Potatura.length+DB.Legatura.length} operazioni</div></div>
+    <div class="kpi"><div class="kpi-lbl">Costo Medio / Pianta</div><div class="kpi-val">${totP?(totC/totP).toFixed(2)+' €':'—'}</div><div class="kpi-sub">costo marginale aggregato</div></div>`;
+  document.getElementById('tb-riepilogo').innerHTML=
+    rows.map(({l,oreTot,costoOre,costoMat,tot,qty,marg})=>`<tr>
+      <td><span class="cb">${l.Codice}</span></td>
+      <td style="text-align:center;font-weight:500">${qty}</td>
+      <td style="text-align:center">${oreTot.toFixed(1)}h</td>
+      <td style="text-align:right">${fmt(costoOre)}</td>
+      <td style="text-align:right">${fmt(costoMat)}</td>
+      <td style="text-align:right;font-weight:700;color:var(--moss)">${fmt(tot)}</td>
+      <td style="text-align:right;font-weight:700;color:var(--amber)">${marg!==null?fmt(marg):'—'}</td>
+      <td><span class="sb ${l.Stato==='Attivo'?'sb-a':l.Stato==='In lavorazione'?'sb-l':'sb-ar'}">${l.Stato||'—'}</span></td>
+    </tr>`).join('')+
+    `<tr style="background:var(--mist);font-weight:700">
+      <td style="color:var(--moss)">TOTALE</td><td style="text-align:center">${totP}</td>
+      <td style="text-align:center">${totOre.toFixed(1)}h</td>
+      <td style="text-align:right">${fmt(rows.reduce((s,r)=>s+r.costoOre,0))}</td>
+      <td style="text-align:right">${fmt(rows.reduce((s,r)=>s+r.costoMat,0))}</td>
+      <td style="text-align:right;color:var(--moss)">${fmt(totC)}</td>
+      <td style="text-align:right;color:var(--amber)">${totP?(totC/totP).toFixed(2)+' €':'—'}</td>
+      <td></td>
+    </tr>`;
 }
 
-function toggleOpPrato() {
-  opPratoEnabled = !opPratoEnabled;
-  document.getElementById('toggle-op-prato').classList.toggle('on', opPratoEnabled);
-}
-
-function toggleOpSiepe() {
-  opSiepeEnabled = !opSiepeEnabled;
-  document.getElementById('toggle-op-siepe').classList.toggle('on', opSiepeEnabled);
-}
-
-function saveOperazione() {
-  const tipo = document.getElementById('f-op-tipo').value;
-  if (!tipo) { showToast('⚠️ Seleziona il tipo'); return; }
-  const concimeID = document.getElementById('f-op-concime').value;
-  const dose = parseFloat(document.getElementById('f-op-dose').value) || 0;
-  // calcola N e K in base al concime e alla dose (da completare con mq cliente al salvataggio)
-  let nTot = 0, kTot = 0;
-  if (concimeID && dose) {
-    const conc = DB.concimi.find(cc => cc.ConcimeID == concimeID);
-    if (conc) {
-      nTot = dose * parseFloat(conc.N_percento) / 100 * 1000; // grammi totali
-      kTot = dose * parseFloat(conc.K_percento) / 100 * 1000;
-    }
-  }
-  const op = {
-    Tipo_operazione: tipo,
-    Descrizione: document.getElementById('f-op-desc').value.trim(),
-    Flag_prato: opPratoEnabled || tipo === 'Arieggiatura' ? 'Sì' : '',
-    Flag_siepe: opSiepeEnabled && tipo === 'Potatura' ? 'Sì' : '',
-    ConcimeID: concimeID,
-    SementeID: document.getElementById('f-op-semente').value,
-    FitofarmacaID: document.getElementById('f-op-fitofarmaco').value,
-    Dose_kg: dose || document.getElementById('f-op-dose-s').value || document.getElementById('f-op-dose-f').value,
-    Note_operazione: '',
-    N_tot_g: nTot.toFixed(0), K_tot_g: kTot.toFixed(0), N_g_m2: 0, K_g_m2: 0,
-  };
-  if (pendingOpIndex !== null) pendingOperazioni[pendingOpIndex] = op;
-  else pendingOperazioni.push(op);
-  closeDrawer('overlay-operazione');
-  renderOperazioniList();
-}
-
-function renderOperazioniList() {
-  const list = document.getElementById('operazioni-list');
-  if (!pendingOperazioni.length) { list.innerHTML = '<div style="font-size:0.8rem;color:var(--text-light);padding:4px 0">Nessuna operazione aggiunta</div>'; return; }
-  list.innerHTML = pendingOperazioni.map((op, i) => `
-    <div style="display:flex; align-items:center; gap:8px; padding:8px 10px; background:var(--green-mist); border-radius:8px; margin-bottom:6px; font-size:0.82rem">
-      <span>${op.Flag_prato==='Sì'?'🌱':'✂️'}</span>
-      <span style="flex:1;font-weight:500">${op.Tipo_operazione}${op.Descrizione?' – '+op.Descrizione:''}</span>
-      <button onclick="pendingOperazioni.splice(${i},1); renderOperazioniList()" style="background:none;border:none;cursor:pointer;font-size:1rem;color:var(--red)">✕</button>
-    </div>`).join('');
-}
-
-// ── UTILS ──
-async function segnaFatto(visitaID) {
-  try {
-    await apiPost({ action:'update', foglio:'VISITE', id:visitaID, idField:'VisitaID', data:{
-      Prossimo_intervento: '',
-      Mese_prossimo_intervento: '',
-      Anno_prossimo_intervento: ''
-    }});
-    showToast('✅ Intervento segnato come fatto');
-    await loadAll();
-    renderProssimi();
-    renderVisite();
-  } catch(e) { showToast('❌ Errore'); }
-}
-
-function generateID() {
-  return Math.random().toString(36).substr(2, 8);
-}
-
-function meseNome(m) {
-  const mesi = ['','Gen','Feb','Mar','Apr','Mag','Giu','Lug','Ago','Set','Ott','Nov','Dic'];
-  return mesi[parseInt(m)] || m;
-}
-
-function closeDrawer(id) {
-  document.getElementById(id).classList.remove('open');
-}
-
-function showToast(msg) {
-  const t = document.getElementById('toast');
-  t.textContent = msg;
-  t.classList.add('show');
-  setTimeout(() => t.classList.remove('show'), 2500);
-}
-
-// click fuori drawer
-document.querySelectorAll('.overlay').forEach(o => {
-  o.addEventListener('click', e => { if(e.target === o) o.classList.remove('open'); });
-});
-
-init();
+loadAll();
 </script>
 </body>
 </html>
