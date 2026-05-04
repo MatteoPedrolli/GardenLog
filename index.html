@@ -869,13 +869,24 @@ async function loadAll() {
       api({action:'getAll', foglio:'FITOFARMACI'}),
       api({action:'getAll', foglio:'FASCE'}),
     ]);
-    DB.clienti = clienti || [];
-    DB.visite = visite || [];
-    DB.operazioni = operazioni || [];
+    DB.fasce = fasce || [];
     DB.concimi = concimi || [];
     DB.sementi = sementi || [];
     DB.fitofarmaci = fitofarmaci || [];
-    DB.fasce = fasce || [];
+    DB.visite = visite || [];
+    DB.operazioni = operazioni || [];
+    // arricchisci clienti con target N/K dalla tabella FASCE
+    // i nuovi clienti inseriti dall'app non hanno la formula su Sheets
+    DB.clienti = (clienti || []).map(c => {
+      if (c.FasciaID) {
+        const fascia = DB.fasce.find(f => String(f.FasciaID) === String(c.FasciaID));
+        if (fascia) {
+          c.Target_N_g_m2_anno = fascia.Target_N_g_m2_anno;
+          c.Target_K_g_m2_anno = fascia.Target_K_g_m2_anno;
+        }
+      }
+      return c;
+    });
     updateStats();
   } catch(e) {
     showToast('⚠️ Errore caricamento dati');
