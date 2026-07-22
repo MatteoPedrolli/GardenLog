@@ -949,9 +949,10 @@ async function loadAll() {
 }
 
 function updateStats() {
-  document.getElementById('stat-clienti').textContent = DB.clienti.length;
-  document.getElementById('stat-visite').textContent = DB.visite.length;
-  document.getElementById('stat-prati').textContent = DB.clienti.filter(c => isSi(c.Ha_prato)).length;
+  const scrivi = (id, v) => { const el = document.getElementById(id); if (el) el.textContent = v; };
+  scrivi('stat-clienti', DB.clienti.length);
+  scrivi('stat-visite', DB.visite.length);
+  scrivi('stat-prati', DB.clienti.filter(c => isSi(c.Ha_prato)).length);
 }
 
 // ── NAVIGATION ──
@@ -975,6 +976,7 @@ function topbarAction() {
 // ── HOME ──
 function renderHome() {
   const list = document.getElementById('home-visite-list');
+  if (!list) return;
   const recent = [...DB.visite].reverse().slice(0, 5);
   if (!recent.length) { list.innerHTML = '<div class="empty"><div class="empty-icon">📋</div><div class="empty-text">Nessuna visita ancora</div></div>'; return; }
   list.innerHTML = recent.map(v => {
@@ -991,7 +993,10 @@ function renderHome() {
 
 // ── CLIENTI ──
 function renderClienti(filter = '') {
+  // Manca quando si sta guardando la scheda di un cliente: showCliente()
+  // rimpiazza il contenuto di page-clienti e la lista non esiste più.
   const list = document.getElementById('clienti-list');
+  if (!list) return;
   let items = DB.clienti.filter(c => !filter || c.Cliente?.toLowerCase().includes(filter.toLowerCase()) || c.Citta?.toLowerCase().includes(filter.toLowerCase()));
   if (!items.length) { list.innerHTML = '<div class="empty"><div class="empty-icon">👥</div><div class="empty-text">Nessun cliente trovato</div></div>'; return; }
   list.innerHTML = items.map(c => {
@@ -1440,6 +1445,10 @@ async function saveCliente() {
     closeDrawer('overlay-cliente');
     await loadAll();
     renderAll();
+    // Se si stava guardando la scheda del cliente, renderAll() non la tocca
+    // (ridisegna la lista, che lì non c'è): senza questo resterebbero a video
+    // i dati vecchi anche dopo un salvataggio riuscito.
+    if (editId && !document.getElementById('clienti-list')) showCliente(editId);
     if (pendingFromVisita) {
       pendingFromVisita = false;
       // pre-select the new client
