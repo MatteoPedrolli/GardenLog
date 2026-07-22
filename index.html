@@ -1270,13 +1270,23 @@ function togglePratoDettaglio(id) {
 function renderPrati() {
   const list = document.getElementById('prati-list');
   if (!list) return;
-  const pratiClienti = DB.clienti.filter(c => isSi(c.Ha_prato));
+  // Fascia 1 in cima, poi fascia 2, in ordine alfabetico dentro ciascuna.
+  // La fascia 3 è "non concimato": in un report che misura la concimazione
+  // non dice niente. Chi non ha una fascia assegnata finisce in fondo invece
+  // di sparire: meglio vederlo e accorgersene che perderlo di vista.
+  const gruppo = c => { const f = parseInt(c.FasciaID); return f === 1 ? 1 : f === 2 ? 2 : 3; };
+  const pratiClienti = DB.clienti
+    .filter(c => isSi(c.Ha_prato) && parseInt(c.FasciaID) !== 3)
+    .sort((a, b) => gruppo(a) - gruppo(b) ||
+                    String(a.Cliente || '').localeCompare(String(b.Cliente || ''), 'it'));
   if (!pratiClienti.length) { list.innerHTML = '<div class="empty"><div class="empty-icon">🌱</div><div class="empty-text">Nessun cliente con prato</div></div>'; return; }
 
   const anno = new Date().getFullYear();
   list.innerHTML = pratiClienti.map(c => {
     const d = calcPratoData(c, anno);
-    const safeId = c.ClienteID.replace(/[^a-z0-9]/gi, '_');
+    // String(): Sheets restituisce gli ID tutti-cifre come numeri ("01" -> 1),
+    // e su un numero .replace non esiste
+    const safeId = String(c.ClienteID).replace(/[^a-z0-9]/gi, '_');
 
     const dettaglioRows = d.concimazioni.length ? d.concimazioni.map((o, i) => {
       const dataStr = o.data ? o.data.toLocaleDateString('it-IT', {day:'numeric', month:'short'}) : '–';
