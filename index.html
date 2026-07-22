@@ -858,6 +858,15 @@ async function apiPost(data) {
   return r.json();
 }
 
+// I flag sul foglio dovrebbero essere "Sì", ma una modifica manuale può
+// lasciare "Si", "SI", "s", "x", TRUE... Meglio riconoscerli tutti che
+// scartare in silenzio la riga.
+function isSi(v) {
+  if (v === true) return true;
+  const s = String(v == null ? '' : v).trim().toLowerCase();
+  return s === 'sì' || s === 'si' || s === 's' || s === 'x' || s === 'true' || s === '1';
+}
+
 async function loadAll() {
   try {
     const [clienti, visite, operazioni, concimi, sementi, fitofarmaci, fasce] = await Promise.all([
@@ -896,7 +905,7 @@ async function loadAll() {
 function updateStats() {
   document.getElementById('stat-clienti').textContent = DB.clienti.length;
   document.getElementById('stat-visite').textContent = DB.visite.length;
-  document.getElementById('stat-prati').textContent = DB.clienti.filter(c => c.Ha_prato === 'Sì').length;
+  document.getElementById('stat-prati').textContent = DB.clienti.filter(c => isSi(c.Ha_prato)).length;
 }
 
 // ── NAVIGATION ──
@@ -942,9 +951,9 @@ function renderClienti(filter = '') {
   list.innerHTML = items.map(c => {
     const initials = (c.Cliente || '?').split(' ').map(w => w[0]).join('').slice(0,2).toUpperCase();
     const badges = [];
-    if (c.Ha_prato === 'Sì') badges.push(`<span class="badge badge-prato">🌱 Prato</span>`);
+    if (isSi(c.Ha_prato)) badges.push(`<span class="badge badge-prato">🌱 Prato</span>`);
     if (c.FasciaID) badges.push(`<span class="badge badge-fascia">Fascia ${c.FasciaID}</span>`);
-    if (c.Ha_siepe === 'Sì') badges.push(`<span class="badge" style="background:#e8f4f0;color:#2a7a5a">🌿 Siepe</span>`);
+    if (isSi(c.Ha_siepe)) badges.push(`<span class="badge" style="background:#e8f4f0;color:#2a7a5a">🌿 Siepe</span>`);
     if (c.Siepe_specie) badges.push(`<span class="badge" style="background:#f0f4e8;color:#5a6a2a">${c.Siepe_specie}</span>`);
     const addr = [c.Indirizzo, c.Citta].filter(Boolean).join(', ');
     return `<div class="client-card" onclick="showCliente('${c.ClienteID}')">
@@ -973,7 +982,7 @@ function showCliente(id) {
   const visitIdsCliente = visite.filter(v => v.Data && new Date(v.Data).getFullYear() == annoCorr).map(v => v.VisitaID);
   const opsCliente = DB.operazioni.filter(o => visitIdsCliente.includes(o.VisitaID));
   let nSomm = 0, kSomm = 0;
-  opsCliente.filter(o => o.Tipo_operazione === 'Concimazione' && o.Flag_prato === 'Sì').forEach(o => {
+  opsCliente.filter(o => o.Tipo_operazione === 'Concimazione' && isSi(o.Flag_prato)).forEach(o => {
     const conc = DB.concimi.find(cc => cc.ConcimeID == o.ConcimeID);
     if (conc && o.Dose_kg && c.Mq_prato) {
       const dose = parseFloat(o.Dose_kg) || 0;
@@ -984,7 +993,7 @@ function showCliente(id) {
   });
   // ultima potatura siepe
   const opsAll = DB.operazioni.filter(o => DB.visite.find(vv => vv.VisitaID == o.VisitaID && vv.ClienteID == c.ClienteID));
-  const ultimaSiepe = opsAll.filter(o => o.Tipo_operazione === 'Potatura' && o.Flag_siepe === 'Sì').map(o => {
+  const ultimaSiepe = opsAll.filter(o => o.Tipo_operazione === 'Potatura' && isSi(o.Flag_siepe)).map(o => {
     const vv = DB.visite.find(vv => vv.VisitaID == o.VisitaID);
     return vv?.Data ? new Date(vv.Data) : null;
   }).filter(Boolean).sort((a,b) => b-a)[0];
@@ -1001,7 +1010,7 @@ function showCliente(id) {
         ${c.Lat && c.Lng ? `<div class="info-item" style="cursor:pointer" onclick="window.open('https://maps.google.com/?q=${c.Lat},${c.Lng}','_blank')"><div class="info-label">Posizione</div><div class="info-value">📍 Maps</div></div>` : '<div class="info-item"><div class="info-label">Posizione</div><div class="info-value">–</div></div>'}
       </div>
 
-      ${c.Ha_prato === 'Sì' ? `
+      ${isSi(c.Ha_prato) ? `
       <div style="background:var(--green-mist); border-radius:var(--radius); padding:14px; margin-bottom:14px; border:1px solid var(--green-pale)">
         <div style="font-family:var(--font-display); font-size:0.95rem; font-weight:600; color:var(--green-deep); margin-bottom:10px">🌱 Riepilogo Prato</div>
         <div class="info-grid" style="margin-bottom:8px">
@@ -1014,7 +1023,7 @@ function showCliente(id) {
         </div>
       </div>` : ''}
 
-      ${c.Ha_siepe === 'Sì' ? `
+      ${isSi(c.Ha_siepe) ? `
       <div style="background:#eef7f2; border-radius:var(--radius); padding:14px; margin-bottom:14px; border:1px solid #c8e8d8">
         <div style="font-family:var(--font-display); font-size:0.95rem; font-weight:600; color:#1a3a2a; margin-bottom:10px">🌿 Riepilogo Siepe</div>
         <div class="info-grid">
@@ -1037,7 +1046,7 @@ function showCliente(id) {
             <div><div class="visit-card-title">${data}</div><div class="visit-card-date">${v.Ore_Visita ? v.Ore_Visita+'h di lavoro' : ''}</div></div>
           </div>
           ${v.Note_visita ? `<div style="font-size:0.82rem; color:var(--text-mid); margin-top:8px">${v.Note_visita}</div>` : ''}
-          ${ops.length ? `<div class="visit-ops">${ops.map(o => `<span class="op-tag ${o.Flag_prato==='Sì'?'prato':''} ${o.Flag_siepe==='Sì'?'siepe':''}">${o.Tipo_operazione}${o.Descrizione?' – '+o.Descrizione:''}</span>`).join('')}</div>` : ''}
+          ${ops.length ? `<div class="visit-ops">${ops.map(o => `<span class="op-tag ${isSi(o.Flag_prato)?'prato':''} ${isSi(o.Flag_siepe)?'siepe':''}">${o.Tipo_operazione}${o.Descrizione?' – '+o.Descrizione:''}</span>`).join('')}</div>` : ''}
         </div>`;
       }).join('') : '<div class="empty"><div class="empty-text">Nessuna visita</div></div>'}
     </div>`;
@@ -1069,7 +1078,7 @@ function renderVisite() {
         <div style="flex:1"><div class="visit-card-title">${nome}</div><div class="visit-card-date">${data}${v.Ore_Visita ? ' · '+v.Ore_Visita+'h' : ''}</div></div>
       </div>
       ${v.Note_visita ? `<div style="font-size:0.82rem; color:var(--text-mid); margin-top:8px">${v.Note_visita}</div>` : ''}
-      ${ops.length ? `<div class="visit-ops">${ops.map(o => `<span class="op-tag ${o.Flag_prato==='Sì'?'prato':''}">${o.Tipo_operazione}${o.Descrizione?' – '+o.Descrizione:''}</span>`).join('')}</div>` : ''}
+      ${ops.length ? `<div class="visit-ops">${ops.map(o => `<span class="op-tag ${isSi(o.Flag_prato)?'prato':''}">${o.Tipo_operazione}${o.Descrizione?' – '+o.Descrizione:''}</span>`).join('')}</div>` : ''}
     </div>`;
   }).join('');
 }
@@ -1149,7 +1158,7 @@ function calcPratoData(c, anno) {
 
   // concimazioni con dettaglio
   const concimazioni = opsCliente
-    .filter(o => o.Tipo_operazione === 'Concimazione' && o.Flag_prato === 'Sì')
+    .filter(o => o.Tipo_operazione === 'Concimazione' && isSi(o.Flag_prato))
     .map(o => {
       const conc = DB.concimi.find(cc => cc.ConcimeID == o.ConcimeID);
       const v = DB.visite.find(vv => vv.VisitaID == o.VisitaID);
@@ -1179,7 +1188,7 @@ function calcPratoData(c, anno) {
   if (targetN === 0) { sem = 'rosso'; semLabel = 'Nessun target'; }
 
   const lastOpDate = (tipo) => {
-    const ops = opsCliente.filter(o => o.Flag_prato === 'Sì' && o.Tipo_operazione === tipo);
+    const ops = opsCliente.filter(o => isSi(o.Flag_prato) && o.Tipo_operazione === tipo);
     if (!ops.length) return '–';
     const v = DB.visite.find(vv => vv.VisitaID == ops[ops.length-1].VisitaID);
     return v?.Data ? new Date(v.Data).toLocaleDateString('it-IT', {day:'numeric', month:'short'}) : '–';
@@ -1206,7 +1215,7 @@ function togglePratoDettaglio(id) {
 function renderPrati() {
   const list = document.getElementById('prati-list');
   if (!list) return;
-  const pratiClienti = DB.clienti.filter(c => c.Ha_prato === 'Sì');
+  const pratiClienti = DB.clienti.filter(c => isSi(c.Ha_prato));
   if (!pratiClienti.length) { list.innerHTML = '<div class="empty"><div class="empty-icon">🌱</div><div class="empty-text">Nessun cliente con prato</div></div>'; return; }
 
   const anno = new Date().getFullYear();
@@ -1307,7 +1316,7 @@ function openNuovoCliente() {
 function editCliente(id) {
   const c = DB.clienti.find(x => x.ClienteID == id);
   if (!c) return;
-  pratoEnabled = c.Ha_prato === 'Sì';
+  pratoEnabled = isSi(c.Ha_prato);
   addrLat = c.Lat || null; addrLng = c.Lng || null;
   document.getElementById('drawer-cliente-title').textContent = 'Modifica Cliente';
   document.getElementById('cliente-edit-id').value = c.ClienteID;
@@ -1320,7 +1329,7 @@ function editCliente(id) {
   document.getElementById('f-cliente-fascia').value = c.FasciaID || '';
   document.getElementById('toggle-prato').classList.toggle('on', pratoEnabled);
   document.getElementById('prato-fields').style.display = pratoEnabled ? 'block' : 'none';
-  siepeEnabled = c.Ha_siepe === 'Sì';
+  siepeEnabled = isSi(c.Ha_siepe);
   document.getElementById('toggle-siepe').classList.toggle('on', siepeEnabled);
   document.getElementById('siepe-fields').style.display = siepeEnabled ? 'block' : 'none';
   document.getElementById('f-cliente-siepe-specie').value = c.Siepe_specie || '';
@@ -1495,8 +1504,8 @@ async function saveVisita() {
     for (const op of pendingOperazioni) {
       const nTot = parseFloat(op.N_tot_g) || 0;
       const kTot = parseFloat(op.K_tot_g) || 0;
-      const nM2 = (op.Flag_prato === 'Sì' && mq > 0) ? (nTot / mq).toFixed(2) : 0;
-      const kM2 = (op.Flag_prato === 'Sì' && mq > 0) ? (kTot / mq).toFixed(2) : 0;
+      const nM2 = (isSi(op.Flag_prato) && mq > 0) ? (nTot / mq).toFixed(2) : 0;
+      const kM2 = (isSi(op.Flag_prato) && mq > 0) ? (kTot / mq).toFixed(2) : 0;
       const opData = { ...op, OperazioneID: generateID(), VisitaID: visitaID, N_g_m2: nM2, K_g_m2: kM2 };
       await apiPost({ action:'insert', foglio:'OPERAZIONI', data: opData });
     }
@@ -1539,9 +1548,16 @@ function onTipoOpChange() {
   document.getElementById('op-concime-wrap').style.display = tipo === 'Concimazione' ? 'block' : 'none';
   document.getElementById('op-semente-wrap').style.display = tipo === 'Semina' ? 'block' : 'none';
   document.getElementById('op-fitofarmaco-wrap').style.display = ['Diserbo','Trattamento fitosanitario'].includes(tipo) ? 'block' : 'none';
-  if (tipo === 'Arieggiatura') {
-    opPratoEnabled = true;
-    document.getElementById('toggle-op-prato').classList.add('on');
+  // Il toggle prato parte acceso per le operazioni che di norma si fanno sul
+  // prato, se il cliente selezionato ne ha uno. Restava spento e veniva
+  // dimenticato, e le operazioni sparivano dal report Prati.
+  const autoPrato = ['Concimazione','Semina','Diserbo'];
+  if (showPrato) {
+    const cObj = DB.clienti.find(cc => cc.ClienteID == document.getElementById('f-visita-cliente').value);
+    if (tipo === 'Arieggiatura' || (autoPrato.includes(tipo) && isSi(cObj?.Ha_prato))) {
+      opPratoEnabled = true;
+      document.getElementById('toggle-op-prato').classList.add('on');
+    }
   }
   if (tipo !== 'Potatura') {
     opSiepeEnabled = false;
@@ -1596,7 +1612,7 @@ function renderOperazioniList() {
   if (!pendingOperazioni.length) { list.innerHTML = '<div style="font-size:0.8rem;color:var(--text-light);padding:4px 0">Nessuna operazione aggiunta</div>'; return; }
   list.innerHTML = pendingOperazioni.map((op, i) => `
     <div style="display:flex; align-items:center; gap:8px; padding:8px 10px; background:var(--green-mist); border-radius:8px; margin-bottom:6px; font-size:0.82rem">
-      <span>${op.Flag_prato==='Sì'?'🌱':'✂️'}</span>
+      <span>${isSi(op.Flag_prato)?'🌱':'✂️'}</span>
       <span style="flex:1;font-weight:500">${op.Tipo_operazione}${op.Descrizione?' – '+op.Descrizione:''}</span>
       <button onclick="pendingOperazioni.splice(${i},1); renderOperazioniList()" style="background:none;border:none;cursor:pointer;font-size:1rem;color:var(--red)">✕</button>
     </div>`).join('');
