@@ -154,6 +154,8 @@ html, body {
 .btn-secondary { background: var(--green-mist); color: var(--green-mid); border: 1px solid var(--green-pale); }
 .btn-danger { background: #fdecea; color: var(--red); }
 .btn-sm { padding: 8px 14px; font-size: 0.8rem; width: auto; }
+.btn:disabled, .btn[disabled] { opacity: 0.55; cursor: wait; transform: none; }
+.btn:disabled:hover { background: var(--green-mid); transform: none; }
 
 .fab {
   position: fixed; bottom: calc(var(--nav-h) + 16px); right: 18px;
@@ -667,7 +669,7 @@ select.form-control { background-image: url("data:image/svg+xml,%3Csvg xmlns='ht
 <div class="overlay" id="overlay-visita">
   <div class="drawer">
     <div class="drawer-handle"></div>
-    <div class="drawer-title">Nuova Visita</div>
+    <div class="drawer-title" id="drawer-visita-titolo">Nuova Visita</div>
     <div class="drawer-body">
       <div class="form-group">
         <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:6px">
@@ -730,7 +732,7 @@ select.form-control { background-image: url("data:image/svg+xml,%3Csvg xmlns='ht
         <div id="operazioni-list"></div>
       </div>
 
-      <button class="btn btn-primary" onclick="saveVisita()">💾 Salva Visita</button>
+      <button class="btn btn-primary" id="btn-salva-visita" onclick="saveVisita()">💾 Salva Visita</button>
       <div style="height:8px"></div>
       <button class="btn btn-secondary" onclick="closeDrawer('overlay-visita')">Annulla</button>
     </div>
@@ -832,14 +834,35 @@ let opPratoEnabled = false;
 let opSiepeEnabled = false;
 let pendingOperazioni = [];
 let pendingOpIndex = null;
+let editVisitaID = null;   // null = nuova visita, altrimenti si sta modificando
+let opsOriginali = [];     // operazioni già sul foglio, per capire cosa è stato tolto
+let salvataggioInCorso = false;
 let addrLat = null, addrLng = null;
 let addrTimeout = null;
 
-// ── INIT ──
-async function init() {
-  document.getElementById('hero-date').textContent = new Date().toLocaleDateString('it-IT', { weekday:'long', day:'numeric', month:'long' });
-  document.getElementById('f-visita-data').value = new Date().toISOString().split('T')[0];
-  await loadAll();
+// ── CACHE LOCALE ──
+// Ogni chiamata ad Apps Script costa 2-3 secondi a prescindere dai dati (sono
+// 35 KB in tutto). Teniamo l'ultima copia in locale così all'apertura si vede
+// subito qualcosa, mentre i dati freschi arrivano in sottofondo.
+const CACHE_KEY = 'giardino-db-v1';
+
+function salvaCache() {
+  try { localStorage.setItem(CACHE_KEY, JSON.stringify({ ts: Date.now(), db: DB })); }
+  catch (e) { /* quota piena o modalità privata: pazienza, si va di rete */ }
+}
+
+function caricaCache() {
+  try {
+    const raw = localStorage.getItem(CACHE_KEY);
+    if (!raw) return false;
+    const { db } = JSON.parse(raw);
+    if (!db || !Array.isArray(db.clienti) || !db.clienti.length) return false;
+    DB = db;
+    return true;
+  } catch (e) { return false; }
+}
+
+function renderAll() {
   renderHome();
   renderClienti();
   renderVisite();
@@ -847,15 +870,36 @@ async function init() {
   renderPrati();
 }
 
+// ── INIT ──
+async function init() {
+  document.getElementById('hero-date').textContent = new Date().toLocaleDateString('it-IT', { weekday:'long', day:'numeric', month:'long' });
+  document.getElementById('f-visita-data').value = new Date().toISOString().split('T')[0];
+  if (caricaCache()) { updateStats(); renderAll(); }
+  await loadAll();
+  renderAll();
+}
+
+// Apps Script risponde 200 anche quando fallisce: al posto del JSON manda una
+// pagina HTML di errore. Senza controllare il corpo, l'app tira dritto
+// convinta di aver salvato.
+async function leggiRisposta(r, cosa) {
+  const testo = await r.text();
+  let j;
+  try { j = JSON.parse(testo); }
+  catch (e) { throw new Error(cosa + ' – il server ha risposto con un errore'); }
+  if (j && j.status === 'error') throw new Error(cosa + ' – ' + (j.msg || 'errore dal server'));
+  return j;
+}
+
 async function api(params) {
   const url = API + '?' + new URLSearchParams(params);
   const r = await fetch(url);
-  return r.json();
+  return leggiRisposta(r, 'Lettura ' + (params.foglio || ''));
 }
 
 async function apiPost(data) {
   const r = await fetch(API, { method:'POST', body: JSON.stringify(data) });
-  return r.json();
+  return leggiRisposta(r, (data.action || 'Scrittura') + ' ' + (data.foglio || ''));
 }
 
 // I flag sul foglio dovrebbero essere "Sì", ma una modifica manuale può
@@ -897,8 +941,10 @@ async function loadAll() {
       return c;
     });
     updateStats();
+    salvaCache();
   } catch(e) {
-    showToast('⚠️ Errore caricamento dati');
+    // con la cache in memoria l'app resta usabile: lo dico senza allarmare
+    showToast(DB.clienti.length ? '⚠️ Dati non aggiornati (offline?)' : '⚠️ Errore caricamento dati');
   }
 }
 
@@ -1079,6 +1125,10 @@ function renderVisite() {
       </div>
       ${v.Note_visita ? `<div style="font-size:0.82rem; color:var(--text-mid); margin-top:8px">${v.Note_visita}</div>` : ''}
       ${ops.length ? `<div class="visit-ops">${ops.map(o => `<span class="op-tag ${isSi(o.Flag_prato)?'prato':''}">${o.Tipo_operazione}${o.Descrizione?' – '+o.Descrizione:''}</span>`).join('')}</div>` : ''}
+      <div style="display:flex; gap:8px; margin-top:10px; padding-top:10px; border-top:1px solid var(--green-mist)">
+        <button class="btn btn-secondary btn-sm" style="flex:1" onclick="openModificaVisita('${v.VisitaID}')">✏️ Modifica</button>
+        <button class="btn btn-danger btn-sm" style="flex:1" onclick="eliminaVisita('${v.VisitaID}')">🗑 Elimina</button>
+      </div>
     </div>`;
   }).join('');
 }
@@ -1382,7 +1432,7 @@ async function saveCliente() {
     }
     closeDrawer('overlay-cliente');
     await loadAll();
-    renderClienti(); renderHome(); renderPrati();
+    renderAll();
     if (pendingFromVisita) {
       pendingFromVisita = false;
       // pre-select the new client
@@ -1445,6 +1495,10 @@ let pendingFromVisita = false;
 
 function openNuovaVisita() {
   pendingOperazioni = [];
+  editVisitaID = null;
+  opsOriginali = [];
+  document.getElementById('drawer-visita-titolo').textContent = 'Nuova Visita';
+  bloccaSalvataggio(false);
   document.getElementById('f-visita-note').value = '';
   document.getElementById('f-visita-ore').value = '';
   document.getElementById('f-visita-prossimo').value = '';
@@ -1481,11 +1535,22 @@ function clearVisitaCliente() {
   document.getElementById('visita-cliente-suggestions').style.display = 'none';
 }
 
+// Il bottone resta premibile per tutta la durata del salvataggio (10-15 s con
+// più operazioni): un secondo tocco creava una visita doppia.
+function bloccaSalvataggio(attivo) {
+  salvataggioInCorso = attivo;
+  const btn = document.getElementById('btn-salva-visita');
+  if (!btn) return;
+  btn.disabled = attivo;
+  btn.textContent = attivo ? '⏳ Salvataggio in corso...' : '💾 Salva Visita';
+}
+
 async function saveVisita() {
+  if (salvataggioInCorso) return;
   const cid = document.getElementById('f-visita-cliente').value;
   const data = document.getElementById('f-visita-data').value;
   if (!cid || !data) { showToast('⚠️ Seleziona cliente e data'); return; }
-  const visitaID = generateID();
+  const visitaID = editVisitaID || generateID();
   const visita = {
     VisitaID: visitaID,
     Data: data,
@@ -1496,8 +1561,19 @@ async function saveVisita() {
     Mese_prossimo_intervento: document.getElementById('f-visita-mese').value,
     Anno_prossimo_intervento: document.getElementById('f-visita-anno').value,
   };
+  bloccaSalvataggio(true);
   try {
-    await apiPost({ action:'insert', foglio:'VISITE', data: visita });
+    if (editVisitaID) {
+      await apiPost({ action:'update', foglio:'VISITE', id:visitaID, idField:'VisitaID', data: visita });
+      // le operazioni tolte dall'elenco vanno cancellate dal foglio
+      const rimaste = pendingOperazioni.map(o => o.OperazioneID).filter(Boolean);
+      for (const orig of opsOriginali) {
+        if (!rimaste.includes(orig.OperazioneID))
+          await apiPost({ action:'delete', foglio:'OPERAZIONI', id:orig.OperazioneID, idField:'OperazioneID' });
+      }
+    } else {
+      await apiPost({ action:'insert', foglio:'VISITE', data: visita });
+    }
     // salva operazioni (con calcolo N_g_m2 / K_g_m2 se prato)
     const cObj = DB.clienti.find(cc => cc.ClienteID == cid);
     const mq = parseFloat(cObj?.Mq_prato) || 0;
@@ -1506,14 +1582,71 @@ async function saveVisita() {
       const kTot = parseFloat(op.K_tot_g) || 0;
       const nM2 = (isSi(op.Flag_prato) && mq > 0) ? (nTot / mq).toFixed(2) : 0;
       const kM2 = (isSi(op.Flag_prato) && mq > 0) ? (kTot / mq).toFixed(2) : 0;
-      const opData = { ...op, OperazioneID: generateID(), VisitaID: visitaID, N_g_m2: nM2, K_g_m2: kM2 };
-      await apiPost({ action:'insert', foglio:'OPERAZIONI', data: opData });
+      if (op.OperazioneID) {
+        const opData = { ...op, VisitaID: visitaID, N_g_m2: nM2, K_g_m2: kM2 };
+        await apiPost({ action:'update', foglio:'OPERAZIONI', id:op.OperazioneID, idField:'OperazioneID', data: opData });
+      } else {
+        const opData = { ...op, OperazioneID: generateID(), VisitaID: visitaID, N_g_m2: nM2, K_g_m2: kM2 };
+        await apiPost({ action:'insert', foglio:'OPERAZIONI', data: opData });
+      }
     }
-    showToast('✅ Visita salvata');
+    showToast(editVisitaID ? '✅ Visita aggiornata' : '✅ Visita salvata');
     closeDrawer('overlay-visita');
+    editVisitaID = null;
+    opsOriginali = [];
     await loadAll();
-    renderHome(); renderVisite(); renderProssimi(); renderPrati();
-  } catch(e) { showToast('❌ Errore salvataggio'); }
+    renderAll();
+  } catch(e) {
+    showToast('❌ ' + (e.message || 'Errore salvataggio'));
+  } finally {
+    bloccaSalvataggio(false);
+  }
+}
+
+function openModificaVisita(vid) {
+  const v = DB.visite.find(x => x.VisitaID == vid);
+  if (!v) { showToast('⚠️ Visita non trovata'); return; }
+  const c = DB.clienti.find(x => x.ClienteID == v.ClienteID);
+  editVisitaID = v.VisitaID;
+  opsOriginali = DB.operazioni.filter(o => o.VisitaID == vid);
+  pendingOperazioni = opsOriginali.map(o => ({ ...o }));
+  document.getElementById('f-visita-data').value = v.Data ? new Date(v.Data).toISOString().split('T')[0] : '';
+  document.getElementById('f-visita-ore').value = v.Ore_Visita || '';
+  document.getElementById('f-visita-note').value = v.Note_visita || '';
+  document.getElementById('f-visita-prossimo').value = v.Prossimo_intervento || '';
+  document.getElementById('f-visita-mese').value = v.Mese_prossimo_intervento ? String(v.Mese_prossimo_intervento).padStart(2,'0') : '';
+  document.getElementById('f-visita-anno').value = v.Anno_prossimo_intervento || '';
+  clearVisitaCliente();
+  if (c) selectVisitaCliente(c.ClienteID, c.Cliente);
+  document.getElementById('drawer-visita-titolo').textContent = 'Modifica Visita';
+  renderOperazioniList();
+  document.getElementById('overlay-visita').classList.add('open');
+}
+
+async function eliminaVisita(vid) {
+  const v = DB.visite.find(x => x.VisitaID == vid);
+  if (!v) return;
+  const c = DB.clienti.find(x => x.ClienteID == v.ClienteID);
+  const ops = DB.operazioni.filter(o => o.VisitaID == vid);
+  const quando = v.Data ? new Date(v.Data).toLocaleDateString('it-IT') : '';
+  if (!confirm(`Eliminare la visita del ${quando} da ${c ? c.Cliente : '?'}` +
+               (ops.length ? ` e le sue ${ops.length} operazioni?` : '?'))) return;
+  if (salvataggioInCorso) return;
+  salvataggioInCorso = true;
+  try {
+    // prima le operazioni, poi la visita: se qualcosa si interrompe a metà
+    // resta al massimo una visita con meno operazioni, mai operazioni orfane
+    for (const o of ops)
+      await apiPost({ action:'delete', foglio:'OPERAZIONI', id:o.OperazioneID, idField:'OperazioneID' });
+    await apiPost({ action:'delete', foglio:'VISITE', id:vid, idField:'VisitaID' });
+    showToast('🗑 Visita eliminata');
+    await loadAll();
+    renderAll();
+  } catch(e) {
+    showToast('❌ ' + (e.message || 'Errore eliminazione'));
+  } finally {
+    salvataggioInCorso = false;
+  }
 }
 
 // ── OPERAZIONI ──
