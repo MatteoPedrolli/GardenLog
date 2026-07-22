@@ -658,7 +658,7 @@ select.form-control { background-image: url("data:image/svg+xml,%3Csvg xmlns='ht
         <label class="form-label">Note</label>
         <textarea class="form-control" id="f-cliente-note" rows="2" placeholder="Note aggiuntive..."></textarea>
       </div>
-      <button class="btn btn-primary" onclick="saveCliente()">💾 Salva Cliente</button>
+      <button class="btn btn-primary" id="btn-salva-cliente" onclick="saveCliente()">💾 Salva Cliente</button>
       <div style="height:8px"></div>
       <button class="btn btn-secondary" onclick="closeDrawer('overlay-cliente')">Annulla</button>
     </div>
@@ -1402,6 +1402,7 @@ function toggleSiepe() {
 }
 
 async function saveCliente() {
+  if (salvataggioInCorso) return;
   const nome = document.getElementById('f-cliente-nome').value.trim();
   if (!nome) { showToast('⚠️ Inserisci il nome'); return; }
   const editId = document.getElementById('cliente-edit-id').value;
@@ -1421,13 +1422,19 @@ async function saveCliente() {
     Siepe_larghezza: siepeEnabled ? document.getElementById('f-cliente-siepe-larghezza').value : '',
     Note_cliente: document.getElementById('f-cliente-note').value.trim(),
   };
+  const btn = document.getElementById('btn-salva-cliente');
+  salvataggioInCorso = true;
+  if (btn) { btn.disabled = true; btn.textContent = '⏳ Salvataggio in corso...'; }
+  let scritto = false;
   try {
     if (editId) {
       await apiPost({ action:'update', foglio:'CLIENTI', id:editId, idField:'ClienteID', data });
+      scritto = true;
       showToast('✅ Cliente aggiornato');
     } else {
       data.ClienteID = generateID();
       await apiPost({ action:'insert', foglio:'CLIENTI', data });
+      scritto = true;
       showToast('✅ Cliente salvato');
     }
     closeDrawer('overlay-cliente');
@@ -1440,7 +1447,18 @@ async function saveCliente() {
       openNuovaVisita();
       if (newCliente) setTimeout(() => selectVisitaCliente(newCliente.ClienteID, newCliente.Cliente), 100);
     }
-  } catch(e) { showToast('❌ Errore salvataggio'); }
+  } catch(e) {
+    // Distinguo il salvataggio fallito dall'inciampo successivo: dire
+    // "errore salvataggio" quando il dato è già sul foglio manda a
+    // rifare una modifica che era andata a buon fine.
+    showToast(scritto
+      ? '⚠️ Salvato, ma la schermata non si è aggiornata: ' + (e.message || e)
+      : '❌ Errore salvataggio: ' + (e.message || e));
+    console.error('saveCliente', e);
+  } finally {
+    salvataggioInCorso = false;
+    if (btn) { btn.disabled = false; btn.textContent = '💾 Salva Cliente'; }
+  }
 }
 
 // ── ADDRESS SEARCH ──
@@ -1572,6 +1590,7 @@ async function saveVisita() {
   };
 
   bloccaSalvataggio(true);
+  let scritto = false;
   try {
     if (!editVisitaID) {
       // Visita nuova: una sola chiamata che scrive tutto insieme. Se le
@@ -1579,6 +1598,7 @@ async function saveVisita() {
       // che rende impossibili le operazioni orfane.
       const operazioni = pendingOperazioni.map(op => ({ ...conNK(op), OperazioneID: generateID() }));
       await apiPost({ action:'saveVisita', visita, operazioni });
+      scritto = true;
       showToast('✅ Visita salvata');
       closeDrawer('overlay-visita');
       await loadAll();
@@ -1602,6 +1622,7 @@ async function saveVisita() {
         await apiPost({ action:'insert', foglio:'OPERAZIONI', data: { ...opData, OperazioneID: generateID() } });
       }
     }
+    scritto = true;
     showToast('✅ Visita aggiornata');
     closeDrawer('overlay-visita');
     editVisitaID = null;
@@ -1609,7 +1630,10 @@ async function saveVisita() {
     await loadAll();
     renderAll();
   } catch(e) {
-    showToast('❌ ' + (e.message || 'Errore salvataggio'));
+    showToast(scritto
+      ? '⚠️ Salvato, ma la schermata non si è aggiornata: ' + (e.message || e)
+      : '❌ Errore salvataggio: ' + (e.message || e));
+    console.error('saveVisita', e);
   } finally {
     bloccaSalvataggio(false);
   }
