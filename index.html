@@ -1561,36 +1561,48 @@ async function saveVisita() {
     Mese_prossimo_intervento: document.getElementById('f-visita-mese').value,
     Anno_prossimo_intervento: document.getElementById('f-visita-anno').value,
   };
+  const cObj = DB.clienti.find(cc => cc.ClienteID == cid);
+  const mq = parseFloat(cObj?.Mq_prato) || 0;
+  const conNK = (op) => {
+    const nTot = parseFloat(op.N_tot_g) || 0;
+    const kTot = parseFloat(op.K_tot_g) || 0;
+    return { ...op, VisitaID: visitaID,
+      N_g_m2: (isSi(op.Flag_prato) && mq > 0) ? (nTot / mq).toFixed(2) : 0,
+      K_g_m2: (isSi(op.Flag_prato) && mq > 0) ? (kTot / mq).toFixed(2) : 0 };
+  };
+
   bloccaSalvataggio(true);
   try {
-    if (editVisitaID) {
-      await apiPost({ action:'update', foglio:'VISITE', id:visitaID, idField:'VisitaID', data: visita });
-      // le operazioni tolte dall'elenco vanno cancellate dal foglio
-      const rimaste = pendingOperazioni.map(o => o.OperazioneID).filter(Boolean);
-      for (const orig of opsOriginali) {
-        if (!rimaste.includes(orig.OperazioneID))
-          await apiPost({ action:'delete', foglio:'OPERAZIONI', id:orig.OperazioneID, idField:'OperazioneID' });
-      }
-    } else {
-      await apiPost({ action:'insert', foglio:'VISITE', data: visita });
+    if (!editVisitaID) {
+      // Visita nuova: una sola chiamata che scrive tutto insieme. Se le
+      // operazioni non passano, il server annulla anche la visita — è questo
+      // che rende impossibili le operazioni orfane.
+      const operazioni = pendingOperazioni.map(op => ({ ...conNK(op), OperazioneID: generateID() }));
+      await apiPost({ action:'saveVisita', visita, operazioni });
+      showToast('✅ Visita salvata');
+      closeDrawer('overlay-visita');
+      await loadAll();
+      renderAll();
+      return;
     }
-    // salva operazioni (con calcolo N_g_m2 / K_g_m2 se prato)
-    const cObj = DB.clienti.find(cc => cc.ClienteID == cid);
-    const mq = parseFloat(cObj?.Mq_prato) || 0;
+    // Modifica: qui la visita esiste già, quindi non c'è il rischio di lasciare
+    // operazioni orfane e si può procedere per singole operazioni, toccando
+    // solo quelle che sono davvero cambiate.
+    await apiPost({ action:'update', foglio:'VISITE', id:visitaID, idField:'VisitaID', data: visita });
+    const rimaste = pendingOperazioni.map(o => o.OperazioneID).filter(Boolean);
+    for (const orig of opsOriginali) {
+      if (!rimaste.includes(orig.OperazioneID))
+        await apiPost({ action:'delete', foglio:'OPERAZIONI', id:orig.OperazioneID, idField:'OperazioneID' });
+    }
     for (const op of pendingOperazioni) {
-      const nTot = parseFloat(op.N_tot_g) || 0;
-      const kTot = parseFloat(op.K_tot_g) || 0;
-      const nM2 = (isSi(op.Flag_prato) && mq > 0) ? (nTot / mq).toFixed(2) : 0;
-      const kM2 = (isSi(op.Flag_prato) && mq > 0) ? (kTot / mq).toFixed(2) : 0;
+      const opData = conNK(op);
       if (op.OperazioneID) {
-        const opData = { ...op, VisitaID: visitaID, N_g_m2: nM2, K_g_m2: kM2 };
         await apiPost({ action:'update', foglio:'OPERAZIONI', id:op.OperazioneID, idField:'OperazioneID', data: opData });
       } else {
-        const opData = { ...op, OperazioneID: generateID(), VisitaID: visitaID, N_g_m2: nM2, K_g_m2: kM2 };
-        await apiPost({ action:'insert', foglio:'OPERAZIONI', data: opData });
+        await apiPost({ action:'insert', foglio:'OPERAZIONI', data: { ...opData, OperazioneID: generateID() } });
       }
     }
-    showToast(editVisitaID ? '✅ Visita aggiornata' : '✅ Visita salvata');
+    showToast('✅ Visita aggiornata');
     closeDrawer('overlay-visita');
     editVisitaID = null;
     opsOriginali = [];
