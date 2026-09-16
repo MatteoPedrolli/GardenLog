@@ -414,6 +414,25 @@ select.form-control { background-image: url("data:image/svg+xml,%3Csvg xmlns='ht
   animation: spin 0.7s linear infinite;
 }
 @keyframes spin { to { transform: rotate(360deg); } }
+.avviso {
+  display: flex; align-items: center; gap: 12px;
+  margin: 12px 14px 0; padding: 12px 14px;
+  background: #fff6e0; border: 1px solid #f0d9a0; border-radius: var(--radius);
+  color: #7a5a10; font-size: 0.88rem; cursor: pointer;
+}
+.dati-riga {
+  display: flex; align-items: center; gap: 10px;
+  padding: 9px 0; border-bottom: 1px solid var(--border);
+  font-size: 0.85rem;
+}
+.dati-riga:last-child { border-bottom: none; }
+.dati-riga-testo { flex: 1; min-width: 0; }
+.dati-azione {
+  background: none; border: none; cursor: pointer;
+  font-size: 0.95rem; padding: 4px 6px; color: var(--text-light);
+}
+.dati-nota { font-size: 0.8rem; color: var(--text-light); line-height: 1.5; margin-bottom: 10px; }
+
 .empty { text-align: center; padding: 50px 20px; color: var(--text-light); }
 .empty-icon { font-size: 3rem; margin-bottom: 12px; }
 .empty-text { font-size: 0.9rem; }
@@ -479,12 +498,16 @@ select.form-control { background-image: url("data:image/svg+xml,%3Csvg xmlns='ht
   <div id="topbar">
     <span class="leaf">🌿</span>
     <h1 id="topbar-title">GiardinoApp</h1>
-    <button class="topbar-action" id="topbar-action-btn" onclick="topbarAction()" title="Aggiungi">＋</button>
+    <div style="display:flex; gap:8px; align-items:center">
+      <button class="topbar-action" onclick="navTo('dati')" title="Dati e backup">⚙</button>
+      <button class="topbar-action" id="topbar-action-btn" onclick="topbarAction()" title="Aggiungi">＋</button>
+    </div>
   </div>
 
   <div id="content">
     <!-- HOME -->
     <div id="page-home" class="page active">
+      <div id="avviso-backup" class="avviso" style="display:none" onclick="navTo('dati')"></div>
       <div class="hero">
         <div class="hero-date" id="hero-date"></div>
         <div class="hero-greeting">Buongiorno! 👋</div>
@@ -539,6 +562,40 @@ select.form-control { background-image: url("data:image/svg+xml,%3Csvg xmlns='ht
       <div id="prossimi-list"></div>
     </div>
 
+    <!-- DATI E BACKUP -->
+    <div id="page-dati" class="page">
+      <div class="section-title">Backup</div>
+      <div class="card" style="padding:14px">
+        <div class="dati-nota">I dati stanno solo su questo dispositivo. Il file di backup è l'unica copia che sopravvive a un telefono perso, formattato o cambiato: esportalo ogni tanto e tienilo dove tieni le cose che contano.</div>
+        <div id="stato-backup" class="dati-nota" style="color:var(--text-mid)"></div>
+        <button class="btn btn-primary" onclick="esportaBackup()">⬇️ Esporta backup</button>
+        <button class="btn btn-secondary" style="margin-top:8px" onclick="document.getElementById('file-backup').click()">⬆️ Importa backup</button>
+        <input type="file" id="file-backup" accept="application/json,.json" style="display:none" onchange="importaBackup(this)">
+      </div>
+
+      <div class="section-title">Esporta per analisi</div>
+      <div class="card" style="padding:14px">
+        <div class="dati-nota">Tabelle CSV da aprire sul computer con Excel o Fogli Google.</div>
+        <div style="display:flex; gap:8px; flex-wrap:wrap">
+          <button class="btn btn-secondary btn-sm" onclick="esportaCSV('clienti')">Clienti</button>
+          <button class="btn btn-secondary btn-sm" onclick="esportaCSV('visite')">Visite</button>
+          <button class="btn btn-secondary btn-sm" onclick="esportaCSV('operazioni')">Operazioni</button>
+        </div>
+      </div>
+
+      <div class="section-title">Archivi</div>
+      <div id="archivi-list"></div>
+
+      <div class="section-title">Dispositivo</div>
+      <div class="card" style="padding:14px" id="card-diagnostica"></div>
+
+      <div class="section-title">Vecchio foglio Google</div>
+      <div class="card" style="padding:14px">
+        <div class="dati-nota">L'app non usa più Google Sheets. Questo serve una volta sola, per portare qui lo storico che è rimasto sul foglio — o per recuperarlo su un altro dispositivo finché il foglio esiste. Sostituisce i dati presenti e richiede connessione.</div>
+        <button class="btn btn-secondary" id="btn-sheets" onclick="importaDaSheets()">⬇️ Importa dal foglio Google</button>
+      </div>
+    </div>
+
     <!-- PRATI -->
     <div id="page-prati" class="page">
       <div class="section-title">Report Prati 🌱</div>
@@ -563,6 +620,18 @@ select.form-control { background-image: url("data:image/svg+xml,%3Csvg xmlns='ht
       <span class="icon">🌱</span><span>Prati</span>
     </button>
   </nav>
+</div>
+
+<!-- DRAWER VOCE ARCHIVIO -->
+<div class="overlay" id="overlay-archivio">
+  <div class="drawer">
+    <div class="drawer-handle"></div>
+    <div class="drawer-title" id="drawer-archivio-title">Voce</div>
+    <div class="drawer-body">
+      <div id="archivio-campi"></div>
+      <button class="btn btn-primary" onclick="salvaVoceArchivio()">💾 Salva</button>
+    </div>
+  </div>
 </div>
 
 <!-- TOAST -->
@@ -825,10 +894,32 @@ select.form-control { background-image: url("data:image/svg+xml,%3Csvg xmlns='ht
 </div>
 
 <script>
-const API = 'https://script.google.com/macros/s/AKfycbx8vlMzgRiJYJqHQwPOdT-aDy0tMOFdHx8G3citRM1dO2gWyIUcvo1zj3YhNC-PGoEI/exec';
+// ── ARCHIVIO LOCALE ──
+// I dati vivono sul telefono, non su un server: il salvataggio è istantaneo e
+// l'app funziona in giardino anche senza campo. Il rovescio della medaglia è
+// che l'unica copia sta qui dentro, quindi il backup su file non è un
+// accessorio ma la rete di sicurezza — vedi esportaBackup() e l'avviso in home.
+const IDB_NOME = 'giardinolog';
+const IDB_STORE = 'stato';
+const IDB_CHIAVE = 'db';
+const MIRROR_KEY = 'giardinolog-db';
+const CACHE_SHEETS = 'giardino-db-v1';  // cache locale di quando si leggeva da Sheets
+const VERSIONE_DATI = 2;
+
+const COLLEZIONI = ['clienti', 'visite', 'operazioni', 'concimi', 'sementi', 'fitofarmaci', 'fasce'];
+
+// Fasce di partenza per chi apre l'app la prima volta: numeri da correggere
+// in Archivi, non verità rivelate. Chi arriva da Sheets o da un backup se li
+// ritrova sovrascritti dai propri.
+const FASCE_DEFAULT = [
+  { FasciaID: '1', Descrizione: 'Prato ornamentale', Target_N_g_m2_anno: 25, Target_K_g_m2_anno: 15 },
+  { FasciaID: '2', Descrizione: 'Prato da giardino', Target_N_g_m2_anno: 15, Target_K_g_m2_anno: 10 },
+  { FasciaID: '3', Descrizione: 'Non concimato', Target_N_g_m2_anno: 0, Target_K_g_m2_anno: 0 },
+];
 
 // ── STATE ──
 let DB = { clienti: [], visite: [], operazioni: [], concimi: [], sementi: [], fitofarmaci: [], fasce: [] };
+let META = { ultimoBackup: null, modificheDalBackup: 0 };
 let currentPage = 'home';
 let pratoEnabled = false;
 let siepeEnabled = false;
@@ -837,31 +928,111 @@ let opSiepeEnabled = false;
 let pendingOperazioni = [];
 let pendingOpIndex = null;
 let editVisitaID = null;   // null = nuova visita, altrimenti si sta modificando
-let opsOriginali = [];     // operazioni già sul foglio, per capire cosa è stato tolto
 let salvataggioInCorso = false;
 let addrLat = null, addrLng = null;
 let addrTimeout = null;
 
-// ── CACHE LOCALE ──
-// Ogni chiamata ad Apps Script costa 2-3 secondi a prescindere dai dati (sono
-// 35 KB in tutto). Teniamo l'ultima copia in locale così all'apertura si vede
-// subito qualcosa, mentre i dati freschi arrivano in sottofondo.
-const CACHE_KEY = 'giardino-db-v1';
-
-function salvaCache() {
-  try { localStorage.setItem(CACHE_KEY, JSON.stringify({ ts: Date.now(), db: DB })); }
-  catch (e) { /* quota piena o modalità privata: pazienza, si va di rete */ }
+// ── INDEXEDDB ──
+// Più capiente e più difficile da sfrattare di localStorage, che resta come
+// seconda copia per Safari in navigazione privata e come piano B se il
+// database si rompe.
+function apriIDB() {
+  return new Promise((risolvi, rifiuta) => {
+    if (!window.indexedDB) return rifiuta(new Error('IndexedDB non disponibile'));
+    const req = indexedDB.open(IDB_NOME, 1);
+    req.onupgradeneeded = () => req.result.createObjectStore(IDB_STORE);
+    req.onsuccess = () => risolvi(req.result);
+    req.onerror = () => rifiuta(req.error);
+  });
 }
 
-function caricaCache() {
+async function idbLeggi() {
+  const db = await apriIDB();
   try {
-    const raw = localStorage.getItem(CACHE_KEY);
-    if (!raw) return false;
-    const { db } = JSON.parse(raw);
-    if (!db || !Array.isArray(db.clienti) || !db.clienti.length) return false;
-    DB = db;
-    return true;
-  } catch (e) { return false; }
+    return await new Promise((risolvi, rifiuta) => {
+      const r = db.transaction(IDB_STORE, 'readonly').objectStore(IDB_STORE).get(IDB_CHIAVE);
+      r.onsuccess = () => risolvi(r.result || null);
+      r.onerror = () => rifiuta(r.error);
+    });
+  } finally { db.close(); }
+}
+
+async function idbScrivi(valore) {
+  const db = await apriIDB();
+  try {
+    return await new Promise((risolvi, rifiuta) => {
+      const tx = db.transaction(IDB_STORE, 'readwrite');
+      tx.objectStore(IDB_STORE).put(valore, IDB_CHIAVE);
+      tx.oncomplete = () => risolvi();
+      tx.onerror = () => rifiuta(tx.error);
+      tx.onabort = () => rifiuta(tx.error || new Error('transazione annullata'));
+    });
+  } finally { db.close(); }
+}
+
+// ── LETTURA E SCRITTURA ──
+function normalizzaDB(grezzo) {
+  const pulito = {};
+  COLLEZIONI.forEach(k => { pulito[k] = Array.isArray(grezzo?.[k]) ? grezzo[k] : []; });
+  return pulito;
+}
+
+// I target N/K non stanno sul cliente ma sulla fascia: ricalcolarli a ogni
+// caricamento fa sì che correggere una fascia aggiorni tutti i suoi clienti.
+function applicaFasce() {
+  DB.clienti.forEach(c => {
+    const f = c.FasciaID ? DB.fasce.find(x => String(x.FasciaID) === String(c.FasciaID)) : null;
+    c.Target_N_g_m2_anno = f ? f.Target_N_g_m2_anno : '';
+    c.Target_K_g_m2_anno = f ? f.Target_K_g_m2_anno : '';
+  });
+}
+
+// Da chiamare dopo ogni modifica. `conta:false` per le scritture che non sono
+// modifiche dei dati (import di un backup, che il backup ce l'ha già).
+async function salvaDB({ conta = true } = {}) {
+  if (conta) META.modificheDalBackup = (META.modificheDalBackup || 0) + 1;
+  META.aggiornato = new Date().toISOString();
+  const payload = { versione: VERSIONE_DATI, db: DB, meta: META };
+  let salvato = false;
+  try { await idbScrivi(payload); salvato = true; }
+  catch (e) { console.warn('IndexedDB non ha salvato', e); }
+  try { localStorage.setItem(MIRROR_KEY, JSON.stringify(payload)); salvato = true; }
+  catch (e) { console.warn('localStorage non ha salvato', e); }
+  // Se falliscono entrambe le copie il dato è solo a video e sparisce
+  // ricaricando: va detto subito e a caratteri cubitali, non in console.
+  if (!salvato) showToast('❌ NON SALVATO: memoria del browser piena o bloccata');
+  aggiornaAvvisoBackup();
+  return salvato;
+}
+
+async function caricaDB() {
+  let payload = null;
+  try { payload = await idbLeggi(); } catch (e) { console.warn('IndexedDB non leggibile', e); }
+  if (!payload?.db) {
+    try { const raw = localStorage.getItem(MIRROR_KEY); if (raw) payload = JSON.parse(raw); }
+    catch (e) { console.warn('localStorage non leggibile', e); }
+  }
+  // Prima apertura dopo il passaggio al locale: i dati sono ancora nella
+  // vecchia cache di Sheets. Recuperarli evita di ripartire da zero.
+  if (!payload?.db) {
+    try {
+      const raw = localStorage.getItem(CACHE_SHEETS);
+      const vecchio = raw ? JSON.parse(raw) : null;
+      if (vecchio?.db) payload = { db: vecchio.db, meta: null };
+    } catch (e) { /* cache vecchia illeggibile: pazienza */ }
+  }
+  DB = normalizzaDB(payload?.db);
+  if (payload?.meta) META = { ...META, ...payload.meta };
+  return !!payload?.db;
+}
+
+// Senza questo iOS e Android possono cancellare i dati del sito quando serve
+// spazio. Non è una garanzia, ma chiedere non costa niente.
+async function chiediPersistenza() {
+  try {
+    if (navigator.storage?.persist && !(await navigator.storage.persisted()))
+      await navigator.storage.persist();
+  } catch (e) { /* non supportato */ }
 }
 
 function renderAll() {
@@ -876,78 +1047,23 @@ function renderAll() {
 async function init() {
   document.getElementById('hero-date').textContent = new Date().toLocaleDateString('it-IT', { weekday:'long', day:'numeric', month:'long' });
   document.getElementById('f-visita-data').value = new Date().toISOString().split('T')[0];
-  if (caricaCache()) { updateStats(); renderAll(); }
-  await loadAll();
+  const trovato = await caricaDB();
+  if (!trovato) DB.fasce = FASCE_DEFAULT.map(f => ({ ...f }));
+  applicaFasce();
+  updateStats();
   renderAll();
+  aggiornaAvvisoBackup();
+  chiediPersistenza();
+  registraServiceWorker();
 }
 
-// Apps Script risponde 200 anche quando fallisce: al posto del JSON manda una
-// pagina HTML di errore. Senza controllare il corpo, l'app tira dritto
-// convinta di aver salvato.
-async function leggiRisposta(r, cosa) {
-  const testo = await r.text();
-  let j;
-  try { j = JSON.parse(testo); }
-  catch (e) { throw new Error(cosa + ' – il server ha risposto con un errore'); }
-  if (j && j.status === 'error') throw new Error(cosa + ' – ' + (j.msg || 'errore dal server'));
-  return j;
-}
-
-async function api(params) {
-  const url = API + '?' + new URLSearchParams(params);
-  const r = await fetch(url);
-  return leggiRisposta(r, 'Lettura ' + (params.foglio || ''));
-}
-
-async function apiPost(data) {
-  const r = await fetch(API, { method:'POST', body: JSON.stringify(data) });
-  return leggiRisposta(r, (data.action || 'Scrittura') + ' ' + (data.foglio || ''));
-}
-
-// I flag sul foglio dovrebbero essere "Sì", ma una modifica manuale può
-// lasciare "Si", "SI", "s", "x", TRUE... Meglio riconoscerli tutti che
-// scartare in silenzio la riga.
+// I flag dovrebbero essere "Sì", ma un backup importato o una vecchia riga di
+// Sheets può contenere "Si", "SI", "s", "x", TRUE... Meglio riconoscerli tutti
+// che scartare in silenzio il dato.
 function isSi(v) {
   if (v === true) return true;
   const s = String(v == null ? '' : v).trim().toLowerCase();
   return s === 'sì' || s === 'si' || s === 's' || s === 'x' || s === 'true' || s === '1';
-}
-
-async function loadAll() {
-  try {
-    const [clienti, visite, operazioni, concimi, sementi, fitofarmaci, fasce] = await Promise.all([
-      api({action:'getAll', foglio:'CLIENTI'}),
-      api({action:'getAll', foglio:'VISITE'}),
-      api({action:'getAll', foglio:'OPERAZIONI'}),
-      api({action:'getAll', foglio:'CONCIMI'}),
-      api({action:'getAll', foglio:'SEMENTI'}),
-      api({action:'getAll', foglio:'FITOFARMACI'}),
-      api({action:'getAll', foglio:'FASCE'}),
-    ]);
-    DB.fasce = fasce || [];
-    DB.concimi = concimi || [];
-    DB.sementi = sementi || [];
-    DB.fitofarmaci = fitofarmaci || [];
-    DB.visite = visite || [];
-    DB.operazioni = operazioni || [];
-    // arricchisci clienti con target N/K dalla tabella FASCE
-    // i nuovi clienti inseriti dall'app non hanno la formula su Sheets
-    DB.clienti = (clienti || []).map(c => {
-      if (c.FasciaID) {
-        const fascia = DB.fasce.find(f => String(f.FasciaID) === String(c.FasciaID));
-        if (fascia) {
-          c.Target_N_g_m2_anno = fascia.Target_N_g_m2_anno;
-          c.Target_K_g_m2_anno = fascia.Target_K_g_m2_anno;
-        }
-      }
-      return c;
-    });
-    updateStats();
-    salvaCache();
-  } catch(e) {
-    // con la cache in memoria l'app resta usabile: lo dico senza allarmare
-    showToast(DB.clienti.length ? '⚠️ Dati non aggiornati (offline?)' : '⚠️ Errore caricamento dati');
-  }
 }
 
 function updateStats() {
@@ -962,11 +1078,15 @@ function navTo(page) {
   document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
   document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
   document.getElementById('page-'+page).classList.add('active');
-  document.getElementById('nav-'+page).classList.add('active');
+  // La pagina Dati si apre dall'ingranaggio e non ha una voce in basso:
+  // la barra resta su quella da cui si è arrivati.
+  document.getElementById('nav-'+page)?.classList.add('active');
   currentPage = page;
-  const titles = { home:'GiardinoApp', clienti:'Clienti', visite:'Registro Visite', prossimi:'Prossimi Interventi', prati:'Prati' };
-  document.getElementById('topbar-title').textContent = titles[page];
-  document.getElementById('topbar-action-btn').style.display = (page === 'prati' || page === 'prossimi') ? 'none' : 'flex';
+  const titles = { home:'GiardinoApp', clienti:'Clienti', visite:'Registro Visite', prossimi:'Prossimi Interventi', prati:'Prati', dati:'Dati e backup' };
+  document.getElementById('topbar-title').textContent = titles[page] || 'GiardinoApp';
+  document.getElementById('topbar-action-btn').style.display =
+    ['prati','prossimi','dati'].includes(page) ? 'none' : 'flex';
+  if (page === 'dati') renderDati();
 }
 
 function topbarAction() {
@@ -1087,7 +1207,10 @@ function showCliente(id) {
         </div>
       </div>` : ''}
 
-      <button class="btn btn-secondary" onclick="editCliente('${c.ClienteID}')" style="margin-bottom:14px">✏️ Modifica cliente</button>
+      <div style="display:flex; gap:8px; margin-bottom:14px">
+        <button class="btn btn-secondary" style="flex:1" onclick="editCliente('${c.ClienteID}')">✏️ Modifica</button>
+        <button class="btn btn-danger" style="flex:1" onclick="eliminaCliente('${c.ClienteID}')">🗑 Elimina</button>
+      </div>
 
       <div class="recent-title">Storico visite</div>
       ${visite.length ? [...visite].sort((a,b) => new Date(b.Data)-new Date(a.Data)).map(v => {
@@ -1439,23 +1562,23 @@ async function saveCliente() {
     Siepe_larghezza: siepeEnabled ? document.getElementById('f-cliente-siepe-larghezza').value : '',
     Note_cliente: document.getElementById('f-cliente-note').value.trim(),
   };
-  const btn = document.getElementById('btn-salva-cliente');
   salvataggioInCorso = true;
-  if (btn) { btn.disabled = true; btn.textContent = '⏳ Salvataggio in corso...'; }
-  let scritto = false;
   try {
     if (editId) {
-      await apiPost({ action:'update', foglio:'CLIENTI', id:editId, idField:'ClienteID', data });
-      scritto = true;
-      showToast('✅ Cliente aggiornato');
+      const i = DB.clienti.findIndex(c => c.ClienteID == editId);
+      if (i < 0) { showToast('⚠️ Cliente non trovato'); return; }
+      DB.clienti[i] = { ...DB.clienti[i], ...data };
     } else {
       data.ClienteID = generateID();
-      await apiPost({ action:'insert', foglio:'CLIENTI', data });
-      scritto = true;
-      showToast('✅ Cliente salvato');
+      DB.clienti.push(data);
     }
+    applicaFasce();
+    // Il drawer resta aperto se la scrittura fallisce: salvaDB() ha già
+    // avvisato, e chiuderlo darebbe l'idea che sia andato tutto bene.
+    if (!await salvaDB()) return;
+    showToast(editId ? '✅ Cliente aggiornato' : '✅ Cliente salvato');
     closeDrawer('overlay-cliente');
-    await loadAll();
+    updateStats();
     renderAll();
     // Se si stava guardando la scheda del cliente, renderAll() non la tocca
     // (ridisegna la lista, che lì non c'è): senza questo resterebbero a video
@@ -1463,22 +1586,40 @@ async function saveCliente() {
     if (editId && !document.getElementById('clienti-list')) showCliente(editId);
     if (pendingFromVisita) {
       pendingFromVisita = false;
-      // pre-select the new client
-      const newCliente = DB.clienti[DB.clienti.length - 1];
+      const nuovo = DB.clienti[DB.clienti.length - 1];
       openNuovaVisita();
-      if (newCliente) setTimeout(() => selectVisitaCliente(newCliente.ClienteID, newCliente.Cliente), 100);
+      if (nuovo) selectVisitaCliente(nuovo.ClienteID, nuovo.Cliente);
     }
-  } catch(e) {
-    // Distinguo il salvataggio fallito dall'inciampo successivo: dire
-    // "errore salvataggio" quando il dato è già sul foglio manda a
-    // rifare una modifica che era andata a buon fine.
-    showToast(scritto
-      ? '⚠️ Salvato, ma la schermata non si è aggiornata: ' + (e.message || e)
-      : '❌ Errore salvataggio: ' + (e.message || e));
-    console.error('saveCliente', e);
   } finally {
     salvataggioInCorso = false;
-    if (btn) { btn.disabled = false; btn.textContent = '💾 Salva Cliente'; }
+  }
+}
+
+// Finché i dati stavano su Sheets un cliente si cancellava a mano dal foglio.
+// Ora quel foglio non c'è più: se non si può fare da qui, non si può fare.
+async function eliminaCliente(id) {
+  if (salvataggioInCorso) return;
+  const c = DB.clienti.find(x => x.ClienteID == id);
+  if (!c) return;
+  const visite = DB.visite.filter(v => v.ClienteID == id);
+  const vids = visite.map(v => v.VisitaID);
+  const ops = DB.operazioni.filter(o => vids.includes(o.VisitaID));
+  const cosa = visite.length
+    ? `${c.Cliente}, le sue ${visite.length} visite e ${ops.length} operazioni`
+    : c.Cliente;
+  if (!confirm('Eliminare ' + cosa + '?\n\nNon si può annullare.')) return;
+  salvataggioInCorso = true;
+  try {
+    DB.operazioni = DB.operazioni.filter(o => !vids.includes(o.VisitaID));
+    DB.visite = DB.visite.filter(v => v.ClienteID != id);
+    DB.clienti = DB.clienti.filter(x => x.ClienteID != id);
+    if (!await salvaDB()) return;
+    showToast('🗑 Cliente eliminato');
+    updateStats();
+    renderClientiPage();
+    renderAll();
+  } finally {
+    salvataggioInCorso = false;
   }
 }
 
@@ -1535,7 +1676,6 @@ let pendingFromVisita = false;
 function openNuovaVisita() {
   pendingOperazioni = [];
   editVisitaID = null;
-  opsOriginali = [];
   document.getElementById('drawer-visita-titolo').textContent = 'Nuova Visita';
   bloccaSalvataggio(false);
   document.getElementById('f-visita-note').value = '';
@@ -1554,7 +1694,7 @@ function filterVisitaClienti(q) {
   if (!q || q.length < 1) { sug.style.display = 'none'; return; }
   const matches = DB.clienti.filter(c => c.Cliente?.toLowerCase().includes(q.toLowerCase())).slice(0, 6);
   if (!matches.length) { sug.style.display = 'none'; return; }
-  sug.innerHTML = matches.map(c => `<div class="suggestion-item" onclick="selectVisitaCliente('${c.ClienteID}', '${c.Cliente.replace(/'/g,"\'")}')">${c.Cliente}<span style="float:right;font-size:0.72rem;color:var(--text-light)">${c.Citta||''}</span></div>`).join('');
+  sug.innerHTML = matches.map(c => `<div class="suggestion-item" onclick="selectVisitaCliente('${perOnclick(c.ClienteID)}', '${perOnclick(c.Cliente)}')">${c.Cliente}<span style="float:right;font-size:0.72rem;color:var(--text-light)">${c.Citta||''}</span></div>`).join('');
   sug.style.display = 'block';
 }
 
@@ -1574,14 +1714,14 @@ function clearVisitaCliente() {
   document.getElementById('visita-cliente-suggestions').style.display = 'none';
 }
 
-// Il bottone resta premibile per tutta la durata del salvataggio (10-15 s con
-// più operazioni): un secondo tocco creava una visita doppia.
+// Doppio tocco sul bottone = visita doppia. Ora il salvataggio è istantaneo,
+// ma il dito sullo schermo non lo sa.
 function bloccaSalvataggio(attivo) {
   salvataggioInCorso = attivo;
   const btn = document.getElementById('btn-salva-visita');
   if (!btn) return;
   btn.disabled = attivo;
-  btn.textContent = attivo ? '⏳ Salvataggio in corso...' : '💾 Salva Visita';
+  btn.textContent = attivo ? '⏳ Salvataggio...' : '💾 Salva Visita';
 }
 
 async function saveVisita() {
@@ -1606,55 +1746,25 @@ async function saveVisita() {
     const nTot = parseFloat(op.N_tot_g) || 0;
     const kTot = parseFloat(op.K_tot_g) || 0;
     return { ...op, VisitaID: visitaID,
+      OperazioneID: op.OperazioneID || generateID(),
       N_g_m2: (isSi(op.Flag_prato) && mq > 0) ? (nTot / mq).toFixed(2) : 0,
       K_g_m2: (isSi(op.Flag_prato) && mq > 0) ? (kTot / mq).toFixed(2) : 0 };
   };
 
   bloccaSalvataggio(true);
-  let scritto = false;
   try {
-    if (!editVisitaID) {
-      // Visita nuova: una sola chiamata che scrive tutto insieme. Se le
-      // operazioni non passano, il server annulla anche la visita — è questo
-      // che rende impossibili le operazioni orfane.
-      const operazioni = pendingOperazioni.map(op => ({ ...conNK(op), OperazioneID: generateID() }));
-      await apiPost({ action:'saveVisita', visita, operazioni });
-      scritto = true;
-      showToast('✅ Visita salvata');
-      closeDrawer('overlay-visita');
-      await loadAll();
-      renderAll();
-      return;
-    }
-    // Modifica: qui la visita esiste già, quindi non c'è il rischio di lasciare
-    // operazioni orfane e si può procedere per singole operazioni, toccando
-    // solo quelle che sono davvero cambiate.
-    await apiPost({ action:'update', foglio:'VISITE', id:visitaID, idField:'VisitaID', data: visita });
-    const rimaste = pendingOperazioni.map(o => o.OperazioneID).filter(Boolean);
-    for (const orig of opsOriginali) {
-      if (!rimaste.includes(orig.OperazioneID))
-        await apiPost({ action:'delete', foglio:'OPERAZIONI', id:orig.OperazioneID, idField:'OperazioneID' });
-    }
-    for (const op of pendingOperazioni) {
-      const opData = conNK(op);
-      if (op.OperazioneID) {
-        await apiPost({ action:'update', foglio:'OPERAZIONI', id:op.OperazioneID, idField:'OperazioneID', data: opData });
-      } else {
-        await apiPost({ action:'insert', foglio:'OPERAZIONI', data: { ...opData, OperazioneID: generateID() } });
-      }
-    }
-    scritto = true;
-    showToast('✅ Visita aggiornata');
+    const operazioni = pendingOperazioni.map(conNK);
+    const i = DB.visite.findIndex(v => v.VisitaID == visitaID);
+    if (i >= 0) DB.visite[i] = visita; else DB.visite.push(visita);
+    // Le operazioni della visita si riscrivono in blocco: quelle tolte dalla
+    // lista spariscono da sole, senza doverle inseguire una per una.
+    DB.operazioni = DB.operazioni.filter(o => o.VisitaID != visitaID).concat(operazioni);
+    if (!await salvaDB()) return;
+    showToast(editVisitaID ? '✅ Visita aggiornata' : '✅ Visita salvata');
     closeDrawer('overlay-visita');
     editVisitaID = null;
-    opsOriginali = [];
-    await loadAll();
+    updateStats();
     renderAll();
-  } catch(e) {
-    showToast(scritto
-      ? '⚠️ Salvato, ma la schermata non si è aggiornata: ' + (e.message || e)
-      : '❌ Errore salvataggio: ' + (e.message || e));
-    console.error('saveVisita', e);
   } finally {
     bloccaSalvataggio(false);
   }
@@ -1665,8 +1775,7 @@ function openModificaVisita(vid) {
   if (!v) { showToast('⚠️ Visita non trovata'); return; }
   const c = DB.clienti.find(x => x.ClienteID == v.ClienteID);
   editVisitaID = v.VisitaID;
-  opsOriginali = DB.operazioni.filter(o => o.VisitaID == vid);
-  pendingOperazioni = opsOriginali.map(o => ({ ...o }));
+  pendingOperazioni = DB.operazioni.filter(o => o.VisitaID == vid).map(o => ({ ...o }));
   document.getElementById('f-visita-data').value = v.Data ? new Date(v.Data).toISOString().split('T')[0] : '';
   document.getElementById('f-visita-ore').value = v.Ore_Visita || '';
   document.getElementById('f-visita-note').value = v.Note_visita || '';
@@ -1681,6 +1790,7 @@ function openModificaVisita(vid) {
 }
 
 async function eliminaVisita(vid) {
+  if (salvataggioInCorso) return;
   const v = DB.visite.find(x => x.VisitaID == vid);
   if (!v) return;
   const c = DB.clienti.find(x => x.ClienteID == v.ClienteID);
@@ -1688,19 +1798,14 @@ async function eliminaVisita(vid) {
   const quando = v.Data ? new Date(v.Data).toLocaleDateString('it-IT') : '';
   if (!confirm(`Eliminare la visita del ${quando} da ${c ? c.Cliente : '?'}` +
                (ops.length ? ` e le sue ${ops.length} operazioni?` : '?'))) return;
-  if (salvataggioInCorso) return;
   salvataggioInCorso = true;
   try {
-    // prima le operazioni, poi la visita: se qualcosa si interrompe a metà
-    // resta al massimo una visita con meno operazioni, mai operazioni orfane
-    for (const o of ops)
-      await apiPost({ action:'delete', foglio:'OPERAZIONI', id:o.OperazioneID, idField:'OperazioneID' });
-    await apiPost({ action:'delete', foglio:'VISITE', id:vid, idField:'VisitaID' });
+    DB.operazioni = DB.operazioni.filter(o => o.VisitaID != vid);
+    DB.visite = DB.visite.filter(x => x.VisitaID != vid);
+    if (!await salvaDB()) return;
     showToast('🗑 Visita eliminata');
-    await loadAll();
+    updateStats();
     renderAll();
-  } catch(e) {
-    showToast('❌ ' + (e.message || 'Errore eliminazione'));
   } finally {
     salvataggioInCorso = false;
   }
@@ -1791,7 +1896,7 @@ function saveOperazione() {
     Note_operazione: '',
     N_tot_g: nTot.toFixed(0), K_tot_g: kTot.toFixed(0), N_g_m2: 0, K_g_m2: 0,
   };
-  if (pendingOpIndex !== null) pendingOperazioni[pendingOpIndex] = op;
+  if (pendingOpIndex !== null) pendingOperazioni[pendingOpIndex] = { ...pendingOperazioni[pendingOpIndex], ...op };
   else pendingOperazioni.push(op);
   closeDrawer('overlay-operazione');
   renderOperazioniList();
@@ -1808,28 +1913,456 @@ function renderOperazioniList() {
     </div>`).join('');
 }
 
-// ── UTILS ──
-async function segnaFatto(visitaID) {
+// ── DATI, BACKUP, ARCHIVI ──
+// Gli archivi (concimi, sementi, fitofarmaci, fasce) stavano su Sheets e si
+// modificavano lì. Senza foglio vanno gestiti qui, altrimenti il giorno che
+// compri un concime nuovo non hai dove metterlo.
+const ARCHIVI = {
+  concimi: {
+    titolo: 'Concimi', singolare: 'concime', articolo: 'Nuovo', icona: '🧪', id: 'ConcimeID',
+    campi: [
+      { k:'Concime', label:'Nome', obbligatorio:true },
+      { k:'N_percento', label:'Azoto %', tipo:'number' },
+      { k:'K_percento', label:'Potassio %', tipo:'number' },
+    ],
+    riga: c => `${c.Concime || '–'} · N ${c.N_percento || 0}% · K ${c.K_percento || 0}%`,
+    usato: c => DB.operazioni.filter(o => o.ConcimeID == c.ConcimeID).length,
+  },
+  sementi: {
+    titolo: 'Sementi', singolare: 'semente', articolo: 'Nuova', icona: '🌾', id: 'SementeID',
+    campi: [
+      { k:'Nome_commerciale', label:'Nome', obbligatorio:true },
+      { k:'Note', label:'Note' },
+    ],
+    riga: s => s.Nome_commerciale || '–',
+    usato: s => DB.operazioni.filter(o => o.SementeID == s.SementeID).length,
+  },
+  fitofarmaci: {
+    titolo: 'Fitofarmaci', singolare: 'fitofarmaco', articolo: 'Nuovo', icona: '🧴', id: 'FitofarmacaID',
+    campi: [
+      { k:'Nome_commerciale', label:'Nome', obbligatorio:true },
+      { k:'Tipo', label:'Tipo (diserbante, fungicida…)' },
+    ],
+    riga: f => `${f.Nome_commerciale || '–'}${f.Tipo ? ' · ' + f.Tipo : ''}`,
+    usato: f => DB.operazioni.filter(o => o.FitofarmacaID == f.FitofarmacaID).length,
+  },
+  fasce: {
+    titolo: 'Fasce prato', singolare: 'fascia prato', articolo: 'Nuova', icona: '🎯', id: 'FasciaID', idManuale: true,
+    campi: [
+      { k:'FasciaID', label:'Numero fascia', obbligatorio:true },
+      { k:'Descrizione', label:'Descrizione' },
+      { k:'Target_N_g_m2_anno', label:'Target azoto g/m² anno', tipo:'number' },
+      { k:'Target_K_g_m2_anno', label:'Target potassio g/m² anno', tipo:'number' },
+    ],
+    riga: f => `Fascia ${f.FasciaID} · ${f.Descrizione || '–'} · N ${f.Target_N_g_m2_anno || 0} K ${f.Target_K_g_m2_anno || 0}`,
+    usato: f => DB.clienti.filter(c => String(c.FasciaID) === String(f.FasciaID)).length,
+  },
+};
+
+let archivioAperto = null;
+let archivioVoceId = null;
+
+function giorniDa(iso) {
+  if (!iso) return null;
+  const g = Math.floor((Date.now() - new Date(iso).getTime()) / 86400000);
+  return isNaN(g) ? null : g;
+}
+
+function testoUltimoBackup() {
+  const giorni = giorniDa(META.ultimoBackup);
+  if (giorni === null) return 'Nessun backup esportato finora';
+  if (giorni <= 0) return 'Ultimo backup: oggi';
+  if (giorni === 1) return 'Ultimo backup: ieri';
+  return `Ultimo backup: ${giorni} giorni fa`;
+}
+
+// L'avviso compare quando il backup comincia a invecchiare. I dati stanno su
+// un telefono solo, e un telefono si perde.
+function aggiornaAvvisoBackup() {
+  const el = document.getElementById('avviso-backup');
+  if (!el) return;
+  const modifiche = META.modificheDalBackup || 0;
+  const giorni = giorniDa(META.ultimoBackup);
+  const daPerdere = DB.clienti.length || DB.visite.length;
+  const serve = daPerdere && modifiche > 0 && (modifiche >= 10 || giorni === null || giorni >= 7);
+  el.style.display = serve ? 'flex' : 'none';
+  if (!serve) return;
+  el.innerHTML = `<span style="font-size:1.3rem">💾</span>
+    <div style="flex:1">
+      <div style="font-weight:600">${testoUltimoBackup()}</div>
+      <div style="font-size:0.78rem; opacity:0.85">${modifiche} modifiche non ancora in un file · tocca per esportare</div>
+    </div>`;
+}
+
+// ── CONDIVISIONE FILE ──
+// Su iPhone il foglio di condivisione è l'unica strada per far finire un file
+// in File, iCloud o in una mail: il download del browser lì non porta da
+// nessuna parte. Sul computer vale l'inverso.
+async function consegnaFile(file) {
+  if (navigator.canShare?.({ files: [file] })) {
+    try {
+      await navigator.share({ files: [file], title: file.name });
+      return 'consegnato';
+    } catch (e) {
+      if (e?.name === 'AbortError') return 'annullato';
+      // condivisione non riuscita (non solo annullata): provo col download
+      console.warn('condivisione fallita', e);
+    }
+  }
+  const url = URL.createObjectURL(file);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = file.name;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 2000);
+  return 'consegnato';
+}
+
+function dataFile() {
+  const d = new Date();
+  const p = n => String(n).padStart(2, '0');
+  return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}`;
+}
+
+// ── BACKUP ──
+async function esportaBackup() {
+  const payload = { app: 'GiardinoApp', versione: VERSIONE_DATI, esportato: new Date().toISOString(), db: DB };
+  const file = new File([JSON.stringify(payload, null, 2)], `giardinolog-${dataFile()}.json`, { type: 'application/json' });
+  let esito;
+  try { esito = await consegnaFile(file); }
+  catch (e) { showToast('❌ Esportazione non riuscita: ' + (e.message || e)); return; }
+  // Se la condivisione è stata annullata il file non è arrivato da nessuna
+  // parte: segnare il backup come fatto sarebbe una bugia che si paga cara.
+  if (esito === 'annullato') return;
+  META.ultimoBackup = new Date().toISOString();
+  META.modificheDalBackup = 0;
+  await salvaDB({ conta: false });
+  showToast('✅ Backup esportato');
+  renderDati();
+}
+
+async function importaBackup(input) {
+  const file = input.files?.[0];
+  input.value = '';  // così riselezionare lo stesso file fa ripartire l'import
+  if (!file) return;
+  let payload;
+  try { payload = JSON.parse(await file.text()); }
+  catch (e) { showToast('❌ File illeggibile: non è un backup JSON'); return; }
+  // accetto sia il file con intestazione sia il solo contenuto del database
+  const arrivo = payload?.db && typeof payload.db === 'object' ? payload.db : payload;
+  if (!arrivo || !COLLEZIONI.some(k => Array.isArray(arrivo[k]))) {
+    showToast('❌ Questo file non è un backup di GiardinoApp');
+    return;
+  }
+  const nuovo = normalizzaDB(arrivo);
+  const quando = payload?.esportato
+    ? new Date(payload.esportato).toLocaleDateString('it-IT')
+    : 'data sconosciuta';
+  const confronto = k => `${k}: ${DB[k].length} → ${nuovo[k].length}`;
+  if (!confirm(
+    `Backup del ${quando}.\n\n` +
+    'Sostituisce tutti i dati di questo dispositivo:\n' +
+    `${confronto('clienti')}\n${confronto('visite')}\n${confronto('operazioni')}\n\n` +
+    'I dati attuali vanno persi. Procedere?')) return;
+  DB = nuovo;
+  applicaFasce();
+  META.ultimoBackup = payload?.esportato || new Date().toISOString();
+  META.modificheDalBackup = 0;
+  if (!await salvaDB({ conta: false })) return;
+  showToast('✅ Backup importato');
+  updateStats();
+  renderAll();
+  renderDati();
+}
+
+// ── CSV PER L'ANALISI SUL COMPUTER ──
+// Excel in italiano si aspetta il punto e virgola come separatore e la virgola
+// come decimale; il BOM gli dice che il file è UTF-8, senza gli accenti
+// diventano geroglifici.
+function cellaCSV(v) {
+  if (v == null) return '';
+  let s = String(v);
+  if (/^-?\d+\.\d+$/.test(s)) s = s.replace('.', ',');
+  return /[";\n\r]/.test(s) ? '"' + s.replace(/"/g, '""') + '"' : s;
+}
+
+function righeCSV(tipo) {
+  const cliente = id => DB.clienti.find(c => c.ClienteID == id);
+  const perData = (a, b) => String(a.Data || '').localeCompare(String(b.Data || ''));
+
+  if (tipo === 'clienti') return {
+    intestazioni: ['Cliente','Indirizzo','Citta','Lat','Lng','Ha prato','Mq prato','Fascia','Target N g/m2','Target K g/m2','Ha siepe','Specie siepe','Lunghezza siepe m','Altezza siepe m','Larghezza siepe m','Visite','Note'],
+    righe: [...DB.clienti]
+      .sort((a, b) => String(a.Cliente || '').localeCompare(String(b.Cliente || ''), 'it'))
+      .map(c => [c.Cliente, c.Indirizzo, c.Citta, c.Lat, c.Lng,
+        isSi(c.Ha_prato) ? 'sì' : 'no', c.Mq_prato, c.FasciaID,
+        c.Target_N_g_m2_anno, c.Target_K_g_m2_anno,
+        isSi(c.Ha_siepe) ? 'sì' : 'no', c.Siepe_specie, c.Siepe_lunghezza, c.Siepe_altezza, c.Siepe_larghezza,
+        DB.visite.filter(v => v.ClienteID == c.ClienteID).length, c.Note_cliente]),
+  };
+
+  if (tipo === 'visite') return {
+    intestazioni: ['Data','Cliente','Citta','Ore','Operazioni','Note','Prossimo intervento','Mese prossimo','Anno prossimo'],
+    righe: [...DB.visite].sort(perData).map(v => {
+      const c = cliente(v.ClienteID);
+      return [v.Data, c?.Cliente || v.ClienteID, c?.Citta || '', v.Ore_Visita,
+        DB.operazioni.filter(o => o.VisitaID == v.VisitaID).length,
+        v.Note_visita, v.Prossimo_intervento, v.Mese_prossimo_intervento, v.Anno_prossimo_intervento];
+    }),
+  };
+
+  const nomeProdotto = o => {
+    if (o.ConcimeID) return DB.concimi.find(x => x.ConcimeID == o.ConcimeID)?.Concime || o.ConcimeID;
+    if (o.SementeID) return DB.sementi.find(x => x.SementeID == o.SementeID)?.Nome_commerciale || o.SementeID;
+    if (o.FitofarmacaID) return DB.fitofarmaci.find(x => x.FitofarmacaID == o.FitofarmacaID)?.Nome_commerciale || o.FitofarmacaID;
+    return '';
+  };
+  return {
+    intestazioni: ['Data','Cliente','Operazione','Descrizione','Prato','Siepe','Prodotto','Dose kg','N tot g','K tot g','N g/m2','K g/m2'],
+    righe: DB.operazioni
+      .map(o => ({ o, v: DB.visite.find(v => v.VisitaID == o.VisitaID) }))
+      .sort((a, b) => String(a.v?.Data || '').localeCompare(String(b.v?.Data || '')))
+      .map(({ o, v }) => {
+        const c = v ? cliente(v.ClienteID) : null;
+        return [v?.Data || '', c?.Cliente || '', o.Tipo_operazione, o.Descrizione,
+          isSi(o.Flag_prato) ? 'sì' : '', isSi(o.Flag_siepe) ? 'sì' : '',
+          nomeProdotto(o), o.Dose_kg, o.N_tot_g, o.K_tot_g, o.N_g_m2, o.K_g_m2];
+      }),
+  };
+}
+
+async function esportaCSV(tipo) {
+  const { intestazioni, righe } = righeCSV(tipo);
+  if (!righe.length) { showToast('⚠️ Niente da esportare'); return; }
+  const testo = '﻿' + [intestazioni, ...righe]
+    .map(r => r.map(cellaCSV).join(';')).join('\r\n');
+  const file = new File([testo], `giardinolog-${tipo}-${dataFile()}.csv`, { type: 'text/csv' });
   try {
-    await apiPost({ action:'update', foglio:'VISITE', id:visitaID, idField:'VisitaID', data:{
-      Prossimo_intervento: '',
-      Mese_prossimo_intervento: '',
-      Anno_prossimo_intervento: ''
-    }});
-    showToast('✅ Intervento segnato come fatto');
-    await loadAll();
-    renderProssimi();
-    renderVisite();
-  } catch(e) { showToast('❌ Errore'); }
+    if (await consegnaFile(file) !== 'annullato') showToast(`✅ ${righe.length} righe esportate`);
+  } catch (e) { showToast('❌ Esportazione non riuscita: ' + (e.message || e)); }
+}
+
+// ── PAGINA DATI ──
+function renderDati() {
+  const stato = document.getElementById('stato-backup');
+  if (stato) {
+    const modifiche = META.modificheDalBackup || 0;
+    stato.textContent = testoUltimoBackup() +
+      (modifiche ? ` · ${modifiche} modifiche da allora` : ' · nessuna modifica da allora');
+  }
+  renderArchivi();
+  renderDiagnostica();
+}
+
+function renderArchivi() {
+  const el = document.getElementById('archivi-list');
+  if (!el) return;
+  el.innerHTML = Object.entries(ARCHIVI).map(([tipo, def]) => {
+    const voci = DB[tipo] || [];
+    const righe = voci.length ? voci.map(v => `
+      <div class="dati-riga">
+        <div class="dati-riga-testo">${def.riga(v)}</div>
+        <button class="dati-azione" onclick="openVoceArchivio('${tipo}', '${perOnclick(v[def.id])}')" title="Modifica">✏️</button>
+        <button class="dati-azione" onclick="eliminaVoceArchivio('${tipo}', '${perOnclick(v[def.id])}')" title="Elimina">🗑</button>
+      </div>`).join('')
+      : '<div class="dati-nota" style="padding:8px 0 0">Nessuna voce</div>';
+    return `<div class="card" style="padding:14px">
+      <div style="display:flex; align-items:center; gap:8px; margin-bottom:4px">
+        <span>${def.icona}</span>
+        <div class="card-title" style="flex:1">${def.titolo}</div>
+        <button class="btn btn-secondary btn-sm" onclick="openVoceArchivio('${tipo}')">+ Aggiungi</button>
+      </div>
+      ${righe}
+    </div>`;
+  }).join('');
+}
+
+async function renderDiagnostica() {
+  const el = document.getElementById('card-diagnostica');
+  if (!el) return;
+  let persistente = null, spazio = '';
+  try {
+    if (navigator.storage?.persisted) persistente = await navigator.storage.persisted();
+    if (navigator.storage?.estimate) {
+      const { usage } = await navigator.storage.estimate();
+      if (usage != null) spazio = (usage / 1024).toFixed(0) + ' KB occupati';
+    }
+  } catch (e) { /* non supportato: si mostra quel che si sa */ }
+  const conteggi = `${DB.clienti.length} clienti · ${DB.visite.length} visite · ${DB.operazioni.length} operazioni`;
+  const avvisoPersistenza = persistente === false
+    ? '<div class="dati-nota" style="color:var(--red); margin:8px 0 0">Il browser non ha promesso di conservare i dati: in caso di poco spazio potrebbe cancellarli. Un motivo in più per esportare il backup.</div>'
+    : '';
+  el.innerHTML = `<div class="dati-nota" style="margin:0">${conteggi}${spazio ? ' · ' + spazio : ''}</div>
+    <div class="dati-nota" style="margin:4px 0 0">Memoria protetta: ${persistente === null ? 'non verificabile' : persistente ? 'sì' : 'no'}</div>
+    ${avvisoPersistenza}`;
+}
+
+// ── VOCI DEGLI ARCHIVI ──
+function openVoceArchivio(tipo, id) {
+  const def = ARCHIVI[tipo];
+  if (!def) return;
+  archivioAperto = tipo;
+  archivioVoceId = id != null ? id : null;
+  const voce = id != null ? DB[tipo].find(x => String(x[def.id]) === String(id)) : null;
+  if (id != null && !voce) { showToast('⚠️ Voce non trovata'); return; }
+  document.getElementById('drawer-archivio-title').textContent =
+    voce ? 'Modifica ' + def.singolare : def.articolo + ' ' + def.singolare;
+  document.getElementById('archivio-campi').innerHTML = def.campi.map(campo => `
+    <div class="form-group">
+      <label class="form-label">${campo.label}${campo.obbligatorio ? ' *' : ''}</label>
+      <input type="${campo.tipo === 'number' ? 'number' : 'text'}" class="form-control"
+             id="f-arch-${campo.k}" step="any" value="${voce ? String(voce[campo.k] ?? '').replace(/"/g, '&quot;') : ''}">
+    </div>`).join('');
+  document.getElementById('overlay-archivio').classList.add('open');
+}
+
+async function salvaVoceArchivio() {
+  const def = ARCHIVI[archivioAperto];
+  if (!def) return;
+  const lista = DB[archivioAperto];
+  const dati = {};
+  for (const campo of def.campi) {
+    const v = document.getElementById('f-arch-' + campo.k).value.trim();
+    if (campo.obbligatorio && !v) { showToast('⚠️ Manca: ' + campo.label); return; }
+    dati[campo.k] = v;
+  }
+  const esisteGia = valore => lista.some(x =>
+    String(x[def.id]) === String(valore) && String(x[def.id]) !== String(archivioVoceId));
+
+  if (archivioVoceId != null) {
+    const i = lista.findIndex(x => String(x[def.id]) === String(archivioVoceId));
+    if (i < 0) { showToast('⚠️ Voce non trovata'); return; }
+    // Rinumerare una fascia lascerebbe i suoi clienti attaccati a una fascia
+    // che non esiste più, e senza target: me li porto dietro.
+    if (def.idManuale && String(dati[def.id]) !== String(archivioVoceId)) {
+      if (esisteGia(dati[def.id])) { showToast('⚠️ Esiste già una voce con questo numero'); return; }
+      DB.clienti.forEach(c => {
+        if (String(c.FasciaID) === String(archivioVoceId)) c.FasciaID = dati[def.id];
+      });
+    }
+    lista[i] = { ...lista[i], ...dati };
+  } else {
+    if (def.idManuale) {
+      if (esisteGia(dati[def.id])) { showToast('⚠️ Esiste già una voce con questo numero'); return; }
+    } else {
+      dati[def.id] = generateID();
+    }
+    lista.push(dati);
+  }
+  applicaFasce();
+  if (!await salvaDB()) return;
+  closeDrawer('overlay-archivio');
+  showToast('✅ Salvato');
+  renderDati();
+  renderAll();
+}
+
+async function eliminaVoceArchivio(tipo, id) {
+  const def = ARCHIVI[tipo];
+  if (!def) return;
+  const voce = DB[tipo].find(x => String(x[def.id]) === String(id));
+  if (!voce) return;
+  const usi = def.usato(voce);
+  // Cancellare un concime già usato non riscrive la storia: le operazioni
+  // restano, ma perdono il nome del prodotto. Meglio dirlo prima.
+  const avviso = usi
+    ? `\n\nÈ usato in ${usi} ${tipo === 'fasce' ? 'clienti' : 'operazioni'}: resteranno senza riferimento.`
+    : '';
+  if (!confirm(`Eliminare "${def.riga(voce)}"?${avviso}`)) return;
+  DB[tipo] = DB[tipo].filter(x => String(x[def.id]) !== String(id));
+  applicaFasce();
+  if (!await salvaDB()) return;
+  showToast('🗑 Eliminato');
+  renderDati();
+  renderAll();
+}
+
+// ── MIGRAZIONE DA GOOGLE SHEETS (una tantum) ──
+// L'app non parla più con il foglio: questo serve solo a portare qui lo
+// storico la prima volta, o a recuperarlo finché il foglio esiste ancora.
+const SHEETS_API = 'https://script.google.com/macros/s/AKfycbx8vlMzgRiJYJqHQwPOdT-aDy0tMOFdHx8G3citRM1dO2gWyIUcvo1zj3YhNC-PGoEI/exec';
+
+async function importaDaSheets() {
+  if (!confirm('Scarica i dati dal vecchio foglio Google e sostituisce quelli di questo dispositivo.\n\nServe la connessione. Procedere?')) return;
+  const btn = document.getElementById('btn-sheets');
+  if (btn) { btn.disabled = true; btn.textContent = '⏳ Scarico dal foglio...'; }
+  try {
+    const leggi = async foglio => {
+      const r = await fetch(SHEETS_API + '?' + new URLSearchParams({ action: 'getAll', foglio }));
+      const testo = await r.text();
+      let j;
+      // Apps Script risponde 200 anche quando fallisce, mandando una pagina
+      // HTML di errore al posto del JSON.
+      try { j = JSON.parse(testo); }
+      catch (e) { throw new Error(foglio + ': il foglio ha risposto con un errore'); }
+      if (j?.status === 'error') throw new Error(foglio + ': ' + (j.msg || 'errore dal foglio'));
+      return Array.isArray(j) ? j : [];
+    };
+    const fogli = ['CLIENTI','VISITE','OPERAZIONI','CONCIMI','SEMENTI','FITOFARMACI','FASCE'];
+    const [clienti, visite, operazioni, concimi, sementi, fitofarmaci, fasce] =
+      await Promise.all(fogli.map(leggi));
+    DB = normalizzaDB({ clienti, visite, operazioni, concimi, sementi, fitofarmaci, fasce });
+    applicaFasce();
+    if (!await salvaDB()) return;
+    showToast(`✅ Importati ${DB.clienti.length} clienti e ${DB.visite.length} visite`);
+    updateStats();
+    renderAll();
+    renderDati();
+  } catch (e) {
+    showToast('❌ ' + (e.message || e));
+  } finally {
+    if (btn) { btn.disabled = false; btn.textContent = '⬇️ Importa dal foglio Google'; }
+  }
+}
+
+// ── UTILS ──
+// Un id o un nome finiscono dentro una stringa JavaScript dentro un attributo
+// HTML: vanno protetti per entrambi, o un apostrofo — "D'Angelo", "Dall'Oglio"
+// — rende il bottone non cliccabile.
+function perOnclick(v) {
+  return String(v == null ? '' : v)
+    .replace(/\\/g, '\\\\')
+    .replace(/'/g, "\\'")
+    .replace(/"/g, '&quot;')
+    .replace(/</g, '&lt;');
+}
+
+async function segnaFatto(visitaID) {
+  const v = DB.visite.find(x => x.VisitaID == visitaID);
+  if (!v) return;
+  v.Prossimo_intervento = '';
+  v.Mese_prossimo_intervento = '';
+  v.Anno_prossimo_intervento = '';
+  if (!await salvaDB()) return;
+  showToast('✅ Intervento segnato come fatto');
+  renderProssimi();
+  renderVisite();
 }
 
 function generateID() {
-  return Math.random().toString(36).substr(2, 8);
+  // Prefisso temporale: due ID generati nello stesso millisecondo si
+  // distinguono per la parte casuale, due di millisecondi diversi non
+  // possono collidere affatto.
+  return Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
 }
 
 function meseNome(m) {
   const mesi = ['','Gen','Feb','Mar','Apr','Mag','Giu','Lug','Ago','Set','Ott','Nov','Dic'];
   return mesi[parseInt(m)] || m;
+}
+
+// ── SERVICE WORKER ──
+function registraServiceWorker() {
+  if (!('serviceWorker' in navigator)) return;
+  // Aprendo il file a doppio clic (file://) i service worker non sono ammessi:
+  // l'app funziona lo stesso, solo senza apertura offline.
+  if (location.protocol === 'file:') return;
+  navigator.serviceWorker.register('sw.js').catch(e => console.warn('service worker non registrato', e));
+  navigator.serviceWorker.addEventListener('message', e => {
+    if (e.data?.tipo === 'aggiornamento') showToast('🔄 Nuova versione pronta: chiudi e riapri l\'app');
+  });
 }
 
 function closeDrawer(id) {
