@@ -59,7 +59,7 @@ try {
   await page.click('.topbar-action');
   await page.waitForTimeout(200);
   ok('pagina Dati raggiungibile', await page.isVisible('#page-dati'));
-  await page.click('#archivi-list .card:first-child button.btn');
+  await page.click('#archivi-list .card:has(.card-title:text-is("Concimi")) button.btn');
   await page.fill('#f-arch-Concime', 'Nitrophoska');
   await page.fill('#f-arch-N_percento', '12');
   await page.fill('#f-arch-K_percento', '12');
@@ -67,33 +67,63 @@ try {
   await page.waitForTimeout(200);
   ok('concime aggiunto in archivio', await page.evaluate(() => DB.concimi.length) === 1);
 
-  // ── visita con concimazione ──
+  // ── visita: fasce orarie e checklist ──
   await page.click('#nav-visite');
   await page.click('#topbar-action-btn');
   await page.fill('#f-visita-cliente-search', 'Mario');
   await page.waitForTimeout(200);
   await page.click('#visita-cliente-suggestions .suggestion-item');
-  await page.fill('#f-visita-ore', '2');
-  await page.click('#overlay-visita button[onclick="addOperazione()"]');
+  await page.waitForTimeout(150);
+
+  // il salvataggio si rifiuta finché la fascia proposta non è stata guardata
+  await page.click('#btn-salva-visita');
   await page.waitForTimeout(200);
-  await page.selectOption('#f-op-tipo', 'Concimazione');
-  await page.selectOption('#f-op-concime', await page.evaluate(() => DB.concimi[0].ConcimeID));
-  await page.fill('#f-op-dose', '10');
-  await page.click('#overlay-operazione .btn-primary');
-  await page.waitForTimeout(200);
+  ok('la fascia proposta blocca il salvataggio',
+    (await page.textContent('#toast')).includes('Conferma'));
+  ok('nessuna visita salvata di nascosto', await page.evaluate(() => DB.visite.length) === 0);
+
+  // 08:00–12:00 in due persone = 8 ore
+  const fascia = page.locator('#fasce-list .fascia').first();
+  await fascia.locator('input[type=time]').first().fill('08:00');
+  await fascia.locator('input[type=time]').nth(1).fill('12:00');
+  await fascia.locator('input[type=number]').fill('2');
+  await page.waitForTimeout(150);
+  ok('il totale ore lo calcola l\'app',
+    (await page.textContent('#ore-totale-val')).includes('8,00'));
+
+  await page.click('#operazioni-check .op-riga:has-text("Concimazione")');
+  await page.waitForTimeout(150);
+  ok('spuntare segna il prato senza chiederlo',
+    await page.evaluate(() => isSi(pendingOperazioni[0].Flag_prato)));
+  await page.selectOption('#operazioni-check .op-dett select',
+    await page.evaluate(() => DB.concimi[0].ConcimeID));
+  await page.fill('#operazioni-check .op-dett input[type=number]', '10');
+
+  // la casella libera per quello che non sta in archivio
+  await page.fill('#f-op-libera', 'Riparazione irrigazione');
+  await page.press('#f-op-libera', 'Enter');
+  await page.waitForTimeout(150);
+  ok('operazione libera aggiunta',
+    (await page.textContent('#operazioni-libere')).includes('Riparazione irrigazione'));
+
   await page.click('#btn-salva-visita');
   await page.waitForTimeout(300);
   ok('visita salvata', await page.evaluate(() => DB.visite.length) === 1);
-  ok('operazione legata alla sua visita',
-    await page.evaluate(() => DB.operazioni.length === 1 && DB.operazioni[0].VisitaID === DB.visite[0].VisitaID));
+  ok('ore e fasce registrate',
+    await page.evaluate(() => DB.visite[0].Ore_Visita === 8 && DB.visite[0].Fasce.length === 1));
+  ok('operazione agganciata al suo tipo',
+    await page.evaluate(() => DB.operazioni.find(o => o.TipoID === 'concimazione') != null));
+  ok('operazione libera salvata senza tipo',
+    await page.evaluate(() => DB.operazioni.some(o => !o.TipoID && o.Tipo_operazione === 'Riparazione irrigazione')));
   // 10 kg al 12% su 200 mq = 1200 g di azoto = 6 g/m²
-  ok('azoto per metro quadro calcolato', await page.evaluate(() => DB.operazioni[0].N_g_m2) == 6);
+  ok('azoto per metro quadro calcolato',
+    await page.evaluate(() => DB.operazioni.find(o => o.TipoID === 'concimazione').N_g_m2) == 6);
 
   // ── persistenza ──
   await page.reload({ waitUntil: 'load' });
   await page.waitForTimeout(600);
   ok('dati ritrovati dopo la ricarica',
-    await page.evaluate(() => DB.clienti.length === 1 && DB.visite.length === 1 && DB.operazioni.length === 1));
+    await page.evaluate(() => DB.clienti.length === 1 && DB.visite.length === 1 && DB.operazioni.length === 2));
   ok('archivio ritrovato dopo la ricarica', await page.evaluate(() => DB.concimi.length) === 1);
 
   // ── report prati ──
@@ -111,7 +141,7 @@ try {
   await page.setInputFiles('#file-backup', { name: 'backup.json', mimeType: 'application/json', buffer: Buffer.from(backup) });
   await page.waitForTimeout(400);
   ok('backup reimportato per intero',
-    await page.evaluate(() => DB.clienti.length === 1 && DB.visite.length === 1 && DB.operazioni.length === 1));
+    await page.evaluate(() => DB.clienti.length === 1 && DB.visite.length === 1 && DB.operazioni.length === 2));
   ok('contatore modifiche azzerato dal backup', await page.evaluate(() => META.modificheDalBackup) === 0);
 
   // ── migrazioni ──
@@ -121,6 +151,18 @@ try {
   }));
   ok('migrazione regge un database vuoto',
     await page.evaluate(() => COLLEZIONI.every(k => Array.isArray(migra(null)[k]))));
+  ok('la migrazione riaggancia le operazioni vecchie', await page.evaluate(() => {
+    const db = migra({ operazioni: [
+      { OperazioneID:'a', Tipo_operazione:'Potatura', Flag_siepe:'Sì' },
+      { OperazioneID:'b', Tipo_operazione:'Concimazione', Dose_kg:7 },
+      { OperazioneID:'c', Tipo_operazione:'Diserbo', Flag_prato:'Sì' },
+    ] }, 2);
+    const [a, b, c] = db.operazioni;
+    return a.TipoID === 'potatura-siepi'
+        && b.TipoID === 'concimazione' && b.Quantita === 7 && b.Dose_kg === undefined
+        && c.TipoID === 'diserbo-selettivo'
+        && db.tipiOperazione.length === 13;
+  }));
   ok('dati già aggiornati passano indenni',
     await page.evaluate(() => migra({ clienti: [{ ClienteID: 'y', Cliente: 'Nuovo' }] }, 2).clienti[0].Cliente === 'Nuovo'));
 

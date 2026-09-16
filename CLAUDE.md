@@ -61,6 +61,28 @@ passa da `migra()`. Per cambiare la forma dei dati:
 I backup esportati mesi fa devono continuare ad aprirsi. È il motivo per cui
 quell'imbuto esiste.
 
+## La schermata visita è un rapporto, non un registro
+
+Segue l'ordine del rapportino che si consegna a fine lavoro: cliente, ore,
+operazioni, note, prossimo intervento. Non è estetica — scorrere lo schermo
+nello stesso ordine del foglio evita di tradurre da una forma all'altra alla
+fine di una giornata di lavoro. Chi la riordina perde quel vantaggio.
+
+**Le ore sono un calcolo, non un numero.** Fasce orarie con orario e numero di
+persone; il totale lo fa `oreTotali()`. Una fascia che l'app propone resta
+`proposta: true` finché non viene toccata o confermata, e `saveVisita()` si
+rifiuta di salvare se ne resta una: le ore finiscono in fattura, e un orario
+precompilato che nessuno ha guardato è un errore che paga il cliente.
+
+**Le operazioni si spuntano.** L'elenco viene da `DB.tipiOperazione`, ordinato
+per quanto si usano da quel cliente. Spuntando si apre solo il dettaglio che
+quel tipo richiede (`dettaglio`: niente, concime, semente, fitofarmaco,
+quantita) e i flag prato/siepe li mette il tipo, non l'utente.
+
+I campi che l'utente compila usano `oninput`, non `onchange`: con `onchange` il
+modello resta indietro fino al blur. E non si ridisegna l'elenco mentre si
+scrive — si aggiorna solo quello che cambia, o il campo sparisce da sotto le dita.
+
 ## Cose da sapere prima di metterci mano
 
 - L'interfaccia usa `onclick="funzione()"`, quindi le funzioni devono restare
@@ -74,3 +96,9 @@ quell'imbuto esiste.
   ricalcolano con `applicaFasce()` a ogni caricamento e dopo ogni modifica.
 - Il vecchio endpoint Apps Script sopravvive solo dentro `importaDaSheets()`,
   per la migrazione una tantum. Non usarlo per altro.
+- I tipi di operazione di partenza hanno identificativi parlanti e stabili
+  (`concimazione`, `potatura-siepi`…) perché il codice li cerca per
+  identificativo e mai per nome: chi rinomina un tipo non deve svuotare il
+  report Prati.
+- Sulle operazioni il campo è `Quantita` con la sua `Unita`. Si chiamava
+  `Dose_kg` e mentiva: i liquidi sono in litri e le piante si contano a numero.

@@ -414,6 +414,56 @@ select.form-control { background-image: url("data:image/svg+xml,%3Csvg xmlns='ht
   animation: spin 0.7s linear infinite;
 }
 @keyframes spin { to { transform: rotate(360deg); } }
+.rapporto-sez {
+  font-size: 0.72rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.06em;
+  color: var(--green-deep);
+  margin: 22px 0 10px; padding-bottom: 6px;
+  border-bottom: 2px solid var(--green-pale);
+}
+.fascia { display: flex; align-items: center; gap: 6px; margin-bottom: 8px; }
+.fascia input[type=time] { flex: 1; min-width: 0; padding: 9px 8px; font-size: 0.85rem; }
+.fascia input[type=number] { width: 54px; padding: 9px 4px; text-align: center; font-size: 0.85rem; }
+.fascia .freccia { color: var(--text-light); font-size: 0.8rem; }
+.fascia .pers { font-size: 0.72rem; color: var(--text-light); }
+.via { background: none; border: none; color: var(--text-light); font-size: 1rem; cursor: pointer; padding: 4px; }
+/* La fascia proposta si vede che è una proposta: le ore finiscono in fattura,
+   e un orario precompilato che nessuno guarda è un errore che paga il cliente. */
+.fascia.proposta input { opacity: 0.45; border-style: dashed; }
+.fascia.errata input[type=time] { border-color: var(--red); }
+.ore-totale {
+  display: flex; justify-content: space-between; align-items: baseline;
+  margin-top: 10px; padding-top: 10px; border-top: 1px solid var(--border);
+  font-size: 0.85rem; font-weight: 600; color: var(--green-deep);
+}
+.ore-totale span:last-child { font-size: 1.2rem; font-family: var(--font-display); }
+.op-riga {
+  display: flex; align-items: center; gap: 10px;
+  padding: 11px 2px; border-bottom: 1px solid var(--border);
+  cursor: pointer; font-size: 0.9rem;
+}
+.op-box {
+  width: 22px; height: 22px; border-radius: 6px; flex-shrink: 0;
+  border: 2px solid var(--green-pale); background: var(--white);
+  display: flex; align-items: center; justify-content: center;
+  font-size: 0.78rem; color: var(--white);
+}
+.op-riga.on .op-box { background: var(--green-mid); border-color: var(--green-mid); }
+.op-riga.on { font-weight: 600; color: var(--green-deep); }
+.op-dett { display: flex; gap: 8px; align-items: center; padding: 2px 0 12px 32px; }
+.op-dett select { flex: 1; min-width: 0; padding: 9px 8px; font-size: 0.85rem; }
+.op-dett input[type=number] { width: 76px; padding: 9px 6px; text-align: right; font-size: 0.85rem; }
+.op-dett input[type=text] { flex: 1; min-width: 0; padding: 9px 8px; font-size: 0.85rem; }
+.op-dett .unita { font-size: 0.78rem; color: var(--text-light); min-width: 36px; }
+.link-altre {
+  background: none; border: none; cursor: pointer; padding: 10px 2px;
+  font-family: var(--font-body); font-size: 0.82rem; color: var(--green-mid); font-weight: 500;
+}
+.op-libera {
+  display: flex; align-items: center; gap: 10px;
+  padding: 11px 2px; border-bottom: 1px solid var(--border);
+  font-size: 0.9rem; font-weight: 600; color: var(--green-deep);
+}
+
 .avviso {
   display: flex; align-items: center; gap: 12px;
   margin: 12px 14px 0; padding: 12px 14px;
@@ -736,12 +786,13 @@ select.form-control { background-image: url("data:image/svg+xml,%3Csvg xmlns='ht
   </div>
 </div>
 
-<!-- DRAWER NUOVA VISITA -->
+<!-- DRAWER VISITA — segue l'ordine del rapportino di fine lavoro -->
 <div class="overlay" id="overlay-visita">
   <div class="drawer">
     <div class="drawer-handle"></div>
     <div class="drawer-title" id="drawer-visita-titolo">Nuova Visita</div>
     <div class="drawer-body">
+
       <div class="form-group">
         <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:6px">
           <label class="form-label" style="margin-bottom:0">Cliente *</label>
@@ -757,25 +808,35 @@ select.form-control { background-image: url("data:image/svg+xml,%3Csvg xmlns='ht
           <button onclick="clearVisitaCliente()" style="background:none;border:none;cursor:pointer;color:var(--text-light);font-size:1rem;float:right">✕</button>
         </div>
       </div>
-      <div class="form-row">
-        <div class="form-group">
-          <label class="form-label">Data *</label>
-          <input type="date" class="form-control" id="f-visita-data">
-        </div>
-        <div class="form-group">
-          <label class="form-label">Ore lavoro</label>
-          <input type="number" class="form-control" id="f-visita-ore" placeholder="Es. 3" step="0.5">
-        </div>
-      </div>
       <div class="form-group">
-        <label class="form-label">Note visita</label>
-        <textarea class="form-control" id="f-visita-note" rows="2" placeholder="Cosa hai fatto..."></textarea>
+        <label class="form-label">Data *</label>
+        <input type="date" class="form-control" id="f-visita-data">
       </div>
-      <div class="form-group">
-        <label class="form-label">Prossimo intervento</label>
-        <input type="text" class="form-control" id="f-visita-prossimo" placeholder="Es. Siepe, prato...">
+
+      <div class="rapporto-sez">Ore lavorate</div>
+      <div id="fasce-list"></div>
+      <button type="button" class="btn btn-secondary btn-sm" onclick="aggiungiFascia()">+ Aggiungi fascia</button>
+      <div class="ore-totale"><span>Totale</span><span id="ore-totale-val">0,00 h</span></div>
+
+      <div class="rapporto-sez">Operazioni</div>
+      <div id="op-promemoria" class="dati-nota" style="display:none; margin-bottom:8px"></div>
+      <div id="operazioni-check"></div>
+      <div id="operazioni-libere"></div>
+      <input type="text" class="form-control" id="f-op-libera" style="margin-top:8px"
+             placeholder="+ Altra operazione…"
+             onkeydown="if(event.key==='Enter'){event.preventDefault();aggiungiOperazioneLibera();}"
+             onblur="aggiungiOperazioneLibera()">
+      <div id="altre-wrap" style="display:none">
+        <button type="button" class="link-altre" id="btn-altre" onclick="toggleAltreOperazioni()">▾ Altre operazioni</button>
+        <div id="operazioni-altre" style="display:none"></div>
       </div>
-      <div class="form-row">
+
+      <div class="rapporto-sez">Note</div>
+      <textarea class="form-control" id="f-visita-note" rows="3" placeholder="Osservazioni, variazioni, cose da ricordare..."></textarea>
+
+      <div class="rapporto-sez">Prossimo intervento</div>
+      <input type="text" class="form-control" id="f-visita-prossimo" placeholder="Es. Potatura siepe">
+      <div class="form-row" style="margin-top:10px">
         <div class="form-group">
           <label class="form-label">Mese previsto</label>
           <select class="form-control" id="f-visita-mese">
@@ -794,101 +855,9 @@ select.form-control { background-image: url("data:image/svg+xml,%3Csvg xmlns='ht
         </div>
       </div>
 
-      <!-- OPERAZIONI -->
-      <div style="margin-top: 8px; margin-bottom: 8px;">
-        <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:8px">
-          <span style="font-size:0.78rem; font-weight:700; text-transform:uppercase; letter-spacing:0.05em; color:var(--green-deep)">Operazioni</span>
-          <button class="btn btn-secondary btn-sm" onclick="addOperazione()">+ Aggiungi</button>
-        </div>
-        <div id="operazioni-list"></div>
-      </div>
-
       <button class="btn btn-primary" id="btn-salva-visita" onclick="saveVisita()">💾 Salva Visita</button>
       <div style="height:8px"></div>
       <button class="btn btn-secondary" onclick="closeDrawer('overlay-visita')">Annulla</button>
-    </div>
-  </div>
-</div>
-
-<!-- DRAWER OPERAZIONE -->
-<div class="overlay" id="overlay-operazione">
-  <div class="drawer">
-    <div class="drawer-handle"></div>
-    <div class="drawer-title">Operazione</div>
-    <div class="drawer-body">
-      <input type="hidden" id="op-index">
-      <div class="form-group">
-        <label class="form-label">Tipo operazione *</label>
-        <select class="form-control" id="f-op-tipo" onchange="onTipoOpChange()">
-          <option value="">– scegli –</option>
-          <option value="Potatura">✂️ Potatura</option>
-          <option value="Concimazione">🌿 Concimazione</option>
-          <option value="Semina">🌱 Semina</option>
-          <option value="Arieggiatura">💨 Arieggiatura</option>
-          <option value="Diserbo">🚫 Diserbo</option>
-          <option value="Trattamento fitosanitario">💊 Trattamento fitosanitario</option>
-          <option value="Altro">📝 Altro</option>
-        </select>
-      </div>
-      <div class="form-group">
-        <label class="form-label">Descrizione</label>
-        <input type="text" class="form-control" id="f-op-desc" placeholder="Es. Kiwi, rose...">
-      </div>
-      <div id="op-siepe-toggle-wrap" style="display:none">
-        <div class="form-group">
-          <div class="toggle-row">
-            <span class="toggle-label">🌿 Potatura siepe</span>
-            <button type="button" class="toggle" id="toggle-op-siepe" onclick="toggleOpSiepe()"></button>
-          </div>
-        </div>
-      </div>
-      <div id="op-prato-toggle-wrap" style="display:none">
-        <div class="form-group">
-          <div class="toggle-row">
-            <span class="toggle-label">🌱 Operazione su prato</span>
-            <button type="button" class="toggle" id="toggle-op-prato" onclick="toggleOpPrato()"></button>
-          </div>
-        </div>
-      </div>
-      <div id="op-concime-wrap" style="display:none">
-        <div class="form-group">
-          <label class="form-label">Concime</label>
-          <select class="form-control" id="f-op-concime">
-            <option value="">– scegli –</option>
-          </select>
-        </div>
-        <div class="form-group">
-          <label class="form-label">Dose (kg)</label>
-          <input type="number" class="form-control" id="f-op-dose" placeholder="Es. 5" step="0.1">
-        </div>
-      </div>
-      <div id="op-semente-wrap" style="display:none">
-        <div class="form-group">
-          <label class="form-label">Semente</label>
-          <select class="form-control" id="f-op-semente">
-            <option value="">– scegli –</option>
-          </select>
-        </div>
-        <div class="form-group">
-          <label class="form-label">Dose (kg)</label>
-          <input type="number" class="form-control" id="f-op-dose-s" placeholder="Es. 2" step="0.1">
-        </div>
-      </div>
-      <div id="op-fitofarmaco-wrap" style="display:none">
-        <div class="form-group">
-          <label class="form-label">Fitofarmaco</label>
-          <select class="form-control" id="f-op-fitofarmaco">
-            <option value="">– scegli –</option>
-          </select>
-        </div>
-        <div class="form-group">
-          <label class="form-label">Dose (kg/l)</label>
-          <input type="number" class="form-control" id="f-op-dose-f" placeholder="Es. 0.5" step="0.01">
-        </div>
-      </div>
-      <button class="btn btn-primary" onclick="saveOperazione()">✅ Conferma Operazione</button>
-      <div style="height:8px"></div>
-      <button class="btn btn-secondary" onclick="closeDrawer('overlay-operazione')">Annulla</button>
     </div>
   </div>
 </div>
@@ -904,9 +873,9 @@ const IDB_STORE = 'stato';
 const IDB_CHIAVE = 'db';
 const MIRROR_KEY = 'giardinolog-db';
 const CACHE_SHEETS = 'giardino-db-v1';  // cache locale di quando si leggeva da Sheets
-const VERSIONE_DATI = 2;
+const VERSIONE_DATI = 3;
 
-const COLLEZIONI = ['clienti', 'visite', 'operazioni', 'concimi', 'sementi', 'fitofarmaci', 'fasce'];
+const COLLEZIONI = ['clienti', 'visite', 'operazioni', 'concimi', 'sementi', 'fitofarmaci', 'fasce', 'tipiOperazione'];
 
 // Fasce di partenza per chi apre l'app la prima volta: numeri da correggere
 // in Archivi, non verità rivelate. Chi arriva da Sheets o da un backup se li
@@ -917,16 +886,43 @@ const FASCE_DEFAULT = [
   { FasciaID: '3', Descrizione: 'Non concimato', Target_N_g_m2_anno: 0, Target_K_g_m2_anno: 0 },
 ];
 
+// I lavori che si fanno davvero, nell'ordine in cui tornano utili. Non sono
+// scolpiti nel codice: stanno in un archivio, così se ne aggiungono senza
+// passare da qui. Gli identificativi dei tipi di partenza sono parlanti e
+// stabili, perché il codice li cerca per identificativo e non per nome: chi
+// rinomina "Taglio prato" in "Sfalcio" non rompe il report Prati.
+//
+// dettaglio: cosa si apre spuntando l'operazione
+//   'niente'      — nient'altro da chiedere
+//   'concime' | 'semente' | 'fitofarmaco' — prodotto dall'archivio + quantità
+//   'quantita'    — solo un numero, con la sua unità
+// prato/siepe: a cosa appartiene il lavoro. Prima erano due interruttori da
+//   ricordarsi di accendere, e scordarli faceva sparire l'operazione dal
+//   report Prati. Ora lo sa il tipo, e non c'è più niente da ricordare.
+const TIPI_DEFAULT = [
+  { TipoID:'taglio-prato',            Nome:'Taglio prato',             dettaglio:'niente',      Unita:'',      Prato:'Sì', Siepe:'',   Ordine:1 },
+  { TipoID:'potatura-siepi',          Nome:'Potatura siepi',           dettaglio:'niente',      Unita:'',      Prato:'',   Siepe:'Sì', Ordine:2 },
+  { TipoID:'potatura-arbusti',        Nome:'Potatura arbusti',         dettaglio:'niente',      Unita:'',      Prato:'',   Siepe:'',   Ordine:3 },
+  { TipoID:'concimazione',            Nome:'Concimazione',             dettaglio:'concime',     Unita:'kg',    Prato:'Sì', Siepe:'',   Ordine:4 },
+  { TipoID:'arieggiatura',            Nome:'Arieggiatura',             dettaglio:'niente',      Unita:'',      Prato:'Sì', Siepe:'',   Ordine:5 },
+  { TipoID:'semina',                  Nome:'Semina',                   dettaglio:'semente',     Unita:'kg',    Prato:'Sì', Siepe:'',   Ordine:6 },
+  { TipoID:'diserbo-selettivo',       Nome:'Diserbo selettivo',        dettaglio:'fitofarmaco', Unita:'l',     Prato:'Sì', Siepe:'',   Ordine:7 },
+  { TipoID:'diserbo-totale',          Nome:'Diserbo totale',           dettaglio:'fitofarmaco', Unita:'l',     Prato:'',   Siepe:'',   Ordine:8 },
+  { TipoID:'trattamento-fitosanitario', Nome:'Trattamento fitosanitario', dettaglio:'fitofarmaco', Unita:'l',  Prato:'',   Siepe:'',   Ordine:9 },
+  { TipoID:'apporto-terriccio',       Nome:'Apporto terriccio',        dettaglio:'quantita',    Unita:'sacchi', Prato:'Sì', Siepe:'',  Ordine:10 },
+  { TipoID:'posa-tappeto-erboso',     Nome:'Posa tappeto erboso',      dettaglio:'quantita',    Unita:'m²',    Prato:'Sì', Siepe:'',   Ordine:11 },
+  { TipoID:'piantumazione',           Nome:'Piantumazione',            dettaglio:'quantita',    Unita:'n',     Prato:'',   Siepe:'',   Ordine:12 },
+  { TipoID:'scarico-verde',           Nome:'Scarico verde',            dettaglio:'quantita',    Unita:'kg',    Prato:'',   Siepe:'',   Ordine:13 },
+];
+
 // ── STATE ──
 let DB = { clienti: [], visite: [], operazioni: [], concimi: [], sementi: [], fitofarmaci: [], fasce: [] };
 let META = { ultimoBackup: null, modificheDalBackup: 0 };
 let currentPage = 'home';
 let pratoEnabled = false;
 let siepeEnabled = false;
-let opPratoEnabled = false;
-let opSiepeEnabled = false;
 let pendingOperazioni = [];
-let pendingOpIndex = null;
+let pendingFasce = [];
 let editVisitaID = null;   // null = nuova visita, altrimenti si sta modificando
 let salvataggioInCorso = false;
 let addrLat = null, addrLng = null;
@@ -992,6 +988,39 @@ const MIGRAZIONI = {
   // così correggere una fascia aggiorna davvero tutti i suoi clienti.
   2: db => {
     db.clienti.forEach(c => { delete c.Target_N_g_m2_anno; delete c.Target_K_g_m2_anno; });
+    return db;
+  },
+
+  // 2 → 3: i tipi di operazione erano un elenco fisso dentro un menu a tendina.
+  // Ora sono un archivio, e ogni operazione punta al suo tipo invece di
+  // portarsi dietro solo un nome. Le vecchie righe vanno riagganciate, e le
+  // due che erano ambigue si risolvono guardando dove erano state fatte:
+  // una potatura con il flag siepe era una potatura di siepi, un diserbo sul
+  // prato era selettivo — sul prato il totale non lo usa nessuno.
+  3: db => {
+    if (!db.tipiOperazione.length) db.tipiOperazione = TIPI_DEFAULT.map(t => ({ ...t }));
+    const perNome = new Map(db.tipiOperazione.map(t => [String(t.Nome).toLowerCase(), t]));
+    db.operazioni.forEach(o => {
+      const vecchio = String(o.Tipo_operazione || '').trim();
+      let tipo = perNome.get(vecchio.toLowerCase());
+      if (!tipo && vecchio === 'Potatura')
+        tipo = db.tipiOperazione.find(t => t.TipoID === (isSi(o.Flag_siepe) ? 'potatura-siepi' : 'potatura-arbusti'));
+      if (!tipo && vecchio === 'Diserbo')
+        tipo = db.tipiOperazione.find(t => t.TipoID === (isSi(o.Flag_prato) ? 'diserbo-selettivo' : 'diserbo-totale'));
+      if (tipo) {
+        o.TipoID = tipo.TipoID;
+        o.Tipo_operazione = tipo.Nome;
+        if (!o.Unita) o.Unita = tipo.Unita || '';
+      } else {
+        // tipo non riconosciuto (era "Altro", o una voce scritta a mano):
+        // resta senza agganci, col nome che aveva. Non si inventa niente.
+        o.TipoID = o.TipoID || '';
+      }
+      // Dose_kg mentiva già: le dosi dei liquidi sono in litri e le piante si
+      // contano a numero. Il campo diventa una quantità con la sua unità.
+      if (o.Quantita == null) o.Quantita = o.Dose_kg ?? '';
+      delete o.Dose_kg;
+    });
     return db;
   },
 };
@@ -1185,10 +1214,10 @@ function showCliente(id) {
   const visitIdsCliente = visite.filter(v => v.Data && new Date(v.Data).getFullYear() == annoCorr).map(v => v.VisitaID);
   const opsCliente = DB.operazioni.filter(o => visitIdsCliente.includes(o.VisitaID));
   let nSomm = 0, kSomm = 0;
-  opsCliente.filter(o => o.Tipo_operazione === 'Concimazione' && isSi(o.Flag_prato)).forEach(o => {
+  opsCliente.filter(o => o.ConcimeID && isSi(o.Flag_prato)).forEach(o => {
     const conc = DB.concimi.find(cc => cc.ConcimeID == o.ConcimeID);
-    if (conc && o.Dose_kg && c.Mq_prato) {
-      const dose = parseFloat(o.Dose_kg) || 0;
+    if (conc && o.Quantita && c.Mq_prato) {
+      const dose = parseFloat(o.Quantita) || 0;
       const mq = parseFloat(c.Mq_prato) || 1;
       nSomm += (dose * parseFloat(conc.N_percento) / 100 * 1000) / mq;
       kSomm += (dose * parseFloat(conc.K_percento) / 100 * 1000) / mq;
@@ -1196,7 +1225,7 @@ function showCliente(id) {
   });
   // ultima potatura siepe
   const opsAll = DB.operazioni.filter(o => DB.visite.find(vv => vv.VisitaID == o.VisitaID && vv.ClienteID == c.ClienteID));
-  const ultimaSiepe = opsAll.filter(o => o.Tipo_operazione === 'Potatura' && isSi(o.Flag_siepe)).map(o => {
+  const ultimaSiepe = opsAll.filter(o => isSi(o.Flag_siepe)).map(o => {
     const vv = DB.visite.find(vv => vv.VisitaID == o.VisitaID);
     return vv?.Data ? new Date(vv.Data) : null;
   }).filter(Boolean).sort((a,b) => b-a)[0];
@@ -1368,20 +1397,20 @@ function calcPratoData(c, anno) {
 
   // concimazioni con dettaglio
   const concimazioni = opsCliente
-    .filter(o => o.Tipo_operazione === 'Concimazione' && isSi(o.Flag_prato))
+    .filter(o => o.ConcimeID && isSi(o.Flag_prato))
     .map(o => {
       const conc = DB.concimi.find(cc => cc.ConcimeID == o.ConcimeID);
       const v = DB.visite.find(vv => vv.VisitaID == o.VisitaID);
       let nM2 = parseFloat(o.N_g_m2) || 0;
       let kM2 = parseFloat(o.K_g_m2) || 0;
-      if (!nM2 && conc && o.Dose_kg && mq > 0) {
-        nM2 = (parseFloat(o.Dose_kg) * parseFloat(conc.N_percento) / 100 * 1000) / mq;
-        kM2 = (parseFloat(o.Dose_kg) * parseFloat(conc.K_percento) / 100 * 1000) / mq;
+      if (!nM2 && conc && o.Quantita && mq > 0) {
+        nM2 = (parseFloat(o.Quantita) * parseFloat(conc.N_percento) / 100 * 1000) / mq;
+        kM2 = (parseFloat(o.Quantita) * parseFloat(conc.K_percento) / 100 * 1000) / mq;
       }
       return {
         data: v?.Data ? new Date(v.Data) : null,
         concime: conc?.Concime || '–',
-        dose: o.Dose_kg || '–',
+        dose: o.Quantita || '–',
         nM2, kM2
       };
     })
@@ -1397,17 +1426,17 @@ function calcPratoData(c, anno) {
   if (pctN >= 0.8) { sem = 'verde'; semLabel = 'In target'; }
   if (targetN === 0) { sem = 'rosso'; semLabel = 'Nessun target'; }
 
-  const lastOpDate = (tipo) => {
-    const ops = opsCliente.filter(o => isSi(o.Flag_prato) && o.Tipo_operazione === tipo);
+  const lastOpDate = (tipoID) => {
+    const ops = opsCliente.filter(o => isSi(o.Flag_prato) && o.TipoID === tipoID);
     if (!ops.length) return '–';
     const v = DB.visite.find(vv => vv.VisitaID == ops[ops.length-1].VisitaID);
     return v?.Data ? new Date(v.Data).toLocaleDateString('it-IT', {day:'numeric', month:'short'}) : '–';
   };
 
   return { targetN, targetK, mq, nSomm, kSomm, pctN, sem, semLabel, concimazioni,
-    lastConc: lastOpDate('Concimazione'),
-    lastSemina: lastOpDate('Semina'),
-    lastArie: lastOpDate('Arieggiatura') };
+    lastConc: lastOpDate('concimazione'),
+    lastSemina: lastOpDate('semina'),
+    lastArie: lastOpDate('arieggiatura') };
 }
 
 function togglePratoDettaglio(id) {
@@ -1701,21 +1730,311 @@ function useGPS() {
 }
 
 // ── DRAWER VISITA ──
+// La schermata segue l'ordine del rapportino che si consegna a fine lavoro:
+// cliente, ore, operazioni, note, prossimo intervento. Non è un vezzo: scorrere
+// lo schermo nello stesso ordine del foglio evita di tradurre da una forma
+// all'altra proprio alla fine di una giornata in cui si è stanchi.
 let pendingFromVisita = false;
+let altreOperazioniAperte = false;
+let oreEreditate = '';   // ore di una visita registrata prima delle fasce orarie
 
+const TIPI_IN_CIMA = 6;
+
+// ── ORE LAVORATE ──
+function minutiDa(hhmm) {
+  const m = /^(\d{1,2}):(\d{2})$/.exec(String(hhmm || ''));
+  return m ? Number(m[1]) * 60 + Number(m[2]) : null;
+}
+
+// Durata della fascia moltiplicata per le persone che c'erano: è il conto che
+// si faceva a mente a fine giornata, ed è quello che si sbagliava.
+function oreFascia(f) {
+  const a = minutiDa(f.Inizio), b = minutiDa(f.Fine);
+  if (a == null || b == null || b <= a) return 0;
+  return ((b - a) / 60) * (Number(f.Persone) || 1);
+}
+
+function oreTotali(fasce) {
+  return (fasce || []).reduce((s, f) => s + oreFascia(f), 0);
+}
+
+function formattaOre(n) {
+  return (Number(n) || 0).toFixed(2).replace('.', ',') + ' h';
+}
+
+// La fascia che l'app propone: quella che si ripete di più da questo cliente,
+// altrimenti la più frequente in assoluto, altrimenti una mattina tipo.
+function fasciaProposta(clienteID) {
+  const conta = new Map();
+  DB.visite.forEach(v => (v.Fasce || []).forEach(f => {
+    if (!f.Inizio || !f.Fine) return;
+    const chiave = `${f.Inizio}|${f.Fine}|${f.Persone || 1}`;
+    conta.set(chiave, (conta.get(chiave) || 0) + (clienteID && v.ClienteID == clienteID ? 10 : 1));
+  }));
+  const migliore = [...conta.entries()].sort((a, b) => b[1] - a[1])[0];
+  if (!migliore) return { Inizio: '08:00', Fine: '12:00', Persone: 1, proposta: true };
+  const [Inizio, Fine, Persone] = migliore[0].split('|');
+  return { Inizio, Fine, Persone: Number(Persone) || 1, proposta: true };
+}
+
+function renderFasce() {
+  const lista = document.getElementById('fasce-list');
+  if (!lista) return;
+  lista.innerHTML = pendingFasce.map((f, i) => {
+    const errata = f.Inizio && f.Fine && oreFascia(f) === 0;
+    return `<div class="fascia ${f.proposta ? 'proposta' : ''} ${errata ? 'errata' : ''}">
+      <input type="time" value="${perValore(f.Inizio)}" oninput="modificaFascia(${i}, 'Inizio', this.value)">
+      <span class="freccia">→</span>
+      <input type="time" value="${perValore(f.Fine)}" oninput="modificaFascia(${i}, 'Fine', this.value)">
+      <input type="number" min="1" step="1" value="${perValore(f.Persone || 1)}" oninput="modificaFascia(${i}, 'Persone', this.value)">
+      <span class="pers">pers.</span>
+      ${f.proposta ? `<button type="button" class="via" onclick="confermaFascia(${i})" title="Conferma">✓</button>` : ''}
+      <button type="button" class="via" onclick="togliFascia(${i})" title="Togli">✕</button>
+    </div>`;
+  }).join('');
+
+  aggiornaTotaleOre();
+}
+
+function aggiornaTotaleOre() {
+  const tot = document.getElementById('ore-totale-val');
+  if (!tot) return;
+  if (!pendingFasce.length && oreEreditate) {
+    tot.textContent = formattaOre(oreEreditate);
+    tot.title = 'Ore registrate prima che esistessero le fasce orarie';
+    return;
+  }
+  const daConfermare = pendingFasce.some(f => f.proposta);
+  tot.textContent = formattaOre(oreTotali(pendingFasce)) + (daConfermare ? ' da confermare' : '');
+}
+
+function aggiungiFascia() {
+  pendingFasce.push(fasciaProposta(document.getElementById('f-visita-cliente').value));
+  renderFasce();
+}
+
+// Toccare una fascia proposta significa farla propria: da lì in poi è un dato,
+// non un suggerimento.
+function modificaFascia(i, campo, valore) {
+  const f = pendingFasce[i];
+  if (!f) return;
+  f[campo] = campo === 'Persone' ? Math.max(1, parseInt(valore) || 1) : valore;
+  f.proposta = false;
+  // Non ridisegno l'elenco: rifarlo mentre stai impostando un orario ti
+  // strappa via il campo da sotto le dita, e il valore successivo finisce
+  // su un elemento che non esiste più.
+  const riga = document.querySelectorAll('#fasce-list .fascia')[i];
+  if (riga) {
+    riga.classList.remove('proposta');
+    riga.classList.toggle('errata', !!(f.Inizio && f.Fine && oreFascia(f) === 0));
+    riga.querySelector('button[title="Conferma"]')?.remove();
+  }
+  aggiornaTotaleOre();
+}
+
+function confermaFascia(i) {
+  if (!pendingFasce[i]) return;
+  pendingFasce[i].proposta = false;
+  renderFasce();
+}
+
+function togliFascia(i) {
+  pendingFasce.splice(i, 1);
+  renderFasce();
+}
+
+// ── OPERAZIONI ──
+function tipoDi(tipoID) {
+  return DB.tipiOperazione.find(t => t.TipoID === tipoID);
+}
+
+function opDelTipo(tipoID) {
+  return pendingOperazioni.filter(o => o.TipoID === tipoID);
+}
+
+// Le operazioni che fai davvero da quel cliente vengono per prime. Il peso è
+// sbilanciato apposta: quello che hai già fatto in quel giardino conta dieci
+// volte la media generale, perché le abitudini su un giardino non cambiano.
+function tipiOrdinati(clienteID) {
+  const visiteCliente = new Set(DB.visite.filter(v => v.ClienteID == clienteID).map(v => v.VisitaID));
+  const usi = new Map();
+  DB.operazioni.forEach(o => {
+    if (!o.TipoID) return;
+    usi.set(o.TipoID, (usi.get(o.TipoID) || 0) + (visiteCliente.has(o.VisitaID) ? 10 : 1));
+  });
+  return [...DB.tipiOperazione].sort((a, b) =>
+    (usi.get(b.TipoID) || 0) - (usi.get(a.TipoID) || 0) ||
+    (Number(a.Ordine) || 99) - (Number(b.Ordine) || 99));
+}
+
+function rigaOperazione(tipo) {
+  const ops = opDelTipo(tipo.TipoID);
+  const riga = `<div class="op-riga ${ops.length ? 'on' : ''}" onclick="spuntaOperazione('${perOnclick(tipo.TipoID)}')">
+      <span class="op-box">${ops.length ? '✓' : ''}</span>
+      <span style="flex:1">${perValore(tipo.Nome)}</span>
+    </div>`;
+  return riga + ops.map(o => dettaglioOperazione(tipo, o)).join('');
+}
+
+// Spuntare apre solo i campi che quell'operazione richiede davvero: un taglio
+// prato non chiede niente, una concimazione chiede prodotto e quantità.
+function dettaglioOperazione(tipo, op) {
+  const i = pendingOperazioni.indexOf(op);
+  const elenchi = {
+    concime:     { coll:'concimi',     id:'ConcimeID',     nome:'Concime' },
+    semente:     { coll:'sementi',     id:'SementeID',     nome:'Nome_commerciale' },
+    fitofarmaco: { coll:'fitofarmaci', id:'FitofarmacaID', nome:'Nome_commerciale' },
+  };
+  const e = elenchi[tipo.dettaglio];
+  const campi = [];
+  if (e) {
+    const opzioni = DB[e.coll].map(p =>
+      `<option value="${perValore(p[e.id])}" ${op[e.id] == p[e.id] ? 'selected' : ''}>${perValore(p[e.nome])}</option>`).join('');
+    campi.push(`<select onchange="modificaOperazione(${i}, '${e.id}', this.value)"><option value="">– prodotto –</option>${opzioni}</select>`);
+  }
+  if (isSi(tipo.ChiedeCosa)) {
+    campi.push(`<input type="text" placeholder="Cosa" value="${perValore(op.Descrizione)}" oninput="modificaOperazione(${i}, 'Descrizione', this.value)">`);
+  }
+  if (e || tipo.dettaglio === 'quantita') {
+    campi.push(`<input type="number" step="any" min="0" placeholder="0" value="${perValore(op.Quantita)}" oninput="modificaOperazione(${i}, 'Quantita', this.value)">`);
+    campi.push(`<span class="unita">${perValore(tipo.Unita)}</span>`);
+  }
+  return campi.length ? `<div class="op-dett">${campi.join('')}</div>` : '';
+}
+
+function renderOperazioni() {
+  const cima = document.getElementById('operazioni-check');
+  if (!cima) return;
+  const ordinati = tipiOrdinati(document.getElementById('f-visita-cliente').value);
+  // Quello che hai già spuntato resta sempre in vista, anche se è un lavoro che
+  // fai una volta l'anno: nascondere una cosa segnata è il modo migliore per
+  // fartela dimenticare.
+  const inCima = ordinati.filter((t, i) => i < TIPI_IN_CIMA || opDelTipo(t.TipoID).length);
+  const sotto = ordinati.filter(t => !inCima.includes(t));
+  cima.innerHTML = inCima.map(rigaOperazione).join('');
+  document.getElementById('operazioni-altre').innerHTML = sotto.map(rigaOperazione).join('');
+  document.getElementById('altre-wrap').style.display = sotto.length ? 'block' : 'none';
+  document.getElementById('operazioni-altre').style.display = altreOperazioniAperte ? 'block' : 'none';
+  const btn = document.getElementById('btn-altre');
+  if (btn) btn.textContent = `${altreOperazioniAperte ? '▴' : '▾'} Altre operazioni (${sotto.length})`;
+  renderOperazioniLibere();
+}
+
+function toggleAltreOperazioni() {
+  altreOperazioniAperte = !altreOperazioniAperte;
+  renderOperazioni();
+}
+
+function spuntaOperazione(tipoID) {
+  const tipo = tipoDi(tipoID);
+  if (!tipo) return;
+  if (opDelTipo(tipoID).length) {
+    pendingOperazioni = pendingOperazioni.filter(o => o.TipoID !== tipoID);
+  } else {
+    pendingOperazioni.push({
+      TipoID: tipo.TipoID,
+      Tipo_operazione: tipo.Nome,
+      Descrizione: '',
+      // Prato e siepe erano due interruttori da ricordarsi di accendere, e
+      // scordarli faceva sparire l'operazione dal report Prati. Ora lo sa il tipo.
+      Flag_prato: isSi(tipo.Prato) ? 'Sì' : '',
+      Flag_siepe: isSi(tipo.Siepe) ? 'Sì' : '',
+      ConcimeID: '', SementeID: '', FitofarmacaID: '',
+      Quantita: '', Unita: tipo.Unita || '',
+    });
+  }
+  renderOperazioni();
+}
+
+// Non ridisegno niente: il valore è già nel campo, e rifare la lista farebbe
+// perdere il fuoco a chi sta scrivendo.
+function modificaOperazione(i, campo, valore) {
+  if (pendingOperazioni[i]) pendingOperazioni[i][campo] = valore;
+}
+
+function renderOperazioniLibere() {
+  const el = document.getElementById('operazioni-libere');
+  if (!el) return;
+  el.innerHTML = pendingOperazioni.filter(o => !o.TipoID).map(o => {
+    const i = pendingOperazioni.indexOf(o);
+    return `<div class="op-libera">
+      <span class="op-box" style="background:var(--green-mid);border-color:var(--green-mid)">✓</span>
+      <span style="flex:1">${perValore(o.Tipo_operazione)}</span>
+      <button type="button" class="via" onclick="togliOperazione(${i})" title="Togli">✕</button>
+    </div>`;
+  }).join('');
+}
+
+// La casella libera: quello che capita una volta sola e non merita una voce
+// in archivio.
+function aggiungiOperazioneLibera() {
+  const campo = document.getElementById('f-op-libera');
+  const testo = campo.value.trim();
+  if (!testo) return;
+  pendingOperazioni.push({ TipoID: '', Tipo_operazione: testo, Descrizione: '',
+    Flag_prato: '', Flag_siepe: '', ConcimeID: '', SementeID: '', FitofarmacaID: '',
+    Quantita: '', Unita: '' });
+  campo.value = '';
+  renderOperazioni();
+}
+
+function togliOperazione(i) {
+  pendingOperazioni.splice(i, 1);
+  renderOperazioni();
+}
+
+// Quello che alla visita precedente avevi previsto di fare. Lo mostro e basta,
+// senza spuntare niente da solo: un'operazione segnata come fatta senza che
+// nessuno l'abbia guardata finisce in un rapportino, e poi in fattura.
+function mostraPromemoria(clienteID) {
+  const el = document.getElementById('op-promemoria');
+  if (!el) return;
+  const ultima = DB.visite
+    .filter(v => v.ClienteID == clienteID && v.Prossimo_intervento && v.VisitaID !== editVisitaID)
+    .sort((a, b) => String(b.Data || '').localeCompare(String(a.Data || '')))[0];
+  el.style.display = ultima ? 'block' : 'none';
+  if (ultima) el.textContent = '📌 Era previsto: ' + ultima.Prossimo_intervento;
+}
+
+// ── APERTURA E SALVATAGGIO ──
 function openNuovaVisita() {
   pendingOperazioni = [];
+  pendingFasce = [fasciaProposta('')];
   editVisitaID = null;
+  altreOperazioniAperte = false;
+  oreEreditate = '';
   document.getElementById('drawer-visita-titolo').textContent = 'Nuova Visita';
   bloccaSalvataggio(false);
-  document.getElementById('f-visita-note').value = '';
-  document.getElementById('f-visita-ore').value = '';
-  document.getElementById('f-visita-prossimo').value = '';
-  document.getElementById('f-visita-mese').value = '';
-  document.getElementById('f-visita-anno').value = '';
+  ['f-visita-note', 'f-visita-prossimo', 'f-visita-mese', 'f-visita-anno', 'f-op-libera']
+    .forEach(id => { document.getElementById(id).value = ''; });
   document.getElementById('f-visita-data').value = new Date().toISOString().split('T')[0];
   clearVisitaCliente();
-  renderOperazioniList();
+  renderFasce();
+  renderOperazioni();
+  document.getElementById('overlay-visita').classList.add('open');
+}
+
+function openModificaVisita(vid) {
+  const v = DB.visite.find(x => x.VisitaID == vid);
+  if (!v) { showToast('⚠️ Visita non trovata'); return; }
+  editVisitaID = v.VisitaID;
+  altreOperazioniAperte = false;
+  pendingOperazioni = DB.operazioni.filter(o => o.VisitaID == vid).map(o => ({ ...o }));
+  pendingFasce = (v.Fasce || []).map(f => ({ ...f, proposta: false }));
+  oreEreditate = pendingFasce.length ? '' : (v.Ore_Visita || '');
+  document.getElementById('f-visita-data').value = v.Data ? new Date(v.Data).toISOString().split('T')[0] : '';
+  document.getElementById('f-visita-note').value = v.Note_visita || '';
+  document.getElementById('f-visita-prossimo').value = v.Prossimo_intervento || '';
+  document.getElementById('f-visita-mese').value = v.Mese_prossimo_intervento ? String(v.Mese_prossimo_intervento).padStart(2, '0') : '';
+  document.getElementById('f-visita-anno').value = v.Anno_prossimo_intervento || '';
+  document.getElementById('f-op-libera').value = '';
+  clearVisitaCliente();
+  const c = DB.clienti.find(x => x.ClienteID == v.ClienteID);
+  if (c) selectVisitaCliente(c.ClienteID, c.Cliente);
+  document.getElementById('drawer-visita-titolo').textContent = 'Modifica Visita';
+  bloccaSalvataggio(false);
+  renderFasce();
+  renderOperazioni();
   document.getElementById('overlay-visita').classList.add('open');
 }
 
@@ -1724,7 +2043,7 @@ function filterVisitaClienti(q) {
   if (!q || q.length < 1) { sug.style.display = 'none'; return; }
   const matches = DB.clienti.filter(c => c.Cliente?.toLowerCase().includes(q.toLowerCase())).slice(0, 6);
   if (!matches.length) { sug.style.display = 'none'; return; }
-  sug.innerHTML = matches.map(c => `<div class="suggestion-item" onclick="selectVisitaCliente('${perOnclick(c.ClienteID)}', '${perOnclick(c.Cliente)}')">${c.Cliente}<span style="float:right;font-size:0.72rem;color:var(--text-light)">${c.Citta||''}</span></div>`).join('');
+  sug.innerHTML = matches.map(c => `<div class="suggestion-item" onclick="selectVisitaCliente('${perOnclick(c.ClienteID)}', '${perOnclick(c.Cliente)}')">${perValore(c.Cliente)}<span style="float:right;font-size:0.72rem;color:var(--text-light)">${perValore(c.Citta)}</span></div>`).join('');
   sug.style.display = 'block';
 }
 
@@ -1734,6 +2053,12 @@ function selectVisitaCliente(id, nome) {
   document.getElementById('f-visita-cliente-selected').style.display = 'block';
   document.getElementById('f-visita-cliente-search').style.display = 'none';
   document.getElementById('visita-cliente-suggestions').style.display = 'none';
+  // Cambiando cliente cambiano sia le operazioni in cima sia la fascia più
+  // probabile: aggiorno quelle ancora da confermare, le altre sono roba tua.
+  pendingFasce = pendingFasce.map(f => f.proposta ? fasciaProposta(id) : f);
+  renderFasce();
+  renderOperazioni();
+  mostraPromemoria(id);
 }
 
 function clearVisitaCliente() {
@@ -1742,6 +2067,8 @@ function clearVisitaCliente() {
   document.getElementById('f-visita-cliente-search').style.display = 'block';
   document.getElementById('f-visita-cliente-selected').style.display = 'none';
   document.getElementById('visita-cliente-suggestions').style.display = 'none';
+  const prom = document.getElementById('op-promemoria');
+  if (prom) prom.style.display = 'none';
 }
 
 // Doppio tocco sul bottone = visita doppia. Ora il salvataggio è istantaneo,
@@ -1754,36 +2081,63 @@ function bloccaSalvataggio(attivo) {
   btn.textContent = attivo ? '⏳ Salvataggio...' : '💾 Salva Visita';
 }
 
+// L'azoto e il potassio si calcolano al salvataggio, quando si sa anche quanti
+// metri quadri ha il prato: prima l'operazione non basta a sapere quanto pesa.
+function completaOperazione(op, visitaID, mq) {
+  const quantita = parseFloat(op.Quantita) || 0;
+  let nTot = 0, kTot = 0;
+  if (op.ConcimeID && quantita) {
+    const c = DB.concimi.find(x => x.ConcimeID == op.ConcimeID);
+    if (c) {
+      nTot = quantita * (parseFloat(c.N_percento) || 0) / 100 * 1000;
+      kTot = quantita * (parseFloat(c.K_percento) || 0) / 100 * 1000;
+    }
+  }
+  const sulPrato = isSi(op.Flag_prato) && mq > 0;
+  return { ...op,
+    VisitaID: visitaID,
+    OperazioneID: op.OperazioneID || generateID(),
+    N_tot_g: nTot.toFixed(0), K_tot_g: kTot.toFixed(0),
+    N_g_m2: sulPrato ? (nTot / mq).toFixed(2) : 0,
+    K_g_m2: sulPrato ? (kTot / mq).toFixed(2) : 0 };
+}
+
 async function saveVisita() {
   if (salvataggioInCorso) return;
   const cid = document.getElementById('f-visita-cliente').value;
   const data = document.getElementById('f-visita-data').value;
   if (!cid || !data) { showToast('⚠️ Seleziona cliente e data'); return; }
+  // Una fascia proposta e mai guardata non è un orario di lavoro. Meglio
+  // fermarsi qui che mandare in fattura le ore di un'altra giornata.
+  if (pendingFasce.some(f => f.proposta)) {
+    showToast('⚠️ Conferma o togli le fasce orarie proposte');
+    return;
+  }
+  const sbagliata = pendingFasce.findIndex(f => oreFascia(f) === 0);
+  if (sbagliata >= 0) { showToast('⚠️ La fascia ' + (sbagliata + 1) + ' non ha un orario valido'); return; }
+  aggiungiOperazioneLibera();   // quello che è rimasto scritto nella casella non si perde
+
   const visitaID = editVisitaID || generateID();
+  const fasce = pendingFasce.map(({ Inizio, Fine, Persone }) => ({ Inizio, Fine, Persone: Number(Persone) || 1 }));
+  const precedente = DB.visite.find(v => v.VisitaID == visitaID);
   const visita = {
     VisitaID: visitaID,
     Data: data,
-    Ore_Visita: document.getElementById('f-visita-ore').value,
+    Fasce: fasce,
+    // Senza fasce restano le ore che c'erano: le visite registrate prima che
+    // le fasce esistessero non devono azzerarsi solo perché le si riapre.
+    Ore_Visita: fasce.length ? Number(oreTotali(fasce).toFixed(2)) : (precedente?.Ore_Visita || ''),
     ClienteID: cid,
     Note_visita: document.getElementById('f-visita-note').value.trim(),
     Prossimo_intervento: document.getElementById('f-visita-prossimo').value.trim(),
     Mese_prossimo_intervento: document.getElementById('f-visita-mese').value,
     Anno_prossimo_intervento: document.getElementById('f-visita-anno').value,
   };
-  const cObj = DB.clienti.find(cc => cc.ClienteID == cid);
-  const mq = parseFloat(cObj?.Mq_prato) || 0;
-  const conNK = (op) => {
-    const nTot = parseFloat(op.N_tot_g) || 0;
-    const kTot = parseFloat(op.K_tot_g) || 0;
-    return { ...op, VisitaID: visitaID,
-      OperazioneID: op.OperazioneID || generateID(),
-      N_g_m2: (isSi(op.Flag_prato) && mq > 0) ? (nTot / mq).toFixed(2) : 0,
-      K_g_m2: (isSi(op.Flag_prato) && mq > 0) ? (kTot / mq).toFixed(2) : 0 };
-  };
 
   bloccaSalvataggio(true);
   try {
-    const operazioni = pendingOperazioni.map(conNK);
+    const mq = parseFloat(DB.clienti.find(c => c.ClienteID == cid)?.Mq_prato) || 0;
+    const operazioni = pendingOperazioni.map(o => completaOperazione(o, visitaID, mq));
     const i = DB.visite.findIndex(v => v.VisitaID == visitaID);
     if (i >= 0) DB.visite[i] = visita; else DB.visite.push(visita);
     // Le operazioni della visita si riscrivono in blocco: quelle tolte dalla
@@ -1798,25 +2152,6 @@ async function saveVisita() {
   } finally {
     bloccaSalvataggio(false);
   }
-}
-
-function openModificaVisita(vid) {
-  const v = DB.visite.find(x => x.VisitaID == vid);
-  if (!v) { showToast('⚠️ Visita non trovata'); return; }
-  const c = DB.clienti.find(x => x.ClienteID == v.ClienteID);
-  editVisitaID = v.VisitaID;
-  pendingOperazioni = DB.operazioni.filter(o => o.VisitaID == vid).map(o => ({ ...o }));
-  document.getElementById('f-visita-data').value = v.Data ? new Date(v.Data).toISOString().split('T')[0] : '';
-  document.getElementById('f-visita-ore').value = v.Ore_Visita || '';
-  document.getElementById('f-visita-note').value = v.Note_visita || '';
-  document.getElementById('f-visita-prossimo').value = v.Prossimo_intervento || '';
-  document.getElementById('f-visita-mese').value = v.Mese_prossimo_intervento ? String(v.Mese_prossimo_intervento).padStart(2,'0') : '';
-  document.getElementById('f-visita-anno').value = v.Anno_prossimo_intervento || '';
-  clearVisitaCliente();
-  if (c) selectVisitaCliente(c.ClienteID, c.Cliente);
-  document.getElementById('drawer-visita-titolo').textContent = 'Modifica Visita';
-  renderOperazioniList();
-  document.getElementById('overlay-visita').classList.add('open');
 }
 
 async function eliminaVisita(vid) {
@@ -1841,113 +2176,31 @@ async function eliminaVisita(vid) {
   }
 }
 
-// ── OPERAZIONI ──
-function addOperazione() {
-  pendingOpIndex = null;
-  ['f-op-tipo','f-op-desc','f-op-concime','f-op-semente','f-op-fitofarmaco'].forEach(id => { const el = document.getElementById(id); if(el) el.value = ''; });
-  ['f-op-dose','f-op-dose-s','f-op-dose-f'].forEach(id => { const el = document.getElementById(id); if(el) el.value = ''; });
-  opPratoEnabled = false;
-  opSiepeEnabled = false;
-  document.getElementById('toggle-op-prato')?.classList.remove('on');
-  document.getElementById('toggle-op-siepe')?.classList.remove('on');
-  // popola select
-  populateOpSelects();
-  onTipoOpChange();
-  document.getElementById('overlay-operazione').classList.add('open');
-}
-
-function populateOpSelects() {
-  const sc = document.getElementById('f-op-concime');
-  sc.innerHTML = '<option value="">– scegli –</option>' + DB.concimi.map(c => `<option value="${c.ConcimeID}">${c.Concime} (N:${c.N_percento}% K:${c.K_percento}%)</option>`).join('');
-  const ss = document.getElementById('f-op-semente');
-  ss.innerHTML = '<option value="">– scegli –</option>' + DB.sementi.map(s => `<option value="${s.SementeID}">${s.Nome_commerciale}</option>`).join('');
-  const sf = document.getElementById('f-op-fitofarmaco');
-  sf.innerHTML = '<option value="">– scegli –</option>' + DB.fitofarmaci.map(f => `<option value="${f.FitofarmacaID}">${f.Nome_commerciale} (${f.Tipo})</option>`).join('');
-}
-
-function onTipoOpChange() {
-  const tipo = document.getElementById('f-op-tipo').value;
-  const showPrato = !['Potatura','Altro',''].includes(tipo);
-  document.getElementById('op-siepe-toggle-wrap').style.display = tipo === 'Potatura' ? 'block' : 'none';
-  document.getElementById('op-prato-toggle-wrap').style.display = showPrato ? 'block' : 'none';
-  document.getElementById('op-concime-wrap').style.display = tipo === 'Concimazione' ? 'block' : 'none';
-  document.getElementById('op-semente-wrap').style.display = tipo === 'Semina' ? 'block' : 'none';
-  document.getElementById('op-fitofarmaco-wrap').style.display = ['Diserbo','Trattamento fitosanitario'].includes(tipo) ? 'block' : 'none';
-  // Il toggle prato parte acceso per le operazioni che di norma si fanno sul
-  // prato, se il cliente selezionato ne ha uno. Restava spento e veniva
-  // dimenticato, e le operazioni sparivano dal report Prati.
-  const autoPrato = ['Concimazione','Semina','Diserbo'];
-  if (showPrato) {
-    const cObj = DB.clienti.find(cc => cc.ClienteID == document.getElementById('f-visita-cliente').value);
-    if (tipo === 'Arieggiatura' || (autoPrato.includes(tipo) && isSi(cObj?.Ha_prato))) {
-      opPratoEnabled = true;
-      document.getElementById('toggle-op-prato').classList.add('on');
-    }
-  }
-  if (tipo !== 'Potatura') {
-    opSiepeEnabled = false;
-    document.getElementById('toggle-op-siepe').classList.remove('on');
-  }
-}
-
-function toggleOpPrato() {
-  opPratoEnabled = !opPratoEnabled;
-  document.getElementById('toggle-op-prato').classList.toggle('on', opPratoEnabled);
-}
-
-function toggleOpSiepe() {
-  opSiepeEnabled = !opSiepeEnabled;
-  document.getElementById('toggle-op-siepe').classList.toggle('on', opSiepeEnabled);
-}
-
-function saveOperazione() {
-  const tipo = document.getElementById('f-op-tipo').value;
-  if (!tipo) { showToast('⚠️ Seleziona il tipo'); return; }
-  const concimeID = document.getElementById('f-op-concime').value;
-  const dose = parseFloat(document.getElementById('f-op-dose').value) || 0;
-  // calcola N e K in base al concime e alla dose (da completare con mq cliente al salvataggio)
-  let nTot = 0, kTot = 0;
-  if (concimeID && dose) {
-    const conc = DB.concimi.find(cc => cc.ConcimeID == concimeID);
-    if (conc) {
-      nTot = dose * parseFloat(conc.N_percento) / 100 * 1000; // grammi totali
-      kTot = dose * parseFloat(conc.K_percento) / 100 * 1000;
-    }
-  }
-  const op = {
-    Tipo_operazione: tipo,
-    Descrizione: document.getElementById('f-op-desc').value.trim(),
-    Flag_prato: opPratoEnabled || tipo === 'Arieggiatura' ? 'Sì' : '',
-    Flag_siepe: opSiepeEnabled && tipo === 'Potatura' ? 'Sì' : '',
-    ConcimeID: concimeID,
-    SementeID: document.getElementById('f-op-semente').value,
-    FitofarmacaID: document.getElementById('f-op-fitofarmaco').value,
-    Dose_kg: dose || document.getElementById('f-op-dose-s').value || document.getElementById('f-op-dose-f').value,
-    Note_operazione: '',
-    N_tot_g: nTot.toFixed(0), K_tot_g: kTot.toFixed(0), N_g_m2: 0, K_g_m2: 0,
-  };
-  if (pendingOpIndex !== null) pendingOperazioni[pendingOpIndex] = { ...pendingOperazioni[pendingOpIndex], ...op };
-  else pendingOperazioni.push(op);
-  closeDrawer('overlay-operazione');
-  renderOperazioniList();
-}
-
-function renderOperazioniList() {
-  const list = document.getElementById('operazioni-list');
-  if (!pendingOperazioni.length) { list.innerHTML = '<div style="font-size:0.8rem;color:var(--text-light);padding:4px 0">Nessuna operazione aggiunta</div>'; return; }
-  list.innerHTML = pendingOperazioni.map((op, i) => `
-    <div style="display:flex; align-items:center; gap:8px; padding:8px 10px; background:var(--green-mist); border-radius:8px; margin-bottom:6px; font-size:0.82rem">
-      <span>${isSi(op.Flag_prato)?'🌱':'✂️'}</span>
-      <span style="flex:1;font-weight:500">${op.Tipo_operazione}${op.Descrizione?' – '+op.Descrizione:''}</span>
-      <button onclick="pendingOperazioni.splice(${i},1); renderOperazioniList()" style="background:none;border:none;cursor:pointer;font-size:1rem;color:var(--red)">✕</button>
-    </div>`).join('');
-}
-
 // ── DATI, BACKUP, ARCHIVI ──
 // Gli archivi (concimi, sementi, fitofarmaci, fasce) stavano su Sheets e si
 // modificavano lì. Senza foglio vanno gestiti qui, altrimenti il giorno che
 // compri un concime nuovo non hai dove metterlo.
 const ARCHIVI = {
+  tipiOperazione: {
+    titolo: 'Tipi di operazione', singolare: 'tipo di operazione', articolo: 'Nuovo', icona: '🧰', id: 'TipoID',
+    campi: [
+      { k:'Nome', label:'Nome', obbligatorio:true },
+      { k:'dettaglio', label:'Cosa chiede quando la spunti', tipo:'select', opzioni:[
+        { v:'niente',      label:'Niente' },
+        { v:'concime',     label:'Un concime e la quantità' },
+        { v:'semente',     label:'Una semente e la quantità' },
+        { v:'fitofarmaco', label:'Un fitofarmaco e la quantità' },
+        { v:'quantita',    label:'Solo una quantità' },
+      ] },
+      { k:'Unita', label:'Unità di misura (kg, l, n, m², sacchi…)' },
+      { k:'ChiedeCosa', label:'Chiede anche "cosa" (la specie, il materiale)', tipo:'flag' },
+      { k:'Prato', label:'Riguarda il prato', tipo:'flag' },
+      { k:'Siepe', label:'Riguarda la siepe', tipo:'flag' },
+      { k:'Ordine', label:'Posizione in elenco', tipo:'number' },
+    ],
+    riga: t => `${t.Nome}${t.Unita ? ' · ' + t.Unita : ''}${isSi(t.Prato) ? ' · prato' : ''}${isSi(t.Siepe) ? ' · siepe' : ''}`,
+    usato: t => DB.operazioni.filter(o => o.TipoID === t.TipoID).length,
+  },
   concimi: {
     titolo: 'Concimi', singolare: 'concime', articolo: 'Nuovo', icona: '🧪', id: 'ConcimeID',
     campi: [
@@ -2157,7 +2410,7 @@ function righeCSV(tipo) {
     return '';
   };
   return {
-    intestazioni: ['Data','Cliente','Operazione','Descrizione','Prato','Siepe','Prodotto','Dose kg','N tot g','K tot g','N g/m2','K g/m2'],
+    intestazioni: ['Data','Cliente','Operazione','Descrizione','Prato','Siepe','Prodotto','Quantità','Unità','N tot g','K tot g','N g/m2','K g/m2'],
     righe: DB.operazioni
       .map(o => ({ o, v: DB.visite.find(v => v.VisitaID == o.VisitaID) }))
       .sort((a, b) => String(a.v?.Data || '').localeCompare(String(b.v?.Data || '')))
@@ -2165,7 +2418,7 @@ function righeCSV(tipo) {
         const c = v ? cliente(v.ClienteID) : null;
         return [v?.Data || '', c?.Cliente || '', o.Tipo_operazione, o.Descrizione,
           isSi(o.Flag_prato) ? 'sì' : '', isSi(o.Flag_siepe) ? 'sì' : '',
-          nomeProdotto(o), o.Dose_kg, o.N_tot_g, o.K_tot_g, o.N_g_m2, o.K_g_m2];
+          nomeProdotto(o), o.Quantita, o.Unita, o.N_tot_g, o.K_tot_g, o.N_g_m2, o.K_g_m2];
       }),
   };
 }
@@ -2246,12 +2499,24 @@ function openVoceArchivio(tipo, id) {
   if (id != null && !voce) { showToast('⚠️ Voce non trovata'); return; }
   document.getElementById('drawer-archivio-title').textContent =
     voce ? 'Modifica ' + def.singolare : def.articolo + ' ' + def.singolare;
-  document.getElementById('archivio-campi').innerHTML = def.campi.map(campo => `
-    <div class="form-group">
-      <label class="form-label">${campo.label}${campo.obbligatorio ? ' *' : ''}</label>
-      <input type="${campo.tipo === 'number' ? 'number' : 'text'}" class="form-control"
-             id="f-arch-${campo.k}" step="any" value="${voce ? String(voce[campo.k] ?? '').replace(/"/g, '&quot;') : ''}">
-    </div>`).join('');
+  document.getElementById('archivio-campi').innerHTML = def.campi.map(campo => {
+    const valore = voce ? (voce[campo.k] ?? '') : '';
+    if (campo.tipo === 'flag') {
+      return `<div class="form-group" style="display:flex; align-items:center; justify-content:space-between; gap:12px">
+          <label class="form-label" style="margin:0">${campo.label}</label>
+          <button type="button" class="toggle ${isSi(valore) ? 'on' : ''}" id="f-arch-${campo.k}" onclick="this.classList.toggle('on')"></button>
+        </div>`;
+    }
+    const controllo = campo.tipo === 'select'
+      ? `<select class="form-control" id="f-arch-${campo.k}">${campo.opzioni.map(o =>
+          `<option value="${o.v}" ${String(valore) === o.v ? 'selected' : ''}>${o.label}</option>`).join('')}</select>`
+      : `<input type="${campo.tipo === 'number' ? 'number' : 'text'}" class="form-control"
+             id="f-arch-${campo.k}" step="any" value="${perValore(valore)}">`;
+    return `<div class="form-group">
+        <label class="form-label">${campo.label}${campo.obbligatorio ? ' *' : ''}</label>
+        ${controllo}
+      </div>`;
+  }).join('');
   document.getElementById('overlay-archivio').classList.add('open');
 }
 
@@ -2261,7 +2526,8 @@ async function salvaVoceArchivio() {
   const lista = DB[archivioAperto];
   const dati = {};
   for (const campo of def.campi) {
-    const v = document.getElementById('f-arch-' + campo.k).value.trim();
+    const el = document.getElementById('f-arch-' + campo.k);
+    const v = campo.tipo === 'flag' ? (el.classList.contains('on') ? 'Sì' : '') : el.value.trim();
     if (campo.obbligatorio && !v) { showToast('⚠️ Manca: ' + campo.label); return; }
     dati[campo.k] = v;
   }
@@ -2360,6 +2626,13 @@ async function importaDaSheets() {
 // Un id o un nome finiscono dentro una stringa JavaScript dentro un attributo
 // HTML: vanno protetti per entrambi, o un apostrofo — "D'Angelo", "Dall'Oglio"
 // — rende il bottone non cliccabile.
+// Testo che finisce dentro il markup o in un attributo value.
+function perValore(v) {
+  return String(v == null ? '' : v)
+    .replace(/&/g, '&amp;').replace(/"/g, '&quot;')
+    .replace(/</g, '&lt;').replace(/>/g, '&gt;');
+}
+
 function perOnclick(v) {
   return String(v == null ? '' : v)
     .replace(/\\/g, '\\\\')
