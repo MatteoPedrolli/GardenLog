@@ -103,6 +103,16 @@ sembra completo mentre gli manca lo smaltimento è peggio di nessun totale.
 Potature, taglio prato e arieggiatura non hanno voce collegata: sono
 manodopera, già contata dalle ore. Collegarle vorrebbe dire fatturarle due volte.
 
+**Il trasferimento compare sempre**, con l'importo da scrivere: c'è a ogni
+lavoro e si valuta volta per volta. Doverlo aggiungere a mano era il modo
+migliore per dimenticarlo, e dimenticarlo costa all'azienda.
+
+**Una voce `ACorpo` si paga con una cifra sola, non a misura.** Il trattamento
+fitosanitario si fattura così: nel conto vale 1 × l'importo, mentre prodotto e
+litri restano sull'operazione, dove servono al registro dei trattamenti. È la
+ragione per cui agronomia e conto sono due elenchi distinti sulla stessa
+visita: lo stesso fatto si misura in modi diversi a seconda di chi lo legge.
+
 ## Cose da sapere prima di metterci mano
 
 - L'interfaccia usa `onclick="funzione()"`, quindi le funzioni devono restare

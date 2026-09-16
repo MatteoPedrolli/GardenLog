@@ -124,10 +124,12 @@ try {
   await page.waitForTimeout(300);
   ok('rapportino aperto sul cliente giusto',
     (await page.textContent('#rapportino-corpo')).includes('Mario Rossi'));
-  ok('due righe automatiche: manodopera e concime',
-    await page.locator('#conto-righe .conto-riga').count() === 2);
+  ok('tre righe automatiche: manodopera, trasferimento, concime',
+    await page.locator('#conto-righe .conto-riga').count() === 3);
   ok('manodopera precompilata con le ore calcolate',
     await page.locator('#conto-righe .conto-riga').first().locator('input').first().inputValue() === '8');
+  ok('il trasferimento c\'è sempre, senza aggiungerlo',
+    (await page.textContent('#conto-righe')).includes('Trasferimento'));
   ok('la potatura non fa riga: è manodopera, non un materiale',
     !(await page.textContent('#conto-righe')).includes('Riparazione irrigazione'));
 
@@ -136,19 +138,20 @@ try {
     (await page.textContent('#conto-totale')).includes('senza prezzo'));
 
   const riga = i => page.locator('#conto-righe .conto-riga').nth(i);
-  await riga(0).locator('input').nth(1).fill('32');
-  await riga(1).locator('input').nth(1).fill('1.8');
+  await riga(0).locator('input').nth(1).fill('32');   // manodopera
+  await riga(1).locator('input').nth(1).fill('45');   // trasferimento, a occhio
+  await riga(2).locator('input').nth(1).fill('1.8');  // concime
   await page.waitForTimeout(200);
-  // 8 h × 32 € + 10 kg × 1,80 € = 274 €
+  // 8 h × 32 € + 45 € + 10 kg × 1,80 € = 319 €
   ok('totale calcolato dalle righe',
-    (await page.textContent('#conto-totale')).includes('274,00'));
+    (await page.textContent('#conto-totale')).includes('319,00'));
   ok('niente più avvisi quando i prezzi ci sono tutti',
     !(await page.textContent('#conto-totale')).includes('senza prezzo'));
 
   await page.fill('#f-conto-libera', 'Noleggio rullo');
   await page.press('#f-conto-libera', 'Enter');
   await page.waitForTimeout(200);
-  ok('riga aggiunta a mano', await page.locator('#conto-righe .conto-riga').count() === 3);
+  ok('riga aggiunta a mano', await page.locator('#conto-righe .conto-riga').count() === 4);
   await page.waitForTimeout(700);   // il salvataggio è differito
 
   // ── persistenza ──
@@ -158,9 +161,24 @@ try {
     await page.evaluate(() => DB.clienti.length === 1 && DB.visite.length === 1 && DB.operazioni.length === 2));
   ok('archivio ritrovato dopo la ricarica', await page.evaluate(() => DB.concimi.length) === 1);
   ok('conto del rapportino ritrovato dopo la ricarica',
-    await page.evaluate(() => DB.visite[0].Conto?.length) === 3);
+    await page.evaluate(() => DB.visite[0].Conto?.length) === 4);
   ok('prezzo scritto a mano sopravvive alla ricarica',
     await page.evaluate(() => DB.visite[0].Conto.find(r => r.Chiave === 'manodopera').Prezzo) == 32);
+
+  // ── il trattamento si fattura a corpo, non a litri ──
+  ok('la voce trattamento è a corpo',
+    await page.evaluate(() => isSi(DB.voci.find(v => v.VoceID === 'trattamento').ACorpo)));
+  ok('il trattamento è agganciato alla voce a corpo, non al fitofarmaco',
+    await page.evaluate(() => DB.tipiOperazione.find(t => t.TipoID === 'trattamento-fitosanitario').VoceID) === 'trattamento');
+  ok('due litri di prodotto fanno una riga da uno, non da due', await page.evaluate(() => {
+    const v = DB.visite[0];
+    const finta = { OperazioneID:'op-test', VisitaID: v.VisitaID, TipoID:'trattamento-fitosanitario',
+      Tipo_operazione:'Trattamento fitosanitario', Quantita: 2, Unita:'l' };
+    DB.operazioni.push(finta);
+    const riga = righeAutomatiche(v).find(r => r.Chiave === 'op-test');
+    DB.operazioni = DB.operazioni.filter(o => o.OperazioneID !== 'op-test');
+    return riga && riga.Quantita === 1 && riga.Unita === '';
+  }));
 
   // ── il conto segue la visita, ma non cancella quello che hai scritto tu ──
   await page.click('#nav-visite');
@@ -180,8 +198,8 @@ try {
     await page.locator('#conto-righe .conto-riga').first().locator('input').nth(1).inputValue() === '32');
   ok('la riga aggiunta a mano non sparisce',
     (await page.textContent('#conto-righe')).includes('Noleggio rullo'));
-  // 12 h × 32 € + 10 kg × 1,80 € = 402 €
-  ok('totale ricalcolato', (await page.textContent('#conto-totale')).includes('402,00'));
+  // 12 h × 32 € + 45 € + 10 kg × 1,80 € = 447 €
+  ok('totale ricalcolato', (await page.textContent('#conto-totale')).includes('447,00'));
   await page.waitForTimeout(700);
   await page.click('#nav-visite');
 
@@ -221,6 +239,24 @@ try {
         && b.TipoID === 'concimazione' && b.Quantita === 7 && b.Dose_kg === undefined
         && c.TipoID === 'diserbo-selettivo'
         && db.tipiOperazione.length === 13;
+  }));
+  ok('migrazione 4 → 5 senza calpestare i prezzi già messi', await page.evaluate(() => {
+    const db = migra({
+      voci: [{ VoceID:'trasferimento', Nome:'Trasferimento', Prezzo: 45 }],
+      tipiOperazione: [{ TipoID:'trattamento-fitosanitario', Nome:'Trattamento fitosanitario', VoceID:'fitofarmaco' }],
+    }, 4);
+    const trasf = db.voci.find(v => v.VoceID === 'trasferimento');
+    const tipo = db.tipiOperazione.find(t => t.TipoID === 'trattamento-fitosanitario');
+    return isSi(trasf.ACorpo) && trasf.Prezzo === 45
+        && db.voci.some(v => v.VoceID === 'trattamento')
+        && tipo.VoceID === 'trattamento';
+  }));
+  ok('un aggancio scelto a mano non viene riscritto dalla migrazione', await page.evaluate(() => {
+    const db = migra({
+      voci: [{ VoceID:'trasferimento', Nome:'Trasferimento' }],
+      tipiOperazione: [{ TipoID:'trattamento-fitosanitario', VoceID:'concime' }],
+    }, 4);
+    return db.tipiOperazione[0].VoceID === 'concime';
   }));
   ok('dati già aggiornati passano indenni',
     await page.evaluate(() => migra({ clienti: [{ ClienteID: 'y', Cliente: 'Nuovo' }] }, 2).clienti[0].Cliente === 'Nuovo'));

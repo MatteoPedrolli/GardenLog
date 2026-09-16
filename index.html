@@ -907,7 +907,7 @@ const IDB_STORE = 'stato';
 const IDB_CHIAVE = 'db';
 const MIRROR_KEY = 'giardinolog-db';
 const CACHE_SHEETS = 'giardino-db-v1';  // cache locale di quando si leggeva da Sheets
-const VERSIONE_DATI = 4;
+const VERSIONE_DATI = 5;
 
 const COLLEZIONI = ['clienti', 'visite', 'operazioni', 'concimi', 'sementi', 'fitofarmaci', 'fasce', 'tipiOperazione', 'voci'];
 
@@ -955,14 +955,15 @@ const TIPI_DEFAULT = [
 // Un prezzo inventato nel codice sarebbe peggio di nessun prezzo.
 const VOCI_DEFAULT = [
   { VoceID:'manodopera',        Nome:'Manodopera',        Unita:'h',      Prezzo:'', Ordine:1 },
-  { VoceID:'trasferimento',     Nome:'Trasferimento',     Unita:'',       Prezzo:'', Ordine:2 },
+  { VoceID:'trasferimento',     Nome:'Trasferimento',     Unita:'',       Prezzo:'', ACorpo:'Sì', Ordine:2 },
   { VoceID:'piante',            Nome:'Piante',            Unita:'n',      Prezzo:'', Ordine:3 },
   { VoceID:'concime',           Nome:'Concime',           Unita:'kg',     Prezzo:'', Ordine:4 },
   { VoceID:'semente',           Nome:'Semente',           Unita:'kg',     Prezzo:'', Ordine:5 },
   { VoceID:'fitofarmaco',       Nome:'Fitofarmaco',       Unita:'l',      Prezzo:'', Ordine:6 },
-  { VoceID:'terriccio',         Nome:'Terriccio',         Unita:'sacchi', Prezzo:'', Ordine:7 },
-  { VoceID:'tappeto-erboso',    Nome:'Tappeto erboso',    Unita:'m²',     Prezzo:'', Ordine:8 },
-  { VoceID:'smaltimento-verde', Nome:'Smaltimento verde', Unita:'kg',     Prezzo:'', Ordine:9 },
+  { VoceID:'trattamento',       Nome:'Trattamento fitosanitario', Unita:'', Prezzo:'', ACorpo:'Sì', Ordine:7 },
+  { VoceID:'terriccio',         Nome:'Terriccio',         Unita:'sacchi', Prezzo:'', Ordine:8 },
+  { VoceID:'tappeto-erboso',    Nome:'Tappeto erboso',    Unita:'m²',     Prezzo:'', Ordine:9 },
+  { VoceID:'smaltimento-verde', Nome:'Smaltimento verde', Unita:'kg',     Prezzo:'', Ordine:10 },
 ];
 
 // Quale voce di conto nasce da quale lavoro. Potature, taglio prato e
@@ -973,7 +974,7 @@ const VOCE_PER_TIPO = {
   'semina': 'semente',
   'diserbo-selettivo': 'fitofarmaco',
   'diserbo-totale': 'fitofarmaco',
-  'trattamento-fitosanitario': 'fitofarmaco',
+  'trattamento-fitosanitario': 'trattamento',
   'apporto-terriccio': 'terriccio',
   'posa-tappeto-erboso': 'tappeto-erboso',
   'piantumazione': 'piante',
@@ -1096,6 +1097,26 @@ const MIGRAZIONI = {
     if (!db.voci.length) db.voci = VOCI_DEFAULT.map(v => ({ ...v }));
     db.tipiOperazione.forEach(t => {
       if (t.VoceID == null) t.VoceID = VOCE_PER_TIPO[t.TipoID] || '';
+    });
+    return db;
+  },
+
+  // 4 → 5: il trasferimento c'è a ogni lavoro e si valuta a occhio, quindi
+  // compare da solo nel conto invece di aggiungerlo ogni volta — aggiungerlo a
+  // mano era il modo migliore per scordarselo. E il trattamento fitosanitario
+  // non si fattura a litri ma a corpo: il prodotto e la dose restano nella
+  // visita, dove servono al registro dei trattamenti, ma nel conto sono una
+  // cifra sola.
+  5: db => {
+    const trasferimento = db.voci.find(v => v.VoceID === 'trasferimento');
+    if (trasferimento && trasferimento.ACorpo == null) trasferimento.ACorpo = 'Sì';
+    if (!db.voci.some(v => v.VoceID === 'trattamento')) {
+      db.voci.push({ VoceID:'trattamento', Nome:'Trattamento fitosanitario',
+        Unita:'', Prezzo:'', ACorpo:'Sì', Ordine:7 });
+    }
+    // solo dove è rimasto l'aggancio di partenza: se l'hai cambiato tu, resta il tuo
+    db.tipiOperazione.forEach(t => {
+      if (t.TipoID === 'trattamento-fitosanitario' && t.VoceID === 'fitofarmaco') t.VoceID = 'trattamento';
     });
     return db;
   },
@@ -2297,22 +2318,39 @@ let salvaContoTimer = null;
 // Le righe che il conto avrebbe se nascesse adesso dai dati della visita.
 function righeAutomatiche(visita) {
   const righe = [];
+  const voceDi = id => DB.voci.find(v => v.VoceID === id);
+
   const ore = oreTotali(visita.Fasce);
   if (ore > 0) {
-    const voce = DB.voci.find(v => v.VoceID === 'manodopera');
+    const voce = voceDi('manodopera');
     righe.push({ Chiave: 'manodopera', VoceID: 'manodopera',
       Voce: voce?.Nome || 'Manodopera', Unita: voce?.Unita || 'h',
       Quantita: Number(ore.toFixed(2)), Prezzo: voce?.Prezzo ?? '' });
   }
+
+  // Il trasferimento c'è a ogni lavoro e l'importo si decide volta per volta:
+  // compare da solo con la cifra da scrivere. Doverlo aggiungere ogni volta
+  // era il modo migliore per dimenticarselo, e dimenticarlo costa all'azienda.
+  const trasferimento = voceDi('trasferimento');
+  if (trasferimento) {
+    righe.push({ Chiave: 'trasferimento', VoceID: 'trasferimento',
+      Voce: trasferimento.Nome, Unita: trasferimento.Unita || '',
+      Quantita: 1, Prezzo: trasferimento.Prezzo ?? '' });
+  }
+
   DB.operazioni.filter(o => o.VisitaID == visita.VisitaID).forEach(o => {
     const tipo = tipoDi(o.TipoID);
     if (!tipo?.VoceID) return;              // potature e tagli sono manodopera
-    const quantita = parseFloat(o.Quantita);
+    const voce = voceDi(tipo.VoceID);
+    // Una voce a corpo si paga con una cifra sola, non a misura: il trattamento
+    // fitosanitario si fattura così. I litri restano registrati sull'operazione,
+    // dove servono al registro dei trattamenti, ma qui non moltiplicano niente.
+    const aCorpo = isSi(voce?.ACorpo);
+    const quantita = aCorpo ? 1 : parseFloat(o.Quantita);
     if (!quantita) return;                  // senza quantità non c'è niente da conteggiare
-    const voce = DB.voci.find(v => v.VoceID === tipo.VoceID);
     righe.push({ Chiave: o.OperazioneID, VoceID: tipo.VoceID,
       Voce: (voce?.Nome || tipo.Nome) + (o.Descrizione ? ' – ' + o.Descrizione : ''),
-      Unita: o.Unita || voce?.Unita || '',
+      Unita: aCorpo ? '' : (o.Unita || voce?.Unita || ''),
       Quantita: quantita, Prezzo: voce?.Prezzo ?? '' });
   });
   return righe;
@@ -2537,9 +2575,10 @@ const ARCHIVI = {
       { k:'Nome', label:'Nome', obbligatorio:true },
       { k:'Unita', label:'Unità di misura (h, kg, n, m²…)' },
       { k:'Prezzo', label:'Prezzo unitario in € — lascia vuoto se lo decidi volta per volta', tipo:'number' },
+      { k:'ACorpo', label:'Si paga a corpo (una cifra sola, non a misura)', tipo:'flag' },
       { k:'Ordine', label:'Posizione in elenco', tipo:'number' },
     ],
-    riga: v => `${v.Nome}${v.Unita ? ' · ' + v.Unita : ''} · ${v.Prezzo !== '' && v.Prezzo != null
+    riga: v => `${v.Nome}${v.Unita ? ' · ' + v.Unita : ''}${isSi(v.ACorpo) ? ' · a corpo' : ''} · ${v.Prezzo !== '' && v.Prezzo != null
       ? formattaEuro(v.Prezzo) + (v.Unita ? '/' + v.Unita : '')
       : 'prezzo a mano'}`,
     usato: v => DB.tipiOperazione.filter(t => t.VoceID === v.VoceID).length,
