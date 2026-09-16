@@ -83,6 +83,26 @@ I campi che l'utente compila usano `oninput`, non `onchange`: con `onchange` il
 modello resta indietro fino al blur. E non si ridisegna l'elenco mentre si
 scrive — si aggiorna solo quello che cambia, o il campo sparisce da sotto le dita.
 
+## Il rapportino e il conto
+
+Il conto di fine lavoro **nasce già compilato**: la manodopera dalle fasce
+orarie, i materiali dalle operazioni che hanno una voce collegata. Chi lo apre
+corregge, non scrive da zero.
+
+Ogni riga automatica porta una `Chiave` che dice da dove nasce — `manodopera`
+oppure l'`OperazioneID`. `costruisciConto()` la usa per riallineare: le
+quantità seguono i dati della visita, **un prezzo scritto a mano non viene mai
+risovrascritto dal listino**, e le righe aggiunte a mano (senza `Chiave`)
+restano dove sono.
+
+I prezzi in `DB.voci` sono facoltativi. Vuoto non è un errore: vuol dire che
+quella voce si valuta volta per volta. Il totale somma solo le righe che hanno
+sia quantità sia prezzo, e **dice quante ne ha lasciate fuori** — un totale che
+sembra completo mentre gli manca lo smaltimento è peggio di nessun totale.
+
+Potature, taglio prato e arieggiatura non hanno voce collegata: sono
+manodopera, già contata dalle ore. Collegarle vorrebbe dire fatturarle due volte.
+
 ## Cose da sapere prima di metterci mano
 
 - L'interfaccia usa `onclick="funzione()"`, quindi le funzioni devono restare
@@ -102,3 +122,8 @@ scrive — si aggiorna solo quello che cambia, o il campo sparisce da sotto le d
   report Prati.
 - Sulle operazioni il campo è `Quantita` con la sua `Unita`. Si chiamava
   `Dose_kg` e mentiva: i liquidi sono in litri e le piante si contano a numero.
+- `saveVisita()` riparte da `{ ...precedente }`. Il modulo della visita non
+  conosce tutti i campi — il conto si compila altrove — e ricostruire l'oggetto
+  da zero cancella quello che non vede. È già successo.
+- Le pagine che sono testo nudo, non schede, devono darsi il margine laterale
+  da sole: `#content` non ne ha, e gli importi finiscono oltre il bordo.
