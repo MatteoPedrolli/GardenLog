@@ -203,10 +203,17 @@ try {
   ok('target ancora collegato dopo la rinumerazione',
     await page.evaluate(() => DB.clienti.find(c => c.Cliente === 'Mario Rossi').Target_N_g_m2_anno) == 25);
 
-  // ── eliminazione a cascata ──
+  // ── scheda cliente: riepilogo prato in una riga ──
   await page.click('#nav-clienti');
   await page.click('.client-card');
   await page.waitForTimeout(200);
+  const scheda = await page.textContent('#page-clienti');
+  ok('scheda cliente: fascia, superficie e percentuale',
+    scheda.includes('Fascia 7') && scheda.includes('200 mq') && scheda.includes('concimato'));
+  ok('scheda cliente: niente dettaglio di azoto e potassio',
+    !scheda.includes('Target N') && !scheda.includes('g/m²'), scheda.slice(0, 0));
+
+  // ── eliminazione a cascata ──
   await page.click('button.btn-danger:has-text("Elimina")');
   await page.waitForTimeout(400);
   ok('cliente eliminato con visite e operazioni',

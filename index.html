@@ -1209,20 +1209,8 @@ function showCliente(id) {
   if (!c) return;
   const visite = DB.visite.filter(v => v.ClienteID == id);
   const page = document.getElementById('page-clienti');
-  // calcola N/K anno corrente per prato
   const annoCorr = new Date().getFullYear();
-  const visitIdsCliente = visite.filter(v => v.Data && new Date(v.Data).getFullYear() == annoCorr).map(v => v.VisitaID);
-  const opsCliente = DB.operazioni.filter(o => visitIdsCliente.includes(o.VisitaID));
-  let nSomm = 0, kSomm = 0;
-  opsCliente.filter(o => o.ConcimeID && isSi(o.Flag_prato)).forEach(o => {
-    const conc = DB.concimi.find(cc => cc.ConcimeID == o.ConcimeID);
-    if (conc && o.Quantita && c.Mq_prato) {
-      const dose = parseFloat(o.Quantita) || 0;
-      const mq = parseFloat(c.Mq_prato) || 1;
-      nSomm += (dose * parseFloat(conc.N_percento) / 100 * 1000) / mq;
-      kSomm += (dose * parseFloat(conc.K_percento) / 100 * 1000) / mq;
-    }
-  });
+  const prato = isSi(c.Ha_prato) ? calcPratoData(c, annoCorr) : null;
   // ultima potatura siepe
   const opsAll = DB.operazioni.filter(o => DB.visite.find(vv => vv.VisitaID == o.VisitaID && vv.ClienteID == c.ClienteID));
   const ultimaSiepe = opsAll.filter(o => isSi(o.Flag_siepe)).map(o => {
@@ -1242,16 +1230,15 @@ function showCliente(id) {
         ${c.Lat && c.Lng ? `<div class="info-item" style="cursor:pointer" onclick="window.open('https://maps.google.com/?q=${c.Lat},${c.Lng}','_blank')"><div class="info-label">Posizione</div><div class="info-value">📍 Maps</div></div>` : '<div class="info-item"><div class="info-label">Posizione</div><div class="info-value">–</div></div>'}
       </div>
 
-      ${isSi(c.Ha_prato) ? `
-      <div style="background:var(--green-mist); border-radius:var(--radius); padding:14px; margin-bottom:14px; border:1px solid var(--green-pale)">
-        <div style="font-family:var(--font-display); font-size:0.95rem; font-weight:600; color:var(--green-deep); margin-bottom:10px">🌱 Riepilogo Prato</div>
-        <div class="info-grid" style="margin-bottom:8px">
-          <div class="info-item"><div class="info-label">Superficie</div><div class="info-value">${c.Mq_prato} mq</div></div>
-          <div class="info-item"><div class="info-label">Fascia</div><div class="info-value">${c.FasciaID ? 'Fascia '+c.FasciaID : '–'}</div></div>
-          <div class="info-item"><div class="info-label">N somm. ${annoCorr}</div><div class="info-value">${nSomm.toFixed(1)} g/m²</div></div>
-          <div class="info-item"><div class="info-label">Target N</div><div class="info-value">${c.Target_N_g_m2_anno || '–'} g/m²</div></div>
-          <div class="info-item"><div class="info-label">K somm. ${annoCorr}</div><div class="info-value">${kSomm.toFixed(1)} g/m²</div></div>
-          <div class="info-item"><div class="info-label">Target K</div><div class="info-value">${c.Target_K_g_m2_anno || '–'} g/m²</div></div>
+      ${prato ? `
+      <div style="background:var(--green-mist); border-radius:var(--radius); padding:12px 14px; margin-bottom:14px; border:1px solid var(--green-pale); display:flex; align-items:center; gap:10px">
+        <div class="semaforo ${prato.targetN > 0 ? prato.sem : ''}" style="width:12px;height:12px;flex-shrink:0"></div>
+        <div style="flex:1; font-size:0.88rem; color:var(--green-deep)">
+          <span style="font-weight:600">${c.FasciaID ? 'Fascia ' + c.FasciaID : 'Nessuna fascia'}</span>
+          <span style="color:var(--text-light)"> · </span>${c.Mq_prato ? c.Mq_prato + ' mq' : 'mq non indicati'}
+          <span style="color:var(--text-light)"> · </span>${prato.targetN > 0
+            ? `<span style="font-weight:600">${Math.round(prato.pctN * 100)}% concimato</span>`
+            : '<span style="color:var(--text-light)">nessun target</span>'}
         </div>
       </div>` : ''}
 
@@ -1772,7 +1759,9 @@ function fasciaProposta(clienteID) {
     conta.set(chiave, (conta.get(chiave) || 0) + (clienteID && v.ClienteID == clienteID ? 10 : 1));
   }));
   const migliore = [...conta.entries()].sort((a, b) => b[1] - a[1])[0];
-  if (!migliore) return { Inizio: '08:00', Fine: '12:00', Persone: 1, proposta: true };
+  // Due persone: si lavora quasi sempre in coppia, e partire dal caso
+  // frequente è un tocco risparmiato a ogni visita.
+  if (!migliore) return { Inizio: '08:00', Fine: '12:00', Persone: 2, proposta: true };
   const [Inizio, Fine, Persone] = migliore[0].split('|');
   return { Inizio, Fine, Persone: Number(Persone) || 1, proposta: true };
 }
