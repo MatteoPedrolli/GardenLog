@@ -219,6 +219,32 @@ try {
   ok('cliente eliminato con visite e operazioni',
     await page.evaluate(() => DB.visite.length === 0 && DB.operazioni.length === 0));
 
+  // ── tasto indietro: chiude un livello per volta, non esce dall'app ──
+  await page.click('#nav-prati');
+  await page.goBack();
+  await page.waitForTimeout(200);
+  ok('indietro da una pagina riporta alla home', await page.isVisible('#page-home'));
+  ok('indietro non ha fatto uscire dall\'app', await page.evaluate(() => typeof DB === 'object'));
+
+  await page.click('#nav-clienti');
+  await page.click('#topbar-action-btn');
+  await page.waitForTimeout(200);
+  ok('pannello aperto', await page.evaluate(() => !!document.querySelector('.overlay.open')));
+  await page.goBack();
+  await page.waitForTimeout(200);
+  ok('indietro chiude il pannello', await page.evaluate(() => !document.querySelector('.overlay.open')));
+  ok('indietro sul pannello lascia la pagina dov\'era', await page.isVisible('#page-clienti'));
+
+  await page.click('.client-card');
+  await page.waitForTimeout(200);
+  await page.goBack();
+  await page.waitForTimeout(200);
+  ok('indietro dalla scheda cliente torna alla lista',
+    await page.evaluate(() => !!document.getElementById('clienti-list')));
+
+  await page.click('#nav-home');
+  await page.waitForTimeout(150);
+
   // ── offline ──
   await page.waitForTimeout(1200);  // lascia installare il service worker
   await ctx.setOffline(true);

@@ -1114,6 +1114,7 @@ async function init() {
   aggiornaAvvisoBackup();
   chiediPersistenza();
   registraServiceWorker();
+  armaIndietro();
 }
 
 // I flag dovrebbero essere "Sì", ma un backup importato o una vecchia riga di
@@ -1147,6 +1148,37 @@ function navTo(page) {
     ['prati','prossimi','dati'].includes(page) ? 'none' : 'flex';
   if (page === 'dati') renderDati();
 }
+
+// ── TASTO INDIETRO ──
+// Premendolo si usciva dall'app: la navigazione avviene tutta dentro la stessa
+// pagina, quindi per il browser non c'è nessun "prima" a cui tornare se non
+// la pagina da cui si è arrivati.
+//
+// Teniamo una voce di scorta nella cronologia: il tasto indietro se la mangia,
+// noi chiudiamo un livello e ne rimettiamo un'altra. Quando non resta niente
+// da chiudere non la rimettiamo, e l'app esce come ci si aspetta. Contare i
+// livelli aperti non serve, ed è proprio il conteggio che andrebbe fuori sincrono
+// ogni volta che si chiude un pannello dal suo bottone.
+function armaIndietro() {
+  history.pushState({ giardino: true }, '');
+}
+
+// Chiude un livello solo. Restituisce false quando non c'era niente da chiudere.
+function tornaIndietro() {
+  const aperto = document.querySelector('.overlay.open');
+  if (aperto) { aperto.classList.remove('open'); return true; }
+  // la scheda di un cliente rimpiazza la lista: si torna alla lista
+  if (currentPage === 'clienti' && !document.getElementById('clienti-list')) {
+    renderClientiPage();
+    return true;
+  }
+  if (currentPage !== 'home') { navTo('home'); return true; }
+  return false;
+}
+
+window.addEventListener('popstate', () => {
+  if (tornaIndietro()) armaIndietro();
+});
 
 function topbarAction() {
   if (currentPage === 'clienti') openNuovoCliente();
