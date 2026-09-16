@@ -1,0 +1,14 @@
+{
+  "name": "giardinolog",
+  "version": "2.0.0",
+  "description": "App per registrare gli interventi di giardinaggio, con i dati sul dispositivo",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "test": "node test/app.test.mjs",
+    "start": "node -e \"import('./test/server.mjs').then(async m => console.log('App su', (await m.avviaServer(process.cwd())).url))\""
+  },
+  "devDependencies": {
+    "playwright": "^1.56.1"
+  }
+}

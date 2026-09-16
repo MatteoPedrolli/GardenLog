@@ -977,6 +977,36 @@ function normalizzaDB(grezzo) {
   return pulito;
 }
 
+// ── MIGRAZIONI ──
+// Ogni dato che entra — da IndexedDB, da un backup, dal vecchio foglio — passa
+// di qui e ne esce alla versione corrente. È l'unico posto in cui aggiungere un
+// passaggio quando lo schema cambia: così un backup esportato oggi si riapre
+// anche fra due versioni, invece di far ripartire da capo chi lo tira fuori.
+//
+// Per aggiungere un passaggio: alza VERSIONE_DATI e scrivi qui la voce con il
+// numero nuovo. Deve funzionare anche su dati già a posto, perché un backup
+// senza versione viene trattato come il più vecchio e li attraversa tutti.
+const MIGRAZIONI = {
+  // 1 → 2: i target azoto/potassio stavano copiati su ogni cliente, congelati
+  // al momento del salvataggio. Ora si leggono dalla fascia a ogni caricamento,
+  // così correggere una fascia aggiorna davvero tutti i suoi clienti.
+  2: db => {
+    db.clienti.forEach(c => { delete c.Target_N_g_m2_anno; delete c.Target_K_g_m2_anno; });
+    return db;
+  },
+};
+
+function migra(grezzo, versione) {
+  let v = Number(versione) || 1;
+  let db = normalizzaDB(grezzo);
+  while (v < VERSIONE_DATI) {
+    v++;
+    const passo = MIGRAZIONI[v];
+    if (passo) db = normalizzaDB(passo(db));
+  }
+  return db;
+}
+
 // I target N/K non stanno sul cliente ma sulla fascia: ricalcolarli a ogni
 // caricamento fa sì che correggere una fascia aggiorni tutti i suoi clienti.
 function applicaFasce() {
@@ -1021,7 +1051,7 @@ async function caricaDB() {
       if (vecchio?.db) payload = { db: vecchio.db, meta: null };
     } catch (e) { /* cache vecchia illeggibile: pazienza */ }
   }
-  DB = normalizzaDB(payload?.db);
+  DB = migra(payload?.db, payload?.versione);
   if (payload?.meta) META = { ...META, ...payload.meta };
   return !!payload?.db;
 }
@@ -2056,7 +2086,14 @@ async function importaBackup(input) {
     showToast('❌ Questo file non è un backup di GiardinoApp');
     return;
   }
-  const nuovo = normalizzaDB(arrivo);
+  // Un backup fatto da una versione futura dell'app può contenere campi che
+  // questa non conosce e che l'import butterebbe via in silenzio. Meglio un
+  // avviso che una perdita scoperta fra sei mesi.
+  const versioneFile = Number(payload?.versione) || 1;
+  if (versioneFile > VERSIONE_DATI && !confirm(
+      `Questo backup arriva da una versione più recente dell'app (${versioneFile}, qui siamo alla ${VERSIONE_DATI}).\n\n` +
+      'Quello che questa versione non conosce andrà perso. Aggiornare l\'app prima di importare sarebbe più prudente.\n\nImportare lo stesso?')) return;
+  const nuovo = migra(arrivo, versioneFile);
   const quando = payload?.esportato
     ? new Date(payload.esportato).toLocaleDateString('it-IT')
     : 'data sconosciuta';
@@ -2303,7 +2340,9 @@ async function importaDaSheets() {
     const fogli = ['CLIENTI','VISITE','OPERAZIONI','CONCIMI','SEMENTI','FITOFARMACI','FASCE'];
     const [clienti, visite, operazioni, concimi, sementi, fitofarmaci, fasce] =
       await Promise.all(fogli.map(leggi));
-    DB = normalizzaDB({ clienti, visite, operazioni, concimi, sementi, fitofarmaci, fasce });
+    // Il foglio è fermo allo schema di partenza: lo faccio passare dalle
+    // migrazioni come qualsiasi altro dato che arriva da fuori.
+    DB = migra({ clienti, visite, operazioni, concimi, sementi, fitofarmaci, fasce }, 1);
     applicaFasce();
     if (!await salvaDB()) return;
     showToast(`✅ Importati ${DB.clienti.length} clienti e ${DB.visite.length} visite`);
