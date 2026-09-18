@@ -209,6 +209,45 @@ troncati, e nella cartella può finirci dentro qualcosa che non è un rapportino
 perché. Un rapportino che non si riesce a leggere è lavoro fatto che rischia di non
 essere fatturato, e non può stare nascosto in una console.
 
+## La lavagna non è un calendario
+
+Vive solo in ufficio, sul PC. A sinistra quello che c'è da fare e non ha ancora
+una data, a destra la settimana spezzata in mezze giornate. È la lavagna che si
+teneva a matita, non un'agenda: **niente si muove da solo**, nemmeno passando di
+settimana.
+
+**La posizione di un lavoro è una data vera** (`giorno` + `mezza`), non un posto
+nella griglia. Con un indice dentro la settimana mostrata i cartellini si
+sposterebbero da soli cambiando settimana — che è esattamente quello che non deve
+succedere.
+
+**Matita e penna sono due stati, non due colori.** `matita` vuol dire previsto e
+il cliente non lo sa; `confermato` vuol dire che il cliente sa che arrivate, e si
+vede evidenziato. Spostare o togliere un confermato chiede conferma: vuol dire che
+qualcuno deve telefonare, e non può succedere per un trascinamento distratto.
+
+**Tre regole per la coda**, in quest'ordine: quello che non si può fare (ha un
+requisito aperto) va in fondo, quello che è già slittato va in cima, e per il resto
+conta chi scade prima. Dentro i giorni non si ordina niente: lì l'ordine lo dà chi
+pianifica.
+
+**Una mezza giornata sono otto ore di manodopera** — quattro d'orologio in due.
+Servono a sapere quante mezze giornate occupa un lavoro lungo, non a dichiarare
+piena una giornata: `piuGiorni` è un interruttore che si accende a mano, perché
+spalmare un lavoro è una decisione, non un calcolo. La domenica si salta.
+
+**La lavagna si salva a ogni mossa**, senza un bottone: una lavagna che ti chiede
+di ricordarti di salvare è una lavagna che perde una settimana di pianificazione.
+
+**Il sabato resta a disposizione**: c'è, ma non è una giornata come le altre e il
+piede della colonna lo dice.
+
+I lavori nascono da `prossimo` sui rapportini archiviati — l'unico canale che dal
+cantiere arriva in ufficio — o si aggiungono a mano. Ogni rapportino già guardato
+finisce in `visti`, così quello che l'ufficio ha scartato non ricompare al giro
+dopo. Sul telefono il mese è il valore di una select (`"03"`, non `"marzo"`):
+passa da `nomeMese()` prima di andare a schermo.
+
 ## Il foglio che va al cliente
 
 **Stampa ed esporta PDF sono la stessa cosa.** Nel dialogo di stampa «Salva come

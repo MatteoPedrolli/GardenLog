@@ -176,6 +176,131 @@ input.vuoto { background: #fffdf5; border-color: #ecdca8; }
 #avviso.visibile { opacity: 1; transform: translateX(-50%) translateY(0); }
 #avviso.brutto { background: var(--red); }
 
+/* ── LA LAVAGNA ── */
+/* Non è un calendario: è la lavagna che in ufficio si tiene a matita. A sinistra
+   quello che c'è da fare e non ha ancora una data, a destra la settimana spezzata
+   in mezze giornate. Niente si muove da solo. */
+#pagina-lavagna { max-width: none; }
+#contenuto:has(#pagina-lavagna.attiva) { max-width: none; }
+
+.testata-lavagna {
+  display: flex; align-items: center; gap: 14px; flex-wrap: wrap; margin-bottom: 14px;
+}
+.testata-lavagna .settimana-num {
+  font-family: var(--font-display); font-size: 1.35rem; font-weight: 600;
+}
+.testata-lavagna .settimana-date { color: var(--text-light); font-size: 0.84rem; }
+.freccia-sett {
+  width: 34px; height: 34px; border-radius: var(--radius-sm); cursor: pointer;
+  border: 1px solid var(--border); background: var(--white); color: var(--text);
+  font-size: 1rem; display: grid; place-items: center; font-family: var(--font-body);
+}
+.freccia-sett:hover { border-color: var(--green-light); color: var(--green-mid); }
+
+.legenda-lavagna {
+  display: flex; gap: 18px; flex-wrap: wrap; font-size: 0.78rem; color: var(--text-light);
+  margin-bottom: 14px;
+}
+.legenda-lavagna b { font-weight: 600; color: var(--text); }
+.campione { display: inline-block; width: 22px; height: 10px; border-radius: 2px; vertical-align: middle; margin-right: 6px; }
+.campione.matita { border: 1px dashed #8a9280; }
+.campione.penna { background: #fbe28c; border: 1px solid #e4c44f; }
+.campione.bloccato { background: var(--earth-light); border: 1px solid var(--earth); }
+
+.tavolo { display: flex; gap: 14px; align-items: flex-start; }
+
+.coda { width: 290px; flex-shrink: 0; }
+.titolo-colonna {
+  font-size: 0.72rem; font-weight: 600; text-transform: uppercase;
+  letter-spacing: 0.06em; color: var(--text-light); margin: 0 0 8px;
+}
+.coda-lista {
+  padding: 8px; border-radius: var(--radius); background: var(--white);
+  border: 1px solid var(--border); display: flex; flex-direction: column; gap: 8px;
+  min-height: 160px;
+}
+.coda-lista.sopra { border-color: var(--green-light); background: var(--green-mist); }
+.rimasti {
+  display: flex; align-items: center; gap: 10px; margin-bottom: 8px; padding: 9px 11px;
+  border-radius: var(--radius-sm); background: var(--earth-light);
+  border: 1px solid var(--earth); color: var(--earth); font-size: 0.8rem;
+}
+
+/* Le mezze giornate devono stare in riga fra un giorno e l'altro: con sei colonne
+   indipendenti il pomeriggio di martedì finiva più in alto di quello di lunedì, e
+   su una lavagna l'occhio cerca la riga. Ogni giorno occupa le quattro righe della
+   griglia grande e ci si aggancia con subgrid, così l'altezza la decide la casella
+   più piena di tutta la settimana. */
+.giorni { flex: 1; min-width: 0; display: grid; gap: 10px;
+  grid-template-columns: repeat(6, minmax(0, 1fr));
+  grid-template-rows: auto auto auto auto; align-items: start; }
+.giorno { display: grid; grid-row: span 4; grid-template-rows: subgrid; gap: 6px; }
+.giorno-testa { display: flex; align-items: baseline; gap: 6px; }
+.giorno-nome { font-size: 0.82rem; font-weight: 600; }
+.giorno-data { font-size: 0.72rem; color: var(--text-light); }
+.giorno.oggi .giorno-nome { color: var(--green-mid); }
+.giorno.sabato .giorno-nome { color: var(--text-light); font-weight: 500; }
+.mezza-etichetta {
+  font-size: 0.64rem; text-transform: uppercase; letter-spacing: 0.06em;
+  color: var(--text-light); margin-bottom: 3px; display: flex; justify-content: space-between;
+}
+.mezza-etichetta b { font-weight: 600; color: var(--text-mid); }
+.mezza-corpo {
+  padding: 6px; border-radius: var(--radius-sm); background: var(--white);
+  border: 1px solid var(--border); display: flex; flex-direction: column; gap: 6px;
+  min-height: 86px;
+}
+.mezza-corpo.sopra { border-color: var(--green-light); background: var(--green-mist); }
+.giorno-piede {
+  align-self: end; font-size: 0.74rem; color: var(--text-light);
+  display: flex; justify-content: space-between; border-top: 1px solid var(--border); padding-top: 5px;
+}
+.giorno-piede b { font-weight: 600; color: var(--text); }
+
+.cartellino {
+  background: var(--cream); border: 1px solid var(--border); border-radius: var(--radius-sm);
+  padding: 8px 9px; cursor: grab; display: flex; flex-direction: column; gap: 2px;
+}
+.cartellino:active { cursor: grabbing; }
+/* A matita: previsto, il cliente non lo sa ancora. Il tratteggio è la matita. */
+.cartellino.matita { border-style: dashed; border-color: #8a9280; background: transparent; }
+.cartellino.matita .cliente-cart { color: var(--text-mid); }
+/* A penna: il cliente ha confermato. Evidenziato, come sul foglio in ufficio. */
+.cartellino.confermato { border-color: #e4c44f; background: var(--white); }
+.cartellino.confermato .cliente-cart {
+  background: linear-gradient(transparent 58%, #fbe28c 58%); padding: 0 2px; margin-left: -2px;
+}
+.cartellino.bloccato { border-left: 3px solid var(--earth); }
+.cliente-cart { font-weight: 600; font-size: 0.86rem; }
+.luogo-cart { font-size: 0.7rem; color: var(--text-light); }
+.cosa-cart { font-size: 0.78rem; color: var(--text-mid); }
+.riga-cart { display: flex; align-items: center; gap: 5px; flex-wrap: wrap; margin-top: 2px; }
+.ore-cart {
+  font-size: 0.72rem; font-weight: 600; color: var(--green-mid);
+  background: var(--green-mist); padding: 1px 7px; border-radius: 999px;
+}
+.quando-cart, .origine-cart { font-size: 0.68rem; color: var(--text-light); }
+.requisito-cart {
+  font-size: 0.68rem; color: var(--earth); background: var(--earth-light);
+  border: 1px solid var(--earth); padding: 0 5px; border-radius: 999px;
+}
+.rimandato-cart {
+  font-size: 0.66rem; font-weight: 600; text-transform: uppercase;
+  letter-spacing: 0.05em; color: var(--earth);
+}
+.bottone-cart {
+  font-size: 0.68rem; font-weight: 600; font-family: var(--font-body); cursor: pointer;
+  border: 1px solid var(--border); background: transparent; color: var(--text-light);
+  padding: 1px 8px; border-radius: 999px;
+}
+.bottone-cart.acceso { border-color: var(--green-light); color: var(--green-mid); background: var(--green-mist); }
+.seguito-cart {
+  border: 1px dashed var(--border); border-radius: var(--radius-sm); padding: 5px 8px;
+  font-size: 0.72rem; color: var(--text-light);
+}
+.sconfina-cart { font-size: 0.68rem; color: var(--earth); }
+.vuoto-mezza { font-size: 0.72rem; color: var(--text-light); text-align: center; padding: 8px 4px; }
+
 /* ── IL FOGLIO DA CONSEGNARE ── */
 /* Un blocco a parte, invisibile a schermo, che esiste solo per la stampa. Non si
    stampa la schermata: i campi da compilare uscirebbero come caselle vuote, e la
@@ -231,6 +356,9 @@ input.vuoto { background: #fffdf5; border-color: #ecdca8; }
     <button class="voce-barra attiva" id="v-arrivi" onclick="vaiA('arrivi')">
       <span>📥</span> In arrivo <span class="pallino" id="pallino-arrivi">0</span>
     </button>
+    <button class="voce-barra" id="v-lavagna" onclick="vaiA('lavagna')">
+      <span>📋</span> Lavagna <span class="pallino" id="pallino-lavagna">0</span>
+    </button>
     <button class="voce-barra" id="v-archivio" onclick="vaiA('archivio')"><span>🗂️</span> Archivio</button>
     <button class="voce-barra" id="v-listino" onclick="vaiA('listino')"><span>🏷️</span> Listino</button>
     <button class="voce-barra" id="v-impostazioni" onclick="vaiA('impostazioni')"><span>⚙️</span> Impostazioni</button>
@@ -240,6 +368,7 @@ input.vuoto { background: #fffdf5; border-color: #ecdca8; }
   <main id="contenuto">
     <div class="pagina attiva" id="pagina-arrivi"></div>
     <div class="pagina" id="pagina-lavoro"></div>
+    <div class="pagina" id="pagina-lavagna"></div>
     <div class="pagina" id="pagina-archivio"></div>
     <div class="pagina" id="pagina-listino"></div>
     <div class="pagina" id="pagina-impostazioni"></div>
@@ -268,6 +397,14 @@ const CARTELLA_ARRIVI = 'rapportini';
 const CARTELLA_ARCHIVIO = 'archivio';
 const FILE_LISTINO = 'listino.json';
 const FILE_IMPOSTAZIONI = 'impostazioni.json';
+const FILE_LAVAGNA = 'lavagna.json';
+
+// Una mezza giornata sono otto ore di manodopera: quattro d'orologio in due. Serve
+// a sapere quante mezze giornate occupa un lavoro lungo, non a dichiarare piena una
+// giornata — quello lo decide chi pianifica.
+const ORE_MEZZA = 8;
+const NOMI_GIORNI = ['Lunedì', 'Martedì', 'Mercoledì', 'Giovedì', 'Venerdì', 'Sabato'];
+const MEZZE = ['mattina', 'pomeriggio'];
 
 // L'intestazione del foglio che va al cliente non sta nel codice: sono i dati di
 // un'azienda vera, e inventarli su un documento che esce sarebbe peggio che
@@ -286,6 +423,9 @@ let LISTINO = { tipo: 'listino', versione: 1, voci: [] };
 let LISTINO_DA_SALVARE = false;
 let IMPOSTAZIONI = { ...IMPOSTAZIONI_VUOTE };
 let IMPOSTAZIONI_DA_SALVARE = false;
+let LAVAGNA = { tipo: 'lavagna', versione: 1, lavori: [], visti: [] };
+let SETTIMANA = null;   // il lunedì della settimana mostrata
+let TRASCINATO = null;
 let ARRIVI = [];
 let ILLEGGIBILI = [];
 let ARCHIVIO = [];
@@ -446,6 +586,7 @@ async function ricarica() {
   // delle due ha trovato — e un file illeggibile che non si vede non esiste.
   ILLEGGIBILI = [];
   IMPOSTAZIONI = await caricaImpostazioni();
+  LAVAGNA = await caricaLavagna();
   LISTINO = await caricaListino();
   ARCHIVIO = await caricaArchivio();
   ARRIVI = await caricaArrivi();
@@ -499,6 +640,63 @@ function modificaImpostazione(campo, valore) {
   IMPOSTAZIONI_DA_SALVARE = true;
   const cartello = document.getElementById('impostazioni-da-salvare');
   if (cartello) cartello.style.display = 'block';
+}
+
+async function caricaLavagna() {
+  try {
+    const l = JSON.parse(await leggiTesto(CARTELLA, FILE_LAVAGNA));
+    if (!l || l.tipo !== 'lavagna') throw new Error('non è una lavagna');
+    if ((Number(l.versione) || 0) > 1) {
+      throw new Error('Lavagna di una versione più recente: aggiorna l\'app');
+    }
+    return {
+      tipo: 'lavagna', versione: 1,
+      lavori: Array.isArray(l.lavori) ? l.lavori.map(sistemaLavoro) : [],
+      visti: Array.isArray(l.visti) ? l.visti : [],
+    };
+  } catch (e) {
+    // Nessuna lavagna ancora, o illeggibile: si parte vuota. Se era illeggibile va
+    // detto, o una settimana di pianificazione sparirebbe senza un rumore.
+    if (String(e.message || '').includes('recente')) {
+      ILLEGGIBILI.push({ nome: FILE_LAVAGNA, motivo: e.message });
+    }
+    return { tipo: 'lavagna', versione: 1, lavori: [], visti: [] };
+  }
+}
+
+function sistemaLavoro(l) {
+  return {
+    id: l.id || 'l' + Math.random().toString(36).slice(2),
+    cliente: l.cliente || '', luogo: l.luogo || '', cosa: l.cosa || '',
+    ore: Number(l.ore) || 0,
+    quando: l.quando || '',      // come si legge sul cartellino: «marzo 2027»
+    entro: l.entro || '',        // la data che mette in ordine la coda
+    origine: l.origine || '',
+    requisiti: Array.isArray(l.requisiti) ? l.requisiti.filter(r => r) : [],
+    rimandato: !!l.rimandato,
+    stato: l.stato === 'matita' || l.stato === 'confermato' ? l.stato : 'lista',
+    // La posizione è una data vera, non un posto nella griglia: un indice dentro la
+    // settimana mostrata farebbe spostare i cartellini da soli cambiando settimana,
+    // e niente su questa lavagna si muove da solo.
+    giorno: l.giorno || '',
+    mezza: l.mezza === 'pomeriggio' ? 'pomeriggio' : (l.mezza === 'mattina' ? 'mattina' : ''),
+    piuGiorni: !!l.piuGiorni,
+    da: l.da || '',
+  };
+}
+
+// La lavagna si salva a ogni mossa, senza un bottone: una lavagna che ti chiede di
+// ricordarti di salvare è una lavagna che perde una settimana di pianificazione.
+async function salvaLavagna() {
+  try {
+    await scriviTesto(CARTELLA, FILE_LAVAGNA, JSON.stringify({
+      ...LAVAGNA, aggiornato: new Date().toISOString(),
+    }, null, 2));
+    return true;
+  } catch (e) {
+    avvisa('Non ho potuto salvare la lavagna: ' + e.message, true);
+    return false;
+  }
 }
 
 async function caricaArchivio() {
@@ -923,8 +1121,13 @@ function disegna() {
   const pallino = document.getElementById('pallino-arrivi');
   pallino.textContent = ARRIVI.length;
   pallino.classList.toggle('visibile', ARRIVI.length > 0);
+  const daPianificare = LAVAGNA.lavori.filter(l => !piazzato(l)).length;
+  const pallinoL = document.getElementById('pallino-lavagna');
+  pallinoL.textContent = daPianificare;
+  pallinoL.classList.toggle('visibile', daPianificare > 0);
   if (PAGINA === 'arrivi') disegnaArrivi();
   if (PAGINA === 'lavoro') disegnaLavoro();
+  if (PAGINA === 'lavagna') disegnaLavagna();
   if (PAGINA === 'archivio') disegnaArchivio();
   if (PAGINA === 'listino') disegnaListino();
   if (PAGINA === 'impostazioni') disegnaImpostazioni();
@@ -1074,7 +1277,7 @@ function disegnaLavoro() {
   if (d.prossimo && d.prossimo.cosa) {
     html += '<div class="scheda"><div class="titolo-sezione">Prossimo intervento</div><p>' +
       perValore(d.prossimo.cosa) +
-      (d.prossimo.mese ? ' <span class="meta">— ' + perValore(d.prossimo.mese) + ' ' + perValore(d.prossimo.anno) + '</span>' : '') +
+      (d.prossimo.mese ? ' <span class="meta">— ' + perValore(nomeMese(d.prossimo.mese)) + ' ' + perValore(d.prossimo.anno) + '</span>' : '') +
       '</p></div>';
   }
 
@@ -1240,6 +1443,391 @@ function filtraArchivio(valore) {
           (l.stato === 'fatturato' ? 'da-fatturare\')">Rimetti da fatturare' : 'fatturato\')">Segna fatturato') +
         '</button></div></div>').join('')
     : '<div class="scheda"><div class="vuoto-elenco">Nessun lavoro per questa ricerca.</div></div>';
+}
+
+// ── LA LAVAGNA ──
+// Non è un calendario. È la lavagna che in ufficio si tiene a matita: a sinistra
+// quello che c'è da fare e non ha ancora una data, a destra la settimana spezzata
+// in mezze giornate. Niente si muove da solo — nemmeno passando di settimana.
+
+function lunediDi(data) {
+  const d = new Date(data);
+  // Mezzogiorno, non mezzanotte: con l'ora legale e i fusi, una data a mezzanotte
+  // scivola al giorno prima passando da toISOString.
+  d.setHours(12, 0, 0, 0);
+  d.setDate(d.getDate() - ((d.getDay() + 6) % 7));
+  return d;
+}
+
+function isoData(d) {
+  const x = new Date(d);
+  x.setHours(12, 0, 0, 0);
+  return x.getFullYear() + '-' + String(x.getMonth() + 1).padStart(2, '0') +
+    '-' + String(x.getDate()).padStart(2, '0');
+}
+
+function numeroSettimana(data) {
+  const d = new Date(data);
+  d.setHours(12, 0, 0, 0);
+  // Il giovedì decide a quale anno appartiene la settimana: è la regola ISO.
+  d.setDate(d.getDate() + 3 - ((d.getDay() + 6) % 7));
+  const primo = new Date(d.getFullYear(), 0, 4);
+  primo.setHours(12, 0, 0, 0);
+  primo.setDate(primo.getDate() + 3 - ((primo.getDay() + 6) % 7));
+  return 1 + Math.round((d - primo) / (7 * 86400000));
+}
+
+function cambiaSettimana(passo) {
+  const d = new Date(SETTIMANA);
+  d.setDate(d.getDate() + passo * 7);
+  SETTIMANA = lunediDi(d);
+  disegnaLavagna();
+}
+
+function questaSettimana() {
+  SETTIMANA = lunediDi(new Date());
+  disegnaLavagna();
+}
+
+const bloccato = l => l.requisiti.length > 0;
+const piazzato = l => l.stato !== 'lista' && !!l.giorno && !!l.mezza;
+// Senza il flag il lavoro resta dov'è messo, per lungo che sia: spalmarlo su più
+// mezze giornate è una decisione di chi pianifica, non un calcolo.
+const mezzeOccupate = l => l.piuGiorni ? Math.max(1, Math.ceil((l.ore || 0) / ORE_MEZZA)) : 1;
+
+function mezzeDa(giorno, mezza, quante) {
+  const elenco = [];
+  const d = new Date(giorno + 'T12:00:00');
+  let m = mezza === 'pomeriggio' ? 1 : 0;
+  let giri = 0;
+  while (elenco.length < quante && giri < 60) {
+    giri++;
+    // La domenica non si lavora: un lavoro lungo la salta invece di finirci dentro.
+    if (d.getDay() !== 0) elenco.push({ giorno: isoData(d), mezza: MEZZE[m] });
+    if (m === 1) { d.setDate(d.getDate() + 1); m = 0; } else { m = 1; }
+  }
+  return elenco;
+}
+
+function copertura(l) {
+  if (!piazzato(l)) return [];
+  return mezzeDa(l.giorno, l.mezza, mezzeOccupate(l));
+}
+
+function oreNellaMezza(l, giorno, mezza) {
+  const c = copertura(l);
+  const i = c.findIndex(x => x.giorno === giorno && x.mezza === mezza);
+  if (i < 0) return 0;
+  return l.piuGiorni ? Math.max(0, Math.min(ORE_MEZZA, (l.ore || 0) - i * ORE_MEZZA)) : (l.ore || 0);
+}
+
+// Tre regole per la coda: quello che non si può fare va in fondo, quello che è già
+// slittato va in cima, e per il resto conta chi scade prima. Dentro i giorni non
+// si ordina niente: lì l'ordine è quello che gli dà chi pianifica.
+function ordinaCoda(a, b) {
+  if (bloccato(a) !== bloccato(b)) return bloccato(a) ? 1 : -1;
+  if (a.rimandato !== b.rimandato) return a.rimandato ? -1 : 1;
+  if (!a.entro !== !b.entro) return a.entro ? -1 : 1;
+  return String(a.entro).localeCompare(String(b.entro));
+}
+
+function cartellino(l) {
+  const classi = ['cartellino'];
+  if (piazzato(l)) classi.push(l.stato);
+  if (bloccato(l)) classi.push('bloccato');
+  const inLista = !piazzato(l);
+  const mezze = mezzeOccupate(l);
+  const c = copertura(l);
+  const ultimoGiorno = c.length ? c[c.length - 1].giorno : '';
+  const sabato = isoData(new Date(new Date(SETTIMANA).setDate(SETTIMANA.getDate() + 5)));
+  const id = perOnclick(l.id);
+
+  return '<article class="' + classi.join(' ') + '" draggable="true"' +
+      ' ondragstart="iniziaTrascino(event, \'' + id + '\')"' +
+      (piazzato(l) ? ' onclick="cambiaPenna(\'' + id + '\')"' : '') +
+      ' title="' + (piazzato(l) ? 'Un clic per confermare o tornare a matita' : 'Trascinalo in una mezza giornata') + '">' +
+    '<div class="cliente-cart">' + perValore(l.cliente || 'senza nome') + '</div>' +
+    (l.luogo ? '<div class="luogo-cart">' + perValore(l.luogo) + '</div>' : '') +
+    (l.cosa ? '<div class="cosa-cart">' + perValore(l.cosa) + '</div>' : '') +
+    '<div class="riga-cart">' +
+      (l.ore ? '<span class="ore-cart">~' + formattaQuantita(l.ore) + ' h</span>' : '') +
+      (l.rimandato && inLista ? '<span class="rimandato-cart">slittato</span>' : '') +
+      (inLista && l.quando ? '<span class="quando-cart">' + perValore(l.quando) + '</span>' : '') +
+      l.requisiti.map(r => '<span class="requisito-cart">⚠ ' + perValore(r) + '</span>').join('') +
+      (piazzato(l) ? '<button type="button" class="bottone-cart' + (l.piuGiorni ? ' acceso' : '') +
+        '" onclick="event.stopPropagation(); cambiaPiuGiorni(\'' + id + '\')"' +
+        ' title="Spalma il lavoro sulle mezze giornate che gli servono">⧉ ' +
+        (l.piuGiorni ? mezze + ' mezze' : 'più giorni') + '</button>' : '') +
+      (inLista && l.origine ? '<span class="origine-cart">' + perValore(l.origine) + '</span>' : '') +
+      (inLista ? '<button type="button" class="bottone-cart" style="margin-left:auto"' +
+        ' onclick="event.stopPropagation(); togliDallaLavagna(\'' + id + '\')" title="Togli dalla lavagna">✕</button>' : '') +
+    '</div>' +
+    (ultimoGiorno && ultimoGiorno > sabato ? '<div class="sconfina-cart">continua la settimana prossima</div>' : '') +
+  '</article>';
+}
+
+function disegnaLavagna() {
+  const c = document.getElementById('pagina-lavagna');
+  if (!CARTELLA) { c.innerHTML = schermataBenvenuto(); return; }
+  if (!SETTIMANA) SETTIMANA = lunediDi(new Date());
+
+  const giorni = [0, 1, 2, 3, 4, 5].map(i => {
+    const d = new Date(SETTIMANA);
+    d.setDate(SETTIMANA.getDate() + i);
+    return d;
+  });
+  const primo = giorni[0].toLocaleDateString('it-IT', { day: 'numeric', month: 'long' });
+  const ultimo = giorni[5].toLocaleDateString('it-IT', { day: 'numeric', month: 'long', year: 'numeric' });
+
+  let html = '<div class="testata-lavagna">' +
+    '<div><h2 class="titolo-pagina" style="margin:0">Lavagna</h2></div>' +
+    '<button class="freccia-sett" onclick="cambiaSettimana(-1)" title="Settimana precedente">←</button>' +
+    '<div><div class="settimana-num">Settimana ' + numeroSettimana(SETTIMANA) + '</div>' +
+      '<div class="settimana-date">' + primo + ' – ' + ultimo + '</div></div>' +
+    '<button class="freccia-sett" onclick="cambiaSettimana(1)" title="Settimana successiva">→</button>' +
+    '<button class="secondaria piccola" onclick="questaSettimana()">Oggi</button>' +
+  '</div>';
+
+  html += '<div class="legenda-lavagna">' +
+    '<span><i class="campione matita"></i><b>A matita</b> — previsto, il cliente non lo sa</span>' +
+    '<span><i class="campione penna"></i><b>Confermato</b> — il cliente sa che arrivate</span>' +
+    '<span><i class="campione bloccato"></i><b>Bloccato</b> — manca qualcosa per poterlo fare</span>' +
+  '</div>';
+
+  html += '<div class="tavolo">';
+
+  // ── la colonna di sinistra: quello che c'è da fare e non ha una data ──
+  const inCoda = LAVAGNA.lavori.filter(l => !piazzato(l)).sort(ordinaCoda);
+  const rimasti = inCoda.filter(l => l.rimandato).length;
+  html += '<section class="coda"><h3 class="titolo-colonna">Da pianificare</h3>';
+  if (rimasti) {
+    html += '<div class="rimasti">⚠ ' + rimasti +
+      (rimasti === 1 ? ' lavoro è slittato' : ' lavori sono slittati') +
+      ' e aspettano<button class="bottone-cart" style="margin-left:auto" onclick="hoVisto()">Ho visto</button></div>';
+  }
+  html += '<div class="coda-lista" ondragover="sopraZona(event, this)" ondragleave="fuoriZona(this)"' +
+    ' ondrop="rilascia(event, this, \'\', \'\')">' +
+    (inCoda.length ? inCoda.map(cartellino).join('')
+      : '<div class="vuoto-mezza">Niente in attesa.<br>Quello che arriva dai rapportini compare qui.</div>') +
+    '</div>';
+  html += '<div class="bottoni">' +
+    '<button class="secondaria piccola" onclick="apriNuovoLavoro()">+ Aggiungi</button>' +
+    '<button class="secondaria piccola" onclick="importaProssimi()">Prendi dai rapportini</button>' +
+  '</div>';
+  html += '<div id="nuovo-lavoro"></div>';
+  html += '</section>';
+
+  // ── la settimana ──
+  html += '<section class="giorni">';
+  giorni.forEach((d, i) => {
+    const iso = isoData(d);
+    const classi = ['giorno'];
+    if (iso === isoData(new Date())) classi.push('oggi');
+    if (i === 5) classi.push('sabato');
+    let oreGiorno = 0;
+    let mezze = '';
+    MEZZE.forEach(mezza => {
+      const inizia = LAVAGNA.lavori.filter(l => piazzato(l) && l.giorno === iso && l.mezza === mezza);
+      const seguiti = LAVAGNA.lavori.filter(l => piazzato(l) && !(l.giorno === iso && l.mezza === mezza) &&
+        copertura(l).some(x => x.giorno === iso && x.mezza === mezza));
+      const ore = LAVAGNA.lavori.reduce((s, l) => s + oreNellaMezza(l, iso, mezza), 0);
+      oreGiorno += ore;
+      const dentro = inizia.map(cartellino).join('') +
+        seguiti.map(l => '<div class="seguito-cart">↳ ' + perValore(l.cliente) + ', continua</div>').join('');
+      mezze += '<div class="mezza">' +
+        '<div class="mezza-etichetta"><span>' + mezza + '</span>' +
+          (ore ? '<b>' + formattaQuantita(ore) + ' h</b>' : '') + '</div>' +
+        '<div class="mezza-corpo" ondragover="sopraZona(event, this)" ondragleave="fuoriZona(this)"' +
+          ' ondrop="rilascia(event, this, \'' + iso + '\', \'' + mezza + '\')">' +
+          (dentro || '<div class="vuoto-mezza">—</div>') +
+        '</div></div>';
+    });
+    html += '<div class="' + classi.join(' ') + '">' +
+      '<div class="giorno-testa"><span class="giorno-nome">' + NOMI_GIORNI[i] + '</span>' +
+        '<span class="giorno-data">' + d.getDate() + '/' + (d.getMonth() + 1) + '</span></div>' +
+      mezze +
+      '<div class="giorno-piede"><span>' + (i === 5 ? 'a disposizione' : 'giornata') + '</span>' +
+        '<b>' + formattaQuantita(oreGiorno) + ' h</b></div>' +
+    '</div>';
+  });
+  html += '</section></div>';
+
+  c.innerHTML = html;
+}
+
+// ── trascinare ──
+
+function iniziaTrascino(e, id) {
+  TRASCINATO = id;
+  if (e.dataTransfer) e.dataTransfer.effectAllowed = 'move';
+}
+
+function sopraZona(e, zona) { e.preventDefault(); zona.classList.add('sopra'); }
+function fuoriZona(zona) { zona.classList.remove('sopra'); }
+
+async function rilascia(e, zona, giorno, mezza) {
+  e.preventDefault();
+  zona.classList.remove('sopra');
+  await spostaLavoro(TRASCINATO, giorno, mezza);
+  TRASCINATO = null;
+}
+
+async function spostaLavoro(id, giorno, mezza) {
+  const l = LAVAGNA.lavori.find(x => x.id === id);
+  if (!l) return;
+  // Togliere o spostare un confermato vuol dire che qualcuno deve telefonare al
+  // cliente: non può succedere per un trascinamento distratto.
+  if (l.stato === 'confermato' && (l.giorno !== giorno || l.mezza !== mezza)) {
+    const cosa = giorno ? 'lo sposti' : 'lo rimetti in attesa';
+    if (!confirm(l.cliente + ' è confermato: il cliente sa che arrivate.\n\n' +
+      'Se ' + cosa + ' bisogna avvisarlo. Procedere?')) return;
+  }
+  if (!giorno) {
+    l.stato = 'lista'; l.giorno = ''; l.mezza = ''; l.piuGiorni = false;
+    l.rimandato = true;   // era già stato programmato: torna in cima alla coda
+  } else {
+    if (l.giorno === giorno && l.mezza === mezza) return;
+    l.giorno = giorno; l.mezza = mezza;
+    if (l.stato === 'lista') l.stato = 'matita';
+    l.rimandato = false;
+  }
+  await salvaLavagna();
+  disegnaLavagna();
+}
+
+async function cambiaPenna(id) {
+  const l = LAVAGNA.lavori.find(x => x.id === id);
+  if (!l || !piazzato(l)) return;   // nella coda non esiste né matita né penna
+  l.stato = l.stato === 'matita' ? 'confermato' : 'matita';
+  await salvaLavagna();
+  disegnaLavagna();
+}
+
+async function cambiaPiuGiorni(id) {
+  const l = LAVAGNA.lavori.find(x => x.id === id);
+  if (!l) return;
+  l.piuGiorni = !l.piuGiorni;
+  await salvaLavagna();
+  disegnaLavagna();
+}
+
+async function togliDallaLavagna(id) {
+  const l = LAVAGNA.lavori.find(x => x.id === id);
+  if (!l) return;
+  if (!confirm('Togliere «' + (l.cliente || 'senza nome') + ' — ' + (l.cosa || '') + '» dalla lavagna?')) return;
+  LAVAGNA.lavori = LAVAGNA.lavori.filter(x => x.id !== id);
+  await salvaLavagna();
+  disegnaLavagna();
+}
+
+async function hoVisto() {
+  LAVAGNA.lavori.forEach(l => { if (!piazzato(l)) l.rimandato = false; });
+  await salvaLavagna();
+  disegnaLavagna();
+}
+
+// ── aggiungere ──
+
+function apriNuovoLavoro() {
+  const c = document.getElementById('nuovo-lavoro');
+  if (!c) return;
+  c.innerHTML = '<div class="scheda" style="margin-top:10px">' +
+    '<div class="titolo-sezione">Un lavoro nuovo</div>' +
+    '<input type="text" id="n-cliente" placeholder="Cliente" style="margin-bottom:6px">' +
+    '<input type="text" id="n-luogo" placeholder="Dove" style="margin-bottom:6px">' +
+    '<input type="text" id="n-cosa" placeholder="Cosa c\'è da fare" style="margin-bottom:6px">' +
+    '<input type="text" id="n-ore" placeholder="Stima ore" style="margin-bottom:6px">' +
+    '<input type="date" id="n-entro" style="margin-bottom:6px" title="Entro quando">' +
+    '<input type="text" id="n-requisito" placeholder="Manca qualcosa? (blocca il lavoro)">' +
+    '<div class="bottoni">' +
+      '<button class="principale piccola" onclick="salvaNuovoLavoro()">Metti in coda</button>' +
+      '<button class="secondaria piccola" onclick="document.getElementById(\'nuovo-lavoro\').innerHTML = \'\'">Annulla</button>' +
+    '</div></div>';
+  document.getElementById('n-cliente').focus();
+}
+
+async function salvaNuovoLavoro() {
+  const valore = id => (document.getElementById(id) || {}).value || '';
+  const cliente = valore('n-cliente').trim();
+  if (!cliente) { avvisa('Serve almeno il cliente', true); return; }
+  const entro = valore('n-entro');
+  const requisito = valore('n-requisito').trim();
+  LAVAGNA.lavori.push(sistemaLavoro({
+    cliente, luogo: valore('n-luogo').trim(), cosa: valore('n-cosa').trim(),
+    ore: Number(valore('n-ore').replace(',', '.')) || 0,
+    entro, quando: entro ? 'entro il ' + formattaData(entro) : '',
+    origine: 'aggiunto in ufficio',
+    requisiti: requisito ? [requisito] : [],
+    stato: 'lista',
+  }));
+  if (!(await salvaLavagna())) return;
+  document.getElementById('nuovo-lavoro').innerHTML = '';
+  disegnaLavagna();
+  avvisa('In coda: ' + cliente);
+}
+
+// Il cantiere segna già il prossimo intervento su ogni visita: è l'unico canale che
+// dal campo arriva in ufficio, e sarebbe sciocco farlo riscrivere a mano. Ogni
+// rapportino letto finisce in «visti», così quello che l'ufficio ha già deciso di
+// scartare non ricompare al giro dopo.
+async function importaProssimi() {
+  const nuovi = [];
+  ARCHIVIO.forEach(lavoro => {
+    const r = lavoro.rapportino;
+    if (!r || !r.prossimo || !String(r.prossimo.cosa || '').trim()) return;
+    if (LAVAGNA.visti.includes(lavoro.id)) return;
+    LAVAGNA.visti.push(lavoro.id);
+    const mese = nomeMese(r.prossimo.mese);
+    const anno = String(r.prossimo.anno || '').trim();
+    nuovi.push(sistemaLavoro({
+      cliente: (r.cliente && r.cliente.nome) || '',
+      luogo: (r.cliente && r.cliente.citta) || '',
+      cosa: r.prossimo.cosa,
+      entro: dataDaMeseAnno(r.prossimo.mese, anno),
+      quando: [mese, anno].filter(x => x).join(' '),
+      origine: 'dal cantiere',
+      stato: 'lista',
+      da: lavoro.id,
+    }));
+  });
+  if (!nuovi.length) {
+    // Anche «niente di nuovo» va detto: senza, il bottone sembra rotto.
+    await salvaLavagna();
+    avvisa('Nessun prossimo intervento nuovo nei rapportini');
+    return;
+  }
+  LAVAGNA.lavori = LAVAGNA.lavori.concat(nuovi);
+  if (!(await salvaLavagna())) return;
+  disegnaLavagna();
+  avvisa(nuovi.length === 1 ? 'Un lavoro messo in coda' : nuovi.length + ' lavori messi in coda');
+}
+
+const MESI = ['gennaio', 'febbraio', 'marzo', 'aprile', 'maggio', 'giugno',
+  'luglio', 'agosto', 'settembre', 'ottobre', 'novembre', 'dicembre'];
+
+// Sul telefono il mese del prossimo intervento è il valore di una select, cioè
+// "03" e non "marzo": è quello che viaggia nel rapportino. Si accetta anche il nome
+// scritto, perché un backup vecchio può contenere di tutto.
+function indiceMese(mese) {
+  const t = String(mese || '').trim().toLowerCase();
+  if (!t) return -1;
+  const n = Number(t);
+  if (n >= 1 && n <= 12) return n - 1;
+  return MESI.indexOf(t);
+}
+
+function nomeMese(mese) {
+  const i = indiceMese(mese);
+  return i < 0 ? String(mese || '') : MESI[i];
+}
+
+// La coda ha bisogno di una data per mettere in ordine, e il cantiere dà mese e
+// anno: si prende il primo del mese. Non è una scadenza, è un ordine.
+function dataDaMeseAnno(mese, anno) {
+  const i = indiceMese(mese);
+  const a = Number(anno);
+  if (i < 0 || !a) return '';
+  return a + '-' + String(i + 1).padStart(2, '0') + '-01';
 }
 
 // ── LISTINO ──

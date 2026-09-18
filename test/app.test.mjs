@@ -144,6 +144,12 @@ try {
   await page.locator('#fasce-list .fascia').first().locator('input[type=number]').fill('2');
   await page.waitForTimeout(200);
 
+  // Il prossimo intervento è l'unica cosa che dal cantiere arriva in ufficio come
+  // lavoro da pianificare: la lavagna lo prende da qui.
+  await page.fill('#f-visita-prossimo', 'Potatura siepe di lauro');
+  await page.selectOption('#f-visita-mese', '03');
+  await page.fill('#f-visita-anno', '2027');
+
   await page.click('#btn-salva-visita');
   await page.waitForTimeout(300);
   ok('visita salvata', await page.evaluate(() => DB.visite.length) === 1);
@@ -744,6 +750,142 @@ try {
   ok('dall\'archivio si stampa senza riaprire il lavoro',
     (await pagU.evaluate(() => { vaiA('archivio'); return document.getElementById('pagina-archivio').innerHTML; }))
       .includes('stampaConto('));
+
+  // ── la lavagna ──
+  // Non è un calendario: è quello che in ufficio si tiene a matita. Le prove non
+  // passano dal trascinamento del mouse ma dalla funzione che il rilascio chiama:
+  // è lì che stanno le regole, e il trascinamento è solo il modo di invocarla.
+  const settimana = await pagU.evaluate(() => {
+    vaiA('lavagna');
+    SETTIMANA = lunediDi(new Date('2026-09-21T12:00:00'));
+    disegnaLavagna();
+    return document.querySelector('#pagina-lavagna .settimana-num').textContent;
+  });
+  ok('la settimana ISO è quella giusta', settimana === 'Settimana 39', settimana);
+  ok('la settimana ha sei giorni, non sette',
+    await pagU.locator('#pagina-lavagna .giorno').count() === 6);
+  ok('il sabato è a disposizione, non una giornata come le altre',
+    (await pagU.textContent('#pagina-lavagna .giorno.sabato')).includes('a disposizione'));
+  ok('ogni giorno è spezzato in mattina e pomeriggio',
+    await pagU.locator('#pagina-lavagna .giorno').first().locator('.mezza').count() === 2);
+
+  const presi = await pagU.evaluate(async () => {
+    await importaProssimi();
+    return LAVAGNA.lavori.length;
+  });
+  ok('il prossimo intervento segnato in cantiere arriva sulla lavagna', presi === 1);
+  ok('col mese scritto a parole, non col numero della select',
+    await pagU.evaluate(() => LAVAGNA.lavori[0].quando) === 'marzo 2027');
+  ok('e con una data che serve a mettere in ordine la coda',
+    await pagU.evaluate(() => LAVAGNA.lavori[0].entro) === '2027-03-01');
+  // Lo stesso rapportino non deve tornare a ogni clic sul bottone.
+  ok('un secondo giro non lo duplica',
+    await pagU.evaluate(async () => { await importaProssimi(); return LAVAGNA.lavori.length; }) === 1);
+
+  // ── dalla coda alla settimana: a matita ──
+  const idLavoro = await pagU.evaluate(() => LAVAGNA.lavori[0].id);
+  await pagU.evaluate(async id => spostaLavoro(id, '2026-09-22', 'pomeriggio'), idLavoro);
+  await pagU.waitForTimeout(150);
+  ok('trascinato in una mezza giornata diventa a matita',
+    await pagU.evaluate(() => LAVAGNA.lavori[0].stato) === 'matita');
+  ok('e si vede nel pomeriggio di quel giorno',
+    await pagU.evaluate(() => LAVAGNA.lavori[0].giorno + ' ' + LAVAGNA.lavori[0].mezza) === '2026-09-22 pomeriggio');
+  ok('la lavagna si è salvata da sola, senza un bottone',
+    await pagU.evaluate(async () => {
+      const l = JSON.parse(await leggiTesto(window.RADICE, 'lavagna.json'));
+      return l.lavori[0].stato === 'matita' && l.lavori[0].giorno === '2026-09-22';
+    }));
+
+  // ── un tocco e il cliente ha confermato ──
+  await pagU.evaluate(id => cambiaPenna(id), idLavoro);
+  await pagU.waitForTimeout(120);
+  ok('un clic sul cartellino lo segna confermato',
+    await pagU.evaluate(() => LAVAGNA.lavori[0].stato) === 'confermato');
+  ok('confermato si vede evidenziato, come sul foglio in ufficio',
+    (await pagU.evaluate(() => { disegnaLavagna(); return document.getElementById('pagina-lavagna').innerHTML; }))
+      .includes('cartellino confermato'));
+
+  // ── niente si muove da solo cambiando settimana ──
+  await pagU.evaluate(() => { cambiaSettimana(1); });
+  ok('cambiando settimana il cartellino non si porta dietro',
+    !(await pagU.textContent('#pagina-lavagna .giorni')).includes('Mario Rossi'));
+  ok('e il lavoro è rimasto sulla sua data, non su una casella',
+    await pagU.evaluate(() => LAVAGNA.lavori[0].giorno) === '2026-09-22');
+  await pagU.evaluate(() => { cambiaSettimana(-1); });
+  ok('tornando indietro è ancora lì',
+    (await pagU.textContent('#pagina-lavagna .giorni')).includes('Mario Rossi'));
+
+  // ── un lavoro lungo si spalma solo se glielo dici ──
+  await pagU.evaluate(async id => {
+    const l = LAVAGNA.lavori.find(x => x.id === id);
+    l.ore = 20;
+    await spostaLavoro(id, '2026-09-25', 'mattina');   // venerdì mattina
+  }, idLavoro);
+  await pagU.waitForTimeout(150);
+  ok('venti ore in una mezza giornata restano dove le metti',
+    await pagU.evaluate(() => copertura(LAVAGNA.lavori[0]).length) === 1);
+  await pagU.evaluate(id => cambiaPiuGiorni(id), idLavoro);
+  await pagU.waitForTimeout(150);
+  const spalmato = await pagU.evaluate(() => copertura(LAVAGNA.lavori[0]));
+  ok('col flag si allarga sulle mezze giornate che gli servono', spalmato.length === 3,
+    JSON.stringify(spalmato));
+  // La domenica non si lavora. Va provato con un lavoro che ci arriva davvero:
+  // partendo dal venerdì con tre mezze giornate si finisce il sabato, e la prova
+  // passerebbe senza aver verificato niente.
+  const oltreDomenica = await pagU.evaluate(async id => {
+    const l = LAVAGNA.lavori.find(x => x.id === id);
+    l.ore = 24;
+    await spostaLavoro(id, '2026-09-26', 'mattina');   // sabato mattina
+    return copertura(l);
+  }, idLavoro);
+  ok('un lavoro che sfora il sabato salta la domenica',
+    oltreDomenica.length === 3 && !oltreDomenica.some(x => x.giorno === '2026-09-27'),
+    JSON.stringify(oltreDomenica));
+  ok('e riprende il lunedì',
+    oltreDomenica[2].giorno === '2026-09-28' && oltreDomenica[2].mezza === 'mattina',
+    JSON.stringify(oltreDomenica));
+  ok('quando sfora la settimana mostrata, il cartellino lo dice',
+    (await pagU.evaluate(() => { disegnaLavagna(); return document.getElementById('pagina-lavagna').innerHTML; }))
+      .includes('continua la settimana prossima'));
+
+  // rimesso dove stava, per le prove che seguono
+  await pagU.evaluate(async id => {
+    const l = LAVAGNA.lavori.find(x => x.id === id);
+    l.ore = 20;
+    await spostaLavoro(id, '2026-09-25', 'mattina');
+  }, idLavoro);
+  ok('le ore si dividono otto per mezza giornata, il resto nell\'ultima',
+    await pagU.evaluate(() => [
+      oreNellaMezza(LAVAGNA.lavori[0], '2026-09-25', 'mattina'),
+      oreNellaMezza(LAVAGNA.lavori[0], '2026-09-25', 'pomeriggio'),
+      oreNellaMezza(LAVAGNA.lavori[0], '2026-09-26', 'mattina'),
+    ].join('|')) === '8|8|4');
+
+  // ── rimetterlo in coda lo fa slittare, e lo dice ──
+  await pagU.evaluate(async id => spostaLavoro(id, '', ''), idLavoro);
+  await pagU.waitForTimeout(150);
+  ok('tornato in coda, il lavoro è segnato come slittato',
+    await pagU.evaluate(() => LAVAGNA.lavori[0].stato === 'lista' && LAVAGNA.lavori[0].rimandato === true));
+  ok('e la coda lo dice a schermo',
+    (await pagU.textContent('#pagina-lavagna')).includes('slittat'));
+
+  // ── l'ordine della coda: bloccati in fondo, slittati in cima ──
+  const ordine = await pagU.evaluate(async () => {
+    LAVAGNA.lavori.push(sistemaLavoro({ cliente: 'Scade prima', entro: '2026-10-01', stato: 'lista' }));
+    LAVAGNA.lavori.push(sistemaLavoro({ cliente: 'Scade dopo', entro: '2026-12-01', stato: 'lista' }));
+    LAVAGNA.lavori.push(sistemaLavoro({ cliente: 'Bloccato', entro: '2026-09-22',
+      requisiti: ['serve la piattaforma'], stato: 'lista' }));
+    await salvaLavagna();
+    disegnaLavagna();
+    return LAVAGNA.lavori.filter(l => !piazzato(l)).sort(ordinaCoda).map(l => l.cliente);
+  });
+  ok('chi è slittato sta in cima', ordine[0].startsWith('Mario Rossi'), JSON.stringify(ordine));
+  ok('poi chi scade prima', ordine[1] === 'Scade prima' && ordine[2] === 'Scade dopo', JSON.stringify(ordine));
+  ok('e quello che non si può fare sta in fondo, anche se scade domani',
+    ordine[ordine.length - 1] === 'Bloccato', JSON.stringify(ordine));
+
+  ok('un lavoro aggiunto a mano si rilegge dal file',
+    await pagU.evaluate(async () => { await ricarica(); return LAVAGNA.lavori.length; }) === 4);
 
   // Un lavoro archiviato da una versione futura può avere campi che questa non
   // sa leggere: fermarsi è meglio che mostrare un totale sbagliato.
