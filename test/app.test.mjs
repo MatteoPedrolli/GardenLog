@@ -362,6 +362,15 @@ try {
   await page.click('#nav-home');
   await page.waitForTimeout(150);
 
+  // ── avviso di versione nuova ──
+  ok('la barra di aggiornamento è nascosta finché non serve',
+    !(await page.isVisible('#barra-aggiorna')));
+  await page.evaluate(() => mostraAggiornamento());
+  await page.waitForTimeout(150);
+  ok('quando arriva una versione nuova la barra resta a video',
+    await page.isVisible('#barra-aggiorna'));
+  await page.evaluate(() => document.getElementById('barra-aggiorna').classList.remove('mostra'));
+
   // ── offline ──
   await page.waitForTimeout(1200);  // lascia installare il service worker
   await ctx.setOffline(true);

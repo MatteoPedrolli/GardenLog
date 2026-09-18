@@ -2,7 +2,7 @@
 // Da quando i dati stanno sul dispositivo e non su un server, l'unica cosa che
 // ancora richiede la rete è il caricamento della pagina: senza questo file
 // l'app aperta in giardino senza campo non partirebbe nemmeno.
-const CACHE = 'giardinolog-v1';
+const CACHE = 'giardinolog-v2';
 
 const GUSCIO = [
   './',
@@ -18,7 +18,12 @@ self.addEventListener('install', e => {
     const cache = await caches.open(CACHE);
     // Una risorsa che manca non deve far fallire tutta l'installazione:
     // meglio un'icona assente che un'app che non si apre offline.
-    await Promise.all(GUSCIO.map(url => cache.add(url).catch(err => console.warn('sw: salto', url, err))));
+    // 'reload' scavalca la cache del browser: GitHub Pages dice di tenersi i
+    // file per dieci minuti, e senza questo si installerebbe la versione
+    // vecchia credendo di aver preso quella nuova.
+    await Promise.all(GUSCIO.map(url =>
+      cache.add(new Request(url, { cache: 'reload' }))
+        .catch(err => console.warn('sw: salto', url, err))));
     self.skipWaiting();
   })());
 });
@@ -51,7 +56,13 @@ async function dallaCachePoiRete(req) {
   const cache = await caches.open(CACHE);
   const inCache = await cache.match(req);
 
-  const dallaRete = fetch(req).then(res => {
+  // Stessa ragione dell'installazione: senza chiedere al server se il file è
+  // cambiato, il controllo in sottofondo si riporta a casa quello di prima e
+  // l'aggiornamento non arriva mai.
+  const richiesta = new URL(req.url).origin === self.location.origin
+    ? new Request(req, { cache: 'no-cache' })
+    : req;
+  const dallaRete = fetch(richiesta).then(res => {
     if (res && (res.ok || res.type === 'opaque')) cache.put(req, res.clone()).catch(() => {});
     return res;
   }).catch(() => null);

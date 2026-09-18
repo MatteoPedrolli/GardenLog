@@ -129,6 +129,25 @@ mandata e una visita mai registrata.
 Nel testo della mail niente colonne allineate con gli spazi: le app di posta
 usano caratteri a larghezza variabile e arrivano storte. Una voce per riga.
 
+## Come arrivano gli aggiornamenti
+
+Il service worker serve la copia in cache e scarica la versione nuova in
+sottofondo, quindi **una modifica pubblicata si vede al secondo avvio**, non al
+primo. Due trappole ci sono già costate un giro a vuoto:
+
+- GitHub Pages dice al browser di tenersi i file per dieci minuti. Senza
+  `cache: 'reload'` all'installazione e `cache: 'no-cache'` sul controllo in
+  sottofondo, il service worker si ricachegga la versione vecchia credendo di
+  essersi aggiornato.
+- Su iPhone chiudere l'app spesso la sospende soltanto: riaprendola riprende la
+  stessa pagina, senza ricaricare. Per questo quando arriva una versione nuova
+  compare una **barra che resta** con un bottone che ricarica, invece di un
+  toast che dice "chiudi e riapri" e sparisce in due secondi.
+
+Dopo aver pubblicato, controllare sempre l'esito della pubblicazione su GitHub
+prima di dire che è in linea: una volta è fallita per un timeout loro e il sito
+ha continuato a servire la versione di tre mesi prima.
+
 ## Cose da sapere prima di metterci mano
 
 - L'interfaccia usa `onclick="funzione()"`, quindi le funzioni devono restare

@@ -492,6 +492,19 @@ select.form-control { background-image: url("data:image/svg+xml,%3Csvg xmlns='ht
 .conto-totale > div:first-child span:last-child { font-family: var(--font-display); font-size: 1.3rem; }
 .conto-avviso { font-size: 0.78rem; color: #8a6d1a; margin-top: 6px; }
 
+.barra-aggiorna {
+  position: fixed; left: 0; right: 0; bottom: var(--nav-h);
+  background: var(--green-deep); color: var(--white);
+  padding: 12px 16px; display: none; align-items: center; gap: 12px;
+  font-size: 0.85rem; z-index: 90;
+}
+.barra-aggiorna.mostra { display: flex; }
+.barra-aggiorna button {
+  background: var(--white); color: var(--green-deep); border: none;
+  padding: 7px 14px; border-radius: 20px; font-weight: 600; font-size: 0.82rem;
+  font-family: var(--font-body); cursor: pointer;
+}
+
 .avviso {
   display: flex; align-items: center; gap: 12px;
   margin: 12px 14px 0; padding: 12px 14px;
@@ -730,6 +743,12 @@ select.form-control { background-image: url("data:image/svg+xml,%3Csvg xmlns='ht
       <button class="btn btn-primary" onclick="salvaVoceArchivio()">💾 Salva</button>
     </div>
   </div>
+</div>
+
+<!-- AGGIORNAMENTO PRONTO -->
+<div id="barra-aggiorna" class="barra-aggiorna">
+  <span style="flex:1">🔄 C'è una versione nuova</span>
+  <button type="button" onclick="aggiornaOra()">Aggiorna</button>
 </div>
 
 <!-- TOAST -->
@@ -3182,8 +3201,23 @@ function registraServiceWorker() {
   if (location.protocol === 'file:') return;
   navigator.serviceWorker.register('sw.js').catch(e => console.warn('service worker non registrato', e));
   navigator.serviceWorker.addEventListener('message', e => {
-    if (e.data?.tipo === 'aggiornamento') showToast('🔄 Nuova versione pronta: chiudi e riapri l\'app');
+    if (e.data?.tipo === 'aggiornamento') mostraAggiornamento();
   });
+}
+
+// Prima era un toast che diceva "chiudi e riapri": spariva in due secondi, e
+// su iPhone chiudere l'app spesso la sospende soltanto, quindi riaprendola si
+// riprendeva la stessa pagina e la versione nuova non arrivava mai. Una barra
+// che resta, con un bottone che ricarica, toglie di mezzo tutt'e due i problemi.
+function mostraAggiornamento() {
+  document.getElementById('barra-aggiorna')?.classList.add('mostra');
+}
+
+function aggiornaOra() {
+  // Ricaricare con una scheda aperta butta via quello che non è stato salvato.
+  const aperto = document.querySelector('.overlay.open');
+  if (aperto && !confirm('Hai una scheda aperta: ricaricando perdi quello che non hai ancora salvato.\n\nAggiornare lo stesso?')) return;
+  location.reload();
 }
 
 function closeDrawer(id) {
