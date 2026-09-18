@@ -708,6 +708,43 @@ try {
   ok('le voci viste nei rapportini e non in listino si possono importare',
     await pagU.evaluate(() => vociMancanti().length) >= 1);
 
+  // ── il foglio che va al cliente ──
+  await pagU.evaluate(() => {
+    vaiA('impostazioni');
+    modificaImpostazione('azienda', 'Giardini Prova');
+    modificaImpostazione('piva', '01234567890');
+  });
+  ok('il cartello delle impostazioni non salvate si accende',
+    await pagU.isVisible('#impostazioni-da-salvare'));
+  ok('le impostazioni non salvate sopravvivono a una rilettura',
+    await pagU.evaluate(async () => { await ricarica(); return IMPOSTAZIONI.azienda; }) === 'Giardini Prova');
+  await pagU.evaluate(() => salvaImpostazioni());
+  await pagU.waitForTimeout(150);
+  ok('l\'intestazione si rilegge dal file della cartella',
+    await pagU.evaluate(async () => { await ricarica(); return IMPOSTAZIONI.piva; }) === '01234567890');
+
+  const foglio = await pagU.evaluate(() => {
+    window.print = () => {};  // in headless non c'è un dialogo di stampa da aprire
+    stampaConto('archivio', ARCHIVIO[0].id);
+    return { html: document.getElementById('foglio').innerHTML, titolo: document.title };
+  });
+  ok('il foglio porta l\'intestazione dell\'azienda', foglio.html.includes('Giardini Prova'));
+  ok('e il cliente a cui va consegnato', foglio.html.includes('Mario Rossi'));
+  // I prezzi del listino sono IVA inclusa: un importo su un foglio che esce senza
+  // dirlo è un'ambiguità che qualcuno paga.
+  ok('il totale dice che l\'IVA è inclusa', foglio.html.includes('IVA inclusa'));
+  ok('una voce senza prezzo stampa «da definire», non uno spazio bianco',
+    foglio.html.includes('da definire'));
+  // Ore e operazioni restano in ufficio: al cliente va il conto.
+  ok('il foglio non porta le operazioni agronomiche', !foglio.html.includes('Nitrophoska'));
+  ok('il nome che Chrome proporrà per il PDF parla di conto e cliente',
+    /^Conto \d{4}-\d{2}-\d{2} Mario Rossi/.test(foglio.titolo), foglio.titolo);
+  ok('il foglio non si vede a schermo: esiste solo per la stampa',
+    !(await pagU.isVisible('#foglio')));
+  ok('dall\'archivio si stampa senza riaprire il lavoro',
+    (await pagU.evaluate(() => { vaiA('archivio'); return document.getElementById('pagina-archivio').innerHTML; }))
+      .includes('stampaConto('));
+
   // Un lavoro archiviato da una versione futura può avere campi che questa non
   // sa leggere: fermarsi è meglio che mostrare un totale sbagliato.
   ok('un lavoro archiviato di una versione futura si ferma e lo dice',

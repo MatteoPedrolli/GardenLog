@@ -176,6 +176,47 @@ input.vuoto { background: #fffdf5; border-color: #ecdca8; }
 #avviso.visibile { opacity: 1; transform: translateX(-50%) translateY(0); }
 #avviso.brutto { background: var(--red); }
 
+/* ── IL FOGLIO DA CONSEGNARE ── */
+/* Un blocco a parte, invisibile a schermo, che esiste solo per la stampa. Non si
+   stampa la schermata: i campi da compilare uscirebbero come caselle vuote, e la
+   barra di navigazione non ha senso su carta. Il PDF non richiede una libreria —
+   nel dialogo di stampa "Salva come PDF" è una destinazione. */
+#foglio { display: none; }
+
+@media print {
+  #app, #avviso { display: none !important; }
+  #foglio { display: block; }
+  body { background: var(--white); color: #000; font-size: 11pt; }
+  @page { margin: 18mm 16mm; }
+}
+
+#foglio .intestazione { border-bottom: 2px solid #000; padding-bottom: 10px; margin-bottom: 22px; }
+#foglio .azienda { font-family: var(--font-display); font-size: 1.5rem; font-weight: 700; }
+#foglio .recapiti { font-size: 0.82rem; color: #333; margin-top: 3px; }
+#foglio h1 {
+  font-family: var(--font-display); font-size: 1.25rem; font-weight: 600;
+  margin-bottom: 14px;
+}
+#foglio .a-chi { display: flex; justify-content: space-between; gap: 20px; margin-bottom: 20px; font-size: 0.95rem; }
+#foglio .a-chi .etichetta-campo { font-size: 0.72rem; text-transform: uppercase; letter-spacing: 0.05em; color: #555; }
+#foglio table { width: 100%; border-collapse: collapse; font-size: 0.95rem; }
+#foglio th {
+  text-align: left; font-size: 0.72rem; text-transform: uppercase; letter-spacing: 0.05em;
+  border-bottom: 1.5px solid #000; padding: 0 8px 6px 0;
+}
+#foglio td { padding: 7px 8px 7px 0; border-bottom: 1px solid #ccc; }
+#foglio td.num, #foglio th.num { text-align: right; padding-right: 0; }
+#foglio .da-definire { color: #555; font-style: italic; }
+#foglio .riga-totale td {
+  border-bottom: none; border-top: 2px solid #000; padding-top: 12px;
+  font-weight: 600; font-size: 1.05rem;
+}
+#foglio .nota-sotto {
+  margin-top: 26px; padding-top: 12px; border-top: 1px solid #ccc;
+  font-size: 0.82rem; color: #333; white-space: pre-line;
+}
+#foglio .incompleto { margin-top: 16px; font-size: 0.85rem; color: #8a6d1f; }
+
 #benvenuto { max-width: 560px; }
 #benvenuto .scheda { padding: 26px 28px; }
 #benvenuto ol { margin: 12px 0 0 20px; color: var(--text-mid); font-size: 0.9rem; line-height: 1.8; }
@@ -192,6 +233,7 @@ input.vuoto { background: #fffdf5; border-color: #ecdca8; }
     </button>
     <button class="voce-barra" id="v-archivio" onclick="vaiA('archivio')"><span>🗂️</span> Archivio</button>
     <button class="voce-barra" id="v-listino" onclick="vaiA('listino')"><span>🏷️</span> Listino</button>
+    <button class="voce-barra" id="v-impostazioni" onclick="vaiA('impostazioni')"><span>⚙️</span> Impostazioni</button>
     <div id="stato-cartella">Nessuna cartella collegata</div>
   </nav>
 
@@ -200,9 +242,11 @@ input.vuoto { background: #fffdf5; border-color: #ecdca8; }
     <div class="pagina" id="pagina-lavoro"></div>
     <div class="pagina" id="pagina-archivio"></div>
     <div class="pagina" id="pagina-listino"></div>
+    <div class="pagina" id="pagina-impostazioni"></div>
   </main>
 </div>
 
+<div id="foglio"></div>
 <div id="avviso"></div>
 
 <script src="../rapportino.js"></script>
@@ -223,6 +267,16 @@ const VERSIONE_LAVORO = 1;
 const CARTELLA_ARRIVI = 'rapportini';
 const CARTELLA_ARCHIVIO = 'archivio';
 const FILE_LISTINO = 'listino.json';
+const FILE_IMPOSTAZIONI = 'impostazioni.json';
+
+// L'intestazione del foglio che va al cliente non sta nel codice: sono i dati di
+// un'azienda vera, e inventarli su un documento che esce sarebbe peggio che
+// lasciarli vuoti. Si compilano in Impostazioni e vivono nella cartella, accanto
+// al listino, così il backup del PC li copre come tutto il resto.
+const IMPOSTAZIONI_VUOTE = {
+  azienda: '', indirizzo: '', citta: '', piva: '', telefono: '', email: '',
+  nota: 'Questo documento non è una fattura.',
+};
 
 let CARTELLA = null;
 let LISTINO = { tipo: 'listino', versione: 1, voci: [] };
@@ -230,6 +284,8 @@ let LISTINO = { tipo: 'listino', versione: 1, voci: [] };
 // resta da salvare, nessuna rilettura della cartella lo deve sovrascrivere: un
 // prezzo appena battuto che sparisce a un Ricontrolla è lavoro perso in silenzio.
 let LISTINO_DA_SALVARE = false;
+let IMPOSTAZIONI = { ...IMPOSTAZIONI_VUOTE };
+let IMPOSTAZIONI_DA_SALVARE = false;
 let ARRIVI = [];
 let ILLEGGIBILI = [];
 let ARCHIVIO = [];
@@ -389,6 +445,7 @@ async function ricarica() {
   // due letture che seguono. Azzerarlo dopo cancellerebbe quello che la prima
   // delle due ha trovato — e un file illeggibile che non si vede non esiste.
   ILLEGGIBILI = [];
+  IMPOSTAZIONI = await caricaImpostazioni();
   LISTINO = await caricaListino();
   ARCHIVIO = await caricaArchivio();
   ARRIVI = await caricaArrivi();
@@ -406,6 +463,42 @@ async function caricaListino() {
     // Non lo creo qui, o un permesso di sola lettura fallirebbe all'apertura.
     return { tipo: 'listino', versione: 1, voci: [] };
   }
+}
+
+async function caricaImpostazioni() {
+  // Stessa regola del listino: quello che è stato battuto e non ancora salvato
+  // non viene sovrascritto da una rilettura della cartella.
+  if (IMPOSTAZIONI_DA_SALVARE) return IMPOSTAZIONI;
+  try {
+    const i = JSON.parse(await leggiTesto(CARTELLA, FILE_IMPOSTAZIONI));
+    if (!i || i.tipo !== 'impostazioni-ufficio') throw new Error('non sono le impostazioni');
+    return { ...IMPOSTAZIONI_VUOTE, ...(i.dati || {}) };
+  } catch (e) {
+    return { ...IMPOSTAZIONI_VUOTE };
+  }
+}
+
+async function salvaImpostazioni() {
+  try {
+    await scriviTesto(CARTELLA, FILE_IMPOSTAZIONI, JSON.stringify({
+      tipo: 'impostazioni-ufficio', versione: 1,
+      aggiornato: new Date().toISOString(), dati: IMPOSTAZIONI,
+    }, null, 2));
+  } catch (e) {
+    avvisa('Non ho potuto salvare le impostazioni: ' + e.message, true);
+    return false;
+  }
+  IMPOSTAZIONI_DA_SALVARE = false;
+  disegna();
+  avvisa('Impostazioni salvate');
+  return true;
+}
+
+function modificaImpostazione(campo, valore) {
+  IMPOSTAZIONI[campo] = valore;
+  IMPOSTAZIONI_DA_SALVARE = true;
+  const cartello = document.getElementById('impostazioni-da-salvare');
+  if (cartello) cartello.style.display = 'block';
 }
 
 async function caricaArchivio() {
@@ -667,6 +760,100 @@ function segnalaListinoDaSalvare() {
   if (cartello) cartello.style.display = 'block';
 }
 
+// ── IL FOGLIO DA CONSEGNARE ──
+// Va al cliente, e contiene solo il conto: le ore e le operazioni restano in
+// ufficio. I prezzi del listino sono IVA inclusa, quindi il totale lo dice — un
+// importo su un foglio che esce senza dire se l'IVA c'è dentro è un'ambiguità
+// che qualcuno paga.
+
+function costruisciFoglio({ cliente, data, righe }) {
+  const { totale, escluse } = totaleConteggio(righe);
+  const sede = [IMPOSTAZIONI.indirizzo, IMPOSTAZIONI.citta].filter(x => x).join(' · ');
+  const contatti = [
+    IMPOSTAZIONI.piva ? 'P.IVA ' + IMPOSTAZIONI.piva : '',
+    IMPOSTAZIONI.telefono,
+    IMPOSTAZIONI.email,
+  ].filter(x => x).join(' · ');
+
+  let html = '<div class="intestazione">' +
+    '<div class="azienda">' + perValore(IMPOSTAZIONI.azienda) + '</div>' +
+    (sede ? '<div class="recapiti">' + perValore(sede) + '</div>' : '') +
+    (contatti ? '<div class="recapiti">' + perValore(contatti) + '</div>' : '') +
+  '</div>';
+
+  html += '<h1>Conto dei lavori</h1>';
+  html += '<div class="a-chi">' +
+    '<div><div class="etichetta-campo">Cliente</div>' +
+      '<strong>' + perValore((cliente && cliente.nome) || '') + '</strong>' +
+      ((cliente && cliente.indirizzo) ? '<br>' + perValore(cliente.indirizzo) : '') +
+      ((cliente && cliente.citta) ? '<br>' + perValore(cliente.citta) : '') +
+    '</div>' +
+    '<div style="text-align:right"><div class="etichetta-campo">Data del lavoro</div>' +
+      '<strong>' + formattaData(data) + '</strong></div>' +
+  '</div>';
+
+  html += '<table><thead><tr><th>Voce</th><th class="num">Quantità</th>' +
+    '<th>Unità</th><th class="num">Prezzo</th><th class="num">Importo</th></tr></thead><tbody>';
+  (righe || []).forEach(r => {
+    const imp = importoRiga(r);
+    html += '<tr>' +
+      '<td>' + perValore(r.voce) + '</td>' +
+      '<td class="num">' + perValore(formattaQuantita(r.quantita)) + '</td>' +
+      '<td>' + perValore(r.unita) + '</td>' +
+      '<td class="num">' + (r.prezzo === '' || r.prezzo == null ? '' : formattaEuro(r.prezzo)) + '</td>' +
+      // Una riga senza prezzo non stampa uno spazio bianco: dice che l'importo
+      // si valuta, come fa il testo della mail sul telefono.
+      '<td class="num">' + (imp == null ? '<span class="da-definire">da definire</span>' : formattaEuro(imp)) + '</td>' +
+    '</tr>';
+  });
+  html += '<tr class="riga-totale"><td colspan="4">Totale (IVA inclusa)</td>' +
+    '<td class="num">' + formattaEuro(totale) + '</td></tr>';
+  html += '</tbody></table>';
+
+  if (escluse) {
+    html += '<div class="incompleto">' + escluse +
+      (escluse === 1 ? ' voce resta da valutare e non è compresa' : ' voci restano da valutare e non sono comprese') +
+      ' nel totale qui sopra.</div>';
+  }
+  if (IMPOSTAZIONI.nota) {
+    html += '<div class="nota-sotto">' + perValore(IMPOSTAZIONI.nota) + '</div>';
+  }
+  return html;
+}
+
+function stampaConto(origine, id) {
+  let cliente, data, righe;
+  if (origine === 'lavoro') {
+    if (!LAVORO) return;
+    cliente = LAVORO.doc.cliente; data = LAVORO.doc.data; righe = LAVORO.righe;
+  } else {
+    const l = ARCHIVIO.find(x => x.id === id);
+    if (!l) { avvisa('Lavoro non trovato: ricontrolla la cartella', true); return; }
+    cliente = l.cliente || {}; data = l.data; righe = l.righe;
+  }
+
+  // Un foglio che va a un cliente senza dire da chi arriva non serve a niente:
+  // si avvisa, ma la decisione resta di chi stampa.
+  if (!String(IMPOSTAZIONI.azienda || '').trim()) {
+    if (!confirm('Manca l\'intestazione con i dati dell\'azienda: si compila in Impostazioni.\n\nStampare comunque?')) return;
+  }
+
+  document.getElementById('foglio').innerHTML = costruisciFoglio({ cliente, data, righe });
+
+  // Chrome propone il titolo della pagina come nome del file quando si salva in
+  // PDF, e lo legge a stampa avviata: rimetterlo a posto subito darebbe un PDF
+  // chiamato "GiardinoApp · Ufficio". Si aspetta afterprint.
+  const titolo = document.title;
+  const ripristina = () => {
+    document.title = titolo;
+    window.removeEventListener('afterprint', ripristina);
+  };
+  window.addEventListener('afterprint', ripristina);
+  document.title = 'Conto ' + (String(data || '').slice(0, 10) || 'senza-data') +
+    ' ' + ((cliente && cliente.nome) || 'cliente');
+  window.print();
+}
+
 // ── FORMATI ──
 
 function formattaEuro(n) {
@@ -740,6 +927,7 @@ function disegna() {
   if (PAGINA === 'lavoro') disegnaLavoro();
   if (PAGINA === 'archivio') disegnaArchivio();
   if (PAGINA === 'listino') disegnaListino();
+  if (PAGINA === 'impostazioni') disegnaImpostazioni();
 }
 
 // ── IN ARRIVO ──
@@ -917,6 +1105,7 @@ function disegnaLavoro() {
   html += '<div class="bottoni">' +
     '<button class="principale" onclick="archivia()">' +
       (LAVORO.corretto ? 'Aggiorna in archivio' : 'Archivia') + '</button>' +
+    '<button class="secondaria" onclick="stampaConto(\'lavoro\')">Stampa il conto</button>' +
     '<button class="secondaria" onclick="tornaAgliArrivi()">Torna in arrivo</button>' +
   '</div>';
 
@@ -1016,6 +1205,7 @@ function disegnaArchivio() {
         (l.righeSenzaPrezzo ? '<div class="meta" style="margin-top:6px;color:var(--yellow)">' +
           l.righeSenzaPrezzo + ' righe fuori dal totale</div>' : '') +
         '<div class="bottoni">' +
+          '<button class="secondaria piccola" onclick="stampaConto(\'archivio\', \'' + perOnclick(l.id) + '\')">Stampa</button>' +
           '<button class="secondaria piccola" onclick="cambiaStato(\'' + perOnclick(l.id) + '\', \'' +
             (l.stato === 'fatturato' ? 'da-fatturare\')">Rimetti da fatturare' : 'fatturato\')">Segna fatturato') +
           '</button>' +
@@ -1044,7 +1234,9 @@ function filtraArchivio(valore) {
         '<span class="meta">' + formattaData(l.data) + '</span>' +
         '<span style="margin-left:auto;font-family:var(--font-display);font-size:1.15rem;font-weight:700">' +
           formattaEuro(l.totale) + '</span></div>' +
-        '<div class="bottoni"><button class="secondaria piccola" onclick="cambiaStato(\'' + perOnclick(l.id) + '\', \'' +
+        '<div class="bottoni">' +
+        '<button class="secondaria piccola" onclick="stampaConto(\'archivio\', \'' + perOnclick(l.id) + '\')">Stampa</button>' +
+        '<button class="secondaria piccola" onclick="cambiaStato(\'' + perOnclick(l.id) + '\', \'' +
           (l.stato === 'fatturato' ? 'da-fatturare\')">Rimetti da fatturare' : 'fatturato\')">Segna fatturato') +
         '</button></div></div>').join('')
     : '<div class="scheda"><div class="vuoto-elenco">Nessun lavoro per questa ricerca.</div></div>';
@@ -1129,6 +1321,63 @@ function importaVoce(voceID, voce, unita) {
   LISTINO.voci.push({ voceID, voce, unita, prezzo: '', aCorpo: false });
   LISTINO_DA_SALVARE = true;
   disegna();
+}
+
+// ── IMPOSTAZIONI ──
+
+const CAMPI_INTESTAZIONE = [
+  ['azienda', 'Nome dell\'azienda'],
+  ['indirizzo', 'Indirizzo'],
+  ['citta', 'CAP e città'],
+  ['piva', 'Partita IVA'],
+  ['telefono', 'Telefono'],
+  ['email', 'Email'],
+];
+
+function disegnaImpostazioni() {
+  const c = document.getElementById('pagina-impostazioni');
+  if (!CARTELLA) { c.innerHTML = schermataBenvenuto(); return; }
+
+  let html = '<h2 class="titolo-pagina">Impostazioni</h2>';
+  html += '<p class="sottotitolo">Quello che finisce in testa al foglio che consegni al cliente</p>';
+
+  html += '<div id="impostazioni-da-salvare" class="avvertenza" style="display:' +
+    (IMPOSTAZIONI_DA_SALVARE ? 'block' : 'none') + '">' +
+    'Ci sono modifiche non ancora scritte su file. Restano qui finché premi Salva.</div>';
+
+  html += '<div class="scheda"><div class="titolo-sezione">Intestazione del conto</div>';
+  html += '<table class="elenco"><tbody>';
+  CAMPI_INTESTAZIONE.forEach(([campo, etichetta]) => {
+    html += '<tr><td style="width:180px">' + etichetta + '</td>' +
+      '<td><input type="text" value="' + perValore(IMPOSTAZIONI[campo]) +
+        '" oninput="modificaImpostazione(\'' + campo + '\', this.value)"></td></tr>';
+  });
+  html += '</tbody></table>';
+  html += '<div class="titolo-sezione" style="margin-top:18px">Nota in fondo al foglio</div>';
+  html += '<textarea rows="3" oninput="modificaImpostazione(\'nota\', this.value)">' +
+    perValore(IMPOSTAZIONI.nota) + '</textarea>';
+  html += '<div class="avvertenza">I prezzi in listino sono IVA inclusa, e il foglio lo scrive nel ' +
+    'totale. Se un giorno diventassero al netto, va cambiato lì — non basta correggere i numeri.</div>';
+  html += '<div class="bottoni"><button class="principale" onclick="salvaImpostazioni()">Salva</button>' +
+    '<button class="secondaria" onclick="anteprimaFoglio()">Guarda come viene stampato</button></div>';
+  html += '</div>';
+
+  c.innerHTML = html;
+}
+
+// Un foglio di prova con righe finte: serve a vedere l'intestazione sulla carta
+// senza dover aprire un lavoro vero.
+function anteprimaFoglio() {
+  document.getElementById('foglio').innerHTML = costruisciFoglio({
+    cliente: { nome: 'Cliente di prova', indirizzo: 'Via Roma 1', citta: '38015 Lavis (TN)' },
+    data: new Date().toISOString().slice(0, 10),
+    righe: [
+      { voce: 'Manodopera', quantita: 8, unita: 'h', prezzo: 35 },
+      { voce: 'Concime', quantita: 10, unita: 'kg', prezzo: 2.4 },
+      { voce: 'Trasferimento', quantita: 1, unita: '', prezzo: '' },
+    ],
+  });
+  window.print();
 }
 
 // ── AVVIO ──

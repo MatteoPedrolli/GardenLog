@@ -209,6 +209,35 @@ troncati, e nella cartella può finirci dentro qualcosa che non è un rapportino
 perché. Un rapportino che non si riesce a leggere è lavoro fatto che rischia di non
 essere fatturato, e non può stare nascosto in una console.
 
+## Il foglio che va al cliente
+
+**Stampa ed esporta PDF sono la stessa cosa.** Nel dialogo di stampa «Salva come
+PDF» è una destinazione, quindi basta un bottone e un `@media print`. Una libreria
+PDF sarebbe la prima dipendenza a runtime del progetto, per un risultato peggiore
+di quello che il browser fa già.
+
+**Non si stampa la schermata, si stampa un foglio a parte.** `#foglio` è invisibile
+a schermo ed esiste solo per la carta: stampando la schermata, i campi da compilare
+uscirebbero come caselle vuote e la barra di navigazione non avrebbe senso.
+
+**Al cliente va solo il conto.** Ore, fasce e operazioni agronomiche restano in
+ufficio: servono a fatturare e al registro dei trattamenti, non a chi paga. Una
+riga senza prezzo stampa «da definire» invece di lasciare un buco, come fa il testo
+della mail sul telefono, e se il totale è parziale il foglio lo dice.
+
+**I prezzi in listino sono IVA inclusa**, e il totale sul foglio lo scrive. Se un
+giorno diventassero al netto non basta cambiare i numeri: va cambiata quella
+riga, o il foglio dichiara una cosa e ne mostra un'altra.
+
+**L'intestazione non sta nel codice.** Sono i dati di un'azienda vera: vivono in
+`impostazioni.json` nella cartella, si compilano in Impostazioni e il backup del PC
+li copre come tutto il resto. Se mancano, la stampa avvisa ma non si rifiuta — la
+decisione resta di chi stampa.
+
+Il titolo della pagina viene cambiato prima di stampare, perché Chrome lo propone
+come nome del file in PDF, e rimesso a posto su `afterprint`: rimetterlo subito
+darebbe un file chiamato «GiardinoApp · Ufficio».
+
 ## Come arrivano gli aggiornamenti
 
 Il service worker serve la copia in cache e scarica la versione nuova in
