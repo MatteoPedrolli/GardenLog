@@ -57,16 +57,20 @@ function costruisciRapportino({ visita, cliente, operazioni, tipi, voci, concimi
         siepe: !!o.Flag_siepe && String(o.Flag_siepe).trim() !== '',
       };
     }),
-    // Le righe viaggiano con le quantità. Il prezzo può esserci o no: da quando
-    // il listino sta in ufficio, è l'ufficio a decidere, e quello che arriva dal
-    // cantiere è al massimo un suggerimento.
+    // Le righe viaggiano con le quantità e senza prezzi: il listino sta in
+    // ufficio ed è l'ufficio a decidere quanto vale ognuna. Il cantiere dice
+    // cosa è stato fatto e quanto, che è la cosa che solo lui sa.
+    //
+    // prezzoProposto resta nel formato, sempre vuoto, perché i rapportini già
+    // depositati su Drive lo contengono e devono continuare a leggersi:
+    // toglierlo cambierebbe il documento, non il telefono.
     righe: (visita.Conto || []).map(r => ({
       chiave: r.Chiave || '',
       voceID: r.VoceID || '',
       voce: r.Voce || '',
       quantita: r.Quantita === '' || r.Quantita == null ? null : Number(r.Quantita),
       unita: r.Unita || '',
-      prezzoProposto: r.Prezzo === '' || r.Prezzo == null ? null : Number(r.Prezzo),
+      prezzoProposto: null,
     })),
     note: visita.Note_visita || '',
     prossimo: {

@@ -106,7 +106,9 @@ try {
   ok('operazione libera aggiunta',
     (await page.textContent('#operazioni-libere')).includes('Riparazione irrigazione'));
 
-  // ── il conto si compila mentre registri, nella stessa schermata ──
+  // ── le voci da conteggiare si compilano mentre registri ──
+  // Senza prezzi: il listino sta in ufficio. Il cantiere dice cosa è stato fatto
+  // e quanto, che è la cosa che solo lui sa.
   ok('tre righe automatiche: manodopera, trasferimento, concime',
     await page.locator('#conto-righe .conto-riga').count() === 3);
   ok('manodopera precompilata con le ore calcolate',
@@ -115,19 +117,12 @@ try {
     (await page.textContent('#conto-righe')).includes('Trasferimento'));
   ok('l\'operazione libera non fa riga di conto',
     !(await page.textContent('#conto-righe')).includes('Riparazione irrigazione'));
-  ok('avvisa che ci sono righe senza prezzo',
-    (await page.textContent('#conto-totale')).includes('senza prezzo'));
+  ok('ogni riga ha un campo solo, la quantità: nessun prezzo sul telefono',
+    await page.locator('#conto-righe .conto-riga').first().locator('input').count() === 1);
+  ok('e in fondo non c\'è nessun totale da leggere',
+    await page.locator('#conto-totale').count() === 0);
 
   const riga = i => page.locator('#conto-righe .conto-riga').nth(i);
-  await riga(0).locator('input').nth(1).fill('32');   // manodopera
-  await riga(1).locator('input').nth(1).fill('45');   // trasferimento, a occhio
-  await riga(2).locator('input').nth(1).fill('1.8');  // concime
-  await page.waitForTimeout(200);
-  // 8 h × 32 € + 45 € + 10 kg × 1,80 € = 319 €
-  ok('totale calcolato dalle righe',
-    (await page.textContent('#conto-totale')).includes('319,00'));
-  ok('niente più avvisi quando i prezzi ci sono tutti',
-    !(await page.textContent('#conto-totale')).includes('senza prezzo'));
 
   await page.fill('#f-conto-libera', 'Noleggio rullo');
   await page.press('#f-conto-libera', 'Enter');
@@ -139,8 +134,8 @@ try {
   await page.waitForTimeout(200);
   ok('cambiando le persone la manodopera si aggiorna da sola',
     await riga(0).locator('input').first().inputValue() === '12');
-  ok('il prezzo che avevi scritto resta',
-    await riga(0).locator('input').nth(1).inputValue() === '32');
+  ok('e la riga aggiunta a mano resta dov\'è',
+    (await page.textContent('#conto-righe')).includes('Noleggio rullo'));
   await page.locator('#fasce-list .fascia').first().locator('input[type=number]').fill('2');
   await page.waitForTimeout(200);
 
@@ -173,30 +168,34 @@ try {
   ok('archivio ritrovato dopo la ricarica', await page.evaluate(() => DB.concimi.length) === 1);
   ok('conto ritrovato dopo la ricarica',
     await page.evaluate(() => DB.visite[0].Conto?.length) === 4);
-  ok('prezzo scritto a mano sopravvive alla ricarica',
-    await page.evaluate(() => DB.visite[0].Conto.find(r => r.Chiave === 'manodopera').Prezzo) == 32);
-
-  // ── il testo del rapportino, che l'ufficio legge e tu puoi ricontrollare ──
-  const testo = await page.evaluate(() => {
-    DB.impostazioni.NomeMittente = 'Matteo';
-    return testoRapportino(DB.visite[0]);
-  });
-  ok('il testo ha cliente, ore, lavoro e conto',
-    testo.includes('Mario Rossi') && testo.includes('MANODOPERA') &&
-    testo.includes('LAVORO SVOLTO') && testo.includes('CONTO'));
-  ok('il testo riporta il totale', testo.includes('TOTALE: 319,00 €'));
-  ok('il testo dice quali voci sono senza importo', testo.includes('senza importo'));
-  ok('il testo è firmato', testo.trimEnd().endsWith('Matteo'));
+  // ── i prezzi sono passati in ufficio ──
+  ok('nessun prezzo sulle righe registrate dal telefono',
+    await page.evaluate(() => DB.visite[0].Conto.every(r => r.Prezzo === undefined)));
+  ok('le quantità restano: sono quello che solo il cantiere sa',
+    await page.evaluate(() => DB.visite[0].Conto.find(r => r.Chiave === 'manodopera').Quantita) == 8);
+  ok('le voci in archivio non hanno più un prezzo',
+    await page.evaluate(() => DB.voci.every(v => v.Prezzo === undefined)));
+  ok('e l\'interruttore degli importi non esiste più',
+    await page.evaluate(() => DB.impostazioni.MostraImporti === undefined));
   ok('le quantità hanno la virgola, non il punto',
-    await page.evaluate(() => formattaQuantita(11.5) === '11,5') && !/\d\.\d/.test(testo),
-    testo.match(/.*\d\.\d.*/)?.[0] || '');
-  ok('una riga senza prezzo lo dice invece di lasciare un buco',
-    testo.includes('importo da definire') && !testo.includes('— ×'));
-  ok('gli importi si possono spegnere', await page.evaluate(() => {
-    DB.impostazioni.MostraImporti = '';
-    const t = testoRapportino(DB.visite[0]);
-    DB.impostazioni.MostraImporti = 'Sì';
-    return !t.includes('CONTO') && t.includes('LAVORO SVOLTO');
+    await page.evaluate(() => formattaQuantita(11.5) === '11,5'));
+
+  // ── il passaggio di consegne del listino ──
+  // I prezzi già scritti sul telefono non si buttano via a un aggiornamento:
+  // restano da parte finché non sono stati portati in ufficio.
+  const listinoDalTelefono = await page.evaluate(() => {
+    DB.listinoVecchio = [{ VoceID: 'manodopera', Nome: 'Manodopera', Unita: 'h', Prezzo: 32, ACorpo: '' }];
+    renderListinoVecchio();
+    return listinoPerUfficio();
+  });
+  ok('finché ci sono prezzi da portare, la pagina Dati lo dice',
+    (await page.textContent('#listino-vecchio-wrap')).includes('passato in ufficio'));
+  ok('ed esce un documento, non una tabella da ribattere',
+    listinoDalTelefono.tipo === 'listino' && listinoDalTelefono.voci[0].prezzo === 32);
+  ok('la scheda sparisce quando il giro è fatto', await page.evaluate(() => {
+    delete DB.listinoVecchio;
+    renderListinoVecchio();
+    return document.getElementById('listino-vecchio-wrap').innerHTML === '';
   }));
 
   // ── la coda di uscita: il lavoro resta al sicuro, la consegna riprova ──
@@ -287,8 +286,12 @@ try {
     doc.operazioni.some(o => o.prodotto === 'Nitrophoska'),
     JSON.stringify(doc.operazioni.map(o => o.prodotto)));
   ok('le righe del conto portano le quantità', doc.righe.length === 4);
-  ok('il prezzo è una proposta, non una decisione',
-    doc.righe.find(r => r.chiave === 'manodopera').prezzoProposto == 32);
+  // Il documento porta le quantità e non i prezzi: il listino sta in ufficio.
+  // Il campo resta nel formato, sempre vuoto, perché i rapportini già depositati
+  // su Drive lo contengono e devono continuare a leggersi.
+  ok('nessun prezzo viaggia più dal cantiere',
+    doc.righe.every(r => r.prezzoProposto === null));
+  ok('ma le quantità sì', doc.righe.find(r => r.chiave === 'manodopera').quantita === 8);
   ok('l\'identificativo è quello della visita, così una correzione sostituisce',
     doc.id === await page.evaluate(() => DB.visite[0].VisitaID));
 
@@ -329,12 +332,10 @@ try {
   await page.waitForTimeout(300);
   ok('riaprendo, il conto è quello di prima',
     await page.locator('#conto-righe .conto-riga').count() === 4);
-  ok('il prezzo scritto a mano è ancora lì',
-    await page.locator('#conto-righe .conto-riga').first().locator('input').nth(1).inputValue() === '32');
+  ok('le quantità sono quelle di prima',
+    await page.locator('#conto-righe .conto-riga').first().locator('input').first().inputValue() === '8');
   ok('la riga aggiunta a mano non sparisce',
     (await page.textContent('#conto-righe')).includes('Noleggio rullo'));
-  // 8 h × 32 € + 45 € + 10 kg × 1,80 € = 319 €
-  ok('totale ritrovato', (await page.textContent('#conto-totale')).includes('319,00'));
   await page.evaluate(() => closeDrawer('overlay-visita'));
   await page.waitForTimeout(150);
 
@@ -382,9 +383,37 @@ try {
     }, 4);
     const trasf = db.voci.find(v => v.VoceID === 'trasferimento');
     const tipo = db.tipiOperazione.find(t => t.TipoID === 'trattamento-fitosanitario');
-    return isSi(trasf.ACorpo) && trasf.Prezzo === 45
+    // Il prezzo non è più sulla voce — il listino è passato in ufficio — ma non è
+    // stato buttato: un backup di due versioni fa lo attraversa e lo consegna.
+    return isSi(trasf.ACorpo) && trasf.Prezzo === undefined
+        && db.listinoVecchio.some(v => v.VoceID === 'trasferimento' && v.Prezzo === 45)
         && db.voci.some(v => v.VoceID === 'trattamento')
         && tipo.VoceID === 'trattamento';
+  }));
+  // ── 7 → 8: il listino passa in ufficio ──
+  ok('la migrazione 8 toglie i prezzi dalle voci', await page.evaluate(() => {
+    const db = migra({ voci: [
+      { VoceID:'manodopera', Nome:'Manodopera', Unita:'h', Prezzo: 32 },
+      { VoceID:'piante', Nome:'Piante', Unita:'n', Prezzo: '' },
+    ], impostazioni: { MostraImporti: 'Sì' } }, 7);
+    return db.voci.every(v => v.Prezzo === undefined) && db.impostazioni.MostraImporti === undefined;
+  }));
+  // Cancellare a un aggiornamento un listino costruito in mesi sarebbe
+  // imperdonabile: quello che c'era resta finché non è stato portato di là.
+  ok('ma li mette da parte invece di buttarli', await page.evaluate(() => {
+    const db = migra({ voci: [
+      { VoceID:'manodopera', Nome:'Manodopera', Unita:'h', Prezzo: 32 },
+      { VoceID:'piante', Nome:'Piante', Unita:'n', Prezzo: '' },
+    ] }, 7);
+    return db.listinoVecchio.length === 1 && db.listinoVecchio[0].Prezzo === 32;
+  }));
+  ok('e senza prezzi da salvare non lascia niente in giro', await page.evaluate(() => {
+    const db = migra({ voci: [{ VoceID:'piante', Nome:'Piante', Prezzo: '' }] }, 7);
+    return db.listinoVecchio === undefined || db.listinoVecchio.length === 0;
+  }));
+  ok('i conti delle visite già registrate non si riscrivono', await page.evaluate(() => {
+    const db = migra({ visite: [{ VisitaID:'v1', Conto: [{ Chiave:'manodopera', Quantita: 8, Prezzo: 30 }] }] }, 7);
+    return db.visite[0].Conto[0].Prezzo === 30;
   }));
   ok('un aggancio scelto a mano non viene riscritto dalla migrazione', await page.evaluate(() => {
     const db = migra({
@@ -713,6 +742,17 @@ try {
     }));
   ok('le voci viste nei rapportini e non in listino si possono importare',
     await pagU.evaluate(() => vociMancanti().length) >= 1);
+
+  // Il giro completo: i prezzi che stavano sul telefono arrivano in ufficio senza
+  // che nessuno li ribatta. È il motivo per cui il file esce in questo formato.
+  ok('il listino esportato dal telefono lo legge l\'ufficio così com\'è',
+    await pagU.evaluate(async doc => {
+      await scriviTesto(window.RADICE, 'listino.json', JSON.stringify(doc));
+      LISTINO_DA_SALVARE = false;
+      await ricarica();
+      const v = LISTINO.voci.find(x => x.voceID === 'manodopera');
+      return !!v && Number(v.prezzo) === 32;
+    }, listinoDalTelefono));
 
   // ── il foglio che va al cliente ──
   await pagU.evaluate(() => {

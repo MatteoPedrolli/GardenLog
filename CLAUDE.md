@@ -85,51 +85,44 @@ I campi che l'utente compila usano `oninput`, non `onchange`: con `onchange` il
 modello resta indietro fino al blur. E non si ridisegna l'elenco mentre si
 scrive — si aggiorna solo quello che cambia, o il campo sparisce da sotto le dita.
 
-## Il rapportino e il conto
+## Le voci da conteggiare
 
-**Visita e rapportino sono la stessa schermata.** Il conto sta in fondo, dopo
-le operazioni, e si compila mentre registri. Erano due: per mostrare il conto,
-il rapportino ti ripeteva ore e operazioni in sola lettura — le stesse
-informazioni due volte, una da compilare e una da rileggere. Chi le separa di
-nuovo reintroduce quella copia.
+**Visita e conto sono la stessa schermata.** In fondo, dopo le operazioni, c'è
+l'elenco delle voci da conteggiare, e si compila mentre registri. Erano due
+schermate: per mostrare il conto, il rapportino ti ripeteva ore e operazioni in
+sola lettura — le stesse informazioni due volte, una da compilare e una da
+rileggere. Chi le separa di nuovo reintroduce quella copia.
 
-Il conto di fine lavoro **nasce già compilato**: la manodopera dalle fasce
-orarie, i materiali dalle operazioni che hanno una voce collegata. Chi lo apre
-corregge, non scrive da zero.
+**Sul telefono non ci sono prezzi.** Il listino sta in ufficio, in un posto solo
+invece che su due dispositivi che divergono. Il cantiere dice *cosa* è stato
+fatto e *quanto* — la cosa che solo lui sa — e quanto vale lo decide chi
+fattura. Chi rimette un campo prezzo qui rimette anche il problema di tenerli
+allineati.
+
+L'elenco **nasce già compilato**: la manodopera dalle fasce orarie, i materiali
+dalle operazioni che hanno una voce collegata. Chi lo apre corregge, non scrive
+da zero.
 
 Ogni riga automatica porta una `Chiave` che dice da dove nasce — `manodopera`
-oppure l'`OperazioneID`. `costruisciConto()` la usa per riallineare: le
-quantità seguono i dati della visita, **un prezzo scritto a mano non viene mai
-risovrascritto dal listino**, e le righe aggiunte a mano (senza `Chiave`)
-restano dove sono.
+oppure l'`OperazioneID`. `costruisciConto()` la usa per riallineare: le quantità
+seguono i dati della visita, e le righe aggiunte a mano (senza `Chiave`) restano
+dove sono.
 
-I prezzi in `DB.voci` sono facoltativi. Vuoto non è un errore: vuol dire che
-quella voce si valuta volta per volta. Il totale somma solo le righe che hanno
-sia quantità sia prezzo, e **dice quante ne ha lasciate fuori** — un totale che
-sembra completo mentre gli manca lo smaltimento è peggio di nessun totale.
+Potature, taglio prato e arieggiatura non hanno voce collegata: sono manodopera,
+già contata dalle ore. Collegarle vorrebbe dire fatturarle due volte.
 
-Potature, taglio prato e arieggiatura non hanno voce collegata: sono
-manodopera, già contata dalle ore. Collegarle vorrebbe dire fatturarle due volte.
+**Il trasferimento compare sempre**: c'è a ogni lavoro. Doverlo aggiungere a mano
+era il modo migliore per dimenticarlo, e dimenticarlo costa all'azienda.
 
-**Il trasferimento compare sempre**, con l'importo da scrivere: c'è a ogni
-lavoro e si valuta volta per volta. Doverlo aggiungere a mano era il modo
-migliore per dimenticarlo, e dimenticarlo costa all'azienda.
+**Una voce `ACorpo` si conta una volta, non a misura.** Il trattamento
+fitosanitario si fattura così: nell'elenco vale 1, mentre prodotto e litri
+restano sull'operazione, dove servono al registro dei trattamenti. È la ragione
+per cui agronomia e conto sono due elenchi distinti sulla stessa visita: lo
+stesso fatto si misura in modi diversi a seconda di chi lo legge.
 
-**Una voce `ACorpo` si paga con una cifra sola, non a misura.** Il trattamento
-fitosanitario si fattura così: nel conto vale 1 × l'importo, mentre prodotto e
-litri restano sull'operazione, dove servono al registro dei trattamenti. È la
-ragione per cui agronomia e conto sono due elenchi distinti sulla stessa
-visita: lo stesso fatto si misura in modi diversi a seconda di chi lo legge.
-
-**L'invio non manda niente.** `inviaRapportino()` apre l'app di posta con
-destinatario, oggetto e testo già scritti: l'ultimo tocco è di chi usa l'app, e
-non serve un server. Per questo la visita viene segnata come *in posta* e non
-come *inviata* — l'app sa di averla passata alla posta, non sa se è partita.
-Prima si salva e poi si apre la posta, o un invio fallito lascerebbe una mail
-mandata e una visita mai registrata.
-
-Nel testo della mail niente colonne allineate con gli spazi: le app di posta
-usano caratteri a larghezza variabile e arrivano storte. Una voce per riga.
+I `Conto` delle visite già registrate **conservano i loro `Prezzo`**: sono il
+registro di quello che è stato fatturato prima che il listino passasse in
+ufficio, non un listino. Riscriverli cancellerebbe l'unica traccia che ne resta.
 
 ## Due app, un documento
 
@@ -276,6 +269,18 @@ decisione resta di chi stampa.
 Il titolo della pagina viene cambiato prima di stampare, perché Chrome lo propone
 come nome del file in PDF, e rimesso a posto su `afterprint`: rimetterlo subito
 darebbe un file chiamato «GiardinoApp · Ufficio».
+
+## Il passaggio di consegne del listino
+
+I prezzi stavano sul telefono e ora stanno in ufficio. La migrazione 8 li toglie
+da `DB.voci`, ma **non li butta via**: quelli scritti finiscono in
+`DB.listinoVecchio`, e la pagina Dati mostra una scheda per scaricarli come
+`listino.json` — già nel formato che l'app dell'ufficio legge, o qualcuno
+dovrebbe ribattere dieci prezzi a mano. La scheda sparisce quando l'elenco è
+vuoto, e si svuota solo con una conferma esplicita.
+
+Cancellare a un aggiornamento un listino costruito in mesi sarebbe imperdonabile:
+è lo stesso principio del backup, applicato a un dato che sta cambiando casa.
 
 ## Come arrivano gli aggiornamenti
 

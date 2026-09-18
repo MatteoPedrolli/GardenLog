@@ -480,17 +480,6 @@ select.form-control { background-image: url("data:image/svg+xml,%3Csvg xmlns='ht
 .conto-numeri input { width: 68px; padding: 8px 6px; text-align: right; font-size: 0.85rem;
   border: 1px solid var(--border); border-radius: 8px; font-family: var(--font-body); background: var(--white); }
 .conto-numeri .unita { font-size: 0.76rem; color: var(--text-light); min-width: 34px; }
-.conto-numeri .per { color: var(--text-light); font-size: 0.8rem; }
-.conto-importo { flex: 1; text-align: right; font-weight: 600; font-size: 0.9rem; color: var(--green-deep); }
-.conto-totale {
-  margin-top: 12px; padding-top: 12px; border-top: 2px solid var(--green-pale);
-}
-.conto-totale > div:first-child {
-  display: flex; justify-content: space-between; align-items: baseline;
-  font-weight: 600; color: var(--green-deep);
-}
-.conto-totale > div:first-child span:last-child { font-family: var(--font-display); font-size: 1.3rem; }
-.conto-avviso { font-size: 0.78rem; color: #8a6d1a; margin-top: 6px; }
 
 .barra-aggiorna {
   position: fixed; left: 0; right: 0; bottom: var(--nav-h);
@@ -679,12 +668,9 @@ select.form-control { background-image: url("data:image/svg+xml,%3Csvg xmlns='ht
           <input type="text" class="form-control" id="f-imp-firma"
                  oninput="salvaImpostazione('NomeMittente', this.value)">
         </div>
-        <div class="form-group" style="display:flex; align-items:center; justify-content:space-between; gap:12px; margin-bottom:0">
-          <label class="form-label" style="margin:0">Includi gli importi nel rapportino</label>
-          <button type="button" class="toggle" id="f-imp-importi"
-                  onclick="this.classList.toggle('on'); salvaImpostazione('MostraImporti', this.classList.contains('on') ? 'Sì' : '');"></button>
-        </div>
       </div>
+
+      <div id="listino-vecchio-wrap"></div>
 
       <div class="section-title">Esporta per analisi</div>
       <div class="card" style="padding:14px">
@@ -900,9 +886,8 @@ select.form-control { background-image: url("data:image/svg+xml,%3Csvg xmlns='ht
         <div id="operazioni-altre" style="display:none"></div>
       </div>
 
-      <div class="rapporto-sez">Conto</div>
+      <div class="rapporto-sez">Voci da conteggiare</div>
       <div id="conto-righe"></div>
-      <div id="conto-totale-wrap"></div>
       <select class="form-control" id="f-conto-voce" style="margin-top:12px"
               onchange="aggiungiRigaDaVoce(this.value); this.value='';">
         <option value="">+ Aggiungi una voce…</option>
@@ -957,14 +942,16 @@ const IDB_STORE = 'stato';
 const IDB_CHIAVE = 'db';
 const MIRROR_KEY = 'giardinolog-db';
 const CACHE_SHEETS = 'giardino-db-v1';  // cache locale di quando si leggeva da Sheets
-const VERSIONE_DATI = 7;
+const VERSIONE_DATI = 8;
 
 // Le impostazioni stanno dentro DB, non in META, perché così finiscono nel
 // backup: un indirizzo da riscrivere dopo aver cambiato telefono è una seccatura
 // piccola, ma è la stessa categoria di dato che il backup deve salvare.
-const IMPOSTAZIONI_DEFAULT = { UrlRapportini: '', NomeMittente: '', MostraImporti: 'Sì' };
+const IMPOSTAZIONI_DEFAULT = { UrlRapportini: '', NomeMittente: '' };
 
-const COLLEZIONI = ['clienti', 'visite', 'operazioni', 'concimi', 'sementi', 'fitofarmaci', 'fasce', 'tipiOperazione', 'voci', 'coda'];
+const COLLEZIONI = ['clienti', 'visite', 'operazioni', 'concimi', 'sementi', 'fitofarmaci', 'fasce', 'tipiOperazione', 'voci', 'coda',
+  // di passaggio: i prezzi vecchi in attesa di essere portati in ufficio
+  'listinoVecchio'];
 
 // Fasce di partenza per chi apre l'app la prima volta: numeri da correggere
 // in Archivi, non verità rivelate. Chi arriva da Sheets o da un backup se li
@@ -1009,16 +996,16 @@ const TIPI_DEFAULT = [
 // dove si valuta caso per caso resta vuoto e lo si scrive sul momento.
 // Un prezzo inventato nel codice sarebbe peggio di nessun prezzo.
 const VOCI_DEFAULT = [
-  { VoceID:'manodopera',        Nome:'Manodopera',        Unita:'h',      Prezzo:'', Ordine:1 },
-  { VoceID:'trasferimento',     Nome:'Trasferimento',     Unita:'',       Prezzo:'', ACorpo:'Sì', Ordine:2 },
-  { VoceID:'piante',            Nome:'Piante',            Unita:'n',      Prezzo:'', Ordine:3 },
-  { VoceID:'concime',           Nome:'Concime',           Unita:'kg',     Prezzo:'', Ordine:4 },
-  { VoceID:'semente',           Nome:'Semente',           Unita:'kg',     Prezzo:'', Ordine:5 },
-  { VoceID:'fitofarmaco',       Nome:'Fitofarmaco',       Unita:'l',      Prezzo:'', Ordine:6 },
-  { VoceID:'trattamento',       Nome:'Trattamento fitosanitario', Unita:'', Prezzo:'', ACorpo:'Sì', Ordine:7 },
-  { VoceID:'terriccio',         Nome:'Terriccio',         Unita:'sacchi', Prezzo:'', Ordine:8 },
-  { VoceID:'tappeto-erboso',    Nome:'Tappeto erboso',    Unita:'m²',     Prezzo:'', Ordine:9 },
-  { VoceID:'smaltimento-verde', Nome:'Smaltimento verde', Unita:'kg',     Prezzo:'', Ordine:10 },
+  { VoceID:'manodopera',        Nome:'Manodopera',        Unita:'h',      Ordine:1 },
+  { VoceID:'trasferimento',     Nome:'Trasferimento',     Unita:'',       ACorpo:'Sì', Ordine:2 },
+  { VoceID:'piante',            Nome:'Piante',            Unita:'n',      Ordine:3 },
+  { VoceID:'concime',           Nome:'Concime',           Unita:'kg',     Ordine:4 },
+  { VoceID:'semente',           Nome:'Semente',           Unita:'kg',     Ordine:5 },
+  { VoceID:'fitofarmaco',       Nome:'Fitofarmaco',       Unita:'l',      Ordine:6 },
+  { VoceID:'trattamento',       Nome:'Trattamento fitosanitario', Unita:'', ACorpo:'Sì', Ordine:7 },
+  { VoceID:'terriccio',         Nome:'Terriccio',         Unita:'sacchi', Ordine:8 },
+  { VoceID:'tappeto-erboso',    Nome:'Tappeto erboso',    Unita:'m²',     Ordine:9 },
+  { VoceID:'smaltimento-verde', Nome:'Smaltimento verde', Unita:'kg',     Ordine:10 },
 ];
 
 // Quale voce di conto nasce da quale lavoro. Potature, taglio prato e
@@ -1168,7 +1155,7 @@ const MIGRAZIONI = {
     if (trasferimento && trasferimento.ACorpo == null) trasferimento.ACorpo = 'Sì';
     if (!db.voci.some(v => v.VoceID === 'trattamento')) {
       db.voci.push({ VoceID:'trattamento', Nome:'Trattamento fitosanitario',
-        Unita:'', Prezzo:'', ACorpo:'Sì', Ordine:7 });
+        Unita:'', ACorpo:'Sì', Ordine:7 });
     }
     // solo dove è rimasto l'aggancio di partenza: se l'hai cambiato tu, resta il tuo
     db.tipiOperazione.forEach(t => {
@@ -1190,6 +1177,31 @@ const MIGRAZIONI = {
   7: db => {
     db.impostazioni = { ...IMPOSTAZIONI_DEFAULT, ...(db.impostazioni || {}) };
     delete db.impostazioni.EmailAzienda;
+    return db;
+  },
+
+  // 7 → 8: il listino passa in ufficio. Il cantiere dice cosa è stato fatto e
+  // quanto — la cosa che solo lui sa — e quanto vale lo decide chi fattura, in
+  // un posto solo invece che su due dispositivi che divergono.
+  //
+  // I prezzi non si buttano via di nascosto: quelli scritti finiscono in
+  // listinoVecchio, che serve solo a portarli in ufficio e si svuota da Dati
+  // quando il giro è fatto. Cancellare a un aggiornamento un listino costruito
+  // in mesi sarebbe imperdonabile.
+  8: db => {
+    const conPrezzo = (db.voci || []).filter(v => v.Prezzo !== '' && v.Prezzo != null);
+    if (conPrezzo.length) {
+      db.listinoVecchio = conPrezzo.map(v => ({
+        VoceID: v.VoceID, Nome: v.Nome, Unita: v.Unita || '',
+        Prezzo: v.Prezzo, ACorpo: v.ACorpo || '',
+      }));
+    }
+    (db.voci || []).forEach(v => { delete v.Prezzo; });
+    db.impostazioni = { ...IMPOSTAZIONI_DEFAULT, ...(db.impostazioni || {}) };
+    delete db.impostazioni.MostraImporti;
+    // I conti delle visite già registrate non si toccano: sono il registro di
+    // quello che è stato fatturato prima che il listino passasse in ufficio, non
+    // un listino. Riscriverli cancellerebbe l'unica traccia che ne resta.
     return db;
   },
 };
@@ -1950,11 +1962,6 @@ function oreTotali(fasce) {
   return (fasce || []).reduce((s, f) => s + oreFascia(f), 0);
 }
 
-function formattaEuro(n) {
-  const v = parseFloat(n);
-  return isNaN(v) ? '' : v.toFixed(2).replace('.', ',') + ' €';
-}
-
 // Le quantità si scrivono come si scrivono in italiano: 11,5 e non 11.5.
 function formattaQuantita(v) {
   const n = parseFloat(v);
@@ -2435,7 +2442,7 @@ function righeAutomatiche(fasce, operazioni) {
     const voce = voceDi('manodopera');
     righe.push({ Chiave: 'manodopera', VoceID: 'manodopera',
       Voce: voce?.Nome || 'Manodopera', Unita: voce?.Unita || 'h',
-      Quantita: Number(ore.toFixed(2)), Prezzo: voce?.Prezzo ?? '' });
+      Quantita: Number(ore.toFixed(2)) });
   }
 
   // Il trasferimento c'è a ogni lavoro e l'importo si decide volta per volta:
@@ -2445,7 +2452,7 @@ function righeAutomatiche(fasce, operazioni) {
   if (trasferimento) {
     righe.push({ Chiave: 'trasferimento', VoceID: 'trasferimento',
       Voce: trasferimento.Nome, Unita: trasferimento.Unita || '',
-      Quantita: 1, Prezzo: trasferimento.Prezzo ?? '' });
+      Quantita: 1 });
   }
 
   (operazioni || []).forEach(o => {
@@ -2461,34 +2468,19 @@ function righeAutomatiche(fasce, operazioni) {
     righe.push({ Chiave: o.OperazioneID, VoceID: tipo.VoceID,
       Voce: (voce?.Nome || tipo.Nome) + (o.Descrizione ? ' – ' + o.Descrizione : ''),
       Unita: aCorpo ? '' : (o.Unita || voce?.Unita || ''),
-      Quantita: quantita, Prezzo: voce?.Prezzo ?? '' });
+      Quantita: quantita });
   });
   return righe;
 }
 
-// Riallinea un conto con quello che ore e operazioni dicono adesso: le righe
-// nate da lì seguono i dati, quelle aggiunte a mano restano dove sono, e un
-// prezzo già scritto non viene mai risovrascritto dal listino — se l'hai
-// corretto tu, vale il tuo.
+// Riallinea le voci con quello che ore e operazioni dicono adesso: quelle nate
+// da lì seguono i dati, quelle aggiunte a mano restano dove sono. I prezzi non
+// c'entrano più: da quando il listino sta in ufficio, il cantiere dice cosa è
+// stato fatto e quanto, e quanto vale lo decide chi fattura.
 function costruisciConto(precedenti, fasce, operazioni) {
   const salvate = Array.isArray(precedenti) ? precedenti : [];
   const manuali = salvate.filter(r => !r.Chiave);
-  const perChiave = new Map(salvate.filter(r => r.Chiave).map(r => [r.Chiave, r]));
-  const automatiche = righeAutomatiche(fasce, operazioni).map(nuova => {
-    const vecchia = perChiave.get(nuova.Chiave);
-    const prezzoScritto = vecchia && vecchia.Prezzo !== '' && vecchia.Prezzo != null;
-    return prezzoScritto ? { ...nuova, Prezzo: vecchia.Prezzo } : nuova;
-  });
-  return automatiche.concat(manuali);
-}
-
-function importoRiga(r) {
-  const q = parseFloat(r.Quantita), p = parseFloat(r.Prezzo);
-  return (isNaN(q) || isNaN(p)) ? null : q * p;
-}
-
-function totaleConto(righe) {
-  return righe.reduce((s, r) => s + (importoRiga(r) || 0), 0);
+  return righeAutomatiche(fasce, operazioni).concat(manuali);
 }
 
 // Da chiamare dopo ogni modifica alle ore o alle operazioni: il conto le segue
@@ -2503,7 +2495,6 @@ function renderContoRighe() {
   if (!el) return;
   el.innerHTML = contoCorrente.length
     ? contoCorrente.map((r, i) => {
-        const importo = importoRiga(r);
         return `<div class="conto-riga">
           <div class="conto-voce">
             <span style="flex:1">${perValore(r.Voce)}</span>
@@ -2513,40 +2504,17 @@ function renderContoRighe() {
             <input type="number" step="any" min="0" value="${perValore(r.Quantita)}"
                    oninput="modificaRigaConto(${i}, 'Quantita', this.value)" aria-label="quantità">
             <span class="unita">${perValore(r.Unita)}</span>
-            <span class="per">×</span>
-            <input type="number" step="any" min="0" placeholder="€" value="${perValore(r.Prezzo)}"
-                   oninput="modificaRigaConto(${i}, 'Prezzo', this.value)" aria-label="prezzo unitario">
-            <span class="conto-importo">${importo == null ? '—' : formattaEuro(importo)}</span>
           </div>
         </div>`;
       }).join('')
-    : '<div class="dati-nota">Le ore e i materiali che registri qui sopra compaiono da soli.</div>';
-  aggiornaTotaleConto();
+    : '<div class="dati-nota">Le ore e i materiali che registri qui sopra compaiono da soli. I prezzi li mette l\'ufficio.</div>';
 }
 
-function aggiornaTotaleConto() {
-  const el = document.getElementById('conto-totale-wrap');
-  if (!el) return;
-  const senzaPrezzo = contoCorrente.filter(r => importoRiga(r) == null).length;
-  // Il totale dice anche quante righe non ci sono dentro: un totale che sembra
-  // completo mentre gli manca lo smaltimento è peggio di nessun totale.
-  el.innerHTML = `<div id="conto-totale" class="conto-totale">
-      <div><span>Totale</span><span>${formattaEuro(totaleConto(contoCorrente))}</span></div>
-      ${senzaPrezzo ? `<div class="conto-avviso">${senzaPrezzo} ${senzaPrezzo === 1 ? 'riga è' : 'righe sono'} senza prezzo e non ${senzaPrezzo === 1 ? 'entra' : 'entrano'} nel totale</div>` : ''}
-    </div>`;
-}
-
-// Non ridisegno le righe: si sta scrivendo dentro un campo. Aggiorno solo
-// l'importo di questa riga e il totale.
+// Non ridisegno le righe: si sta scrivendo dentro un campo.
 function modificaRigaConto(i, campo, valore) {
   const r = contoCorrente[i];
   if (!r) return;
   r[campo] = valore;
-  const riga = document.querySelectorAll('#conto-righe .conto-riga')[i];
-  const importo = importoRiga(r);
-  const cella = riga?.querySelector('.conto-importo');
-  if (cella) cella.textContent = importo == null ? '—' : formattaEuro(importo);
-  aggiornaTotaleConto();
 }
 
 function popolaVociConto() {
@@ -2560,7 +2528,7 @@ function aggiungiRigaDaVoce(voceID) {
   const vo = DB.voci.find(x => x.VoceID === voceID);
   if (!vo) return;
   contoCorrente.push({ VoceID: vo.VoceID, Voce: vo.Nome, Unita: vo.Unita || '',
-    Quantita: isSi(vo.ACorpo) ? 1 : '', Prezzo: vo.Prezzo ?? '' });
+    Quantita: isSi(vo.ACorpo) ? 1 : '' });
   renderContoRighe();
 }
 
@@ -2569,7 +2537,7 @@ function aggiungiRigaLibera() {
   if (!campo) return;
   const testo = campo.value.trim();
   if (!testo) return;
-  contoCorrente.push({ VoceID: '', Voce: testo, Unita: '', Quantita: '', Prezzo: '' });
+  contoCorrente.push({ VoceID: '', Voce: testo, Unita: '', Quantita: '' });
   campo.value = '';
   renderContoRighe();
 }
@@ -2577,80 +2545,6 @@ function aggiungiRigaLibera() {
 function togliRigaConto(i) {
   contoCorrente.splice(i, 1);
   renderContoRighe();
-}
-
-// ── IL RAPPORTINO DA MANDARE ──
-// Testo semplice, una voce per riga: nessun allineamento a colonne, perché le
-// app di posta usano caratteri a larghezza variabile e le colonne fatte con
-// gli spazi arrivano storte. Meglio leggibile che incolonnato.
-function testoRapportino(visita) {
-  const c = DB.clienti.find(x => x.ClienteID == visita.ClienteID);
-  const ops = DB.operazioni.filter(o => o.VisitaID == visita.VisitaID);
-  const conto = Array.isArray(visita.Conto) ? visita.Conto : [];
-  const mostraImporti = isSi(DB.impostazioni?.MostraImporti);
-  const righe = [];
-
-  righe.push('RAPPORTINO DI FINE LAVORO');
-  righe.push((c?.Cliente || '—') + (c?.Indirizzo || c?.Citta
-    ? ' — ' + [c.Indirizzo, c.Citta].filter(Boolean).join(', ') : ''));
-  if (visita.Data) {
-    const d = new Date(visita.Data).toLocaleDateString('it-IT',
-      { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' });
-    righe.push(d.charAt(0).toUpperCase() + d.slice(1));
-  }
-
-  const fasce = visita.Fasce || [];
-  if (fasce.length || visita.Ore_Visita) {
-    righe.push('', 'MANODOPERA');
-    fasce.forEach(f => righe.push(
-      `  ${f.Inizio} – ${f.Fine}, ${f.Persone || 1} ${(f.Persone || 1) === 1 ? 'persona' : 'persone'} — ${formattaOre(oreFascia(f))}`));
-    righe.push(`  Totale: ${formattaOre(fasce.length ? oreTotali(fasce) : visita.Ore_Visita)}`);
-  }
-
-  if (ops.length) {
-    righe.push('', 'LAVORO SVOLTO');
-    ops.forEach(o => righe.push('  ' + o.Tipo_operazione
-      + (o.Descrizione ? ' – ' + o.Descrizione : '')
-      + (o.Quantita ? ` — ${formattaQuantita(o.Quantita)} ${o.Unita || ''}`.trimEnd() : '')));
-  }
-
-  if (mostraImporti && conto.length) {
-    righe.push('', 'CONTO');
-    conto.forEach(r => {
-      const importo = importoRiga(r);
-      const quantita = formattaQuantita(r.Quantita);
-      const misurabile = quantita && (r.Unita || parseFloat(r.Quantita) !== 1);
-      const conUnita = misurabile ? quantita + (r.Unita ? ' ' + r.Unita : '') : '';
-      if (importo == null) {
-        // Dire quanto manca è più utile che tacere: chi legge sa cosa deve
-        // quantificare, e non deve richiamarti per chiederlo.
-        righe.push('  ' + r.Voce + ' — ' + [conUnita, 'importo da definire'].filter(Boolean).join(', '));
-      } else {
-        // "1 × 45,00 €" non dice niente più di "45,00 €"
-        righe.push('  ' + r.Voce + ' — '
-          + (conUnita ? `${conUnita} × ${formattaEuro(r.Prezzo)} = ` : '')
-          + formattaEuro(importo));
-      }
-    });
-    const senzaPrezzo = conto.filter(r => importoRiga(r) == null).length;
-    righe.push(`  TOTALE: ${formattaEuro(totaleConto(conto))}`);
-    // Se qualcosa non è entrato nel totale, va detto a chi lo legge: è lui che
-    // poi fattura, e un totale parziale spacciato per completo diventa il suo errore.
-    if (senzaPrezzo) righe.push(`  (${senzaPrezzo} ${senzaPrezzo === 1 ? 'voce è rimasta' : 'voci sono rimaste'} senza importo)`);
-  }
-
-  if (visita.Note_visita) righe.push('', 'NOTE', '  ' + visita.Note_visita);
-
-  if (visita.Prossimo_intervento || visita.Mese_prossimo_intervento) {
-    righe.push('', 'PROSSIMO INTERVENTO', '  ' + [visita.Prossimo_intervento,
-      visita.Mese_prossimo_intervento
-        ? meseNomeLungo(visita.Mese_prossimo_intervento) + ' ' + (visita.Anno_prossimo_intervento || '')
-        : ''].filter(Boolean).join(' — ').trim());
-  }
-
-  const firma = DB.impostazioni?.NomeMittente;
-  if (firma) righe.push('', firma);
-  return righe.join('\n');
 }
 
 // ── LA CODA DI USCITA ──
@@ -2794,13 +2688,10 @@ const ARCHIVI = {
     campi: [
       { k:'Nome', label:'Nome', obbligatorio:true },
       { k:'Unita', label:'Unità di misura (h, kg, n, m²…)' },
-      { k:'Prezzo', label:'Prezzo unitario in € — lascia vuoto se lo decidi volta per volta', tipo:'number' },
       { k:'ACorpo', label:'Si paga a corpo (una cifra sola, non a misura)', tipo:'flag' },
       { k:'Ordine', label:'Posizione in elenco', tipo:'number' },
     ],
-    riga: v => `${v.Nome}${v.Unita ? ' · ' + v.Unita : ''}${isSi(v.ACorpo) ? ' · a corpo' : ''} · ${v.Prezzo !== '' && v.Prezzo != null
-      ? formattaEuro(v.Prezzo) + (v.Unita ? '/' + v.Unita : '')
-      : 'prezzo a mano'}`,
+    riga: v => `${v.Nome}${v.Unita ? ' · ' + v.Unita : ''}${isSi(v.ACorpo) ? ' · a corpo' : ''}`,
     usato: v => DB.tipiOperazione.filter(t => t.VoceID === v.VoceID).length,
   },
   concimi: {
@@ -3059,10 +2950,65 @@ function renderDati() {
   if (url) url.value = imp.UrlRapportini || '';
   const firma = document.getElementById('f-imp-firma');
   if (firma) firma.value = imp.NomeMittente || '';
-  const importi = document.getElementById('f-imp-importi');
-  if (importi) importi.classList.toggle('on', isSi(imp.MostraImporti));
   renderArchivi();
+  renderListinoVecchio();
   renderDiagnostica();
+}
+
+// I prezzi sono passati in ufficio, ma quelli già scritti sul telefono non si
+// buttano via a un aggiornamento: restano qui finché non li hai portati di là.
+// La scheda sparisce da sola quando il giro è fatto.
+function renderListinoVecchio() {
+  const el = document.getElementById('listino-vecchio-wrap');
+  if (!el) return;
+  const vecchio = DB.listinoVecchio || [];
+  if (!vecchio.length) { el.innerHTML = ''; return; }
+  el.innerHTML = `<div class="section-title">Il listino è passato in ufficio</div>
+    <div class="card" style="padding:14px">
+      <div class="dati-nota">I prezzi ora stanno nell'app dell'ufficio, in un posto solo.
+        ${vecchio.length} ${vecchio.length === 1 ? 'voce che avevi' : 'voci che avevi'} qui
+        ${vecchio.length === 1 ? 'aspetta' : 'aspettano'} di essere ${vecchio.length === 1 ? 'portata' : 'portate'} di là.</div>
+      <div style="display:flex; gap:8px; flex-wrap:wrap">
+        <button class="btn btn-secondary btn-sm" onclick="scaricaListinoPerUfficio()">Scarica listino.json</button>
+        <button class="btn btn-secondary btn-sm" onclick="scartaListinoVecchio()">Fatto, cancellalo</button>
+      </div>
+      <div class="dati-nota" style="margin-top:10px">Il file va messo nella cartella
+        <strong>GiardinoApp</strong> su Drive, accanto a <code>rapportini</code>: l'app dell'ufficio lo legge da lì.</div>
+    </div>`;
+}
+
+// Esce già nel formato che l'app dell'ufficio legge, ed è il punto: se uscisse in
+// un formato suo qualcuno dovrebbe ribattere dieci prezzi a mano, che è il lavoro
+// che questo passaggio deve evitare.
+function listinoPerUfficio() {
+  return {
+    tipo: 'listino', versione: 1, aggiornato: new Date().toISOString(),
+    voci: (DB.listinoVecchio || []).map(v => ({
+      voceID: v.VoceID, voce: v.Nome, unita: v.Unita || '',
+      prezzo: v.Prezzo, aCorpo: isSi(v.ACorpo),
+    })),
+  };
+}
+
+async function scaricaListinoPerUfficio() {
+  if (!(DB.listinoVecchio || []).length) return;
+  const contenuto = JSON.stringify(listinoPerUfficio(), null, 2);
+  const file = new File([contenuto], 'listino.json', { type: 'application/json' });
+  let esito;
+  try { esito = await consegnaFile(file); }
+  catch (e) { showToast('❌ Non riuscito: ' + (e.message || e)); return; }
+  // Una condivisione annullata non è un file consegnato: dirlo eviterebbe di
+  // cancellare dei prezzi credendo di averli messi al sicuro.
+  showToast(esito === 'annullato' ? '↩️ Annullato: il file non è uscito' : '🏷️ listino.json pronto');
+}
+
+async function scartaListinoVecchio() {
+  if (!confirm('Cancellare i prezzi vecchi da questo telefono?\n\n' +
+    'Fallo solo se li hai già portati nell\'app dell\'ufficio: da qui non si recuperano più.')) return;
+  delete DB.listinoVecchio;
+  await salvaDB();
+  renderListinoVecchio();
+  showToast('🏷️ Prezzi vecchi cancellati');
 }
 
 function renderArchivi() {
