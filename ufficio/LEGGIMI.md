@@ -12,6 +12,39 @@ cartella normale del disco.
                                      PC UFFICIO ──→ prezzi, archivio
 ```
 
+La cartella, dopo un po' di lavoro, ha questa forma:
+
+```
+  GiardinoApp/
+    rapportini/                    ← ci scrive il telefono, l'ufficio legge
+      2026-09-18-mario-rossi-<id>.json
+    archivio/                      ← ci scrive l'ufficio
+      2026/
+        2026-09-18-mario-rossi-<id>.json
+    listino.json                   ← i prezzi, solo dell'ufficio
+```
+
+## L'app dell'ufficio
+
+Sta in `index.html`, qui dentro, e si apre col browser dallo stesso indirizzo
+dell'app del cantiere con `/ufficio/` in fondo. Al primo avvio chiede di scegliere
+la cartella `GiardinoApp`; da allora se la ricorda, e ogni tanto chiede il permesso
+con un clic — Chrome non lo tiene per sempre.
+
+Fa tre cose: mostra i rapportini arrivati e non ancora archiviati, ci applica il
+listino e li archivia. Serve **Chrome o Edge su PC**: l'accesso a una cartella del
+disco è un'API che Safari e i browser da telefono non hanno. Non è un limite che
+dà fastidio — quella cartella esiste solo sul PC dell'ufficio.
+
+**L'archivio dell'ufficio sono file in quella cartella**, non dati dentro il
+browser. È il motivo per cui si è scelto Drive: la cartella sta sul PC, che ha il
+suo backup automatico, e IndexedDB del browser non ci finirebbe dentro. Quello che
+conta deve stare dove il backup passa.
+
+Un lavoro archiviato si porta dentro il rapportino per intero. Fra due anni quel
+file deve raccontare il lavoro da solo, anche se la cartella degli arrivi è stata
+svuotata e il telefono cambiato.
+
 ## Due pezzi da installare, una volta sola
 
 **1. Lo script che riceve** — `ricevi-rapportini.gs`, da incollare in
@@ -37,3 +70,12 @@ backup.
 Un file, un solo autore. Il telefono deposita in `rapportini/` e non tocca
 altro; l'ufficio legge da lì e scrive nel suo archivio. Nessuno sovrascrive il
 lavoro di nessuno, e non serve nessuna sincronizzazione bidirezionale.
+
+Per questo un rapportino risulta «in arrivo» perché **l'archivio non ne ha ancora
+una copia a quella revisione**, non perché qualcuno lo abbia spostato: l'ufficio
+non scrive in `rapportini/` nemmeno per segnare che ha finito.
+
+E per questo la stessa visita corretta e rimandata **riscrive il suo file
+d'archivio** invece di affiancarne un secondo: il nome nasce da data e cliente, e
+un cliente rinominato sul telefono metterebbe lo stesso lavoro in archivio due
+volte — pronto per essere fatturato due volte.

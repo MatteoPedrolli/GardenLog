@@ -478,13 +478,250 @@ try {
     await page.isVisible('#barra-aggiorna'));
   await page.evaluate(() => document.getElementById('barra-aggiorna').classList.remove('mostra'));
 
-  // ── offline ──
+  // ── il service worker del cantiere non si prende l'app dell'ufficio ──
+  // Ha lo scope sulla radice, quindi /ufficio/ gli passa davanti. Se la
+  // cacheggiasse, l'app dell'ufficio si aggiornerebbe con le regole del telefono
+  // — al secondo avvio — ma senza la barra che avvisa, e sul PC nessuno se ne
+  // accorgerebbe. Si guarda la cache, non la pagina: l'emulazione offline di
+  // Playwright non vale per le richieste che fa il service worker, e una prova
+  // basata su quella passerebbe per il motivo sbagliato.
   await page.waitForTimeout(1200);  // lascia installare il service worker
+  await page.goto(BASE + 'ufficio/', { waitUntil: 'load' });
+  await page.waitForTimeout(500);
+  const ufficioInCache = await page.evaluate(async () => {
+    for (const nome of await caches.keys()) {
+      const chiavi = await (await caches.open(nome)).keys();
+      if (chiavi.some(r => r.url.includes('/ufficio/'))) return true;
+    }
+    return false;
+  });
+  ok('il service worker del cantiere non mette in cache l\'app dell\'ufficio', !ufficioInCache);
+  await page.goto(BASE, { waitUntil: 'load' });
+  await page.waitForTimeout(400);
+
+  // ── offline ──
   await ctx.setOffline(true);
   await page.goto(BASE, { waitUntil: 'load' });
   await page.waitForTimeout(600);
   ok('app si apre senza rete', await page.isVisible('#page-home'));
   ok('dati leggibili senza rete', await page.evaluate(() => DB.clienti.length) >= 1);
+
+
+  // ── L'APP DELL'UFFICIO ──
+  // Legge la cartella di Drive come una cartella normale del disco. Qui la
+  // cartella è finta: l'API del browser apre una finestra di sistema che un test
+  // non può toccare, ed è il motivo per cui tutto il contatto con quell'API sta
+  // in un punto solo. Il documento che le diamo in pasto non è inventato — è
+  // quello che l'app del cantiere ha prodotto poche righe sopra: se le due app
+  // non si capiscono, si vede qui.
+  const ctxU = await browser.newContext();
+  const pagU = await ctxU.newPage();
+  const erroriU = [];
+  pagU.on('pageerror', e => erroriU.push(String(e)));
+  pagU.on('console', m => {
+    if (m.type() === 'error' && !m.text().includes('Failed to load resource')) erroriU.push('console: ' + m.text());
+  });
+  pagU.on('dialog', d => d.accept());
+  await ctxU.route('**://fonts.googleapis.com/**', r => r.abort());
+  await ctxU.route('**://fonts.gstatic.com/**', r => r.abort());
+  await pagU.goto(BASE + 'ufficio/', { waitUntil: 'load' });
+  await pagU.waitForTimeout(400);
+
+  ok('l\'app dell\'ufficio si apre e chiede la cartella',
+    (await pagU.textContent('#pagina-arrivi')).includes('Collega la cartella'));
+
+  await pagU.evaluate(() => {
+    // Una cartella che sa fare solo quello che l'app le chiede: getFileHandle,
+    // getDirectoryHandle, values(), createWritable.
+    window.creaCartellaFinta = function (nome) {
+      const file = new Map();
+      const sotto = new Map();
+      return {
+        kind: 'directory', name: nome, _file: file, _sotto: sotto,
+        async getDirectoryHandle(n, o) {
+          if (!sotto.has(n)) {
+            if (!o || !o.create) throw new Error('NotFoundError');
+            sotto.set(n, window.creaCartellaFinta(n));
+          }
+          return sotto.get(n);
+        },
+        async getFileHandle(n, o) {
+          if (!file.has(n)) {
+            if (!o || !o.create) throw new Error('NotFoundError');
+            file.set(n, '');
+          }
+          return {
+            kind: 'file', name: n,
+            async getFile() { const t = file.get(n); return { text: async () => t }; },
+            async createWritable() { return { async write(t) { file.set(n, t); }, async close() {} }; },
+          };
+        },
+        values() {
+          const voci = [...file.keys()].map(n => ({ kind: 'file', name: n }))
+            .concat([...sotto.keys()].map(n => ({ kind: 'directory', name: n })));
+          return (async function* () { for (const v of voci) yield v; })();
+        },
+        async queryPermission() { return 'granted'; },
+        async requestPermission() { return 'granted'; },
+      };
+    };
+  });
+
+  await pagU.evaluate(async d => {
+    window.RADICE = window.creaCartellaFinta('GiardinoApp');
+    const arrivi = await window.RADICE.getDirectoryHandle('rapportini', { create: true });
+    await scriviTesto(arrivi, nomeFileRapportino(d), JSON.stringify(d));
+    // Drive a metà sincronizzazione lascia file troncati, e nella cartella può
+    // finirci dentro qualcosa che non è un rapportino.
+    await scriviTesto(arrivi, 'a-troncato.json', '{"tipo":"rapportino","id":"abc"');
+    await scriviTesto(arrivi, 'b-altro.json', '{"tipo":"listaspesa"}');
+    await usaCartella(window.RADICE);
+  }, doc);
+  await pagU.waitForTimeout(200);
+
+  ok('il rapportino del cantiere arriva in ufficio',
+    await pagU.evaluate(() => ARRIVI.length) === 1);
+  ok('i file illeggibili si vedono invece di sparire',
+    await pagU.evaluate(() => ILLEGGIBILI.length) === 2);
+  ok('l\'elenco in arrivo li dice a schermo',
+    (await pagU.textContent('#pagina-arrivi')).includes('non leggibili'));
+  ok('il cliente si legge senza avere l\'anagrafica',
+    (await pagU.textContent('#pagina-arrivi')).includes('Mario Rossi'));
+
+  // il listino dell'ufficio è l'unico che conta: quello del cantiere è un'idea
+  const prezzoApplicato = await pagU.evaluate(() => {
+    const manodopera = ARRIVI[0].doc.righe.find(r => r.chiave === 'manodopera');
+    importaVoce(manodopera.voceID, 'Manodopera', 'h');
+    modificaVoce(manodopera.voceID, 'prezzo', '35');
+    apriLavoro(ARRIVI[0].doc.id);
+    return LAVORO.righe.find(r => r.chiave === 'manodopera').prezzo;
+  });
+  ok('il listino dell\'ufficio vince sul prezzo proposto dal cantiere', prezzoApplicato === 35);
+  ok('la schermata del lavoro mostra le ore del cantiere',
+    (await pagU.textContent('#pagina-lavoro')).includes('8,00 h'));
+
+  const conto = await pagU.evaluate(() => totaleConteggio(LAVORO.righe));
+  ok('il totale somma le righe complete', conto.totale > 0, JSON.stringify(conto));
+  ok('e dice quante ne ha lasciate fuori', conto.escluse >= 1, JSON.stringify(conto));
+  ok('l\'avvertenza sul totale incompleto è a schermo',
+    (await pagU.textContent('#pagina-lavoro')).includes('fuori dal totale'));
+
+  // un prezzo scritto a mano è una decisione, e non va risovrascritta
+  await pagU.evaluate(() => {
+    const i = LAVORO.righe.findIndex(r => r.chiave === 'manodopera');
+    modificaRiga(i, 'prezzo', '40');
+  });
+  ok('un prezzo scritto a mano si segna come tale',
+    await pagU.evaluate(() => LAVORO.righe.find(r => r.chiave === 'manodopera').manuale) === true);
+  ok('l\'importo della riga si aggiorna senza ridisegnare la tabella',
+    (await pagU.textContent('#pagina-lavoro')).includes('320,00 €'));
+
+  await pagU.evaluate(() => archivia());
+  await pagU.waitForTimeout(200);
+  ok('archiviato, il lavoro esce dall\'elenco in arrivo',
+    await pagU.evaluate(() => ARRIVI.length) === 0);
+  ok('e compare in archivio', await pagU.evaluate(() => ARCHIVIO.length) === 1);
+  const annoLavoro = String(doc.data).slice(0, 4);
+  ok('l\'archivio è un file nella cartella di Drive, non nel browser',
+    await pagU.evaluate(async a => {
+      const archivio = await window.RADICE.getDirectoryHandle('archivio');
+      return (await elencaFile(await archivio.getDirectoryHandle(a))).length;
+    }, annoLavoro) === 1);
+  // Il file deve raccontare il lavoro da solo anche fra due anni, senza il
+  // telefono e senza la cartella degli arrivi.
+  ok('il rapportino viaggia dentro il lavoro archiviato',
+    await pagU.evaluate(() => !!ARCHIVIO[0].rapportino && ARCHIVIO[0].rapportino.operazioni.length > 0));
+  ok('il totale archiviato è quello corretto a mano',
+    await pagU.evaluate(() => ARCHIVIO[0].righe.find(r => r.chiave === 'manodopera').prezzo) == 40);
+
+  // ── la stessa visita corretta e rimandata ──
+  const revisioneCorretta = (Number(doc.revisione) || 1) + 1;
+  await pagU.evaluate(async ({ d, rev }) => {
+    const arrivi = await window.RADICE.getDirectoryHandle('rapportini');
+    await scriviTesto(arrivi, nomeFileRapportino(d), JSON.stringify({ ...d, revisione: rev, note: 'ore corrette' }));
+    await ricarica();
+    disegna();
+  }, { d: doc, rev: revisioneCorretta });
+  ok('una revisione più recente torna fra i lavori da rivedere',
+    await pagU.evaluate(() => ARRIVI.length === 1 && ARRIVI[0].corretto === true));
+  ok('e si vede che è una correzione',
+    (await pagU.textContent('#pagina-arrivi')).includes('corretto'));
+  ok('il prezzo messo a mano sopravvive alla correzione',
+    await pagU.evaluate(() => {
+      apriLavoro(ARRIVI[0].doc.id);
+      return LAVORO.righe.find(r => r.chiave === 'manodopera').prezzo;
+    }) == 40);
+
+  await pagU.evaluate(() => archivia());
+  await pagU.waitForTimeout(200);
+  // Due file con lo stesso lavoro dentro sono il modo migliore per fatturarlo
+  // due volte: la revisione nuova riscrive quella vecchia.
+  ok('la correzione riscrive il file, non ne affianca un secondo',
+    await pagU.evaluate(async a => {
+      const archivio = await window.RADICE.getDirectoryHandle('archivio');
+      return (await elencaFile(await archivio.getDirectoryHandle(a))).length;
+    }, annoLavoro) === 1);
+  ok('in archivio resta un solo lavoro', await pagU.evaluate(() => ARCHIVIO.length) === 1);
+  ok('con la revisione aggiornata',
+    await pagU.evaluate(() => ARCHIVIO[0].revisione) === revisioneCorretta);
+
+  // ── fatturato, e il listino che resta scritto ──
+  await pagU.evaluate(() => cambiaStato(ARCHIVIO[0].id, 'fatturato'));
+  await pagU.waitForTimeout(150);
+  // Il nome del file nasce da data e cliente: se sul telefono il cliente viene
+  // rinominato, la revisione nuova cadrebbe in un file diverso e lo stesso lavoro
+  // starebbe in archivio due volte — pronto per essere fatturato due volte.
+  await pagU.evaluate(async ({ d, rev }) => {
+    const arrivi = await window.RADICE.getDirectoryHandle('rapportini');
+    const corretto = { ...d, revisione: rev, cliente: { ...d.cliente, nome: 'Mario Rossi Junior' } };
+    await scriviTesto(arrivi, nomeFileRapportino(corretto), JSON.stringify(corretto));
+    await ricarica();
+    apriLavoro(d.id);
+    await archivia();
+  }, { d: doc, rev: revisioneCorretta + 1 });
+  await pagU.waitForTimeout(200);
+  ok('un cliente rinominato non crea un secondo file per lo stesso lavoro',
+    await pagU.evaluate(async a => {
+      const archivio = await window.RADICE.getDirectoryHandle('archivio');
+      return (await elencaFile(await archivio.getDirectoryHandle(a))).length;
+    }, annoLavoro) === 1, 'file in archivio');
+  ok('e in archivio il lavoro resta uno', await pagU.evaluate(() => ARCHIVIO.length) === 1);
+
+  ok('lo stato fatturato finisce sul file, non solo a schermo',
+    await pagU.evaluate(async () => { await ricarica(); return ARCHIVIO[0].stato; }) === 'fatturato');
+
+  // Un prezzo appena battuto e non ancora salvato non deve sparire perché
+  // qualcuno ha premuto Ricontrolla: la rilettura della cartella lo rispetta.
+  ok('le modifiche al listino non salvate sopravvivono a una rilettura',
+    await pagU.evaluate(async () => {
+      await ricarica();
+      const v = LISTINO.voci.find(x => String(x.prezzo) === '35');
+      return !!v && LISTINO_DA_SALVARE === true;
+    }));
+  await pagU.evaluate(() => salvaListino());
+  await pagU.waitForTimeout(150);
+  ok('il listino si rilegge dalla cartella dopo il salvataggio',
+    await pagU.evaluate(async () => {
+      await ricarica();
+      return LISTINO.voci.length >= 1 && LISTINO_DA_SALVARE === false;
+    }));
+  ok('le voci viste nei rapportini e non in listino si possono importare',
+    await pagU.evaluate(() => vociMancanti().length) >= 1);
+
+  // Un lavoro archiviato da una versione futura può avere campi che questa non
+  // sa leggere: fermarsi è meglio che mostrare un totale sbagliato.
+  ok('un lavoro archiviato di una versione futura si ferma e lo dice',
+    await pagU.evaluate(() => {
+      try { leggiLavoro({ tipo: 'lavoro-archiviato', versione: 99, id: 'x' }); return false; }
+      catch (e) { return e.message.includes('recente'); }
+    }));
+  ok('un file che non è un lavoro archiviato viene respinto',
+    await pagU.evaluate(() => {
+      try { leggiLavoro('{"tipo":"altro"}'); return false; } catch (e) { return true; }
+    }));
+
+  ok('nessun errore JavaScript nell\'app dell\'ufficio', erroriU.length === 0, erroriU.join(' | '));
+  await ctxU.close();
 
   // ── bilancio ──
   ok('nessun errore JavaScript in tutto il giro', erroriJS.length === 0, erroriJS.join(' | '));

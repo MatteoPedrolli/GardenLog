@@ -6,10 +6,12 @@ sola, quasi sempre dal telefono, spesso in giardino senza campo.
 
 ## Com'è fatta
 
-- `index.html` — tutta l'app: stili, markup e codice in un file solo
+- `index.html` — l'app del cantiere: stili, markup e codice in un file solo
+- `ufficio/index.html` — l'app dell'ufficio, stessa forma, un file solo
+- `rapportino.js` — il documento che le due app si scambiano, caricato da entrambe
 - `sw.js` — service worker, serve l'app dalla cache così si apre offline
 - `manifest.json` + icone — installazione sulla schermata home
-- `test/` — giro di prova con un browser vero
+- `test/` — giro di prova con un browser vero, su entrambe le app
 
 Nessun build, nessun framework, nessuna dipendenza a runtime. Si apre il file e
 funziona. Prima di aggiungere un pacchetto, chiedersi se serve davvero: finora
@@ -160,6 +162,52 @@ trappola del vecchio foglio — e un servizio può rispondere JSON valido che no
 conferma nulla. Silenzio non vuol dire consegnato: si accetta solo
 `status: "ok"`. E la richiesta va mandata **senza intestazione Content-Type**,
 o scatta il controllo preventivo CORS che Apps Script non sa gestire.
+
+## L'app dell'ufficio
+
+Sta in `ufficio/index.html`, gira su Chrome o Edge su PC, e **non ha un database
+suo**: il suo archivio sono file nella stessa cartella di Drive da cui legge i
+rapportini. È il motivo per cui la cartella esiste — sta sul PC dell'ufficio, che
+ha già il suo backup automatico, e IndexedDB non ci finirebbe dentro. Chi sposta
+l'archivio nel browser perde la sola rete di sicurezza che c'è.
+
+```
+  GiardinoApp/rapportini/            ← scrive il telefono, l'ufficio legge
+  GiardinoApp/archivio/<anno>/…      ← scrive l'ufficio
+  GiardinoApp/listino.json           ← i prezzi, solo dell'ufficio
+```
+
+**Tutto il contatto con l'API delle cartelle sta in un punto solo.** `usaCartella()`
+prende una maniglia e il resto dell'app non sa da dove arrivi: è il motivo per cui
+si può provare senza aprire una finestra di sistema, che un test non saprebbe
+toccare. Chi sparge `showDirectoryPicker` nel codice rende quella parte non
+verificabile.
+
+**Un rapportino è «in arrivo» perché l'archivio non ne ha una copia a quella
+revisione**, non perché qualcuno l'abbia spostato: l'ufficio non scrive in
+`rapportini/` nemmeno per segnare che ha finito. Un file, un solo autore.
+
+**La stessa visita corretta riscrive il suo file d'archivio.** Il nome nasce da
+data e cliente, e un cliente rinominato sul telefono metterebbe lo stesso lavoro
+in archivio due volte — pronto per essere fatturato due volte. Per questo
+`archivia()` riusa il nome del file già in archivio, se c'è.
+
+**Il listino dell'ufficio è quello vero.** Il `prezzoProposto` che arriva dal
+cantiere vale solo dove il listino tace. E come sul telefono, un prezzo scritto a
+mano non viene mai risovrascritto: sopravvive anche a una correzione rimandata dal
+cantiere.
+
+**Il listino si modifica a video e si scrive su file col bottone.** Finché resta da
+salvare, `LISTINO_DA_SALVARE` impedisce a una rilettura della cartella di
+sovrascriverlo: un prezzo appena battuto che sparisce a un Ricontrolla è lavoro
+perso in silenzio. Vale la stessa regola del telefono — un salvataggio fallito si
+dice a chiaro schermo, non in console.
+
+**Un file illeggibile si vede.** Drive a metà sincronizzazione lascia file
+troncati, e nella cartella può finirci dentro qualcosa che non è un rapportino:
+`leggiRapportino()` e `leggiLavoro()` si fermano, e l'elenco in arrivo dice quali e
+perché. Un rapportino che non si riesce a leggere è lavoro fatto che rischia di non
+essere fatturato, e non può stare nascosto in una console.
 
 ## Come arrivano gli aggiornamenti
 

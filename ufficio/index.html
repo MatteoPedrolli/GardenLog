@@ -1,0 +1,1160 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="theme-color" content="#1a3a1a">
+<title>GiardinoApp · Ufficio</title>
+<link rel="icon" type="image/png" href="../icon-192.png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@400;600;700&family=DM+Sans:wght@300;400;500;600&display=swap" rel="stylesheet">
+<style>
+:root {
+  --green-deep: #1a3a1a;
+  --green-mid: #2d6a2d;
+  --green-light: #4a9e4a;
+  --green-pale: #d4edda;
+  --green-mist: #eef7ee;
+  --earth: #8B6914;
+  --earth-light: #f5ecd7;
+  --cream: #faf8f3;
+  --white: #ffffff;
+  --text: #1a1a1a;
+  --text-mid: #444;
+  --text-light: #888;
+  --border: #dde8dd;
+  --red: #c0392b;
+  --yellow: #e67e22;
+  --radius: 14px;
+  --radius-sm: 9px;
+  --shadow: 0 2px 14px rgba(26,58,26,0.08);
+  --font-display: 'Playfair Display', serif;
+  --font-body: 'DM Sans', sans-serif;
+  --barra-l: 240px;
+}
+
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+html, body { height: 100%; }
+body {
+  background: var(--cream);
+  font-family: var(--font-body);
+  color: var(--text);
+  font-size: 15px;
+}
+
+/* ── IMPIANTO ── */
+/* Su PC lo spazio orizzontale c'è: la navigazione sta a sinistra e resta
+   sempre visibile, invece di rubare una barra in fondo come sul telefono. */
+#app { display: flex; min-height: 100dvh; }
+
+#barra {
+  width: var(--barra-l);
+  flex-shrink: 0;
+  background: var(--green-deep);
+  color: var(--white);
+  display: flex; flex-direction: column;
+  position: sticky; top: 0; height: 100dvh;
+}
+#barra h1 {
+  font-family: var(--font-display);
+  font-size: 1.15rem; font-weight: 600;
+  padding: 22px 20px 6px;
+  letter-spacing: 0.02em;
+}
+#barra .sotto {
+  font-size: 0.72rem; color: rgba(255,255,255,0.55);
+  padding: 0 20px 20px; letter-spacing: 0.06em; text-transform: uppercase;
+}
+.voce-barra {
+  background: none; border: none; color: rgba(255,255,255,0.75);
+  font-family: var(--font-body); font-size: 0.92rem; text-align: left;
+  padding: 12px 20px; cursor: pointer; display: flex; align-items: center; gap: 10px;
+  border-left: 3px solid transparent; transition: all 0.15s; width: 100%;
+}
+.voce-barra:hover { background: rgba(255,255,255,0.07); color: var(--white); }
+.voce-barra.attiva { background: rgba(255,255,255,0.12); color: var(--white); border-left-color: var(--green-light); }
+.voce-barra .pallino {
+  margin-left: auto; background: var(--green-light); color: var(--green-deep);
+  font-size: 0.7rem; font-weight: 600; min-width: 21px; height: 21px;
+  border-radius: 11px; display: none; align-items: center; justify-content: center; padding: 0 6px;
+}
+.voce-barra .pallino.visibile { display: flex; }
+#stato-cartella {
+  margin-top: auto; padding: 16px 20px; font-size: 0.75rem;
+  color: rgba(255,255,255,0.55); border-top: 1px solid rgba(255,255,255,0.12);
+  word-break: break-word;
+}
+
+#contenuto { flex: 1; padding: 28px 34px 60px; max-width: 1100px; }
+
+h2.titolo-pagina {
+  font-family: var(--font-display); font-size: 1.6rem; font-weight: 600;
+  margin-bottom: 4px;
+}
+p.sottotitolo { color: var(--text-light); font-size: 0.88rem; margin-bottom: 22px; }
+
+.pagina { display: none; }
+.pagina.attiva { display: block; }
+
+/* ── PEZZI ── */
+.scheda {
+  background: var(--white); border: 1px solid var(--border);
+  border-radius: var(--radius); padding: 18px 20px; margin-bottom: 14px;
+  box-shadow: var(--shadow);
+}
+.scheda.cliccabile { cursor: pointer; transition: all 0.15s; }
+.scheda.cliccabile:hover { border-color: var(--green-light); transform: translateY(-1px); }
+
+.riga-scheda { display: flex; align-items: baseline; gap: 12px; flex-wrap: wrap; }
+.nome-cliente { font-family: var(--font-display); font-size: 1.15rem; font-weight: 600; }
+.meta { color: var(--text-light); font-size: 0.84rem; }
+
+.etichetta {
+  font-size: 0.7rem; font-weight: 600; text-transform: uppercase; letter-spacing: 0.05em;
+  padding: 3px 9px; border-radius: 20px; white-space: nowrap;
+}
+.etichetta.nuovo { background: var(--green-pale); color: var(--green-deep); }
+.etichetta.corretto { background: #fdebd0; color: #9c5700; }
+.etichetta.fatturato { background: var(--green-mist); color: var(--green-mid); }
+.etichetta.da-fatturare { background: var(--earth-light); color: var(--earth); }
+
+button.principale, button.secondaria, button.pericolo {
+  font-family: var(--font-body); font-size: 0.92rem; font-weight: 500;
+  padding: 10px 18px; border-radius: var(--radius-sm); cursor: pointer;
+  border: 1px solid transparent; transition: all 0.15s;
+}
+button.principale { background: var(--green-mid); color: var(--white); }
+button.principale:hover { background: var(--green-deep); }
+button.secondaria { background: var(--white); color: var(--text-mid); border-color: var(--border); }
+button.secondaria:hover { border-color: var(--green-light); color: var(--green-mid); }
+button.pericolo { background: var(--white); color: var(--red); border-color: #f2d4d0; }
+button.piccola { padding: 6px 12px; font-size: 0.82rem; }
+.bottoni { display: flex; gap: 10px; flex-wrap: wrap; margin-top: 18px; }
+
+table.elenco { width: 100%; border-collapse: collapse; }
+table.elenco th {
+  text-align: left; font-size: 0.72rem; text-transform: uppercase; letter-spacing: 0.05em;
+  color: var(--text-light); font-weight: 600; padding: 0 8px 8px 0; border-bottom: 1px solid var(--border);
+}
+table.elenco td { padding: 9px 8px 9px 0; border-bottom: 1px solid var(--border); vertical-align: middle; }
+table.elenco tr:last-child td { border-bottom: none; }
+table.elenco td.num, table.elenco th.num { text-align: right; padding-right: 0; }
+
+input[type=text], input[type=number], input[type=search], textarea, select {
+  font-family: var(--font-body); font-size: 0.92rem; color: var(--text);
+  border: 1px solid var(--border); border-radius: var(--radius-sm);
+  padding: 8px 10px; background: var(--white); width: 100%;
+}
+input:focus, textarea:focus, select:focus { outline: none; border-color: var(--green-light); }
+input.prezzo, input.quantita { width: 96px; text-align: right; }
+input.vuoto { background: #fffdf5; border-color: #ecdca8; }
+
+.titolo-sezione {
+  font-family: var(--font-display); font-size: 1.05rem; font-weight: 600;
+  margin: 0 0 10px; padding-top: 4px;
+}
+
+.totale { display: flex; justify-content: flex-end; align-items: baseline; gap: 14px; margin-top: 14px; }
+.totale .cifra { font-family: var(--font-display); font-size: 1.5rem; font-weight: 700; }
+.avvertenza {
+  background: #fdf6e3; border: 1px solid #ecdca8; color: #8a6d1f;
+  border-radius: var(--radius-sm); padding: 10px 13px; font-size: 0.86rem; margin-top: 12px;
+}
+.allarme {
+  background: #fdedec; border: 1px solid #f2d4d0; color: #922b21;
+  border-radius: var(--radius-sm); padding: 10px 13px; font-size: 0.86rem; margin-top: 12px;
+}
+.vuoto-elenco { color: var(--text-light); font-size: 0.9rem; padding: 26px 0; text-align: center; }
+
+#avviso {
+  position: fixed; bottom: 22px; left: 50%; transform: translateX(-50%) translateY(10px);
+  background: var(--green-deep); color: var(--white); padding: 12px 22px;
+  border-radius: 24px; font-size: 0.9rem; opacity: 0; pointer-events: none;
+  transition: all 0.25s; z-index: 100; max-width: 70vw; text-align: center;
+}
+#avviso.visibile { opacity: 1; transform: translateX(-50%) translateY(0); }
+#avviso.brutto { background: var(--red); }
+
+#benvenuto { max-width: 560px; }
+#benvenuto .scheda { padding: 26px 28px; }
+#benvenuto ol { margin: 12px 0 0 20px; color: var(--text-mid); font-size: 0.9rem; line-height: 1.8; }
+</style>
+</head>
+<body>
+
+<div id="app">
+  <nav id="barra">
+    <h1>GiardinoApp</h1>
+    <div class="sotto">Ufficio</div>
+    <button class="voce-barra attiva" id="v-arrivi" onclick="vaiA('arrivi')">
+      <span>📥</span> In arrivo <span class="pallino" id="pallino-arrivi">0</span>
+    </button>
+    <button class="voce-barra" id="v-archivio" onclick="vaiA('archivio')"><span>🗂️</span> Archivio</button>
+    <button class="voce-barra" id="v-listino" onclick="vaiA('listino')"><span>🏷️</span> Listino</button>
+    <div id="stato-cartella">Nessuna cartella collegata</div>
+  </nav>
+
+  <main id="contenuto">
+    <div class="pagina attiva" id="pagina-arrivi"></div>
+    <div class="pagina" id="pagina-lavoro"></div>
+    <div class="pagina" id="pagina-archivio"></div>
+    <div class="pagina" id="pagina-listino"></div>
+  </main>
+</div>
+
+<div id="avviso"></div>
+
+<script src="../rapportino.js"></script>
+<script>
+// ── L'APP DELL'UFFICIO ──
+// Non ha un database suo in senso proprio: il suo archivio sono file nella
+// stessa cartella di Drive da cui legge i rapportini. È una scelta, non una
+// scorciatoia — la cartella è sul PC dell'ufficio, che ha già il suo backup
+// automatico, e IndexedDB non ci finirebbe dentro. Tutto quello che conta deve
+// stare dove il backup passa.
+//
+// Chi scrive cosa resta come nel LEGGIMI: il telefono deposita in rapportini/ e
+// l'ufficio non tocca quella cartella. Un rapportino risulta "in arrivo" perché
+// l'archivio non ne ha ancora una copia a quella revisione, non perché qualcuno
+// lo abbia spostato.
+
+const VERSIONE_LAVORO = 1;
+const CARTELLA_ARRIVI = 'rapportini';
+const CARTELLA_ARCHIVIO = 'archivio';
+const FILE_LISTINO = 'listino.json';
+
+let CARTELLA = null;
+let LISTINO = { tipo: 'listino', versione: 1, voci: [] };
+// Il listino si modifica a video e si scrive su file solo col bottone. Finché
+// resta da salvare, nessuna rilettura della cartella lo deve sovrascrivere: un
+// prezzo appena battuto che sparisce a un Ricontrolla è lavoro perso in silenzio.
+let LISTINO_DA_SALVARE = false;
+let ARRIVI = [];
+let ILLEGGIBILI = [];
+let ARCHIVIO = [];
+let LAVORO = null;
+let PAGINA = 'arrivi';
+
+// ── LA CARTELLA ──
+// Tutto il contatto con l'API del browser sta qui dentro. Il resto dell'app
+// lavora su un oggetto "cartella" e non sa da dove arrivi: è il motivo per cui
+// si può provare senza aprire una finestra di sistema.
+
+function apiCartelleDisponibile() {
+  return typeof window.showDirectoryPicker === 'function';
+}
+
+async function scegliCartella() {
+  if (!apiCartelleDisponibile()) {
+    avvisa('Questo browser non sa aprire cartelle: serve Chrome o Edge su PC', true);
+    return;
+  }
+  let maniglia;
+  try {
+    maniglia = await window.showDirectoryPicker({ id: 'giardinoapp', mode: 'readwrite' });
+  } catch (e) {
+    return; // l'utente ha annullato: non è un errore
+  }
+  await ricordaManiglia(maniglia);
+  await usaCartella(maniglia);
+}
+
+// Il punto d'ingresso: gli riesce anche una cartella finta, purché sappia fare
+// getDirectoryHandle, getFileHandle e values(). I test entrano da qui.
+async function usaCartella(maniglia) {
+  CARTELLA = maniglia;
+  aggiornaStatoCartella('Lettura in corso…');
+  try {
+    await ricarica();
+  } catch (e) {
+    CARTELLA = null;
+    aggiornaStatoCartella('Cartella non leggibile');
+    avvisa('Non riesco a leggere la cartella: ' + e.message, true);
+    disegna();
+    return;
+  }
+  aggiornaStatoCartella('📁 ' + (maniglia.name || 'cartella collegata'));
+  disegna();
+}
+
+async function permessoConcesso(maniglia, chiedi) {
+  if (typeof maniglia.queryPermission !== 'function') return true;
+  const opzioni = { mode: 'readwrite' };
+  if ((await maniglia.queryPermission(opzioni)) === 'granted') return true;
+  if (!chiedi || typeof maniglia.requestPermission !== 'function') return false;
+  return (await maniglia.requestPermission(opzioni)) === 'granted';
+}
+
+// Chrome tiene la maniglia fra una sessione e l'altra, ma il permesso lo
+// richiede con un gesto dell'utente: da qui il bottone "Riapri la cartella"
+// invece di ripassare dalla scelta della cartella ogni mattina.
+async function riapriCartella() {
+  const maniglia = await maniglieRicordate();
+  if (!maniglia) { await scegliCartella(); return; }
+  if (!(await permessoConcesso(maniglia, true))) {
+    avvisa('Permesso negato sulla cartella', true);
+    return;
+  }
+  await usaCartella(maniglia);
+}
+
+function apriMagazzinoManiglie() {
+  return new Promise((risolvi, rifiuta) => {
+    const r = indexedDB.open('giardinoapp-ufficio', 1);
+    r.onupgradeneeded = () => {
+      if (!r.result.objectStoreNames.contains('maniglie')) r.result.createObjectStore('maniglie');
+    };
+    r.onsuccess = () => risolvi(r.result);
+    r.onerror = () => rifiuta(r.error);
+  });
+}
+
+async function ricordaManiglia(maniglia) {
+  try {
+    const db = await apriMagazzinoManiglie();
+    await new Promise((risolvi, rifiuta) => {
+      const t = db.transaction('maniglie', 'readwrite');
+      t.objectStore('maniglie').put(maniglia, 'cartella');
+      t.oncomplete = risolvi;
+      t.onerror = () => rifiuta(t.error);
+    });
+  } catch (e) {
+    // Non poterla ricordare è una scomodità, non una perdita di dati: si
+    // rimette la cartella a mano. Ma va detto, non ingoiato.
+    avvisa('La cartella non resterà in memoria: la dovrai riscegliere', true);
+  }
+}
+
+async function maniglieRicordate() {
+  try {
+    const db = await apriMagazzinoManiglie();
+    return await new Promise((risolvi, rifiuta) => {
+      const t = db.transaction('maniglie', 'readonly');
+      const q = t.objectStore('maniglie').get('cartella');
+      q.onsuccess = () => risolvi(q.result || null);
+      q.onerror = () => rifiuta(q.error);
+    });
+  } catch (e) {
+    return null;
+  }
+}
+
+// ── LEGGERE E SCRIVERE FILE ──
+
+async function sottocartella(padre, nome, crea) {
+  try {
+    return await padre.getDirectoryHandle(nome, { create: !!crea });
+  } catch (e) {
+    return null;
+  }
+}
+
+async function elencaFile(cartella) {
+  const nomi = [];
+  if (!cartella) return nomi;
+  for await (const voce of cartella.values()) {
+    if (voce.kind === 'file' && voce.name.toLowerCase().endsWith('.json')) nomi.push(voce.name);
+  }
+  return nomi.sort();
+}
+
+async function elencaCartelle(cartella) {
+  const nomi = [];
+  if (!cartella) return nomi;
+  for await (const voce of cartella.values()) {
+    if (voce.kind === 'directory') nomi.push(voce.name);
+  }
+  return nomi.sort();
+}
+
+async function leggiTesto(cartella, nome) {
+  const maniglia = await cartella.getFileHandle(nome);
+  const file = await maniglia.getFile();
+  return await file.text();
+}
+
+async function scriviTesto(cartella, nome, testo) {
+  const maniglia = await cartella.getFileHandle(nome, { create: true });
+  const flusso = await maniglia.createWritable();
+  await flusso.write(testo);
+  await flusso.close();
+}
+
+// ── CARICAMENTO ──
+
+async function ricarica() {
+  if (!CARTELLA) return;
+  // L'elenco dei file illeggibili si azzera qui, una volta, e lo riempiono le
+  // due letture che seguono. Azzerarlo dopo cancellerebbe quello che la prima
+  // delle due ha trovato — e un file illeggibile che non si vede non esiste.
+  ILLEGGIBILI = [];
+  LISTINO = await caricaListino();
+  ARCHIVIO = await caricaArchivio();
+  ARRIVI = await caricaArrivi();
+}
+
+async function caricaListino() {
+  if (LISTINO_DA_SALVARE) return LISTINO;
+  try {
+    const testo = await leggiTesto(CARTELLA, FILE_LISTINO);
+    const l = JSON.parse(testo);
+    if (!l || l.tipo !== 'listino') throw new Error('non è un listino');
+    return { tipo: 'listino', versione: Number(l.versione) || 1, voci: Array.isArray(l.voci) ? l.voci : [] };
+  } catch (e) {
+    // Nessun listino ancora: si parte vuoto e si scrive al primo salvataggio.
+    // Non lo creo qui, o un permesso di sola lettura fallirebbe all'apertura.
+    return { tipo: 'listino', versione: 1, voci: [] };
+  }
+}
+
+async function caricaArchivio() {
+  const radice = await sottocartella(CARTELLA, CARTELLA_ARCHIVIO, false);
+  if (!radice) return [];
+  const lavori = [];
+  const anni = await elencaCartelle(radice);
+  for (const anno of anni) {
+    const cartellaAnno = await sottocartella(radice, anno, false);
+    for (const nome of await elencaFile(cartellaAnno)) {
+      try {
+        lavori.push({ ...leggiLavoro(await leggiTesto(cartellaAnno, nome)), anno, file: nome });
+      } catch (e) {
+        // Un file d'archivio illeggibile è grave, ma non deve impedire di vedere
+        // gli altri: si segnala e si va avanti.
+        ILLEGGIBILI.push({ nome: CARTELLA_ARCHIVIO + '/' + anno + '/' + nome, motivo: e.message });
+      }
+    }
+  }
+  return lavori;
+}
+
+async function caricaArrivi() {
+  const cartella = await sottocartella(CARTELLA, CARTELLA_ARRIVI, false);
+  if (!cartella) return [];
+  const arrivi = [];
+  for (const nome of await elencaFile(cartella)) {
+    let doc;
+    try {
+      doc = leggiRapportino(await leggiTesto(cartella, nome));
+    } catch (e) {
+      // Drive potrebbe essere a metà sincronizzazione, il file troncato, o non
+      // essere un rapportino. Nessuno di questi casi si nasconde: un rapportino
+      // che non si riesce a leggere è lavoro fatto che rischia di non essere
+      // fatturato, e deve stare a video finché qualcuno lo guarda.
+      ILLEGGIBILI.push({ nome: CARTELLA_ARRIVI + '/' + nome, motivo: e.message });
+      continue;
+    }
+    const archiviato = ARCHIVIO.find(l => l.id === doc.id);
+    if (archiviato && Number(archiviato.revisione) >= Number(doc.revisione)) continue;
+    arrivi.push({ doc, file: nome, corretto: !!archiviato });
+  }
+  arrivi.sort((a, b) => String(b.doc.data).localeCompare(String(a.doc.data)));
+  return arrivi;
+}
+
+// Anche l'archivio si rilegge con diffidenza: è lo stesso principio del
+// rapportino, e un anno dopo questi file li avrà toccati solo il tempo.
+function leggiLavoro(grezzo) {
+  let l = grezzo;
+  if (typeof grezzo === 'string') {
+    try { l = JSON.parse(grezzo); }
+    catch (e) { throw new Error('Il file non è leggibile: non è JSON valido'); }
+  }
+  if (!l || l.tipo !== 'lavoro-archiviato') throw new Error('Questo file non è un lavoro archiviato');
+  const versione = Number(l.versione) || 0;
+  if (versione > VERSIONE_LAVORO) {
+    throw new Error('Lavoro archiviato da una versione più recente (' + versione + '): aggiorna l\'app');
+  }
+  if (!l.id) throw new Error('Lavoro archiviato senza identificativo');
+  return {
+    ...l,
+    versione: versione || 1,
+    revisione: Number(l.revisione) || 1,
+    righe: Array.isArray(l.righe) ? l.righe : [],
+    rapportino: l.rapportino || null,
+    stato: l.stato === 'fatturato' ? 'fatturato' : 'da-fatturare',
+  };
+}
+
+// ── IL CONTEGGIO ──
+// Le stesse regole del telefono, con una differenza: qui il listino è quello
+// vero. Il prezzo che arriva dal cantiere è un suggerimento, e vale solo se in
+// listino quella voce non ha un prezzo.
+
+function voceInListino(voceID) {
+  return LISTINO.voci.find(v => v.voceID === voceID) || null;
+}
+
+function costruisciConteggio(doc, precedenti) {
+  const vecchie = Array.isArray(precedenti) ? precedenti : [];
+  const righe = (doc.righe || []).map(r => {
+    const vecchia = vecchie.find(x => x.chiave && x.chiave === r.chiave);
+    const inListino = voceInListino(r.voceID);
+    let prezzo = '';
+    let manuale = false;
+    if (vecchia && vecchia.manuale) {
+      // Un prezzo scritto a mano non viene mai risovrascritto dal listino:
+      // chi l'ha messo sapeva qualcosa che il listino non sa.
+      prezzo = vecchia.prezzo;
+      manuale = true;
+    } else if (inListino && inListino.prezzo !== '' && inListino.prezzo != null) {
+      prezzo = Number(inListino.prezzo);
+    } else if (r.prezzoProposto != null) {
+      prezzo = Number(r.prezzoProposto);
+    }
+    return {
+      chiave: r.chiave || '',
+      voceID: r.voceID || '',
+      voce: (inListino && inListino.voce) || r.voce || '',
+      quantita: r.quantita == null ? '' : Number(r.quantita),
+      unita: (inListino && inListino.unita) || r.unita || '',
+      prezzo,
+      manuale,
+    };
+  });
+  // Le righe aggiunte in ufficio non hanno chiave e non nascono da niente:
+  // restano dove sono, come sul telefono.
+  vecchie.filter(r => !r.chiave).forEach(r => righe.push({ ...r }));
+  return righe;
+}
+
+function importoRiga(r) {
+  const q = parseFloat(r.quantita);
+  const p = parseFloat(r.prezzo);
+  if (isNaN(q) || isNaN(p)) return null;
+  return q * p;
+}
+
+// Somma solo le righe complete e dice quante ne ha lasciate fuori. Un totale
+// che sembra finito mentre gli manca lo smaltimento è peggio di nessun totale.
+function totaleConteggio(righe) {
+  let totale = 0;
+  let escluse = 0;
+  (righe || []).forEach(r => {
+    const i = importoRiga(r);
+    if (i == null) escluse++; else totale += i;
+  });
+  return { totale: Number(totale.toFixed(2)), escluse };
+}
+
+// ── ARCHIVIARE ──
+
+async function archivia() {
+  if (!LAVORO) return;
+  const doc = LAVORO.doc;
+  const conteggio = totaleConteggio(LAVORO.righe);
+  const lavoro = {
+    tipo: 'lavoro-archiviato',
+    versione: VERSIONE_LAVORO,
+    id: doc.id,
+    revisione: Number(doc.revisione) || 1,
+    archiviato: new Date().toISOString(),
+    cliente: doc.cliente,
+    data: doc.data,
+    righe: LAVORO.righe,
+    totale: conteggio.totale,
+    righeSenzaPrezzo: conteggio.escluse,
+    stato: LAVORO.stato || 'da-fatturare',
+    // Il rapportino ci viaggia dentro per intero: fra due anni questo file deve
+    // raccontare il lavoro da solo, anche se la cartella degli arrivi è stata
+    // svuotata e il telefono cambiato.
+    rapportino: doc,
+  };
+
+  // Se di questo lavoro c'è già una copia in archivio, si riscrive quella. Il
+  // nome si ricava da data e cliente, e un cliente rinominato sul telefono
+  // produrrebbe un secondo file con lo stesso lavoro dentro.
+  const esistente = ARCHIVIO.find(l => l.id === doc.id);
+  const anno = esistente ? esistente.anno : (String(doc.data || '').slice(0, 4) || String(new Date().getFullYear()));
+  const nome = esistente ? esistente.file : nomeFileRapportino(doc);
+
+  try {
+    const radice = await sottocartella(CARTELLA, CARTELLA_ARCHIVIO, true);
+    if (!radice) throw new Error('non riesco a creare la cartella archivio');
+    const cartellaAnno = await sottocartella(radice, anno, true);
+    if (!cartellaAnno) throw new Error('non riesco a creare la cartella ' + anno);
+    await scriviTesto(cartellaAnno, nome, JSON.stringify(lavoro, null, 2));
+  } catch (e) {
+    // Un salvataggio fallito si dice a chiaro schermo. Se restasse in console,
+    // l'unica traccia di questo lavoro tornerebbe a essere il file in arrivo.
+    avvisa('Non ho potuto archiviare: ' + e.message, true);
+    return;
+  }
+
+  await ricarica();
+  LAVORO = null;
+  vaiA('arrivi');
+  avvisa('Archiviato: ' + (doc.cliente && doc.cliente.nome ? doc.cliente.nome : 'lavoro') + ' · ' + formattaEuro(conteggio.totale));
+}
+
+async function cambiaStato(id, stato) {
+  const lavoro = ARCHIVIO.find(l => l.id === id);
+  if (!lavoro) return;
+  const aggiornato = { ...lavoro, stato };
+  delete aggiornato.anno;
+  delete aggiornato.file;
+  try {
+    const radice = await sottocartella(CARTELLA, CARTELLA_ARCHIVIO, true);
+    const cartellaAnno = await sottocartella(radice, lavoro.anno, true);
+    await scriviTesto(cartellaAnno, lavoro.file, JSON.stringify(aggiornato, null, 2));
+  } catch (e) {
+    avvisa('Non ho potuto salvare: ' + e.message, true);
+    return;
+  }
+  lavoro.stato = stato;
+  disegna();
+  avvisa(stato === 'fatturato' ? 'Segnato come fatturato' : 'Rimesso fra i lavori da fatturare');
+}
+
+// ── IL LISTINO ──
+
+async function salvaListino() {
+  const da_salvare = {
+    tipo: 'listino',
+    versione: 1,
+    aggiornato: new Date().toISOString(),
+    voci: LISTINO.voci,
+  };
+  try {
+    await scriviTesto(CARTELLA, FILE_LISTINO, JSON.stringify(da_salvare, null, 2));
+  } catch (e) {
+    avvisa('Non ho potuto salvare il listino: ' + e.message, true);
+    return false;
+  }
+  LISTINO_DA_SALVARE = false;
+  disegna();
+  avvisa('Listino salvato');
+  return true;
+}
+
+function aggiungiVoce() {
+  LISTINO.voci.push({ voceID: 'v' + Date.now().toString(36), voce: '', unita: '', prezzo: '', aCorpo: false });
+  LISTINO_DA_SALVARE = true;
+  disegna();
+}
+
+function eliminaVoce(voceID) {
+  const v = voceInListino(voceID);
+  if (!v) return;
+  if (!confirm('Eliminare la voce "' + (v.voce || 'senza nome') + '" dal listino?')) return;
+  LISTINO.voci = LISTINO.voci.filter(x => x.voceID !== voceID);
+  LISTINO_DA_SALVARE = true;
+  disegna();
+}
+
+// oninput e non onchange: con onchange il modello resta indietro fino al blur, e
+// chi salva senza uscire dal campo salva il valore di prima.
+function modificaVoce(voceID, campo, valore) {
+  const v = voceInListino(voceID);
+  if (!v) return;
+  v[campo] = campo === 'prezzo' ? valore.replace(',', '.') : valore;
+  LISTINO_DA_SALVARE = true;
+  segnalaListinoDaSalvare();
+}
+
+function segnaACorpo(voceID, si) {
+  const v = voceInListino(voceID);
+  if (!v) return;
+  v.aCorpo = !!si;
+  LISTINO_DA_SALVARE = true;
+  segnalaListinoDaSalvare();
+}
+
+// Si accende un cartello, non si ridisegna la tabella: chi sta battendo un
+// prezzo non deve vedersi sparire il campo da sotto le dita.
+function segnalaListinoDaSalvare() {
+  const cartello = document.getElementById('listino-da-salvare');
+  if (cartello) cartello.style.display = 'block';
+}
+
+// ── FORMATI ──
+
+function formattaEuro(n) {
+  const v = parseFloat(n);
+  return isNaN(v) ? '' : v.toFixed(2).replace('.', ',') + ' €';
+}
+
+function formattaQuantita(v) {
+  const n = parseFloat(v);
+  return isNaN(n) ? '' : String(n).replace('.', ',');
+}
+
+function formattaOre(n) {
+  return (Number(n) || 0).toFixed(2).replace('.', ',') + ' h';
+}
+
+function formattaData(iso) {
+  const m = /^(\d{4})-(\d{2})-(\d{2})/.exec(String(iso || ''));
+  return m ? m[3] + '/' + m[2] + '/' + m[1] : (iso || '');
+}
+
+function perValore(v) {
+  return String(v == null ? '' : v)
+    .replace(/&/g, '&amp;').replace(/"/g, '&quot;')
+    .replace(/</g, '&lt;').replace(/>/g, '&gt;');
+}
+
+// Gli id finiscono dentro stringhe JavaScript dentro attributi HTML: senza
+// questo, un cognome come "Dall'Oglio" rende il bottone inerte.
+function perOnclick(v) {
+  return String(v == null ? '' : v)
+    .replace(/\\/g, '\\\\')
+    .replace(/'/g, "\\'")
+    .replace(/"/g, '&quot;')
+    .replace(/</g, '&lt;');
+}
+
+function avvisa(messaggio, brutto) {
+  const a = document.getElementById('avviso');
+  a.textContent = messaggio;
+  a.classList.toggle('brutto', !!brutto);
+  a.classList.add('visibile');
+  clearTimeout(avvisa._t);
+  // Un errore resta a video più a lungo: va letto, non intravisto.
+  avvisa._t = setTimeout(() => a.classList.remove('visibile'), brutto ? 6000 : 2800);
+}
+
+function aggiornaStatoCartella(testo) {
+  document.getElementById('stato-cartella').textContent = testo;
+}
+
+// ── NAVIGAZIONE ──
+
+function vaiA(pagina) {
+  PAGINA = pagina;
+  document.querySelectorAll('.pagina').forEach(p => p.classList.remove('attiva'));
+  const p = document.getElementById('pagina-' + pagina);
+  if (p) p.classList.add('attiva');
+  document.querySelectorAll('.voce-barra').forEach(v => v.classList.remove('attiva'));
+  // La schermata di un lavoro vive dentro "In arrivo": è da lì che ci si arriva.
+  const voce = document.getElementById('v-' + (pagina === 'lavoro' ? 'arrivi' : pagina));
+  if (voce) voce.classList.add('attiva');
+  disegna();
+}
+
+function disegna() {
+  const pallino = document.getElementById('pallino-arrivi');
+  pallino.textContent = ARRIVI.length;
+  pallino.classList.toggle('visibile', ARRIVI.length > 0);
+  if (PAGINA === 'arrivi') disegnaArrivi();
+  if (PAGINA === 'lavoro') disegnaLavoro();
+  if (PAGINA === 'archivio') disegnaArchivio();
+  if (PAGINA === 'listino') disegnaListino();
+}
+
+// ── IN ARRIVO ──
+
+function disegnaArrivi() {
+  const c = document.getElementById('pagina-arrivi');
+  if (!CARTELLA) { c.innerHTML = schermataBenvenuto(); return; }
+
+  let html = '<h2 class="titolo-pagina">In arrivo</h2>';
+  html += '<p class="sottotitolo">Rapportini depositati dal telefono e non ancora archiviati</p>';
+
+  if (ILLEGGIBILI.length) {
+    html += '<div class="allarme"><strong>' + ILLEGGIBILI.length + ' file non leggibili.</strong><br>' +
+      ILLEGGIBILI.map(f => perValore(f.nome) + ' — ' + perValore(f.motivo)).join('<br>') +
+      '<br><br>Se Drive era a metà sincronizzazione, riprova fra un minuto con Ricontrolla.</div>';
+  }
+
+  if (!ARRIVI.length) {
+    html += '<div class="scheda"><div class="vuoto-elenco">Nessun rapportino da lavorare.</div></div>';
+  } else {
+    ARRIVI.forEach(a => {
+      const d = a.doc;
+      const conteggio = totaleConteggio(costruisciConteggio(d, null));
+      html += '<div class="scheda cliccabile" onclick="apriLavoro(\'' + perOnclick(d.id) + '\')">' +
+        '<div class="riga-scheda">' +
+          '<span class="nome-cliente">' + perValore(d.cliente.nome || 'senza nome') + '</span>' +
+          (a.corretto ? '<span class="etichetta corretto">corretto · rev ' + d.revisione + '</span>'
+                      : '<span class="etichetta nuovo">nuovo</span>') +
+          '<span class="meta" style="margin-left:auto">' + formattaData(d.data) + '</span>' +
+        '</div>' +
+        '<div class="meta" style="margin-top:6px">' +
+          formattaOre(d.ore.totale) + ' · ' + d.operazioni.length + ' operazioni' +
+          (conteggio.totale ? ' · circa ' + formattaEuro(conteggio.totale) : '') +
+          (conteggio.escluse ? ' · ' + conteggio.escluse + ' righe senza prezzo' : '') +
+        '</div>' +
+      '</div>';
+    });
+  }
+
+  html += '<div class="bottoni"><button class="secondaria" onclick="ricontrolla()">Ricontrolla la cartella</button></div>';
+  c.innerHTML = html;
+}
+
+function schermataBenvenuto() {
+  return '<div id="benvenuto">' +
+    '<h2 class="titolo-pagina">Collega la cartella</h2>' +
+    '<p class="sottotitolo">Serve una volta sola su questo PC</p>' +
+    '<div class="scheda">' +
+      '<p>Scegli la cartella <strong>GiardinoApp</strong> dentro Google Drive: da lì l’app legge i rapportini che arrivano dal telefono e ci scrive il suo archivio.</p>' +
+      '<ol>' +
+        '<li>Google Drive per desktop installato e collegato all’account dei giardini</li>' +
+        '<li>La cartella <code>GiardinoApp</code> compare fra le cartelle del PC</li>' +
+        '<li>Scegli quella — non <code>rapportini</code>, quella che la contiene</li>' +
+      '</ol>' +
+      '<div class="bottoni">' +
+        '<button class="principale" onclick="riapriCartella()">Scegli la cartella</button>' +
+      '</div>' +
+      (apiCartelleDisponibile() ? '' :
+        '<div class="allarme">Questo browser non sa aprire cartelle. Serve Chrome o Edge su PC.</div>') +
+    '</div>' +
+  '</div>';
+}
+
+async function ricontrolla() {
+  if (!CARTELLA) return;
+  try {
+    await ricarica();
+  } catch (e) {
+    avvisa('Non riesco a rileggere la cartella: ' + e.message, true);
+    return;
+  }
+  disegna();
+  avvisa(ARRIVI.length ? ARRIVI.length + ' da lavorare' : 'Niente di nuovo');
+}
+
+// ── UN LAVORO ──
+
+function apriLavoro(id) {
+  const arrivo = ARRIVI.find(a => a.doc.id === id);
+  if (!arrivo) { avvisa('Rapportino non trovato: ricontrolla la cartella', true); return; }
+  // Se è la correzione di un lavoro già archiviato, i prezzi messi a mano la
+  // prima volta restano: il cantiere ha corretto le ore, non il listino.
+  const precedente = ARCHIVIO.find(l => l.id === id);
+  LAVORO = {
+    doc: arrivo.doc,
+    righe: costruisciConteggio(arrivo.doc, precedente ? precedente.righe : null),
+    stato: precedente ? precedente.stato : 'da-fatturare',
+    corretto: arrivo.corretto,
+  };
+  vaiA('lavoro');
+}
+
+function disegnaLavoro() {
+  const c = document.getElementById('pagina-lavoro');
+  if (!LAVORO) { c.innerHTML = '<div class="vuoto-elenco">Nessun lavoro aperto.</div>'; return; }
+  const d = LAVORO.doc;
+
+  // L'ordine è quello del rapportino di fine lavoro: cliente, ore, operazioni,
+  // note, e il conto in fondo. È lo stesso ordine della schermata sul telefono,
+  // e chi legge in ufficio ha davanti la stessa sequenza di chi l'ha scritto.
+  let html = '<h2 class="titolo-pagina">' + perValore(d.cliente.nome || 'senza nome') + '</h2>';
+  html += '<p class="sottotitolo">' + formattaData(d.data) +
+    (d.cliente.indirizzo ? ' · ' + perValore(d.cliente.indirizzo) : '') +
+    (d.cliente.citta ? ', ' + perValore(d.cliente.citta) : '') +
+    (LAVORO.corretto ? ' · <strong>versione corretta (rev ' + d.revisione + ')</strong>' : '') +
+    '</p>';
+
+  html += '<div class="scheda"><div class="titolo-sezione">Ore</div>';
+  if (d.ore.fasce && d.ore.fasce.length) {
+    html += '<table class="elenco"><tbody>';
+    d.ore.fasce.forEach(f => {
+      html += '<tr><td>' + perValore(f.inizio) + ' – ' + perValore(f.fine) + '</td>' +
+        '<td>' + f.persone + (f.persone === 1 ? ' persona' : ' persone') + '</td>' +
+        '<td class="num">' + formattaOre(f.ore) + '</td></tr>';
+    });
+    html += '</tbody></table>';
+  }
+  html += '<div class="totale"><span class="meta">Totale ore</span><span class="cifra">' +
+    formattaOre(d.ore.totale) + '</span></div></div>';
+
+  html += '<div class="scheda"><div class="titolo-sezione">Operazioni</div>';
+  if (!d.operazioni.length) {
+    html += '<div class="vuoto-elenco">Nessuna operazione registrata.</div>';
+  } else {
+    html += '<table class="elenco"><tbody>';
+    d.operazioni.forEach(o => {
+      const dettagli = [];
+      if (o.prodotto) dettagli.push(perValore(o.prodotto));
+      if (o.quantita != null) dettagli.push(formattaQuantita(o.quantita) + ' ' + perValore(o.unita));
+      if (o.prato) dettagli.push('prato');
+      if (o.siepe) dettagli.push('siepe');
+      html += '<tr><td><strong>' + perValore(o.nome) + '</strong>' +
+        (o.descrizione ? '<br><span class="meta">' + perValore(o.descrizione) + '</span>' : '') +
+        '</td><td class="meta">' + dettagli.join(' · ') + '</td></tr>';
+    });
+    html += '</tbody></table>';
+  }
+  html += '</div>';
+
+  if (d.note) {
+    html += '<div class="scheda"><div class="titolo-sezione">Note dal cantiere</div><p>' +
+      perValore(d.note) + '</p></div>';
+  }
+  if (d.prossimo && d.prossimo.cosa) {
+    html += '<div class="scheda"><div class="titolo-sezione">Prossimo intervento</div><p>' +
+      perValore(d.prossimo.cosa) +
+      (d.prossimo.mese ? ' <span class="meta">— ' + perValore(d.prossimo.mese) + ' ' + perValore(d.prossimo.anno) + '</span>' : '') +
+      '</p></div>';
+  }
+
+  html += '<div class="scheda"><div class="titolo-sezione">Conto</div>';
+  html += '<table class="elenco"><thead><tr><th>Voce</th><th class="num">Quantità</th>' +
+    '<th>Unità</th><th class="num">Prezzo</th><th class="num">Importo</th><th></th></tr></thead><tbody>';
+  LAVORO.righe.forEach((r, i) => {
+    const imp = importoRiga(r);
+    html += '<tr>' +
+      '<td>' + (r.chiave ? perValore(r.voce) :
+        '<input type="text" value="' + perValore(r.voce) + '" oninput="modificaRiga(' + i + ', \'voce\', this.value)">') + '</td>' +
+      '<td class="num"><input type="text" class="quantita" value="' + perValore(formattaQuantita(r.quantita)) +
+        '" oninput="modificaRiga(' + i + ', \'quantita\', this.value)"></td>' +
+      '<td class="meta">' + perValore(r.unita) + '</td>' +
+      '<td class="num"><input type="text" class="prezzo' + (r.prezzo === '' ? ' vuoto' : '') +
+        '" value="' + perValore(formattaQuantita(r.prezzo)) +
+        '" oninput="modificaRiga(' + i + ', \'prezzo\', this.value)"></td>' +
+      '<td class="num" id="importo-' + i + '">' + (imp == null ? '—' : formattaEuro(imp)) + '</td>' +
+      '<td class="num">' + (r.chiave ? '' :
+        '<button class="secondaria piccola" onclick="togliRiga(' + i + ')">✕</button>') + '</td>' +
+    '</tr>';
+  });
+  html += '</tbody></table>';
+  html += '<div class="bottoni"><button class="secondaria piccola" onclick="aggiungiRiga()">+ Aggiungi una riga</button></div>';
+  html += '<div id="riepilogo">' + riepilogoConto() + '</div>';
+  html += '</div>';
+
+  html += '<div class="bottoni">' +
+    '<button class="principale" onclick="archivia()">' +
+      (LAVORO.corretto ? 'Aggiorna in archivio' : 'Archivia') + '</button>' +
+    '<button class="secondaria" onclick="tornaAgliArrivi()">Torna in arrivo</button>' +
+  '</div>';
+
+  c.innerHTML = html;
+}
+
+function riepilogoConto() {
+  const { totale, escluse } = totaleConteggio(LAVORO.righe);
+  let html = '<div class="totale"><span class="meta">Totale</span><span class="cifra">' +
+    formattaEuro(totale) + '</span></div>';
+  if (escluse) {
+    html += '<div class="avvertenza">' + escluse +
+      (escluse === 1 ? ' riga è fuori dal totale' : ' righe sono fuori dal totale') +
+      ': manca la quantità o il prezzo. Il totale qui sopra è incompleto.</div>';
+  }
+  return html;
+}
+
+// Non si ridisegna la tabella mentre si scrive: si aggiornano solo l'importo
+// della riga e il riepilogo, o il campo sparisce da sotto le dita.
+function modificaRiga(indice, campo, valore) {
+  const r = LAVORO && LAVORO.righe[indice];
+  if (!r) return;
+  if (campo === 'quantita' || campo === 'prezzo') {
+    r[campo] = valore.trim() === '' ? '' : valore.replace(',', '.');
+    // Da qui in poi quel prezzo è dell'ufficio, e il listino non lo tocca più.
+    if (campo === 'prezzo') r.manuale = true;
+  } else {
+    r[campo] = valore;
+  }
+  const imp = importoRiga(r);
+  const cella = document.getElementById('importo-' + indice);
+  if (cella) cella.textContent = imp == null ? '—' : formattaEuro(imp);
+  const riepilogo = document.getElementById('riepilogo');
+  if (riepilogo) riepilogo.innerHTML = riepilogoConto();
+}
+
+function aggiungiRiga() {
+  if (!LAVORO) return;
+  LAVORO.righe.push({ chiave: '', voceID: '', voce: '', quantita: '', unita: '', prezzo: '', manuale: true });
+  disegnaLavoro();
+}
+
+function togliRiga(indice) {
+  if (!LAVORO) return;
+  LAVORO.righe.splice(indice, 1);
+  disegnaLavoro();
+}
+
+function tornaAgliArrivi() {
+  LAVORO = null;
+  vaiA('arrivi');
+}
+
+// ── ARCHIVIO ──
+
+let FILTRO_ARCHIVIO = '';
+
+function disegnaArchivio() {
+  const c = document.getElementById('pagina-archivio');
+  if (!CARTELLA) { c.innerHTML = schermataBenvenuto(); return; }
+
+  let html = '<h2 class="titolo-pagina">Archivio</h2>';
+  html += '<p class="sottotitolo">' + ARCHIVIO.length +
+    (ARCHIVIO.length === 1 ? ' lavoro archiviato' : ' lavori archiviati') + '</p>';
+
+  html += '<div class="scheda"><input type="search" placeholder="Cerca un cliente" value="' +
+    perValore(FILTRO_ARCHIVIO) + '" oninput="filtraArchivio(this.value)"></div>';
+
+  const filtro = FILTRO_ARCHIVIO.trim().toLowerCase();
+  const lavori = ARCHIVIO
+    .filter(l => !filtro || String((l.cliente && l.cliente.nome) || '').toLowerCase().includes(filtro))
+    .sort((a, b) => String(b.data).localeCompare(String(a.data)));
+
+  const daFatturare = lavori.filter(l => l.stato === 'da-fatturare');
+  const somma = daFatturare.reduce((s, l) => s + (Number(l.totale) || 0), 0);
+  if (daFatturare.length) {
+    html += '<div class="avvertenza"><strong>' + daFatturare.length +
+      (daFatturare.length === 1 ? ' lavoro' : ' lavori') + ' da fatturare</strong> · ' +
+      formattaEuro(somma) + '</div>';
+  }
+
+  html += '<div id="elenco-archivio">';
+  if (!lavori.length) {
+    html += '<div class="scheda"><div class="vuoto-elenco">' +
+      (filtro ? 'Nessun lavoro per questa ricerca.' : 'Niente in archivio.') + '</div></div>';
+  } else {
+    lavori.forEach(l => {
+      const nome = (l.cliente && l.cliente.nome) || 'senza nome';
+      html += '<div class="scheda"><div class="riga-scheda">' +
+        '<span class="nome-cliente">' + perValore(nome) + '</span>' +
+        '<span class="etichetta ' + (l.stato === 'fatturato' ? 'fatturato">fatturato' : 'da-fatturare">da fatturare') + '</span>' +
+        '<span class="meta">' + formattaData(l.data) + '</span>' +
+        '<span class="cifra" style="margin-left:auto;font-family:var(--font-display);font-size:1.15rem;font-weight:700">' +
+          formattaEuro(l.totale) + '</span>' +
+        '</div>' +
+        (l.righeSenzaPrezzo ? '<div class="meta" style="margin-top:6px;color:var(--yellow)">' +
+          l.righeSenzaPrezzo + ' righe fuori dal totale</div>' : '') +
+        '<div class="bottoni">' +
+          '<button class="secondaria piccola" onclick="cambiaStato(\'' + perOnclick(l.id) + '\', \'' +
+            (l.stato === 'fatturato' ? 'da-fatturare\')">Rimetti da fatturare' : 'fatturato\')">Segna fatturato') +
+          '</button>' +
+        '</div>' +
+      '</div>';
+    });
+  }
+  html += '</div>';
+  c.innerHTML = html;
+}
+
+// Il campo di ricerca non passa da disegnaArchivio: ridisegnare tutto a ogni
+// tasto gli farebbe perdere il fuoco a metà parola.
+function filtraArchivio(valore) {
+  FILTRO_ARCHIVIO = valore;
+  const filtro = valore.trim().toLowerCase();
+  const contenitore = document.getElementById('elenco-archivio');
+  if (!contenitore) return;
+  const lavori = ARCHIVIO
+    .filter(l => !filtro || String((l.cliente && l.cliente.nome) || '').toLowerCase().includes(filtro))
+    .sort((a, b) => String(b.data).localeCompare(String(a.data)));
+  contenitore.innerHTML = lavori.length
+    ? lavori.map(l => '<div class="scheda"><div class="riga-scheda">' +
+        '<span class="nome-cliente">' + perValore((l.cliente && l.cliente.nome) || 'senza nome') + '</span>' +
+        '<span class="etichetta ' + (l.stato === 'fatturato' ? 'fatturato">fatturato' : 'da-fatturare">da fatturare') + '</span>' +
+        '<span class="meta">' + formattaData(l.data) + '</span>' +
+        '<span style="margin-left:auto;font-family:var(--font-display);font-size:1.15rem;font-weight:700">' +
+          formattaEuro(l.totale) + '</span></div>' +
+        '<div class="bottoni"><button class="secondaria piccola" onclick="cambiaStato(\'' + perOnclick(l.id) + '\', \'' +
+          (l.stato === 'fatturato' ? 'da-fatturare\')">Rimetti da fatturare' : 'fatturato\')">Segna fatturato') +
+        '</button></div></div>').join('')
+    : '<div class="scheda"><div class="vuoto-elenco">Nessun lavoro per questa ricerca.</div></div>';
+}
+
+// ── LISTINO ──
+
+function disegnaListino() {
+  const c = document.getElementById('pagina-listino');
+  if (!CARTELLA) { c.innerHTML = schermataBenvenuto(); return; }
+
+  let html = '<h2 class="titolo-pagina">Listino</h2>';
+  html += '<p class="sottotitolo">I prezzi stanno qui, non sul telefono: si correggono in un posto solo</p>';
+
+  html += '<div id="listino-da-salvare" class="avvertenza" style="display:' +
+    (LISTINO_DA_SALVARE ? 'block' : 'none') + '">' +
+    'Ci sono modifiche non ancora scritte su file. Restano qui finché premi Salva il listino.</div>';
+
+  html += '<div class="scheda">';
+  html += '<table class="elenco"><thead><tr><th>Voce</th><th>Unità</th>' +
+    '<th class="num">Prezzo</th><th>A corpo</th><th></th></tr></thead><tbody>';
+  if (!LISTINO.voci.length) {
+    html += '<tr><td colspan="5"><div class="vuoto-elenco">Listino vuoto. ' +
+      'Le voci arrivano dai rapportini: aggiungile qui col nome che hanno lì.</div></td></tr>';
+  }
+  LISTINO.voci.forEach(v => {
+    const id = perOnclick(v.voceID);
+    html += '<tr>' +
+      '<td><input type="text" value="' + perValore(v.voce) +
+        '" oninput="modificaVoce(\'' + id + '\', \'voce\', this.value)"></td>' +
+      '<td><input type="text" style="width:90px" value="' + perValore(v.unita) +
+        '" oninput="modificaVoce(\'' + id + '\', \'unita\', this.value)"></td>' +
+      '<td class="num"><input type="text" class="prezzo' + (v.prezzo === '' || v.prezzo == null ? ' vuoto' : '') +
+        '" value="' + perValore(formattaQuantita(v.prezzo)) +
+        '" oninput="modificaVoce(\'' + id + '\', \'prezzo\', this.value)"></td>' +
+      '<td><input type="checkbox" style="width:auto"' + (v.aCorpo ? ' checked' : '') +
+        ' onchange="segnaACorpo(\'' + id + '\', this.checked)"></td>' +
+      '<td class="num"><button class="pericolo piccola" onclick="eliminaVoce(\'' + id + '\')">✕</button></td>' +
+    '</tr>';
+  });
+  html += '</tbody></table>';
+  html += '<div class="avvertenza">Un prezzo vuoto non è un errore: vuol dire che quella voce ' +
+    'si valuta volta per volta. Il trasferimento e il trattamento fitosanitario funzionano così.</div>';
+  html += '<div class="bottoni">' +
+    '<button class="secondaria" onclick="aggiungiVoce()">+ Aggiungi una voce</button>' +
+    '<button class="principale" onclick="salvaListino()">Salva il listino</button>' +
+  '</div>';
+  html += '</div>';
+
+  const nonInListino = vociMancanti();
+  if (nonInListino.length) {
+    html += '<div class="scheda"><div class="titolo-sezione">Voci viste nei rapportini e non in listino</div>';
+    html += '<p class="meta">Finché non hanno un prezzo qui, restano fuori dai totali.</p>';
+    html += '<table class="elenco"><tbody>';
+    nonInListino.forEach(v => {
+      html += '<tr><td>' + perValore(v.voce) + '</td><td class="meta">' + perValore(v.unita) + '</td>' +
+        '<td class="num"><button class="secondaria piccola" onclick="importaVoce(\'' +
+          perOnclick(v.voceID) + '\', \'' + perOnclick(v.voce) + '\', \'' + perOnclick(v.unita) +
+          '\')">Aggiungi in listino</button></td></tr>';
+    });
+    html += '</tbody></table></div>';
+  }
+
+  c.innerHTML = html;
+}
+
+// Le voci del conto nascono sul telefono, e il listino dell'ufficio parte vuoto:
+// invece di farle riscrivere a mano, si prendono da quello che è già arrivato.
+function vociMancanti() {
+  const viste = new Map();
+  const daDoc = d => (d.righe || []).forEach(r => {
+    if (!r.voceID || voceInListino(r.voceID) || viste.has(r.voceID)) return;
+    viste.set(r.voceID, { voceID: r.voceID, voce: r.voce || '', unita: r.unita || '' });
+  });
+  ARRIVI.forEach(a => daDoc(a.doc));
+  ARCHIVIO.forEach(l => { if (l.rapportino) daDoc(l.rapportino); });
+  return [...viste.values()];
+}
+
+function importaVoce(voceID, voce, unita) {
+  if (voceInListino(voceID)) return;
+  LISTINO.voci.push({ voceID, voce, unita, prezzo: '', aCorpo: false });
+  LISTINO_DA_SALVARE = true;
+  disegna();
+}
+
+// ── AVVIO ──
+
+async function avvia() {
+  const maniglia = await maniglieRicordate();
+  if (maniglia && (await permessoConcesso(maniglia, false))) {
+    await usaCartella(maniglia);
+    return;
+  }
+  if (maniglia) {
+    // La cartella c'è ancora ma il permesso è scaduto: serve un clic, non una
+    // nuova scelta della cartella.
+    document.getElementById('pagina-arrivi').innerHTML =
+      '<h2 class="titolo-pagina">Bentornato</h2>' +
+      '<p class="sottotitolo">La cartella è ancora quella, serve solo il tuo permesso</p>' +
+      '<div class="scheda"><div class="bottoni">' +
+        '<button class="principale" onclick="riapriCartella()">Riapri la cartella</button>' +
+      '</div></div>';
+    aggiornaStatoCartella('In attesa del permesso');
+    return;
+  }
+  disegna();
+}
+
+avvia();
+</script>
+</body>
+</html>

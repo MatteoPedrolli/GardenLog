@@ -44,6 +44,11 @@ self.addEventListener('fetch', e => {
   // Ricerca indirizzi e vecchio foglio Google vanno sempre in rete: una
   // risposta vecchia servita dalla cache sarebbe peggio di un errore onesto.
   if (url.hostname.endsWith('openstreetmap.org') || url.hostname.endsWith('google.com')) return;
+  // L'app dell'ufficio è un'altra app, su un PC sempre connesso, e non passa da
+  // questa cache: servirla da qui vorrebbe dire aggiornarla con le regole del
+  // telefono — che si vedono al secondo avvio — e, offline, rispondere con la
+  // home del cantiere al posto suo.
+  if (url.origin === self.location.origin && url.pathname.includes('/ufficio/')) return;
   const nostra = url.origin === self.location.origin
     || url.hostname.endsWith('googleapis.com')
     || url.hostname.endsWith('gstatic.com');

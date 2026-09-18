@@ -16,7 +16,11 @@ const TIPI = {
 export function avviaServer(radice) {
   const server = createServer(async (req, res) => {
     const percorso = decodeURIComponent(req.url.split('?')[0]);
-    const file = join(radice, normalize(percorso === '/' ? '/index.html' : percorso));
+    // Una cartella si serve col suo index.html, come fa GitHub Pages: l'app
+    // dell'ufficio sta in /ufficio/ e i test devono chiamarla con lo stesso
+    // indirizzo che userà il PC.
+    const chiesto = percorso.endsWith('/') ? percorso + 'index.html' : percorso;
+    const file = join(radice, normalize(chiesto));
     // niente uscite dalla radice con ../
     if (!file.startsWith(radice)) { res.writeHead(403).end('vietato'); return; }
     try {
