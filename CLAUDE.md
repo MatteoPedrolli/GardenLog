@@ -129,6 +129,26 @@ mandata e una visita mai registrata.
 Nel testo della mail niente colonne allineate con gli spazi: le app di posta
 usano caratteri a larghezza variabile e arrivano storte. Una voce per riga.
 
+## Due app, un documento
+
+L'app del cantiere (`index.html`) e quella dell'ufficio **non condividono un
+database**: il telefono ha le sue visite, l'ufficio il suo archivio. Si scambiano
+**documenti**, e il solo formato in comune è il rapportino — `rapportino.js`,
+caricato da entrambe, con la sua versione e i suoi test.
+
+Quel documento è **denormalizzato apposta**: l'ufficio non ha l'archivio prodotti
+del telefono e non può risolvere un `ConcimeID`, così i nomi viaggiano insieme ai
+riferimenti. Un rapportino si deve leggere da solo anche fra due anni, anche se
+quel concime nel frattempo è stato cancellato.
+
+`leggiRapportino()` non si fida di niente: un file può essere troncato, non
+essere un rapportino, o venire da una versione futura. In quest'ultimo caso si
+ferma e lo dice, invece di archiviare un documento monco in silenzio.
+
+Il trasporto sta in `ufficio/`: uno script Apps Script riceve dal telefono e
+deposita nella cartella Drive, che sul PC dell'ufficio è una cartella normale.
+Un file, un solo autore — il telefono deposita, l'ufficio legge.
+
 ## Come arrivano gli aggiornamenti
 
 Il service worker serve la copia in cache e scarica la versione nuova in

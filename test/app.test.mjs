@@ -198,6 +198,44 @@ try {
     return !t.includes('CONTO') && t.includes('LAVORO SVOLTO');
   }));
 
+  // ── il rapportino come documento che viaggia verso l'ufficio ──
+  const doc = await page.evaluate(() => costruisciRapportino({
+    visita: DB.visite[0],
+    cliente: DB.clienti.find(c => c.ClienteID == DB.visite[0].ClienteID),
+    operazioni: DB.operazioni.filter(o => o.VisitaID == DB.visite[0].VisitaID),
+    tipi: DB.tipiOperazione, voci: DB.voci,
+    concimi: DB.concimi, sementi: DB.sementi, fitofarmaci: DB.fitofarmaci,
+  }));
+  ok('il documento porta il cliente e la data', doc.cliente.nome === 'Mario Rossi' && !!doc.data);
+  ok('il documento porta le ore calcolate', doc.ore.totale === 8 && doc.ore.fasce.length === 1);
+  ok('il nome del prodotto viaggia col documento, non solo il codice',
+    doc.operazioni.some(o => o.prodotto === 'Nitrophoska'),
+    JSON.stringify(doc.operazioni.map(o => o.prodotto)));
+  ok('le righe del conto portano le quantità', doc.righe.length === 4);
+  ok('il prezzo è una proposta, non una decisione',
+    doc.righe.find(r => r.chiave === 'manodopera').prezzoProposto == 32);
+  ok('l\'identificativo è quello della visita, così una correzione sostituisce',
+    doc.id === await page.evaluate(() => DB.visite[0].VisitaID));
+
+  ok('si rilegge quello che si è scritto', await page.evaluate(d => {
+    const riletto = leggiRapportino(JSON.stringify(d));
+    return riletto.id === d.id && riletto.ore.totale === d.ore.totale;
+  }, doc));
+  ok('un file che non è un rapportino viene respinto', await page.evaluate(() => {
+    try { leggiRapportino('{"tipo":"altro"}'); return false; } catch (e) { return true; }
+  }));
+  ok('un file troncato viene respinto invece di passare a metà', await page.evaluate(() => {
+    try { leggiRapportino('{"tipo":"rappo'); return false; } catch (e) { return true; }
+  }));
+  // Un documento scritto da una versione futura può avere campi che questa non
+  // sa leggere: archiviarlo monco in silenzio sarebbe il guasto peggiore.
+  ok('un rapportino di una versione futura si ferma e lo dice', await page.evaluate(() => {
+    try { leggiRapportino({ tipo:'rapportino', versione: 99, id:'x' }); return false; }
+    catch (e) { return e.message.includes('recente'); }
+  }));
+  ok('il nome del file resta leggibile a occhio', await page.evaluate(d =>
+    /^\d{4}-\d{2}-\d{2}-mario-rossi-/.test(nomeFileRapportino(d)), doc));
+
   // ── il trattamento si fattura a corpo, non a litri ──
   ok('la voce trattamento è a corpo',
     await page.evaluate(() => isSi(DB.voci.find(v => v.VoceID === 'trattamento').ACorpo)));
