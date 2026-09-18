@@ -170,13 +170,8 @@ try {
   ok('prezzo scritto a mano sopravvive alla ricarica',
     await page.evaluate(() => DB.visite[0].Conto.find(r => r.Chiave === 'manodopera').Prezzo) == 32);
 
-  // ── il rapportino da mandare ──
-  ok('senza indirizzo dell\'azienda non si manda niente', await page.evaluate(() => {
-    DB.impostazioni.EmailAzienda = '';
-    return inviaRapportino(DB.visite[0]) === false;
-  }));
+  // ── il testo del rapportino, che l'ufficio legge e tu puoi ricontrollare ──
   const testo = await page.evaluate(() => {
-    DB.impostazioni.EmailAzienda = 'ufficio@esempio.it';
     DB.impostazioni.NomeMittente = 'Matteo';
     return testoRapportino(DB.visite[0]);
   });
@@ -197,6 +192,80 @@ try {
     DB.impostazioni.MostraImporti = 'Sì';
     return !t.includes('CONTO') && t.includes('LAVORO SVOLTO');
   }));
+
+  // ── la coda di uscita: il lavoro resta al sicuro, la consegna riprova ──
+  const CONSEGNA = 'https://consegna.esempio.invalid/exec';
+  let rispostaFinta = { status: 'ok' };
+  let consegneRicevute = 0;
+  await ctx.route(CONSEGNA, r => {
+    consegneRicevute++;
+    if (rispostaFinta === 'html') {
+      // Apps Script risponde 200 con una pagina HTML quando qualcosa va storto:
+      // è la trappola che aveva già fregato la vecchia app col foglio.
+      return r.fulfill({ status: 200, contentType: 'text/html', body: '<html>Errore</html>' });
+    }
+    return r.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(rispostaFinta) });
+  });
+
+  ok('senza indirizzo di consegna non parte niente e lo dice', await page.evaluate(async () => {
+    DB.impostazioni.UrlRapportini = '';
+    try { await consegnaRapportino({ tipo: 'rapportino', id: 'x' }); return false; }
+    catch (e) { return e.message.includes('indirizzo'); }
+  }));
+
+  await page.evaluate(u => { DB.impostazioni.UrlRapportini = u; }, CONSEGNA);
+  await page.evaluate(async () => { accodaRapportino(DB.visite[0]); await salvaDB({ conta: false }); renderAll(); });
+  ok('il rapportino entra in coda', await page.evaluate(() => DB.coda.length) === 1);
+  ok('la visita si vede che è da consegnare',
+    (await page.textContent('#visite-list')).includes('da consegnare'));
+
+  // rimandare lo stesso rapportino corretto non ne fa partire due
+  await page.evaluate(() => accodaRapportino(DB.visite[0]));
+  ok('riaccodare la stessa visita sostituisce invece di duplicare',
+    await page.evaluate(() => DB.coda.length) === 1);
+
+  // senza rete la coda aspetta, non perde niente
+  await ctx.setOffline(true);
+  await page.evaluate(() => svuotaCoda());
+  await page.waitForTimeout(200);
+  ok('senza rete il rapportino resta in coda', await page.evaluate(() => DB.coda.length) === 1);
+  await ctx.setOffline(false);
+
+  // il servizio risponde con una pagina HTML: non è una conferma
+  rispostaFinta = 'html';
+  await page.evaluate(() => svuotaCoda());
+  await page.waitForTimeout(300);
+  ok('una risposta che non è una conferma non svuota la coda',
+    await page.evaluate(() => DB.coda.length) === 1);
+  ok('l\'errore resta scritto sulla voce in coda',
+    await page.evaluate(() => !!DB.coda[0].errore));
+
+  // risposta che è JSON valido ma non conferma niente: capita con un portale
+  // captive o un servizio che cambia formato. Silenzio non vuol dire consegnato.
+  rispostaFinta = { qualcosa: 'altro' };
+  await page.evaluate(() => svuotaCoda());
+  await page.waitForTimeout(300);
+  ok('una risposta senza conferma non vale come consegna',
+    await page.evaluate(() => DB.coda.length) === 1);
+
+  // il servizio risponde male ma in JSON
+  rispostaFinta = { status: 'error', msg: 'cartella non trovata' };
+  await page.evaluate(() => svuotaCoda());
+  await page.waitForTimeout(300);
+  ok('un errore dichiarato dal servizio non fa sparire il rapportino',
+    await page.evaluate(() => DB.coda.length === 1 && DB.coda[0].errore.includes('cartella')));
+
+  // e finalmente va a buon fine
+  rispostaFinta = { status: 'ok' };
+  await page.evaluate(() => svuotaCoda());
+  await page.waitForTimeout(400);
+  ok('consegnato, la coda si svuota', await page.evaluate(() => DB.coda.length) === 0);
+  ok('la visita si segna consegnata', await page.evaluate(() => !!DB.visite[0].Consegnato));
+  ok('la visita porta il numero di revisione consegnata',
+    await page.evaluate(() => DB.visite[0].Revisione) >= 1);
+  ok('il servizio è stato chiamato davvero', consegneRicevute >= 3, 'chiamate: ' + consegneRicevute);
+  await page.evaluate(() => { DB.visite[0].Consegnato = ''; return salvaDB({ conta: false }); });
+  await ctx.unroute(CONSEGNA);
 
   // ── il rapportino come documento che viaggia verso l'ufficio ──
   const doc = await page.evaluate(() => costruisciRapportino({

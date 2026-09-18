@@ -598,6 +598,7 @@ select.form-control { background-image: url("data:image/svg+xml,%3Csvg xmlns='ht
   <div id="content">
     <!-- HOME -->
     <div id="page-home" class="page active">
+      <div id="avviso-coda" class="avviso" style="display:none" onclick="svuotaCoda({ avvisa: true })"></div>
       <div id="avviso-backup" class="avviso" style="display:none" onclick="navTo('dati')"></div>
       <div class="hero">
         <div class="hero-date" id="hero-date"></div>
@@ -666,11 +667,12 @@ select.form-control { background-image: url("data:image/svg+xml,%3Csvg xmlns='ht
 
       <div class="section-title">Rapportino</div>
       <div class="card" style="padding:14px">
-        <div class="dati-nota">A chi va la mail di fine lavoro e come la firmi. L'app non manda niente da sé: apre la posta col rapportino già scritto, l'ultimo tocco è tuo.</div>
+        <div class="dati-nota">Dove il rapportino viene consegnato all'ufficio. Il lavoro si salva sempre sul telefono: se non c'è rete la consegna aspetta e riparte da sola.</div>
         <div class="form-group">
-          <label class="form-label">Email dell'azienda</label>
-          <input type="email" class="form-control" id="f-imp-email" inputmode="email" autocapitalize="off"
-                 oninput="salvaImpostazione('EmailAzienda', this.value)">
+          <label class="form-label">Indirizzo di consegna</label>
+          <input type="url" class="form-control" id="f-imp-url" inputmode="url" autocapitalize="off"
+                 placeholder="https://script.google.com/macros/s/.../exec"
+                 oninput="salvaImpostazione('UrlRapportini', this.value)">
         </div>
         <div class="form-group">
           <label class="form-label">Come firmarti</label>
@@ -955,14 +957,14 @@ const IDB_STORE = 'stato';
 const IDB_CHIAVE = 'db';
 const MIRROR_KEY = 'giardinolog-db';
 const CACHE_SHEETS = 'giardino-db-v1';  // cache locale di quando si leggeva da Sheets
-const VERSIONE_DATI = 6;
+const VERSIONE_DATI = 7;
 
 // Le impostazioni stanno dentro DB, non in META, perché così finiscono nel
 // backup: un indirizzo da riscrivere dopo aver cambiato telefono è una seccatura
 // piccola, ma è la stessa categoria di dato che il backup deve salvare.
-const IMPOSTAZIONI_DEFAULT = { EmailAzienda: '', NomeMittente: '', MostraImporti: 'Sì' };
+const IMPOSTAZIONI_DEFAULT = { UrlRapportini: '', NomeMittente: '', MostraImporti: 'Sì' };
 
-const COLLEZIONI = ['clienti', 'visite', 'operazioni', 'concimi', 'sementi', 'fitofarmaci', 'fasce', 'tipiOperazione', 'voci'];
+const COLLEZIONI = ['clienti', 'visite', 'operazioni', 'concimi', 'sementi', 'fitofarmaci', 'fasce', 'tipiOperazione', 'voci', 'coda'];
 
 // Fasce di partenza per chi apre l'app la prima volta: numeri da correggere
 // in Archivi, non verità rivelate. Chi arriva da Sheets o da un backup se li
@@ -1181,6 +1183,15 @@ const MIGRAZIONI = {
     db.impostazioni = { ...IMPOSTAZIONI_DEFAULT, ...(db.impostazioni || {}) };
     return db;
   },
+
+  // 6 → 7: il rapportino non parte più per mail ma verso la cartella di Drive
+  // dell'ufficio, e ci arriva quando c'è rete. Serve una coda: in giardino il
+  // campo spesso non c'è, e un invio fallito non deve perdere il lavoro.
+  7: db => {
+    db.impostazioni = { ...IMPOSTAZIONI_DEFAULT, ...(db.impostazioni || {}) };
+    delete db.impostazioni.EmailAzienda;
+    return db;
+  },
 };
 
 function migra(grezzo, versione) {
@@ -1219,6 +1230,7 @@ async function salvaDB({ conta = true } = {}) {
   // ricaricando: va detto subito e a caratteri cubitali, non in console.
   if (!salvato) showToast('❌ NON SALVATO: memoria del browser piena o bloccata');
   aggiornaAvvisoBackup();
+  aggiornaAvvisoCoda();
   return salvato;
 }
 
@@ -1270,6 +1282,9 @@ async function init() {
   updateStats();
   renderAll();
   aggiornaAvvisoBackup();
+  aggiornaAvvisoCoda();
+  avviaOrologioCoda();
+  svuotaCoda();
   chiediPersistenza();
   registraServiceWorker();
   armaIndietro();
@@ -1487,7 +1502,7 @@ function renderVisite() {
     return `<div class="visit-card">
       <div class="visit-card-header">
         <span class="visit-card-icon">🌿</span>
-        <div style="flex:1"><div class="visit-card-title">${nome}</div><div class="visit-card-date">${data}${v.Ore_Visita ? ' · '+v.Ore_Visita+'h' : ''}${v.InPosta ? ' · 📧 in posta il ' + new Date(v.InPosta).toLocaleDateString('it-IT') : ''}</div></div>
+        <div style="flex:1"><div class="visit-card-title">${nome}</div><div class="visit-card-date">${data}${v.Ore_Visita ? ' · '+v.Ore_Visita+'h' : ''}${statoConsegna(v)}</div></div>
       </div>
       ${v.Note_visita ? `<div style="font-size:0.82rem; color:var(--text-mid); margin-top:8px">${v.Note_visita}</div>` : ''}
       ${ops.length ? `<div class="visit-ops">${ops.map(o => `<span class="op-tag ${isSi(o.Flag_prato)?'prato':''}">${o.Tipo_operazione}${o.Descrizione?' – '+o.Descrizione:''}</span>`).join('')}</div>` : ''}
@@ -2361,14 +2376,13 @@ async function saveVisita({ invia = false } = {}) {
     DB.operazioni = DB.operazioni.filter(o => o.VisitaID != visitaID).concat(operazioni);
     if (!await salvaDB()) return;
     if (invia) {
-      // Prima si salva, poi si manda: se la posta non si apre il lavoro è
-      // comunque al sicuro, e non si resta con una mail partita e una visita
-      // mai registrata.
-      if (inviaRapportino(visita)) {
-        visita.InPosta = new Date().toISOString();
-        await salvaDB({ conta: false });
-        showToast('📧 Rapportino passato alla posta');
-      }
+      // Prima si salva, poi si accoda: il lavoro è al sicuro sul telefono
+      // qualunque cosa faccia la rete, e la consegna diventa un problema
+      // dell'app invece che tuo.
+      accodaRapportino(visita);
+      await salvaDB({ conta: false });
+      showToast('📤 Rapportino in consegna');
+      svuotaCoda({ avvisa: true });
     } else {
       showToast(editVisitaID ? '✅ Visita aggiornata' : '✅ Visita salvata');
     }
@@ -2639,25 +2653,110 @@ function testoRapportino(visita) {
   return righe.join('\n');
 }
 
-function oggettoRapportino(visita) {
-  const c = DB.clienti.find(x => x.ClienteID == visita.ClienteID);
-  const data = visita.Data ? new Date(visita.Data).toLocaleDateString('it-IT') : '';
-  return `Rapportino ${data} — ${c?.Cliente || 'cliente'}`;
+// ── LA CODA DI USCITA ──
+// Il rapportino si salva sempre sul telefono, e parte quando c'è rete. In
+// giardino il campo spesso non c'è: se l'invio fosse l'unico modo di
+// registrare, il lavoro si perderebbe proprio dove si fa. Così invece la
+// consegna è un problema dell'app, non tuo — tu tocchi "invia" e te ne
+// dimentichi.
+let invioInCorso = false;
+let orologioCoda = null;
+
+function accodaRapportino(visita) {
+  const cliente = DB.clienti.find(c => c.ClienteID == visita.ClienteID);
+  const doc = costruisciRapportino({
+    visita,
+    cliente,
+    operazioni: DB.operazioni.filter(o => o.VisitaID == visita.VisitaID),
+    tipi: DB.tipiOperazione,
+    voci: DB.voci,
+    concimi: DB.concimi,
+    sementi: DB.sementi,
+    fitofarmaci: DB.fitofarmaci,
+  });
+  // Una sola voce per visita: se correggi e rimandi, in coda resta la versione
+  // buona invece di accodarsi alla precedente e farne partire due.
+  DB.coda = DB.coda.filter(v => v.docID !== doc.id);
+  DB.coda.push({ docID: doc.id, doc, creato: new Date().toISOString(), tentativi: 0, errore: '' });
+  return doc;
 }
 
-// Apre l'app di posta con destinatario, oggetto e testo già scritti. Non manda
-// niente da sé: l'app non ha un server e non deve averlo. L'ultimo tocco è tuo.
-function inviaRapportino(visita) {
-  const destinatario = (DB.impostazioni?.EmailAzienda || '').trim();
-  if (!destinatario) {
-    showToast('⚠️ Manca l\'indirizzo dell\'azienda: impostalo in ⚙️ Dati');
-    return false;
+// Apps Script risponde 200 anche quando fallisce, con una pagina HTML al posto
+// del JSON — è la stessa trappola del vecchio foglio. E la richiesta va mandata
+// senza intestazione Content-Type: aggiungerla farebbe scattare il controllo
+// preventivo CORS, che Apps Script non sa gestire.
+async function consegnaRapportino(doc) {
+  const url = (DB.impostazioni?.UrlRapportini || '').trim();
+  if (!url) throw new Error('Manca l\'indirizzo di consegna: impostalo in ⚙️ Dati');
+  const r = await fetch(url, { method: 'POST', body: JSON.stringify(doc) });
+  const testo = await r.text();
+  let risposta;
+  try { risposta = JSON.parse(testo); }
+  catch (e) { throw new Error('Il servizio ha risposto con un errore, non con una conferma'); }
+  if (risposta?.status === 'error') throw new Error(risposta.msg || 'errore dal servizio');
+  if (risposta?.status !== 'ok') throw new Error('Risposta inattesa dal servizio');
+  return risposta;
+}
+
+// Prova a svuotare la coda. Silenziosa di suo: viene chiamata all'avvio, al
+// ritorno della rete e ogni tanto, e non deve interrompere chi sta lavorando.
+async function svuotaCoda({ avvisa = false } = {}) {
+  if (invioInCorso || !DB.coda.length) return;
+  if (!navigator.onLine) { if (avvisa) showToast('📭 Nessuna rete: il rapportino parte appena torna'); return; }
+  invioInCorso = true;
+  let consegnati = 0, ultimoErrore = '';
+  try {
+    for (const voce of [...DB.coda]) {
+      try {
+        await consegnaRapportino(voce.doc);
+        DB.coda = DB.coda.filter(v => v !== voce);
+        const visita = DB.visite.find(v => v.VisitaID == voce.docID);
+        if (visita) {
+          visita.Consegnato = new Date().toISOString();
+          visita.Revisione = voce.doc.revisione;
+        }
+        consegnati++;
+      } catch (e) {
+        voce.tentativi = (voce.tentativi || 0) + 1;
+        voce.errore = e.message || String(e);
+        ultimoErrore = voce.errore;
+        break;   // se il servizio non risponde, inutile insistere sugli altri
+      }
+    }
+    await salvaDB({ conta: false });
+    renderAll();
+    aggiornaAvvisoCoda();
+    if (consegnati && avvisa) showToast(`📨 ${consegnati === 1 ? 'Rapportino consegnato' : consegnati + ' rapportini consegnati'}`);
+    if (ultimoErrore && avvisa) showToast('⚠️ Non consegnato: ' + ultimoErrore);
+  } finally {
+    invioInCorso = false;
   }
-  const url = 'mailto:' + encodeURIComponent(destinatario)
-    + '?subject=' + encodeURIComponent(oggettoRapportino(visita))
-    + '&body=' + encodeURIComponent(testoRapportino(visita));
-  location.href = url;
-  return true;
+}
+
+// L'avviso in home dice quanti rapportini stanno ancora sul telefono. Non è un
+// dettaglio tecnico: finché sono lì, in ufficio quel lavoro non esiste.
+function aggiornaAvvisoCoda() {
+  const el = document.getElementById('avviso-coda');
+  if (!el) return;
+  const n = DB.coda.length;
+  el.style.display = n ? 'flex' : 'none';
+  if (!n) return;
+  const conErrore = DB.coda.find(v => v.errore);
+  el.innerHTML = `<span style="font-size:1.3rem">📤</span>
+    <div style="flex:1">
+      <div style="font-weight:600">${n === 1 ? '1 rapportino da consegnare' : n + ' rapportini da consegnare'}</div>
+      <div style="font-size:0.78rem; opacity:0.85">${conErrore
+        ? perValore(conErrore.errore)
+        : 'partono da soli appena c’è rete · tocca per riprovare adesso'}</div>
+    </div>`;
+}
+
+function avviaOrologioCoda() {
+  // Alla ripresa della rete e ogni due minuti mentre l'app è aperta: abbastanza
+  // spesso da non farti aspettare, abbastanza raro da non scaldare il telefono.
+  window.addEventListener('online', () => svuotaCoda());
+  clearInterval(orologioCoda);
+  orologioCoda = setInterval(() => svuotaCoda(), 120000);
 }
 
 // ── DATI, BACKUP, ARCHIVI ──
@@ -2956,8 +3055,8 @@ function renderDati() {
       (modifiche ? ` · ${modifiche} modifiche da allora` : ' · nessuna modifica da allora');
   }
   const imp = DB.impostazioni || IMPOSTAZIONI_DEFAULT;
-  const email = document.getElementById('f-imp-email');
-  if (email) email.value = imp.EmailAzienda || '';
+  const url = document.getElementById('f-imp-url');
+  if (url) url.value = imp.UrlRapportini || '';
   const firma = document.getElementById('f-imp-firma');
   if (firma) firma.value = imp.NomeMittente || '';
   const importi = document.getElementById('f-imp-importi');
@@ -3148,6 +3247,14 @@ async function importaDaSheets() {
 // HTML: vanno protetti per entrambi, o un apostrofo — "D'Angelo", "Dall'Oglio"
 // — rende il bottone non cliccabile.
 // Testo che finisce dentro il markup o in un attributo value.
+// Dove sta il rapportino di questa visita: ancora sul telefono, oppure
+// arrivato in ufficio. Finché è in coda, per l'ufficio quel lavoro non esiste.
+function statoConsegna(v) {
+  if (DB.coda.some(c => c.docID === v.VisitaID)) return ' · 📤 da consegnare';
+  if (v.Consegnato) return ' · ✅ in ufficio dal ' + new Date(v.Consegnato).toLocaleDateString('it-IT');
+  return '';
+}
+
 function perValore(v) {
   return String(v == null ? '' : v)
     .replace(/&/g, '&amp;').replace(/"/g, '&quot;')

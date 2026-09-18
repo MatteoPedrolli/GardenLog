@@ -149,6 +149,18 @@ Il trasporto sta in `ufficio/`: uno script Apps Script riceve dal telefono e
 deposita nella cartella Drive, che sul PC dell'ufficio è una cartella normale.
 Un file, un solo autore — il telefono deposita, l'ufficio legge.
 
+**La consegna passa da una coda.** Il rapportino si salva sempre in locale e
+parte quando c'è rete: in giardino il campo spesso non c'è, e se l'invio fosse
+l'unica strada il lavoro si perderebbe proprio dove si fa. `svuotaCoda()` gira
+all'avvio, al ritorno della rete e ogni due minuti mentre l'app è aperta.
+
+Niente esce dalla coda senza una conferma esplicita. Apps Script risponde 200
+anche quando fallisce, con una pagina HTML al posto del JSON — la stessa
+trappola del vecchio foglio — e un servizio può rispondere JSON valido che non
+conferma nulla. Silenzio non vuol dire consegnato: si accetta solo
+`status: "ok"`. E la richiesta va mandata **senza intestazione Content-Type**,
+o scatta il controllo preventivo CORS che Apps Script non sa gestire.
+
 ## Come arrivano gli aggiornamenti
 
 Il service worker serve la copia in cache e scarica la versione nuova in
