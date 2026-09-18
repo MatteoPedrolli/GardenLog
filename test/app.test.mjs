@@ -106,34 +106,15 @@ try {
   ok('operazione libera aggiunta',
     (await page.textContent('#operazioni-libere')).includes('Riparazione irrigazione'));
 
-  await page.click('#btn-salva-visita');
-  await page.waitForTimeout(300);
-  ok('visita salvata', await page.evaluate(() => DB.visite.length) === 1);
-  ok('ore e fasce registrate',
-    await page.evaluate(() => DB.visite[0].Ore_Visita === 8 && DB.visite[0].Fasce.length === 1));
-  ok('operazione agganciata al suo tipo',
-    await page.evaluate(() => DB.operazioni.find(o => o.TipoID === 'concimazione') != null));
-  ok('operazione libera salvata senza tipo',
-    await page.evaluate(() => DB.operazioni.some(o => !o.TipoID && o.Tipo_operazione === 'Riparazione irrigazione')));
-  // 10 kg al 12% su 200 mq = 1200 g di azoto = 6 g/m²
-  ok('azoto per metro quadro calcolato',
-    await page.evaluate(() => DB.operazioni.find(o => o.TipoID === 'concimazione').N_g_m2) == 6);
-
-  // ── rapportino: il conto nasce già compilato ──
-  await page.click('.visit-card button:has-text("Rapportino")');
-  await page.waitForTimeout(300);
-  ok('rapportino aperto sul cliente giusto',
-    (await page.textContent('#rapportino-corpo')).includes('Mario Rossi'));
+  // ── il conto si compila mentre registri, nella stessa schermata ──
   ok('tre righe automatiche: manodopera, trasferimento, concime',
     await page.locator('#conto-righe .conto-riga').count() === 3);
   ok('manodopera precompilata con le ore calcolate',
     await page.locator('#conto-righe .conto-riga').first().locator('input').first().inputValue() === '8');
   ok('il trasferimento c\'è sempre, senza aggiungerlo',
     (await page.textContent('#conto-righe')).includes('Trasferimento'));
-  ok('la potatura non fa riga: è manodopera, non un materiale',
+  ok('l\'operazione libera non fa riga di conto',
     !(await page.textContent('#conto-righe')).includes('Riparazione irrigazione'));
-
-  // senza prezzi il totale non finge di essere completo
   ok('avvisa che ci sono righe senza prezzo',
     (await page.textContent('#conto-totale')).includes('senza prezzo'));
 
@@ -150,9 +131,33 @@ try {
 
   await page.fill('#f-conto-libera', 'Noleggio rullo');
   await page.press('#f-conto-libera', 'Enter');
-  await page.waitForTimeout(200);
+  await page.waitForTimeout(150);
   ok('riga aggiunta a mano', await page.locator('#conto-righe .conto-riga').count() === 4);
-  await page.waitForTimeout(700);   // il salvataggio è differito
+
+  // il conto segue le ore mentre le correggi, senza uscire dalla schermata
+  await page.locator('#fasce-list .fascia').first().locator('input[type=number]').fill('3');
+  await page.waitForTimeout(200);
+  ok('cambiando le persone la manodopera si aggiorna da sola',
+    await riga(0).locator('input').first().inputValue() === '12');
+  ok('il prezzo che avevi scritto resta',
+    await riga(0).locator('input').nth(1).inputValue() === '32');
+  await page.locator('#fasce-list .fascia').first().locator('input[type=number]').fill('2');
+  await page.waitForTimeout(200);
+
+  await page.click('#btn-salva-visita');
+  await page.waitForTimeout(300);
+  ok('visita salvata', await page.evaluate(() => DB.visite.length) === 1);
+  ok('ore e fasce registrate',
+    await page.evaluate(() => DB.visite[0].Ore_Visita === 8 && DB.visite[0].Fasce.length === 1));
+  ok('operazione agganciata al suo tipo',
+    await page.evaluate(() => DB.operazioni.find(o => o.TipoID === 'concimazione') != null));
+  ok('operazione libera salvata senza tipo',
+    await page.evaluate(() => DB.operazioni.some(o => !o.TipoID && o.Tipo_operazione === 'Riparazione irrigazione')));
+  // 10 kg al 12% su 200 mq = 1200 g di azoto = 6 g/m²
+  ok('azoto per metro quadro calcolato',
+    await page.evaluate(() => DB.operazioni.find(o => o.TipoID === 'concimazione').N_g_m2) == 6);
+  ok('conto salvato con la visita',
+    await page.evaluate(() => DB.visite[0].Conto?.length) === 4);
 
   // ── persistenza ──
   await page.reload({ waitUntil: 'load' });
@@ -160,10 +165,38 @@ try {
   ok('dati ritrovati dopo la ricarica',
     await page.evaluate(() => DB.clienti.length === 1 && DB.visite.length === 1 && DB.operazioni.length === 2));
   ok('archivio ritrovato dopo la ricarica', await page.evaluate(() => DB.concimi.length) === 1);
-  ok('conto del rapportino ritrovato dopo la ricarica',
+  ok('conto ritrovato dopo la ricarica',
     await page.evaluate(() => DB.visite[0].Conto?.length) === 4);
   ok('prezzo scritto a mano sopravvive alla ricarica',
     await page.evaluate(() => DB.visite[0].Conto.find(r => r.Chiave === 'manodopera').Prezzo) == 32);
+
+  // ── il rapportino da mandare ──
+  ok('senza indirizzo dell\'azienda non si manda niente', await page.evaluate(() => {
+    DB.impostazioni.EmailAzienda = '';
+    return inviaRapportino(DB.visite[0]) === false;
+  }));
+  const testo = await page.evaluate(() => {
+    DB.impostazioni.EmailAzienda = 'ufficio@esempio.it';
+    DB.impostazioni.NomeMittente = 'Matteo';
+    return testoRapportino(DB.visite[0]);
+  });
+  ok('il testo ha cliente, ore, lavoro e conto',
+    testo.includes('Mario Rossi') && testo.includes('MANODOPERA') &&
+    testo.includes('LAVORO SVOLTO') && testo.includes('CONTO'));
+  ok('il testo riporta il totale', testo.includes('TOTALE: 319,00 €'));
+  ok('il testo dice quali voci sono senza importo', testo.includes('senza importo'));
+  ok('il testo è firmato', testo.trimEnd().endsWith('Matteo'));
+  ok('le quantità hanno la virgola, non il punto',
+    await page.evaluate(() => formattaQuantita(11.5) === '11,5') && !/\d\.\d/.test(testo),
+    testo.match(/.*\d\.\d.*/)?.[0] || '');
+  ok('una riga senza prezzo lo dice invece di lasciare un buco',
+    testo.includes('importo da definire') && !testo.includes('— ×'));
+  ok('gli importi si possono spegnere', await page.evaluate(() => {
+    DB.impostazioni.MostraImporti = '';
+    const t = testoRapportino(DB.visite[0]);
+    DB.impostazioni.MostraImporti = 'Sì';
+    return !t.includes('CONTO') && t.includes('LAVORO SVOLTO');
+  }));
 
   // ── il trattamento si fattura a corpo, non a litri ──
   ok('la voce trattamento è a corpo',
@@ -171,37 +204,26 @@ try {
   ok('il trattamento è agganciato alla voce a corpo, non al fitofarmaco',
     await page.evaluate(() => DB.tipiOperazione.find(t => t.TipoID === 'trattamento-fitosanitario').VoceID) === 'trattamento');
   ok('due litri di prodotto fanno una riga da uno, non da due', await page.evaluate(() => {
-    const v = DB.visite[0];
-    const finta = { OperazioneID:'op-test', VisitaID: v.VisitaID, TipoID:'trattamento-fitosanitario',
+    const finta = { OperazioneID:'op-test', TipoID:'trattamento-fitosanitario',
       Tipo_operazione:'Trattamento fitosanitario', Quantita: 2, Unita:'l' };
-    DB.operazioni.push(finta);
-    const riga = righeAutomatiche(v).find(r => r.Chiave === 'op-test');
-    DB.operazioni = DB.operazioni.filter(o => o.OperazioneID !== 'op-test');
+    const riga = righeAutomatiche([], [finta]).find(r => r.Chiave === 'op-test');
     return riga && riga.Quantita === 1 && riga.Unita === '';
   }));
 
-  // ── il conto segue la visita, ma non cancella quello che hai scritto tu ──
+  // ── riaprendo la visita si ritrova tutto, conto compreso ──
   await page.click('#nav-visite');
-  await page.click('.visit-card button:has-text("Modifica")');
-  await page.waitForTimeout(250);
-  await page.locator('#fasce-list .fascia').first().locator('input[type=number]').fill('3');
-  await page.waitForTimeout(150);
-  await page.click('#btn-salva-visita');
+  await page.click('.visit-card button:has-text("Apri")');
   await page.waitForTimeout(300);
-  ok('ore ricalcolate dopo la modifica', await page.evaluate(() => DB.visite[0].Ore_Visita) === 12);
-
-  await page.click('.visit-card button:has-text("Rapportino")');
-  await page.waitForTimeout(300);
-  ok('la manodopera del conto segue le ore nuove',
-    await page.locator('#conto-righe .conto-riga').first().locator('input').first().inputValue() === '12');
-  ok('il prezzo che avevi scritto resta',
+  ok('riaprendo, il conto è quello di prima',
+    await page.locator('#conto-righe .conto-riga').count() === 4);
+  ok('il prezzo scritto a mano è ancora lì',
     await page.locator('#conto-righe .conto-riga').first().locator('input').nth(1).inputValue() === '32');
   ok('la riga aggiunta a mano non sparisce',
     (await page.textContent('#conto-righe')).includes('Noleggio rullo'));
-  // 12 h × 32 € + 45 € + 10 kg × 1,80 € = 447 €
-  ok('totale ricalcolato', (await page.textContent('#conto-totale')).includes('447,00'));
-  await page.waitForTimeout(700);
-  await page.click('#nav-visite');
+  // 8 h × 32 € + 45 € + 10 kg × 1,80 € = 319 €
+  ok('totale ritrovato', (await page.textContent('#conto-totale')).includes('319,00'));
+  await page.evaluate(() => closeDrawer('overlay-visita'));
+  await page.waitForTimeout(150);
 
   // ── report prati ──
   await page.click('#nav-prati');

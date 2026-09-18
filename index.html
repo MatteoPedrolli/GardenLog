@@ -464,7 +464,6 @@ select.form-control { background-image: url("data:image/svg+xml,%3Csvg xmlns='ht
   font-size: 0.9rem; font-weight: 600; color: var(--green-deep);
 }
 
-#rapportino-corpo { padding: 16px 18px 24px; }
 .rapp-testa { padding: 4px 0 6px; }
 .rapp-cliente { font-family: var(--font-display); font-size: 1.3rem; font-weight: 600; color: var(--green-deep); }
 .rapp-luogo { font-size: 0.85rem; color: var(--text-mid); margin-top: 2px; }
@@ -641,11 +640,6 @@ select.form-control { background-image: url("data:image/svg+xml,%3Csvg xmlns='ht
       <div id="prossimi-list"></div>
     </div>
 
-    <!-- RAPPORTINO -->
-    <div id="page-rapportino" class="page">
-      <div id="rapportino-corpo"></div>
-    </div>
-
     <!-- DATI E BACKUP -->
     <div id="page-dati" class="page">
       <div class="section-title">Backup</div>
@@ -655,6 +649,26 @@ select.form-control { background-image: url("data:image/svg+xml,%3Csvg xmlns='ht
         <button class="btn btn-primary" onclick="esportaBackup()">⬇️ Esporta backup</button>
         <button class="btn btn-secondary" style="margin-top:8px" onclick="document.getElementById('file-backup').click()">⬆️ Importa backup</button>
         <input type="file" id="file-backup" accept="application/json,.json" style="display:none" onchange="importaBackup(this)">
+      </div>
+
+      <div class="section-title">Rapportino</div>
+      <div class="card" style="padding:14px">
+        <div class="dati-nota">A chi va la mail di fine lavoro e come la firmi. L'app non manda niente da sé: apre la posta col rapportino già scritto, l'ultimo tocco è tuo.</div>
+        <div class="form-group">
+          <label class="form-label">Email dell'azienda</label>
+          <input type="email" class="form-control" id="f-imp-email" inputmode="email" autocapitalize="off"
+                 oninput="salvaImpostazione('EmailAzienda', this.value)">
+        </div>
+        <div class="form-group">
+          <label class="form-label">Come firmarti</label>
+          <input type="text" class="form-control" id="f-imp-firma"
+                 oninput="salvaImpostazione('NomeMittente', this.value)">
+        </div>
+        <div class="form-group" style="display:flex; align-items:center; justify-content:space-between; gap:12px; margin-bottom:0">
+          <label class="form-label" style="margin:0">Includi gli importi nel rapportino</label>
+          <button type="button" class="toggle" id="f-imp-importi"
+                  onclick="this.classList.toggle('on'); salvaImpostazione('MostraImporti', this.classList.contains('on') ? 'Sì' : '');"></button>
+        </div>
       </div>
 
       <div class="section-title">Esporta per analisi</div>
@@ -865,6 +879,18 @@ select.form-control { background-image: url("data:image/svg+xml,%3Csvg xmlns='ht
         <div id="operazioni-altre" style="display:none"></div>
       </div>
 
+      <div class="rapporto-sez">Conto</div>
+      <div id="conto-righe"></div>
+      <div id="conto-totale-wrap"></div>
+      <select class="form-control" id="f-conto-voce" style="margin-top:12px"
+              onchange="aggiungiRigaDaVoce(this.value); this.value='';">
+        <option value="">+ Aggiungi una voce…</option>
+      </select>
+      <input type="text" class="form-control" id="f-conto-libera" style="margin-top:8px"
+             placeholder="+ Voce non in elenco…"
+             onkeydown="if(event.key==='Enter'){event.preventDefault();aggiungiRigaLibera();}"
+             onblur="aggiungiRigaLibera()">
+
       <div class="rapporto-sez">Note</div>
       <textarea class="form-control" id="f-visita-note" rows="3" placeholder="Osservazioni, variazioni, cose da ricordare..."></textarea>
 
@@ -889,7 +915,9 @@ select.form-control { background-image: url("data:image/svg+xml,%3Csvg xmlns='ht
         </div>
       </div>
 
-      <button class="btn btn-primary" id="btn-salva-visita" onclick="saveVisita()">💾 Salva Visita</button>
+      <button class="btn btn-primary" id="btn-salva-visita" onclick="saveVisita()">💾 Salva</button>
+      <div style="height:8px"></div>
+      <button class="btn btn-secondary" id="btn-salva-invia" onclick="saveVisita({ invia: true })">📧 Salva e invia</button>
       <div style="height:8px"></div>
       <button class="btn btn-secondary" onclick="closeDrawer('overlay-visita')">Annulla</button>
     </div>
@@ -907,7 +935,12 @@ const IDB_STORE = 'stato';
 const IDB_CHIAVE = 'db';
 const MIRROR_KEY = 'giardinolog-db';
 const CACHE_SHEETS = 'giardino-db-v1';  // cache locale di quando si leggeva da Sheets
-const VERSIONE_DATI = 5;
+const VERSIONE_DATI = 6;
+
+// Le impostazioni stanno dentro DB, non in META, perché così finiscono nel
+// backup: un indirizzo da riscrivere dopo aver cambiato telefono è una seccatura
+// piccola, ma è la stessa categoria di dato che il backup deve salvare.
+const IMPOSTAZIONI_DEFAULT = { EmailAzienda: '', NomeMittente: '', MostraImporti: 'Sì' };
 
 const COLLEZIONI = ['clienti', 'visite', 'operazioni', 'concimi', 'sementi', 'fitofarmaci', 'fasce', 'tipiOperazione', 'voci'];
 
@@ -1036,6 +1069,7 @@ async function idbScrivi(valore) {
 function normalizzaDB(grezzo) {
   const pulito = {};
   COLLEZIONI.forEach(k => { pulito[k] = Array.isArray(grezzo?.[k]) ? grezzo[k] : []; });
+  pulito.impostazioni = { ...IMPOSTAZIONI_DEFAULT, ...(grezzo?.impostazioni || {}) };
   return pulito;
 }
 
@@ -1118,6 +1152,13 @@ const MIGRAZIONI = {
     db.tipiOperazione.forEach(t => {
       if (t.TipoID === 'trattamento-fitosanitario' && t.VoceID === 'fitofarmaco') t.VoceID = 'trattamento';
     });
+    return db;
+  },
+
+  // 5 → 6: arrivano le impostazioni del rapportino — a chi va la mail e con
+  // che nome firmarla.
+  6: db => {
+    db.impostazioni = { ...IMPOSTAZIONI_DEFAULT, ...(db.impostazioni || {}) };
     return db;
   },
 };
@@ -1239,12 +1280,11 @@ function navTo(page) {
   // la barra resta su quella da cui si è arrivati.
   document.getElementById('nav-'+page)?.classList.add('active');
   currentPage = page;
-  const titles = { home:'GiardinoApp', clienti:'Clienti', visite:'Registro Visite', prossimi:'Prossimi Interventi', prati:'Prati', dati:'Dati e backup', rapportino:'Rapportino' };
+  const titles = { home:'GiardinoApp', clienti:'Clienti', visite:'Registro Visite', prossimi:'Prossimi Interventi', prati:'Prati', dati:'Dati e backup' };
   document.getElementById('topbar-title').textContent = titles[page] || 'GiardinoApp';
   document.getElementById('topbar-action-btn').style.display =
-    ['prati','prossimi','dati','rapportino'].includes(page) ? 'none' : 'flex';
+    ['prati','prossimi','dati'].includes(page) ? 'none' : 'flex';
   if (page === 'dati') renderDati();
-  if (page === 'rapportino') renderRapportino();
 }
 
 // ── TASTO INDIETRO ──
@@ -1270,8 +1310,6 @@ function tornaIndietro() {
     renderClientiPage();
     return true;
   }
-  // dal rapportino si risale alla visita da cui si è arrivati
-  if (currentPage === 'rapportino') { navTo('visite'); return true; }
   if (currentPage !== 'home') { navTo('home'); return true; }
   return false;
 }
@@ -1429,13 +1467,12 @@ function renderVisite() {
     return `<div class="visit-card">
       <div class="visit-card-header">
         <span class="visit-card-icon">🌿</span>
-        <div style="flex:1"><div class="visit-card-title">${nome}</div><div class="visit-card-date">${data}${v.Ore_Visita ? ' · '+v.Ore_Visita+'h' : ''}</div></div>
+        <div style="flex:1"><div class="visit-card-title">${nome}</div><div class="visit-card-date">${data}${v.Ore_Visita ? ' · '+v.Ore_Visita+'h' : ''}${v.InPosta ? ' · 📧 in posta il ' + new Date(v.InPosta).toLocaleDateString('it-IT') : ''}</div></div>
       </div>
       ${v.Note_visita ? `<div style="font-size:0.82rem; color:var(--text-mid); margin-top:8px">${v.Note_visita}</div>` : ''}
       ${ops.length ? `<div class="visit-ops">${ops.map(o => `<span class="op-tag ${isSi(o.Flag_prato)?'prato':''}">${o.Tipo_operazione}${o.Descrizione?' – '+o.Descrizione:''}</span>`).join('')}</div>` : ''}
       <div style="display:flex; gap:6px; margin-top:10px; padding-top:10px; border-top:1px solid var(--green-mist)">
-        <button class="btn btn-primary btn-sm" style="flex:1" onclick="apriRapportino('${perOnclick(v.VisitaID)}')">📄 Rapportino</button>
-        <button class="btn btn-secondary btn-sm" style="flex:1" onclick="openModificaVisita('${perOnclick(v.VisitaID)}')">✏️ Modifica</button>
+        <button class="btn btn-secondary btn-sm" style="flex:1" onclick="openModificaVisita('${perOnclick(v.VisitaID)}')">✏️ Apri</button>
         <button class="btn btn-danger btn-sm" onclick="eliminaVisita('${perOnclick(v.VisitaID)}')">🗑</button>
       </div>
     </div>`;
@@ -1883,6 +1920,12 @@ function formattaEuro(n) {
   return isNaN(v) ? '' : v.toFixed(2).replace('.', ',') + ' €';
 }
 
+// Le quantità si scrivono come si scrivono in italiano: 11,5 e non 11.5.
+function formattaQuantita(v) {
+  const n = parseFloat(v);
+  return isNaN(n) ? '' : String(n).replace('.', ',');
+}
+
 function formattaOre(n) {
   return (Number(n) || 0).toFixed(2).replace('.', ',') + ' h';
 }
@@ -1938,6 +1981,7 @@ function aggiornaTotaleOre() {
 function aggiungiFascia() {
   pendingFasce.push(fasciaProposta(document.getElementById('f-visita-cliente').value));
   renderFasce();
+  aggiornaConto();
 }
 
 // Toccare una fascia proposta significa farla propria: da lì in poi è un dato,
@@ -1957,17 +2001,20 @@ function modificaFascia(i, campo, valore) {
     riga.querySelector('button[title="Conferma"]')?.remove();
   }
   aggiornaTotaleOre();
+  aggiornaConto();
 }
 
 function confermaFascia(i) {
   if (!pendingFasce[i]) return;
   pendingFasce[i].proposta = false;
   renderFasce();
+  aggiornaConto();
 }
 
 function togliFascia(i) {
   pendingFasce.splice(i, 1);
   renderFasce();
+  aggiornaConto();
 }
 
 // ── OPERAZIONI ──
@@ -2059,6 +2106,7 @@ function spuntaOperazione(tipoID) {
     pendingOperazioni = pendingOperazioni.filter(o => o.TipoID !== tipoID);
   } else {
     pendingOperazioni.push({
+      OperazioneID: generateID(),
       TipoID: tipo.TipoID,
       Tipo_operazione: tipo.Nome,
       Descrizione: '',
@@ -2071,12 +2119,17 @@ function spuntaOperazione(tipoID) {
     });
   }
   renderOperazioni();
+  aggiornaConto();
 }
 
-// Non ridisegno niente: il valore è già nel campo, e rifare la lista farebbe
+// Il conto segue: cambiare il concime o i chili cambia una sua riga, e rifare la lista farebbe
 // perdere il fuoco a chi sta scrivendo.
 function modificaOperazione(i, campo, valore) {
-  if (pendingOperazioni[i]) pendingOperazioni[i][campo] = valore;
+  if (!pendingOperazioni[i]) return;
+  pendingOperazioni[i][campo] = valore;
+  // Non ridisegno l'elenco delle operazioni: il valore è già nel campo in cui
+  // si sta scrivendo. Il conto sì, che sta altrove e nessuno ci ha le dita.
+  aggiornaConto();
 }
 
 function renderOperazioniLibere() {
@@ -2098,16 +2151,18 @@ function aggiungiOperazioneLibera() {
   const campo = document.getElementById('f-op-libera');
   const testo = campo.value.trim();
   if (!testo) return;
-  pendingOperazioni.push({ TipoID: '', Tipo_operazione: testo, Descrizione: '',
+  pendingOperazioni.push({ OperazioneID: generateID(), TipoID: '', Tipo_operazione: testo, Descrizione: '',
     Flag_prato: '', Flag_siepe: '', ConcimeID: '', SementeID: '', FitofarmacaID: '',
     Quantita: '', Unita: '' });
   campo.value = '';
   renderOperazioni();
+  aggiornaConto();
 }
 
 function togliOperazione(i) {
   pendingOperazioni.splice(i, 1);
   renderOperazioni();
+  aggiornaConto();
 }
 
 // Quello che alla visita precedente avevi previsto di fare. Lo mostro e basta,
@@ -2132,12 +2187,15 @@ function openNuovaVisita() {
   oreEreditate = '';
   document.getElementById('drawer-visita-titolo').textContent = 'Nuova Visita';
   bloccaSalvataggio(false);
-  ['f-visita-note', 'f-visita-prossimo', 'f-visita-mese', 'f-visita-anno', 'f-op-libera']
+  ['f-visita-note', 'f-visita-prossimo', 'f-visita-mese', 'f-visita-anno', 'f-op-libera', 'f-conto-libera']
     .forEach(id => { document.getElementById(id).value = ''; });
   document.getElementById('f-visita-data').value = new Date().toISOString().split('T')[0];
   clearVisitaCliente();
+  contoCorrente = [];
+  popolaVociConto();
   renderFasce();
   renderOperazioni();
+  aggiornaConto();
   document.getElementById('overlay-visita').classList.add('open');
 }
 
@@ -2155,13 +2213,17 @@ function openModificaVisita(vid) {
   document.getElementById('f-visita-mese').value = v.Mese_prossimo_intervento ? String(v.Mese_prossimo_intervento).padStart(2, '0') : '';
   document.getElementById('f-visita-anno').value = v.Anno_prossimo_intervento || '';
   document.getElementById('f-op-libera').value = '';
+  document.getElementById('f-conto-libera').value = '';
   clearVisitaCliente();
   const c = DB.clienti.find(x => x.ClienteID == v.ClienteID);
   if (c) selectVisitaCliente(c.ClienteID, c.Cliente);
   document.getElementById('drawer-visita-titolo').textContent = 'Modifica Visita';
   bloccaSalvataggio(false);
+  contoCorrente = Array.isArray(v.Conto) ? v.Conto.map(r => ({ ...r })) : [];
+  popolaVociConto();
   renderFasce();
   renderOperazioni();
+  aggiornaConto();
   document.getElementById('overlay-visita').classList.add('open');
 }
 
@@ -2205,7 +2267,9 @@ function bloccaSalvataggio(attivo) {
   const btn = document.getElementById('btn-salva-visita');
   if (!btn) return;
   btn.disabled = attivo;
-  btn.textContent = attivo ? '⏳ Salvataggio...' : '💾 Salva Visita';
+  btn.textContent = attivo ? '⏳ Salvataggio...' : '💾 Salva';
+  const invia = document.getElementById('btn-salva-invia');
+  if (invia) invia.disabled = attivo;
 }
 
 // L'azoto e il potassio si calcolano al salvataggio, quando si sa anche quanti
@@ -2229,7 +2293,7 @@ function completaOperazione(op, visitaID, mq) {
     K_g_m2: sulPrato ? (kTot / mq).toFixed(2) : 0 };
 }
 
-async function saveVisita() {
+async function saveVisita({ invia = false } = {}) {
   if (salvataggioInCorso) return;
   const cid = document.getElementById('f-visita-cliente').value;
   const data = document.getElementById('f-visita-data').value;
@@ -2248,9 +2312,9 @@ async function saveVisita() {
   const fasce = pendingFasce.map(({ Inizio, Fine, Persone }) => ({ Inizio, Fine, Persone: Number(Persone) || 1 }));
   const precedente = DB.visite.find(v => v.VisitaID == visitaID);
   const visita = {
-    // Si riparte da quello che la visita aveva: questo modulo non conosce
-    // tutti i suoi campi — il conto del rapportino, per esempio, si compila
-    // altrove — e ricostruirla da zero cancellerebbe quello che non vede.
+    // Si riparte da quello che la visita aveva: ricostruirla da zero
+    // cancellerebbe i campi che questo modulo non conosce. È già successo col
+    // conto, quando si compilava altrove.
     ...(precedente || {}),
     VisitaID: visitaID,
     Data: data,
@@ -2263,6 +2327,7 @@ async function saveVisita() {
     Prossimo_intervento: document.getElementById('f-visita-prossimo').value.trim(),
     Mese_prossimo_intervento: document.getElementById('f-visita-mese').value,
     Anno_prossimo_intervento: document.getElementById('f-visita-anno').value,
+    Conto: contoCorrente.map(r => ({ ...r })),
   };
 
   bloccaSalvataggio(true);
@@ -2275,7 +2340,18 @@ async function saveVisita() {
     // lista spariscono da sole, senza doverle inseguire una per una.
     DB.operazioni = DB.operazioni.filter(o => o.VisitaID != visitaID).concat(operazioni);
     if (!await salvaDB()) return;
-    showToast(editVisitaID ? '✅ Visita aggiornata' : '✅ Visita salvata');
+    if (invia) {
+      // Prima si salva, poi si manda: se la posta non si apre il lavoro è
+      // comunque al sicuro, e non si resta con una mail partita e una visita
+      // mai registrata.
+      if (inviaRapportino(visita)) {
+        visita.InPosta = new Date().toISOString();
+        await salvaDB({ conta: false });
+        showToast('📧 Rapportino passato alla posta');
+      }
+    } else {
+      showToast(editVisitaID ? '✅ Visita aggiornata' : '✅ Visita salvata');
+    }
     closeDrawer('overlay-visita');
     editVisitaID = null;
     updateStats();
@@ -2307,20 +2383,20 @@ async function eliminaVisita(vid) {
   }
 }
 
-// ── RAPPORTINO DI FINE LAVORO ──
-// Il conto non si scrive da zero: nasce già compilato da quello che la visita
-// sa — la manodopera dalle fasce orarie, i materiali dalle operazioni — e
-// resta da correggere. È il lavoro che a fine giornata si faceva a mente.
-let rapportinoVisitaID = null;
+// ── IL CONTO DI FINE LAVORO ──
+// Sta nella stessa schermata della visita, in fondo. Prima era una pagina a
+// parte e per mostrarti il conto ti ripeteva ore e operazioni in sola lettura:
+// le stesse informazioni due volte, una da compilare e una da rileggere.
+// Unite, ogni cosa compare una volta e il conto si aggiorna mentre scrivi.
 let contoCorrente = [];
-let salvaContoTimer = null;
 
-// Le righe che il conto avrebbe se nascesse adesso dai dati della visita.
-function righeAutomatiche(visita) {
+// Le righe che il conto avrebbe se nascesse adesso da queste ore e da queste
+// operazioni. Lavora su quello che hai davanti, salvato o no.
+function righeAutomatiche(fasce, operazioni) {
   const righe = [];
   const voceDi = id => DB.voci.find(v => v.VoceID === id);
 
-  const ore = oreTotali(visita.Fasce);
+  const ore = oreTotali(fasce);
   if (ore > 0) {
     const voce = voceDi('manodopera');
     righe.push({ Chiave: 'manodopera', VoceID: 'manodopera',
@@ -2338,7 +2414,7 @@ function righeAutomatiche(visita) {
       Quantita: 1, Prezzo: trasferimento.Prezzo ?? '' });
   }
 
-  DB.operazioni.filter(o => o.VisitaID == visita.VisitaID).forEach(o => {
+  (operazioni || []).forEach(o => {
     const tipo = tipoDi(o.TipoID);
     if (!tipo?.VoceID) return;              // potature e tagli sono manodopera
     const voce = voceDi(tipo.VoceID);
@@ -2356,15 +2432,15 @@ function righeAutomatiche(visita) {
   return righe;
 }
 
-// Riallinea il conto già salvato con quello che la visita dice adesso: le
-// righe nate da ore e operazioni seguono i dati, quelle aggiunte a mano
-// restano dove sono, e un prezzo già scritto non viene mai risovrascritto dal
-// listino — se l'hai corretto tu, vale il tuo.
-function costruisciConto(visita) {
-  const salvate = Array.isArray(visita.Conto) ? visita.Conto : [];
+// Riallinea un conto con quello che ore e operazioni dicono adesso: le righe
+// nate da lì seguono i dati, quelle aggiunte a mano restano dove sono, e un
+// prezzo già scritto non viene mai risovrascritto dal listino — se l'hai
+// corretto tu, vale il tuo.
+function costruisciConto(precedenti, fasce, operazioni) {
+  const salvate = Array.isArray(precedenti) ? precedenti : [];
   const manuali = salvate.filter(r => !r.Chiave);
   const perChiave = new Map(salvate.filter(r => r.Chiave).map(r => [r.Chiave, r]));
-  const automatiche = righeAutomatiche(visita).map(nuova => {
+  const automatiche = righeAutomatiche(fasce, operazioni).map(nuova => {
     const vecchia = perChiave.get(nuova.Chiave);
     const prezzoScritto = vecchia && vecchia.Prezzo !== '' && vecchia.Prezzo != null;
     return prezzoScritto ? { ...nuova, Prezzo: vecchia.Prezzo } : nuova;
@@ -2381,131 +2457,77 @@ function totaleConto(righe) {
   return righe.reduce((s, r) => s + (importoRiga(r) || 0), 0);
 }
 
-function apriRapportino(vid) {
-  rapportinoVisitaID = vid;
-  navTo('rapportino');
-}
-
-function renderRapportino() {
-  const el = document.getElementById('rapportino-corpo');
-  if (!el) return;
-  const v = DB.visite.find(x => x.VisitaID == rapportinoVisitaID);
-  if (!v) { el.innerHTML = '<div class="empty"><div class="empty-text">Visita non trovata</div></div>'; return; }
-  const c = DB.clienti.find(x => x.ClienteID == v.ClienteID);
-  contoCorrente = costruisciConto(v);
-
-  const data = v.Data ? new Date(v.Data).toLocaleDateString('it-IT',
-    { weekday:'long', day:'numeric', month:'long', year:'numeric' }) : '';
-  const fasce = (v.Fasce || []);
-  const ops = DB.operazioni.filter(o => o.VisitaID == v.VisitaID);
-
-  const righeOre = fasce.length
-    ? fasce.map(f => `<div class="rapp-riga">
-        <span>${perValore(f.Inizio)} – ${perValore(f.Fine)}</span>
-        <span style="color:var(--text-light)">${f.Persone || 1} pers.</span>
-        <span style="text-align:right;font-weight:600">${formattaOre(oreFascia(f))}</span>
-      </div>`).join('') + `<div class="rapp-riga totale">
-        <span style="flex:1">Totale</span><span>${formattaOre(oreTotali(fasce))}</span></div>`
-    : `<div class="dati-nota">${v.Ore_Visita ? formattaOre(v.Ore_Visita) + ' (registrate senza fasce orarie)' : 'Nessuna ora registrata'}</div>`;
-
-  const righeLavoro = ops.length
-    ? ops.map(o => `<div class="rapp-riga">
-        <span style="flex:1">${perValore(o.Tipo_operazione)}${o.Descrizione ? ' – ' + perValore(o.Descrizione) : ''}</span>
-        <span style="color:var(--text-light)">${o.Quantita ? perValore(o.Quantita) + ' ' + perValore(o.Unita) : ''}</span>
-      </div>`).join('')
-    : '<div class="dati-nota">Nessuna operazione registrata</div>';
-
-  el.innerHTML = `
-    <div class="rapp-testa">
-      <div class="rapp-cliente">${perValore(c?.Cliente || '—')}</div>
-      <div class="rapp-luogo">${perValore([c?.Indirizzo, c?.Citta].filter(Boolean).join(', '))}</div>
-      <div class="rapp-data">${data}</div>
-    </div>
-    <div class="rapporto-sez">Ore lavorate</div>
-    ${righeOre}
-    <div class="rapporto-sez">Lavoro svolto</div>
-    ${righeLavoro}
-    <div class="rapporto-sez">Conto</div>
-    <div id="conto-righe"></div>
-    <div class="form-group" style="margin-top:12px">
-      <select class="form-control" id="f-conto-voce" onchange="aggiungiRigaDaVoce(this.value); this.value='';">
-        <option value="">+ Aggiungi una voce…</option>
-        ${DB.voci.map(vo => `<option value="${perValore(vo.VoceID)}">${perValore(vo.Nome)}</option>`).join('')}
-      </select>
-      <input type="text" class="form-control" id="f-conto-libera" style="margin-top:8px"
-             placeholder="+ Voce non in elenco…"
-             onkeydown="if(event.key==='Enter'){event.preventDefault();aggiungiRigaLibera();}"
-             onblur="aggiungiRigaLibera()">
-    </div>
-    <button class="btn btn-secondary" onclick="navTo('visite')" style="margin-top:8px">← Torna al registro</button>
-    <div style="height:12px"></div>`;
+// Da chiamare dopo ogni modifica alle ore o alle operazioni: il conto le segue
+// mentre compili, così a fine giornata è già lì e non va aperto altrove.
+function aggiornaConto() {
+  contoCorrente = costruisciConto(contoCorrente, pendingFasce, pendingOperazioni);
   renderContoRighe();
 }
 
 function renderContoRighe() {
   const el = document.getElementById('conto-righe');
   if (!el) return;
-  if (!contoCorrente.length) {
-    el.innerHTML = '<div class="dati-nota">Nessuna riga. Le ore e i materiali registrati nella visita compaiono qui da soli.</div>';
-    return;
-  }
-  el.innerHTML = contoCorrente.map((r, i) => {
-    const importo = importoRiga(r);
-    return `<div class="conto-riga">
-      <div class="conto-voce">
-        <span style="flex:1">${perValore(r.Voce)}</span>
-        <button type="button" class="via" onclick="togliRigaConto(${i})" title="Togli">✕</button>
-      </div>
-      <div class="conto-numeri">
-        <input type="number" step="any" min="0" value="${perValore(r.Quantita)}"
-               oninput="modificaRigaConto(${i}, 'Quantita', this.value)" aria-label="quantità">
-        <span class="unita">${perValore(r.Unita)}</span>
-        <span class="per">×</span>
-        <input type="number" step="any" min="0" placeholder="€" value="${perValore(r.Prezzo)}"
-               oninput="modificaRigaConto(${i}, 'Prezzo', this.value)" aria-label="prezzo unitario">
-        <span class="conto-importo">${importo == null ? '—' : formattaEuro(importo)}</span>
-      </div>
-    </div>`;
-  }).join('');
+  el.innerHTML = contoCorrente.length
+    ? contoCorrente.map((r, i) => {
+        const importo = importoRiga(r);
+        return `<div class="conto-riga">
+          <div class="conto-voce">
+            <span style="flex:1">${perValore(r.Voce)}</span>
+            <button type="button" class="via" onclick="togliRigaConto(${i})" title="Togli">✕</button>
+          </div>
+          <div class="conto-numeri">
+            <input type="number" step="any" min="0" value="${perValore(r.Quantita)}"
+                   oninput="modificaRigaConto(${i}, 'Quantita', this.value)" aria-label="quantità">
+            <span class="unita">${perValore(r.Unita)}</span>
+            <span class="per">×</span>
+            <input type="number" step="any" min="0" placeholder="€" value="${perValore(r.Prezzo)}"
+                   oninput="modificaRigaConto(${i}, 'Prezzo', this.value)" aria-label="prezzo unitario">
+            <span class="conto-importo">${importo == null ? '—' : formattaEuro(importo)}</span>
+          </div>
+        </div>`;
+      }).join('')
+    : '<div class="dati-nota">Le ore e i materiali che registri qui sopra compaiono da soli.</div>';
   aggiornaTotaleConto();
 }
 
 function aggiornaTotaleConto() {
-  const el = document.getElementById('conto-righe');
+  const el = document.getElementById('conto-totale-wrap');
   if (!el) return;
   const senzaPrezzo = contoCorrente.filter(r => importoRiga(r) == null).length;
-  const vecchio = document.getElementById('conto-totale');
-  if (vecchio) vecchio.remove();
-  // Il totale dice anche quante righe non ci sono dentro: un totale che
-  // sembra completo mentre gli manca lo smaltimento è peggio di nessun totale.
-  el.insertAdjacentHTML('afterend', `<div id="conto-totale" class="conto-totale">
+  // Il totale dice anche quante righe non ci sono dentro: un totale che sembra
+  // completo mentre gli manca lo smaltimento è peggio di nessun totale.
+  el.innerHTML = `<div id="conto-totale" class="conto-totale">
       <div><span>Totale</span><span>${formattaEuro(totaleConto(contoCorrente))}</span></div>
       ${senzaPrezzo ? `<div class="conto-avviso">${senzaPrezzo} ${senzaPrezzo === 1 ? 'riga è' : 'righe sono'} senza prezzo e non ${senzaPrezzo === 1 ? 'entra' : 'entrano'} nel totale</div>` : ''}
-    </div>`);
+    </div>`;
 }
 
+// Non ridisegno le righe: si sta scrivendo dentro un campo. Aggiorno solo
+// l'importo di questa riga e il totale.
 function modificaRigaConto(i, campo, valore) {
   const r = contoCorrente[i];
   if (!r) return;
   r[campo] = valore;
-  // Non ridisegno le righe: si sta scrivendo dentro un campo. Aggiorno solo
-  // l'importo di questa riga e il totale.
   const riga = document.querySelectorAll('#conto-righe .conto-riga')[i];
   const importo = importoRiga(r);
   const cella = riga?.querySelector('.conto-importo');
   if (cella) cella.textContent = importo == null ? '—' : formattaEuro(importo);
   aggiornaTotaleConto();
-  salvaContoDifferito();
+}
+
+function popolaVociConto() {
+  const sel = document.getElementById('f-conto-voce');
+  if (!sel) return;
+  sel.innerHTML = '<option value="">+ Aggiungi una voce…</option>' +
+    DB.voci.map(v => `<option value="${perValore(v.VoceID)}">${perValore(v.Nome)}</option>`).join('');
 }
 
 function aggiungiRigaDaVoce(voceID) {
-  if (!voceID) return;
   const vo = DB.voci.find(x => x.VoceID === voceID);
   if (!vo) return;
   contoCorrente.push({ VoceID: vo.VoceID, Voce: vo.Nome, Unita: vo.Unita || '',
-    Quantita: '', Prezzo: vo.Prezzo ?? '' });
+    Quantita: isSi(vo.ACorpo) ? 1 : '', Prezzo: vo.Prezzo ?? '' });
   renderContoRighe();
-  salvaContoDifferito();
 }
 
 function aggiungiRigaLibera() {
@@ -2516,27 +2538,106 @@ function aggiungiRigaLibera() {
   contoCorrente.push({ VoceID: '', Voce: testo, Unita: '', Quantita: '', Prezzo: '' });
   campo.value = '';
   renderContoRighe();
-  salvaContoDifferito();
 }
 
 function togliRigaConto(i) {
   contoCorrente.splice(i, 1);
   renderContoRighe();
-  salvaContoDifferito();
 }
 
-// Il conto si salva da solo poco dopo l'ultima modifica: non c'è un bottone
-// da ricordarsi di premere, e non si scrive su disco a ogni cifra battuta.
-function salvaContoDifferito() {
-  clearTimeout(salvaContoTimer);
-  salvaContoTimer = setTimeout(salvaConto, 600);
+// ── IL RAPPORTINO DA MANDARE ──
+// Testo semplice, una voce per riga: nessun allineamento a colonne, perché le
+// app di posta usano caratteri a larghezza variabile e le colonne fatte con
+// gli spazi arrivano storte. Meglio leggibile che incolonnato.
+function testoRapportino(visita) {
+  const c = DB.clienti.find(x => x.ClienteID == visita.ClienteID);
+  const ops = DB.operazioni.filter(o => o.VisitaID == visita.VisitaID);
+  const conto = Array.isArray(visita.Conto) ? visita.Conto : [];
+  const mostraImporti = isSi(DB.impostazioni?.MostraImporti);
+  const righe = [];
+
+  righe.push('RAPPORTINO DI FINE LAVORO');
+  righe.push((c?.Cliente || '—') + (c?.Indirizzo || c?.Citta
+    ? ' — ' + [c.Indirizzo, c.Citta].filter(Boolean).join(', ') : ''));
+  if (visita.Data) {
+    const d = new Date(visita.Data).toLocaleDateString('it-IT',
+      { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' });
+    righe.push(d.charAt(0).toUpperCase() + d.slice(1));
+  }
+
+  const fasce = visita.Fasce || [];
+  if (fasce.length || visita.Ore_Visita) {
+    righe.push('', 'MANODOPERA');
+    fasce.forEach(f => righe.push(
+      `  ${f.Inizio} – ${f.Fine}, ${f.Persone || 1} ${(f.Persone || 1) === 1 ? 'persona' : 'persone'} — ${formattaOre(oreFascia(f))}`));
+    righe.push(`  Totale: ${formattaOre(fasce.length ? oreTotali(fasce) : visita.Ore_Visita)}`);
+  }
+
+  if (ops.length) {
+    righe.push('', 'LAVORO SVOLTO');
+    ops.forEach(o => righe.push('  ' + o.Tipo_operazione
+      + (o.Descrizione ? ' – ' + o.Descrizione : '')
+      + (o.Quantita ? ` — ${formattaQuantita(o.Quantita)} ${o.Unita || ''}`.trimEnd() : '')));
+  }
+
+  if (mostraImporti && conto.length) {
+    righe.push('', 'CONTO');
+    conto.forEach(r => {
+      const importo = importoRiga(r);
+      const quantita = formattaQuantita(r.Quantita);
+      const misurabile = quantita && (r.Unita || parseFloat(r.Quantita) !== 1);
+      const conUnita = misurabile ? quantita + (r.Unita ? ' ' + r.Unita : '') : '';
+      if (importo == null) {
+        // Dire quanto manca è più utile che tacere: chi legge sa cosa deve
+        // quantificare, e non deve richiamarti per chiederlo.
+        righe.push('  ' + r.Voce + ' — ' + [conUnita, 'importo da definire'].filter(Boolean).join(', '));
+      } else {
+        // "1 × 45,00 €" non dice niente più di "45,00 €"
+        righe.push('  ' + r.Voce + ' — '
+          + (conUnita ? `${conUnita} × ${formattaEuro(r.Prezzo)} = ` : '')
+          + formattaEuro(importo));
+      }
+    });
+    const senzaPrezzo = conto.filter(r => importoRiga(r) == null).length;
+    righe.push(`  TOTALE: ${formattaEuro(totaleConto(conto))}`);
+    // Se qualcosa non è entrato nel totale, va detto a chi lo legge: è lui che
+    // poi fattura, e un totale parziale spacciato per completo diventa il suo errore.
+    if (senzaPrezzo) righe.push(`  (${senzaPrezzo} ${senzaPrezzo === 1 ? 'voce è rimasta' : 'voci sono rimaste'} senza importo)`);
+  }
+
+  if (visita.Note_visita) righe.push('', 'NOTE', '  ' + visita.Note_visita);
+
+  if (visita.Prossimo_intervento || visita.Mese_prossimo_intervento) {
+    righe.push('', 'PROSSIMO INTERVENTO', '  ' + [visita.Prossimo_intervento,
+      visita.Mese_prossimo_intervento
+        ? meseNomeLungo(visita.Mese_prossimo_intervento) + ' ' + (visita.Anno_prossimo_intervento || '')
+        : ''].filter(Boolean).join(' — ').trim());
+  }
+
+  const firma = DB.impostazioni?.NomeMittente;
+  if (firma) righe.push('', firma);
+  return righe.join('\n');
 }
 
-async function salvaConto() {
-  const v = DB.visite.find(x => x.VisitaID == rapportinoVisitaID);
-  if (!v) return;
-  v.Conto = contoCorrente.map(r => ({ ...r }));
-  await salvaDB();
+function oggettoRapportino(visita) {
+  const c = DB.clienti.find(x => x.ClienteID == visita.ClienteID);
+  const data = visita.Data ? new Date(visita.Data).toLocaleDateString('it-IT') : '';
+  return `Rapportino ${data} — ${c?.Cliente || 'cliente'}`;
+}
+
+// Apre l'app di posta con destinatario, oggetto e testo già scritti. Non manda
+// niente da sé: l'app non ha un server e non deve averlo. L'ultimo tocco è tuo.
+function inviaRapportino(visita) {
+  const destinatario = (DB.impostazioni?.EmailAzienda || '').trim();
+  if (!destinatario) {
+    showToast('⚠️ Manca l\'indirizzo dell\'azienda: impostalo in ⚙️ Dati');
+    return false;
+  }
+  const url = 'mailto:' + encodeURIComponent(destinatario)
+    + '?subject=' + encodeURIComponent(oggettoRapportino(visita))
+    + '&body=' + encodeURIComponent(testoRapportino(visita));
+  location.href = url;
+  return true;
 }
 
 // ── DATI, BACKUP, ARCHIVI ──
@@ -2817,6 +2918,16 @@ async function esportaCSV(tipo) {
 }
 
 // ── PAGINA DATI ──
+let salvaImpostazioneTimer = null;
+
+// Le impostazioni si salvano da sole poco dopo l'ultima battuta: non c'è un
+// bottone da ricordarsi, e non si scrive su disco a ogni lettera dell'indirizzo.
+function salvaImpostazione(chiave, valore) {
+  DB.impostazioni = { ...DB.impostazioni, [chiave]: valore };
+  clearTimeout(salvaImpostazioneTimer);
+  salvaImpostazioneTimer = setTimeout(() => salvaDB({ conta: false }), 600);
+}
+
 function renderDati() {
   const stato = document.getElementById('stato-backup');
   if (stato) {
@@ -2824,6 +2935,13 @@ function renderDati() {
     stato.textContent = testoUltimoBackup() +
       (modifiche ? ` · ${modifiche} modifiche da allora` : ' · nessuna modifica da allora');
   }
+  const imp = DB.impostazioni || IMPOSTAZIONI_DEFAULT;
+  const email = document.getElementById('f-imp-email');
+  if (email) email.value = imp.EmailAzienda || '';
+  const firma = document.getElementById('f-imp-firma');
+  if (firma) firma.value = imp.NomeMittente || '';
+  const importi = document.getElementById('f-imp-importi');
+  if (importi) importi.classList.toggle('on', isSi(imp.MostraImporti));
   renderArchivi();
   renderDiagnostica();
 }
@@ -3045,6 +3163,14 @@ function generateID() {
 
 function meseNome(m) {
   const mesi = ['','Gen','Feb','Mar','Apr','Mag','Giu','Lug','Ago','Set','Ott','Nov','Dic'];
+  return mesi[parseInt(m)] || m;
+}
+
+// Per esteso: un'abbreviazione va bene in un elenco stretto, non in un
+// documento che finisce in una mail.
+function meseNomeLungo(m) {
+  const mesi = ['','Gennaio','Febbraio','Marzo','Aprile','Maggio','Giugno',
+    'Luglio','Agosto','Settembre','Ottobre','Novembre','Dicembre'];
   return mesi[parseInt(m)] || m;
 }
 

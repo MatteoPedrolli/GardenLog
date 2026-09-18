@@ -85,6 +85,12 @@ scrive — si aggiorna solo quello che cambia, o il campo sparisce da sotto le d
 
 ## Il rapportino e il conto
 
+**Visita e rapportino sono la stessa schermata.** Il conto sta in fondo, dopo
+le operazioni, e si compila mentre registri. Erano due: per mostrare il conto,
+il rapportino ti ripeteva ore e operazioni in sola lettura — le stesse
+informazioni due volte, una da compilare e una da rileggere. Chi le separa di
+nuovo reintroduce quella copia.
+
 Il conto di fine lavoro **nasce già compilato**: la manodopera dalle fasce
 orarie, i materiali dalle operazioni che hanno una voce collegata. Chi lo apre
 corregge, non scrive da zero.
@@ -112,6 +118,16 @@ fitosanitario si fattura così: nel conto vale 1 × l'importo, mentre prodotto e
 litri restano sull'operazione, dove servono al registro dei trattamenti. È la
 ragione per cui agronomia e conto sono due elenchi distinti sulla stessa
 visita: lo stesso fatto si misura in modi diversi a seconda di chi lo legge.
+
+**L'invio non manda niente.** `inviaRapportino()` apre l'app di posta con
+destinatario, oggetto e testo già scritti: l'ultimo tocco è di chi usa l'app, e
+non serve un server. Per questo la visita viene segnata come *in posta* e non
+come *inviata* — l'app sa di averla passata alla posta, non sa se è partita.
+Prima si salva e poi si apre la posta, o un invio fallito lascerebbe una mail
+mandata e una visita mai registrata.
+
+Nel testo della mail niente colonne allineate con gli spazi: le app di posta
+usano caratteri a larghezza variabile e arrivano storte. Una voce per riga.
 
 ## Cose da sapere prima di metterci mano
 
