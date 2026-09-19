@@ -264,6 +264,38 @@ ha scartato non ricompare al giro dopo. Sul telefono il mese del prossimo interv
 è il valore di una select (`"03"`, non `"marzo"`): passa da `nomeMese()` prima di
 andare a schermo.
 
+## L'archivio: prima il gestionale
+
+Un lavoro archiviato **si apre con un clic**, e lì si guarda il conto senza
+passare dalla stampa. La schermata mostra anche ore e operazioni, che sul foglio
+del cliente non vanno: qui servono, perché sono il perché di quel totale ed è la
+domanda che arriva quando qualcuno telefona.
+
+**Non si corregge.** Per cambiare un lavoro chiuso si rimanda il rapportino
+corretto dal cantiere, e torna fra quelli in arrivo con la sua revisione nuova.
+Una modifica fatta solo in ufficio si perderebbe al primo reinvio.
+
+**A sinistra sta il gestionale**: quanti lavori sono da fatturare e quanto fanno,
+quanti sono fatturati, e il totale. Resta lì mentre si scorre l'elenco, perché è
+la domanda che in ufficio ci si fa per prima e un numero in fondo alla pagina non
+risponde a nessuno. Raccogliendo **per cliente**, ogni gruppo dice quanto gli si
+deve ancora: è la riga che serve prima di alzare il telefono.
+
+**L'invio non manda niente**, come sul telefono prima di lui: `inviaConto()` apre
+la posta con destinatario — preso dall'anagrafica, ed è il motivo per cui le mail
+stanno lì — oggetto e conto già scritti. Il lavoro si segna *in posta* e non
+*inviato*: l'app sa di averlo passato alla posta, non sa se è partito. E si segna
+prima di aprirla, o una mail mandata resterebbe senza traccia in archivio. Senza
+email il conto si manda lo stesso, con il destinatario da scrivere a mano, ma
+l'app lo dice.
+
+Nel testo della mail niente colonne allineate con gli spazi: le app di posta usano
+caratteri a larghezza variabile e arrivano storte. Una voce per riga.
+
+`apriPosta()` è l'unico punto che porta fuori dall'app, e sta da solo per lo stesso
+motivo per cui ci sta `usaCartella()`: aprire la posta è una cosa che un test non
+può fare.
+
 ## Il foglio che va al cliente
 
 **Stampa ed esporta PDF sono la stessa cosa.** Nel dialogo di stampa «Salva come

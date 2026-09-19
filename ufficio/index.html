@@ -309,6 +309,31 @@ input.vuoto { background: #fffdf5; border-color: #ecdca8; }
 .sconfina-cart { font-size: 0.68rem; color: var(--earth); }
 .vuoto-mezza { font-size: 0.72rem; color: var(--text-light); text-align: center; padding: 8px 4px; }
 
+/* ── LA COLONNA GESTIONALE DELL'ARCHIVIO ── */
+.elenco-stati { display: flex; flex-direction: column; gap: 6px; }
+.voce-stato {
+  display: grid; grid-template-columns: 1fr auto; gap: 2px 10px; align-items: baseline;
+  background: var(--white); border: 1px solid var(--border); border-radius: var(--radius-sm);
+  padding: 10px 12px; cursor: pointer; font-family: var(--font-body); text-align: left;
+  color: var(--text); transition: all 0.15s; width: 100%;
+}
+.voce-stato:hover { border-color: var(--green-light); }
+.voce-stato.attiva { border-color: var(--green-mid); background: var(--green-mist); }
+.stato-nome { font-size: 0.9rem; font-weight: 500; }
+.stato-conta { font-size: 0.8rem; color: var(--text-light); }
+.stato-somma {
+  grid-column: 1 / -1; font-family: var(--font-display); font-size: 1.1rem; font-weight: 700;
+}
+
+.gruppo-cliente { margin-bottom: 18px; }
+.testa-gruppo {
+  display: flex; align-items: baseline; gap: 12px; flex-wrap: wrap;
+  padding: 0 4px 6px; border-bottom: 1px solid var(--border); margin-bottom: 10px;
+}
+.testa-gruppo .dovuto {
+  margin-left: auto; font-size: 0.82rem; font-weight: 600; color: var(--earth);
+}
+
 /* ── IL FOGLIO DA CONSEGNARE ── */
 /* Un blocco a parte, invisibile a schermo, che esiste solo per la stampa. Non si
    stampa la schermata: i campi da compilare uscirebbero come caselle vuote, e la
@@ -380,6 +405,7 @@ input.vuoto { background: #fffdf5; border-color: #ecdca8; }
     <div class="pagina" id="pagina-lavagna"></div>
     <div class="pagina" id="pagina-clienti"></div>
     <div class="pagina" id="pagina-archivio"></div>
+    <div class="pagina" id="pagina-archiviato"></div>
     <div class="pagina" id="pagina-listino"></div>
     <div class="pagina" id="pagina-impostazioni"></div>
   </main>
@@ -871,6 +897,7 @@ function leggiLavoro(grezzo) {
     revisione: Number(l.revisione) || 1,
     righe: Array.isArray(l.righe) ? l.righe : [],
     rapportino: l.rapportino || null,
+    inPosta: l.inPosta || '',
     stato: l.stato === 'fatturato' ? 'fatturato' : 'da-fatturare',
   };
 }
@@ -1220,7 +1247,8 @@ function vaiA(pagina) {
   if (p) p.classList.add('attiva');
   document.querySelectorAll('.voce-barra').forEach(v => v.classList.remove('attiva'));
   // La schermata di un lavoro vive dentro "In arrivo": è da lì che ci si arriva.
-  const voce = document.getElementById('v-' + (pagina === 'lavoro' ? 'arrivi' : pagina));
+  const dentro = { lavoro: 'arrivi', archiviato: 'archivio' };
+  const voce = document.getElementById('v-' + (dentro[pagina] || pagina));
   if (voce) voce.classList.add('attiva');
   disegna();
 }
@@ -1238,6 +1266,7 @@ function disegna() {
   if (PAGINA === 'lavagna') disegnaLavagna();
   if (PAGINA === 'clienti') disegnaClienti();
   if (PAGINA === 'archivio') disegnaArchivio();
+  if (PAGINA === 'archiviato') disegnaArchiviato();
   if (PAGINA === 'listino') disegnaListino();
   if (PAGINA === 'impostazioni') disegnaImpostazioni();
 }
@@ -1475,6 +1504,9 @@ function tornaAgliArrivi() {
 // ── ARCHIVIO ──
 
 let FILTRO_ARCHIVIO = '';
+let STATO_ARCHIVIO = 'tutti';
+let RACCOLTA_ARCHIVIO = 'data';
+let ARCHIVIATO = null;
 
 function disegnaArchivio() {
   const c = document.getElementById('pagina-archivio');
@@ -1484,74 +1516,290 @@ function disegnaArchivio() {
   html += '<p class="sottotitolo">' + ARCHIVIO.length +
     (ARCHIVIO.length === 1 ? ' lavoro archiviato' : ' lavori archiviati') + '</p>';
 
-  html += '<div class="scheda"><input type="search" placeholder="Cerca un cliente" value="' +
-    perValore(FILTRO_ARCHIVIO) + '" oninput="filtraArchivio(this.value)"></div>';
+  html += '<div class="tavolo">';
 
-  const filtro = FILTRO_ARCHIVIO.trim().toLowerCase();
-  const lavori = ARCHIVIO
-    .filter(l => !filtro || String((l.cliente && l.cliente.nome) || '').toLowerCase().includes(filtro))
-    .sort((a, b) => String(b.data).localeCompare(String(a.data)));
+  // ── a sinistra il gestionale: cosa è ancora da incassare ──
+  // Sta lì e resta lì mentre si scorre l'elenco: è la domanda che in ufficio ci
+  // si fa per prima, e un numero in fondo alla pagina non risponde a nessuno.
+  const conti = {
+    'da-fatturare': ARCHIVIO.filter(l => l.stato === 'da-fatturare'),
+    fatturato: ARCHIVIO.filter(l => l.stato === 'fatturato'),
+    tutti: ARCHIVIO,
+  };
+  const somma = elenco => elenco.reduce((s, l) => s + (Number(l.totale) || 0), 0);
+  const voce = (chiave, etichetta) => {
+    const elenco = conti[chiave];
+    return '<button class="voce-stato' + (STATO_ARCHIVIO === chiave ? ' attiva' : '') +
+      '" onclick="filtraStato(\'' + chiave + '\')">' +
+      '<span class="stato-nome">' + etichetta + '</span>' +
+      '<span class="stato-conta">' + elenco.length + '</span>' +
+      '<span class="stato-somma">' + (formattaEuro(somma(elenco)) || '—') + '</span>' +
+    '</button>';
+  };
 
-  const daFatturare = lavori.filter(l => l.stato === 'da-fatturare');
-  const somma = daFatturare.reduce((s, l) => s + (Number(l.totale) || 0), 0);
-  if (daFatturare.length) {
-    html += '<div class="avvertenza"><strong>' + daFatturare.length +
-      (daFatturare.length === 1 ? ' lavoro' : ' lavori') + ' da fatturare</strong> · ' +
-      formattaEuro(somma) + '</div>';
-  }
+  html += '<section class="coda"><h3 class="titolo-colonna">Gestionale</h3>' +
+    '<div class="elenco-stati">' +
+      voce('da-fatturare', 'Da fatturare') +
+      voce('fatturato', 'Fatturato') +
+      voce('tutti', 'Tutto') +
+    '</div>' +
+    '<h3 class="titolo-colonna" style="margin-top:18px">Raccogli</h3>' +
+    '<div class="elenco-stati">' +
+      '<button class="voce-stato' + (RACCOLTA_ARCHIVIO === 'data' ? ' attiva' : '') +
+        '" onclick="cambiaRaccolta(\'data\')"><span class="stato-nome">Per data</span></button>' +
+      '<button class="voce-stato' + (RACCOLTA_ARCHIVIO === 'cliente' ? ' attiva' : '') +
+        '" onclick="cambiaRaccolta(\'cliente\')"><span class="stato-nome">Per cliente</span></button>' +
+    '</div>' +
+    '<div style="margin-top:14px"><input type="search" placeholder="Cerca un cliente" value="' +
+      perValore(FILTRO_ARCHIVIO) + '" oninput="filtraArchivio(this.value)"></div>' +
+  '</section>';
 
-  html += '<div id="elenco-archivio">';
-  if (!lavori.length) {
-    html += '<div class="scheda"><div class="vuoto-elenco">' +
-      (filtro ? 'Nessun lavoro per questa ricerca.' : 'Niente in archivio.') + '</div></div>';
-  } else {
-    lavori.forEach(l => {
-      const nome = (l.cliente && l.cliente.nome) || 'senza nome';
-      html += '<div class="scheda"><div class="riga-scheda">' +
-        '<span class="nome-cliente">' + perValore(nome) + '</span>' +
-        '<span class="etichetta ' + (l.stato === 'fatturato' ? 'fatturato">fatturato' : 'da-fatturare">da fatturare') + '</span>' +
-        '<span class="meta">' + formattaData(l.data) + '</span>' +
-        '<span class="cifra" style="margin-left:auto;font-family:var(--font-display);font-size:1.15rem;font-weight:700">' +
-          formattaEuro(l.totale) + '</span>' +
-        '</div>' +
-        (l.righeSenzaPrezzo ? '<div class="meta" style="margin-top:6px;color:var(--yellow)">' +
-          l.righeSenzaPrezzo + ' righe fuori dal totale</div>' : '') +
-        '<div class="bottoni">' +
-          '<button class="secondaria piccola" onclick="stampaConto(\'archivio\', \'' + perOnclick(l.id) + '\')">Stampa</button>' +
-          '<button class="secondaria piccola" onclick="cambiaStato(\'' + perOnclick(l.id) + '\', \'' +
-            (l.stato === 'fatturato' ? 'da-fatturare\')">Rimetti da fatturare' : 'fatturato\')">Segna fatturato') +
-          '</button>' +
-        '</div>' +
-      '</div>';
-    });
-  }
+  html += '<section style="flex:1; min-width:0" id="elenco-archivio">' + righeArchivio() + '</section>';
   html += '</div>';
   c.innerHTML = html;
+}
+
+function lavoriArchivio() {
+  const filtro = FILTRO_ARCHIVIO.trim().toLowerCase();
+  return ARCHIVIO
+    .filter(l => STATO_ARCHIVIO === 'tutti' || l.stato === STATO_ARCHIVIO)
+    .filter(l => !filtro || String((l.cliente && l.cliente.nome) || '').toLowerCase().includes(filtro))
+    .sort((a, b) => String(b.data).localeCompare(String(a.data)));
+}
+
+function righeArchivio() {
+  const lavori = lavoriArchivio();
+  if (!lavori.length) {
+    return '<div class="scheda"><div class="vuoto-elenco">' +
+      (FILTRO_ARCHIVIO.trim() || STATO_ARCHIVIO !== 'tutti'
+        ? 'Nessun lavoro con questi filtri.' : 'Niente in archivio.') + '</div></div>';
+  }
+  if (RACCOLTA_ARCHIVIO !== 'cliente') return lavori.map(schedaArchivio).join('');
+
+  // Raccolti per cliente: quanti lavori ha e quanto di suo è ancora da
+  // incassare. È la riga che serve prima di alzare il telefono.
+  const perCliente = new Map();
+  lavori.forEach(l => {
+    const nome = (l.cliente && l.cliente.nome) || 'senza nome';
+    if (!perCliente.has(nome)) perCliente.set(nome, []);
+    perCliente.get(nome).push(l);
+  });
+  return [...perCliente.entries()]
+    .sort((a, b) => a[0].localeCompare(b[0]))
+    .map(([nome, suoi]) => {
+      const aperti = suoi.filter(l => l.stato === 'da-fatturare');
+      const dovuto = aperti.reduce((s, l) => s + (Number(l.totale) || 0), 0);
+      return '<div class="gruppo-cliente">' +
+        '<div class="testa-gruppo">' +
+          '<span class="nome-cliente">' + perValore(nome) + '</span>' +
+          '<span class="meta">' + suoi.length + (suoi.length === 1 ? ' lavoro' : ' lavori') + '</span>' +
+          (aperti.length ? '<span class="dovuto">da incassare ' + formattaEuro(dovuto) + '</span>' : '') +
+        '</div>' +
+        suoi.map(schedaArchivio).join('') +
+      '</div>';
+    }).join('');
+}
+
+function schedaArchivio(l) {
+  const id = perOnclick(l.id);
+  const nome = (l.cliente && l.cliente.nome) || 'senza nome';
+  return '<div class="scheda cliccabile" onclick="apriArchiviato(\'' + id + '\')">' +
+    '<div class="riga-scheda">' +
+      '<span class="nome-cliente">' + perValore(nome) + '</span>' +
+      '<span class="etichetta ' + (l.stato === 'fatturato' ? 'fatturato">fatturato' : 'da-fatturare">da fatturare') + '</span>' +
+      (l.inPosta ? '<span class="meta">✉️ in posta</span>' : '') +
+      '<span class="meta">' + formattaData(l.data) + '</span>' +
+      '<span style="margin-left:auto;font-family:var(--font-display);font-size:1.15rem;font-weight:700">' +
+        formattaEuro(l.totale) + '</span>' +
+    '</div>' +
+    (l.righeSenzaPrezzo ? '<div class="meta" style="margin-top:6px;color:var(--yellow)">' +
+      l.righeSenzaPrezzo + (l.righeSenzaPrezzo === 1 ? ' riga fuori dal totale' : ' righe fuori dal totale') +
+      '</div>' : '') +
+  '</div>';
 }
 
 // Il campo di ricerca non passa da disegnaArchivio: ridisegnare tutto a ogni
 // tasto gli farebbe perdere il fuoco a metà parola.
 function filtraArchivio(valore) {
   FILTRO_ARCHIVIO = valore;
-  const filtro = valore.trim().toLowerCase();
-  const contenitore = document.getElementById('elenco-archivio');
-  if (!contenitore) return;
-  const lavori = ARCHIVIO
-    .filter(l => !filtro || String((l.cliente && l.cliente.nome) || '').toLowerCase().includes(filtro))
-    .sort((a, b) => String(b.data).localeCompare(String(a.data)));
-  contenitore.innerHTML = lavori.length
-    ? lavori.map(l => '<div class="scheda"><div class="riga-scheda">' +
-        '<span class="nome-cliente">' + perValore((l.cliente && l.cliente.nome) || 'senza nome') + '</span>' +
-        '<span class="etichetta ' + (l.stato === 'fatturato' ? 'fatturato">fatturato' : 'da-fatturare">da fatturare') + '</span>' +
-        '<span class="meta">' + formattaData(l.data) + '</span>' +
-        '<span style="margin-left:auto;font-family:var(--font-display);font-size:1.15rem;font-weight:700">' +
-          formattaEuro(l.totale) + '</span></div>' +
-        '<div class="bottoni">' +
-        '<button class="secondaria piccola" onclick="stampaConto(\'archivio\', \'' + perOnclick(l.id) + '\')">Stampa</button>' +
-        '<button class="secondaria piccola" onclick="cambiaStato(\'' + perOnclick(l.id) + '\', \'' +
-          (l.stato === 'fatturato' ? 'da-fatturare\')">Rimetti da fatturare' : 'fatturato\')">Segna fatturato') +
-        '</button></div></div>').join('')
-    : '<div class="scheda"><div class="vuoto-elenco">Nessun lavoro per questa ricerca.</div></div>';
+  const el = document.getElementById('elenco-archivio');
+  if (el) el.innerHTML = righeArchivio();
+}
+
+function filtraStato(stato) {
+  STATO_ARCHIVIO = stato;
+  disegnaArchivio();
+}
+
+function cambiaRaccolta(come) {
+  RACCOLTA_ARCHIVIO = come;
+  disegnaArchivio();
+}
+
+// ── UN LAVORO ARCHIVIATO ──
+// Si guarda, si stampa, si manda. Non si corregge: per cambiare un lavoro chiuso
+// si rimanda il rapportino corretto dal cantiere, e torna fra quelli in arrivo.
+
+function apriArchiviato(id) {
+  const l = ARCHIVIO.find(x => x.id === id);
+  if (!l) { avvisa('Lavoro non trovato: ricontrolla la cartella', true); return; }
+  ARCHIVIATO = id;
+  vaiA('archiviato');
+}
+
+function disegnaArchiviato() {
+  const c = document.getElementById('pagina-archiviato');
+  const l = ARCHIVIO.find(x => x.id === ARCHIVIATO);
+  if (!l) { c.innerHTML = '<div class="vuoto-elenco">Nessun lavoro aperto.</div>'; return; }
+  const r = l.rapportino;
+  const id = perOnclick(l.id);
+  const conteggio = totaleConteggio(l.righe);
+
+  let html = '<h2 class="titolo-pagina">' + perValore((l.cliente && l.cliente.nome) || 'senza nome') + '</h2>';
+  html += '<p class="sottotitolo">' + formattaData(l.data) +
+    ' · ' + (l.stato === 'fatturato' ? 'fatturato' : 'da fatturare') +
+    (l.inPosta ? ' · mandato al cliente il ' + formattaData(l.inPosta) : '') + '</p>';
+
+  html += '<div class="scheda"><div class="titolo-sezione">Conto</div>';
+  html += '<table class="elenco"><thead><tr><th>Voce</th><th class="num">Quantità</th>' +
+    '<th>Unità</th><th class="num">Prezzo</th><th class="num">Importo</th></tr></thead><tbody>';
+  l.righe.forEach(riga => {
+    const imp = importoRiga(riga);
+    html += '<tr><td>' + perValore(riga.voce) + '</td>' +
+      '<td class="num">' + perValore(formattaQuantita(riga.quantita)) + '</td>' +
+      '<td class="meta">' + perValore(riga.unita) + '</td>' +
+      '<td class="num">' + (riga.prezzo === '' || riga.prezzo == null ? '' : formattaEuro(riga.prezzo)) + '</td>' +
+      '<td class="num">' + (imp == null ? '—' : formattaEuro(imp)) + '</td></tr>';
+  });
+  html += '</tbody></table>';
+  html += '<div class="totale"><span class="meta">Totale (IVA inclusa)</span>' +
+    '<span class="cifra">' + formattaEuro(conteggio.totale) + '</span></div>';
+  if (conteggio.escluse) {
+    html += '<div class="avvertenza">' + conteggio.escluse +
+      (conteggio.escluse === 1 ? ' riga è fuori dal totale' : ' righe sono fuori dal totale') + '.</div>';
+  }
+  html += '</div>';
+
+  // Ore e operazioni non vanno sul foglio del cliente, ma qui servono: sono il
+  // perché di quel totale, ed è la domanda che arriva quando qualcuno telefona.
+  if (r) {
+    html += '<div class="scheda"><div class="titolo-sezione">Ore</div>';
+    if (r.ore && r.ore.fasce && r.ore.fasce.length) {
+      html += '<table class="elenco"><tbody>';
+      r.ore.fasce.forEach(f => {
+        html += '<tr><td>' + perValore(f.inizio) + ' – ' + perValore(f.fine) + '</td>' +
+          '<td>' + f.persone + (f.persone === 1 ? ' persona' : ' persone') + '</td>' +
+          '<td class="num">' + formattaOre(f.ore) + '</td></tr>';
+      });
+      html += '</tbody></table>';
+    }
+    html += '<div class="totale"><span class="meta">Totale ore</span><span class="cifra">' +
+      formattaOre(r.ore ? r.ore.totale : 0) + '</span></div></div>';
+
+    if (r.operazioni && r.operazioni.length) {
+      html += '<div class="scheda"><div class="titolo-sezione">Operazioni</div><table class="elenco"><tbody>';
+      r.operazioni.forEach(o => {
+        const dettagli = [];
+        if (o.prodotto) dettagli.push(perValore(o.prodotto));
+        if (o.quantita != null) dettagli.push(formattaQuantita(o.quantita) + ' ' + perValore(o.unita));
+        html += '<tr><td><strong>' + perValore(o.nome) + '</strong>' +
+          (o.descrizione ? '<br><span class="meta">' + perValore(o.descrizione) + '</span>' : '') +
+          '</td><td class="meta">' + dettagli.join(' · ') + '</td></tr>';
+      });
+      html += '</tbody></table></div>';
+    }
+    if (r.note) {
+      html += '<div class="scheda"><div class="titolo-sezione">Note dal cantiere</div><p>' +
+        perValore(r.note) + '</p></div>';
+    }
+  }
+
+  html += '<div class="bottoni">' +
+    '<button class="secondaria" onclick="stampaConto(\'archivio\', \'' + id + '\')">Stampa</button>' +
+    '<button class="secondaria" onclick="inviaConto(\'' + id + '\')">Invia al cliente</button>' +
+    '<button class="' + (l.stato === 'fatturato' ? 'secondaria' : 'principale') +
+      '" onclick="cambiaStato(\'' + id + '\', \'' +
+      (l.stato === 'fatturato' ? 'da-fatturare\')">Rimetti da fatturare' : 'fatturato\')">Segna fatturato') +
+      '</button>' +
+    '<button class="secondaria" onclick="vaiA(\'archivio\')">Torna all\'archivio</button>' +
+  '</div>';
+
+  c.innerHTML = html;
+}
+
+// Niente colonne allineate con gli spazi: le app di posta usano caratteri a
+// larghezza variabile e arrivano storte. Una voce per riga.
+function testoConto(l) {
+  const { totale, escluse } = totaleConteggio(l.righe);
+  const righe = [];
+  righe.push('CONTO DEI LAVORI');
+  righe.push((l.cliente && l.cliente.nome) || '');
+  if (l.data) righe.push(formattaData(l.data));
+  righe.push('');
+  l.righe.forEach(r => {
+    const imp = importoRiga(r);
+    const quantita = formattaQuantita(r.quantita);
+    const misurabile = quantita && (r.unita || parseFloat(r.quantita) !== 1);
+    const conUnita = misurabile ? quantita + (r.unita ? ' ' + r.unita : '') : '';
+    if (imp == null) {
+      // Dire cosa manca è più utile che tacere: chi legge sa cosa resta da
+      // quantificare e non deve telefonare per chiederlo.
+      righe.push('  ' + r.voce + ' — ' + [conUnita, 'importo da definire'].filter(Boolean).join(', '));
+    } else {
+      righe.push('  ' + r.voce + ' — ' +
+        (conUnita ? conUnita + ' × ' + formattaEuro(r.prezzo) + ' = ' : '') + formattaEuro(imp));
+    }
+  });
+  righe.push('');
+  righe.push('  TOTALE (IVA inclusa): ' + formattaEuro(totale));
+  if (escluse) {
+    righe.push('  (' + escluse + (escluse === 1 ? ' voce resta' : ' voci restano') +
+      ' da valutare e non ' + (escluse === 1 ? 'è compresa' : 'sono comprese') + ' nel totale)');
+  }
+  if (IMPOSTAZIONI.nota) righe.push('', IMPOSTAZIONI.nota);
+  if (IMPOSTAZIONI.azienda) righe.push('', IMPOSTAZIONI.azienda);
+  return righe.join('\n');
+}
+
+// L'invio non manda niente: apre la posta con destinatario, oggetto e testo già
+// scritti, e l'ultimo tocco resta di chi la usa. Per questo il lavoro si segna
+// "in posta" e non "inviato" — l'app sa di averlo passato alla posta, non sa se
+// è partito. E si segna prima di aprirla, o una mail mandata resterebbe senza
+// traccia in archivio.
+async function inviaConto(id) {
+  const l = ARCHIVIO.find(x => x.id === id);
+  if (!l) return;
+  const cliente = CLIENTI.find(c => c.id === (l.cliente && l.cliente.id));
+  const indirizzo = (cliente && cliente.email) || '';
+  if (!indirizzo) {
+    avvisa('Manca l\'email di ' + ((l.cliente && l.cliente.nome) || 'questo cliente') +
+      ': mettila in Clienti, o scrivila a mano nella posta', true);
+  }
+
+  const aggiornato = { ...l, inPosta: new Date().toISOString() };
+  delete aggiornato.anno;
+  delete aggiornato.file;
+  try {
+    const radice = await sottocartella(CARTELLA, CARTELLA_ARCHIVIO, true);
+    const cartellaAnno = await sottocartella(radice, l.anno, true);
+    await scriviTesto(cartellaAnno, l.file, JSON.stringify(aggiornato, null, 2));
+  } catch (e) {
+    avvisa('Non ho potuto segnare l\'invio: ' + e.message, true);
+    return;
+  }
+  l.inPosta = aggiornato.inPosta;
+
+  const oggetto = 'Conto dei lavori' + (l.data ? ' del ' + formattaData(l.data) : '');
+  apriPosta('mailto:' + encodeURIComponent(indirizzo) +
+    '?subject=' + encodeURIComponent(oggetto) +
+    '&body=' + encodeURIComponent(testoConto(l)));
+  disegna();
+}
+
+// L'unico punto che porta fuori dall'app. Sta da solo per lo stesso motivo per
+// cui ci sta usaCartella: aprire la posta è una cosa che un test non può fare.
+function apriPosta(url) {
+  window.location.href = url;
 }
 
 // ── PAGINA CLIENTI ──

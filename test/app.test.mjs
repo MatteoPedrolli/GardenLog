@@ -840,10 +840,6 @@ try {
     /^Conto \d{4}-\d{2}-\d{2} Mario Rossi/.test(foglio.titolo), foglio.titolo);
   ok('il foglio non si vede a schermo: esiste solo per la stampa',
     !(await pagU.isVisible('#foglio')));
-  ok('dall\'archivio si stampa senza riaprire il lavoro',
-    (await pagU.evaluate(() => { vaiA('archivio'); return document.getElementById('pagina-archivio').innerHTML; }))
-      .includes('stampaConto('));
-
   // ── la lavagna ──
   // Non è un calendario: è quello che in ufficio si tiene a matita. Le prove non
   // passano dal trascinamento del mouse ma dalla funzione che il rilascio chiama:
@@ -1145,6 +1141,97 @@ try {
       await ricarica();
       return (CLIENTI.find(c => c.id === id) || {}).email === 'prova@esempio.it' && CLIENTI_DA_SALVARE === true;
     }, telefonoMesso));
+
+  // ── l'archivio: si guarda, si stampa, si manda ──
+  // Un secondo lavoro in archivio, di un altro cliente e già fatturato: con uno
+  // solo, un filtro che non filtra passerebbe lo stesso.
+  await pagU.evaluate(async a => {
+    const archivio = await window.RADICE.getDirectoryHandle('archivio', { create: true });
+    const anno = await archivio.getDirectoryHandle(a, { create: true });
+    await scriviTesto(anno, '2026-05-04-verdi-altro.json', JSON.stringify({
+      tipo: 'lavoro-archiviato', versione: 1, id: 'altro-lavoro', revisione: 1,
+      cliente: { id: 'cliente-verdi', nome: 'Giuseppe Verdi', citta: 'Lavis' },
+      data: '2026-05-04',
+      righe: [{ chiave: 'manodopera', voce: 'Manodopera', quantita: 5, unita: 'h', prezzo: 35 }],
+      totale: 175, righeSenzaPrezzo: 0, stato: 'fatturato', rapportino: null,
+    }));
+    await ricarica();
+  }, annoLavoro);
+  ok('due lavori in archivio, di due clienti diversi',
+    await pagU.evaluate(() => ARCHIVIO.length) === 2);
+
+  const archivio = await pagU.evaluate(() => { vaiA('archivio'); return document.getElementById('pagina-archivio').innerHTML; });
+  ok('a sinistra c\'è il gestionale con i due stati',
+    archivio.includes('Da fatturare') && archivio.includes('Fatturato') && archivio.includes('Gestionale'));
+  ok('e con quanto c\'è ancora da incassare', archivio.includes('stato-somma'));
+
+  const dettaglio = await pagU.evaluate(() => {
+    apriArchiviato(ARCHIVIO.find(l => l.id !== 'altro-lavoro').id);
+    return document.getElementById('pagina-archiviato').innerHTML;
+  });
+  ok('un clic apre il conto, senza passare dalla stampa',
+    dettaglio.includes('Conto') && dettaglio.includes('IVA inclusa'));
+  // Ore e operazioni non vanno al cliente ma qui servono: sono il perché del totale.
+  ok('e mostra anche le ore e le operazioni, che sul foglio del cliente non vanno',
+    dettaglio.includes('Totale ore') && dettaglio.includes('Nitrophoska'));
+  ok('con stampa e invio a portata', dettaglio.includes('stampaConto(') && dettaglio.includes('inviaConto('));
+
+  // L'invio non manda niente: apre la posta con tutto scritto, e l'ultimo tocco
+  // è di chi la usa. Per questo si segna "in posta" e non "inviato".
+  const posta = await pagU.evaluate(async () => {
+    window.apriPosta = url => { window.__posta = url; };
+    const l = ARCHIVIO.find(x => x.id !== 'altro-lavoro');
+    const c = CLIENTI.find(x => x.id === (l.cliente && l.cliente.id));
+    if (c) { modificaCliente(c.id, 'email', 'cliente@esempio.it'); await salvaClienti(); }
+    await inviaConto(l.id);
+    return { url: window.__posta || '', inPosta: l.inPosta };
+  });
+  ok('la posta si apre col destinatario preso dall\'anagrafica',
+    posta.url.startsWith('mailto:cliente%40esempio.it'), posta.url.slice(0, 60));
+  ok('e col conto già scritto nel corpo',
+    decodeURIComponent(posta.url).includes('TOTALE (IVA inclusa)'));
+  // Colonne allineate con gli spazi no: le app di posta usano caratteri a
+  // larghezza variabile e arrivano storte.
+  ok('una voce per riga, senza incolonnare con gli spazi',
+    !/ {3,}\S/.test(decodeURIComponent(posta.url).split('&body=')[1] || ''));
+  ok('il lavoro si segna in posta, non inviato', !!posta.inPosta);
+  ok('e la data finisce sul file, non solo a schermo',
+    await pagU.evaluate(async () => { await ricarica(); return !!ARCHIVIO.find(l => l.inPosta); }));
+
+  ok('senza email il conto si manda lo stesso, ma lo dice',
+    await pagU.evaluate(async () => {
+      const l = ARCHIVIO.find(x => x.id !== 'altro-lavoro');
+      const c = CLIENTI.find(x => x.id === (l.cliente && l.cliente.id));
+      if (c) { modificaCliente(c.id, 'email', ''); await salvaClienti(); }
+      window.__posta = '';
+      await inviaConto(l.id);
+      return document.getElementById('avviso').classList.contains('brutto') && window.__posta.startsWith('mailto:?');
+    }));
+
+  ok('il filtro gestionale mostra solo quello che chiede',
+    await pagU.evaluate(async () => {
+      vaiA('archivio');
+      await cambiaStato(ARCHIVIO.find(l => l.id !== 'altro-lavoro').id, 'da-fatturare');
+      filtraStato('fatturato');
+      const fatturati = lavoriArchivio();
+      filtraStato('da-fatturare');
+      const aperti = lavoriArchivio();
+      filtraStato('tutti');
+      return fatturati.length === 1 && fatturati[0].id === 'altro-lavoro' &&
+        aperti.length === 1 && aperti[0].id !== 'altro-lavoro' &&
+        lavoriArchivio().length === 2;
+    }) === true);
+  const raccolto = await pagU.evaluate(() => {
+    cambiaRaccolta('cliente');
+    return document.getElementById('pagina-archivio').innerHTML;
+  });
+  ok('raccogliendo per cliente i lavori stanno sotto il loro nome',
+    (raccolto.match(/gruppo-cliente/g) || []).length === 2, raccolto.match(/gruppo-cliente/g));
+  ok('e ogni cliente dice quanto gli si deve ancora', raccolto.includes('da incassare'));
+  // Chi ha già pagato non deve comparire con un importo aperto.
+  ok('chi è tutto fatturato non ha niente da incassare',
+    (raccolto.match(/da incassare/g) || []).length === 1);
+  await pagU.evaluate(() => cambiaRaccolta('data'));
 
   // Un lavoro archiviato da una versione futura può avere campi che questa non
   // sa leggere: fermarsi è meglio che mostrare un totale sbagliato.
