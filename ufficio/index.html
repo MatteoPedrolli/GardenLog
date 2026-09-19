@@ -140,6 +140,11 @@ table.elenco th {
 table.elenco td { padding: 9px 8px 9px 0; border-bottom: 1px solid var(--border); vertical-align: middle; }
 table.elenco tr:last-child td { border-bottom: none; }
 table.elenco td.num, table.elenco th.num { text-align: right; padding-right: 0; }
+/* Nella scheda cliente le due colonne vanno larghe uguali: lasciate libere, le
+   celle si dimensionano sul contenuto e il telefono esce stretto come il numero. */
+table.scheda-cliente { table-layout: fixed; }
+table.scheda-cliente td { width: 50%; padding-right: 10px; }
+table.scheda-cliente td:last-child { padding-right: 0; }
 
 input[type=text], input[type=number], input[type=search], textarea, select {
   font-family: var(--font-body); font-size: 0.92rem; color: var(--text);
@@ -199,7 +204,7 @@ input.vuoto { background: #fffdf5; border-color: #ecdca8; }
 
 .legenda-lavagna {
   display: flex; gap: 18px; flex-wrap: wrap; font-size: 0.78rem; color: var(--text-light);
-  margin-bottom: 14px;
+  margin-top: 20px; padding-top: 14px; border-top: 1px solid var(--border);
 }
 .legenda-lavagna b { font-weight: 600; color: var(--text); }
 .campione { display: inline-block; width: 22px; height: 10px; border-radius: 2px; vertical-align: middle; margin-right: 6px; }
@@ -294,6 +299,9 @@ input.vuoto { background: #fffdf5; border-color: #ecdca8; }
   padding: 1px 8px; border-radius: 999px;
 }
 .bottone-cart.acceso { border-color: var(--green-light); color: var(--green-mid); background: var(--green-mist); }
+.bottone-cart[disabled] { opacity: 0.35; cursor: default; }
+.larghezza-cart { display: inline-flex; align-items: center; gap: 4px; }
+.mezze-cart { font-size: 0.68rem; color: var(--text-light); min-width: 46px; text-align: center; }
 .seguito-cart {
   border: 1px dashed var(--border); border-radius: var(--radius-sm); padding: 5px 8px;
   font-size: 0.72rem; color: var(--text-light);
@@ -359,6 +367,7 @@ input.vuoto { background: #fffdf5; border-color: #ecdca8; }
     <button class="voce-barra" id="v-lavagna" onclick="vaiA('lavagna')">
       <span>📋</span> Lavagna <span class="pallino" id="pallino-lavagna">0</span>
     </button>
+    <button class="voce-barra" id="v-clienti" onclick="vaiA('clienti')"><span>👥</span> Clienti</button>
     <button class="voce-barra" id="v-archivio" onclick="vaiA('archivio')"><span>🗂️</span> Archivio</button>
     <button class="voce-barra" id="v-listino" onclick="vaiA('listino')"><span>🏷️</span> Listino</button>
     <button class="voce-barra" id="v-impostazioni" onclick="vaiA('impostazioni')"><span>⚙️</span> Impostazioni</button>
@@ -369,6 +378,7 @@ input.vuoto { background: #fffdf5; border-color: #ecdca8; }
     <div class="pagina attiva" id="pagina-arrivi"></div>
     <div class="pagina" id="pagina-lavoro"></div>
     <div class="pagina" id="pagina-lavagna"></div>
+    <div class="pagina" id="pagina-clienti"></div>
     <div class="pagina" id="pagina-archivio"></div>
     <div class="pagina" id="pagina-listino"></div>
     <div class="pagina" id="pagina-impostazioni"></div>
@@ -398,6 +408,8 @@ const CARTELLA_ARCHIVIO = 'archivio';
 const FILE_LISTINO = 'listino.json';
 const FILE_IMPOSTAZIONI = 'impostazioni.json';
 const FILE_LAVAGNA = 'lavagna.json';
+const FILE_CLIENTI = 'clienti.json';
+const FILE_ANAGRAFICA = 'anagrafica-dal-telefono.json';
 
 // Una mezza giornata sono otto ore di manodopera: quattro d'orologio in due. Serve
 // a sapere quante mezze giornate occupa un lavoro lungo, non a dichiarare piena una
@@ -424,6 +436,8 @@ let LISTINO_DA_SALVARE = false;
 let IMPOSTAZIONI = { ...IMPOSTAZIONI_VUOTE };
 let IMPOSTAZIONI_DA_SALVARE = false;
 let LAVAGNA = { tipo: 'lavagna', versione: 1, lavori: [], visti: [] };
+let CLIENTI = [];
+let CLIENTI_DA_SALVARE = false;
 let SETTIMANA = null;   // il lunedì della settimana mostrata
 let TRASCINATO = null;
 let ARRIVI = [];
@@ -586,6 +600,7 @@ async function ricarica() {
   // delle due ha trovato — e un file illeggibile che non si vede non esiste.
   ILLEGGIBILI = [];
   IMPOSTAZIONI = await caricaImpostazioni();
+  CLIENTI = await caricaClienti();
   LAVAGNA = await caricaLavagna();
   LISTINO = await caricaListino();
   ARCHIVIO = await caricaArchivio();
@@ -642,6 +657,57 @@ function modificaImpostazione(campo, valore) {
   if (cartello) cartello.style.display = 'block';
 }
 
+// ── L'ANAGRAFICA ──
+// L'archivio dell'ufficio, non una copia di quello del telefono. Qui i clienti
+// hanno anche telefono e mail — quello che serve per chiamare e confermare un
+// appuntamento — e il telefono non li conosce. Per questo l'ufficio importa da
+// un file a parte invece di leggere direttamente quello che esporta il cantiere:
+// un'importazione che sovrascrive cancellerebbe i numeri di telefono a ogni giro.
+
+async function caricaClienti() {
+  if (CLIENTI_DA_SALVARE) return CLIENTI;
+  try {
+    const a = JSON.parse(await leggiTesto(CARTELLA, FILE_CLIENTI));
+    if (!a || a.tipo !== 'anagrafica-ufficio') throw new Error('non è l\'anagrafica');
+    return (Array.isArray(a.clienti) ? a.clienti : []).map(sistemaCliente);
+  } catch (e) {
+    return [];
+  }
+}
+
+function sistemaCliente(c) {
+  return {
+    id: c.id || 'c' + Math.random().toString(36).slice(2),
+    nome: c.nome || '', indirizzo: c.indirizzo || '', citta: c.citta || '',
+    telefono: c.telefono || '', email: c.email || '', note: c.note || '',
+  };
+}
+
+async function salvaClienti() {
+  try {
+    await scriviTesto(CARTELLA, FILE_CLIENTI, JSON.stringify({
+      tipo: 'anagrafica-ufficio', versione: 1,
+      aggiornato: new Date().toISOString(), clienti: CLIENTI,
+    }, null, 2));
+  } catch (e) {
+    avvisa('Non ho potuto salvare l\'anagrafica: ' + e.message, true);
+    return false;
+  }
+  CLIENTI_DA_SALVARE = false;
+  disegna();
+  avvisa('Anagrafica salvata');
+  return true;
+}
+
+function modificaCliente(id, campo, valore) {
+  const c = CLIENTI.find(x => x.id === id);
+  if (!c) return;
+  c[campo] = valore;
+  CLIENTI_DA_SALVARE = true;
+  const cartello = document.getElementById('clienti-da-salvare');
+  if (cartello) cartello.style.display = 'block';
+}
+
 async function caricaLavagna() {
   try {
     const l = JSON.parse(await leggiTesto(CARTELLA, FILE_LAVAGNA));
@@ -680,7 +746,11 @@ function sistemaLavoro(l) {
     // e niente su questa lavagna si muove da solo.
     giorno: l.giorno || '',
     mezza: l.mezza === 'pomeriggio' ? 'pomeriggio' : (l.mezza === 'mattina' ? 'mattina' : ''),
-    piuGiorni: !!l.piuGiorni,
+    // Quante mezze giornate occupa. Si allarga e si stringe a mano, un passo per
+    // volta: dedurle dalla stima ore legava la pianificazione a un numero messo
+    // a occhio, e chi pianifica sa cose che la stima non sa. I lavori salvati
+    // prima portavano un interruttore: si convertono una volta e amen.
+    mezze: Math.max(1, Number(l.mezze) || (l.piuGiorni ? Math.ceil((Number(l.ore) || 0) / ORE_MEZZA) : 1)),
     da: l.da || '',
   };
 }
@@ -1128,6 +1198,7 @@ function disegna() {
   if (PAGINA === 'arrivi') disegnaArrivi();
   if (PAGINA === 'lavoro') disegnaLavoro();
   if (PAGINA === 'lavagna') disegnaLavagna();
+  if (PAGINA === 'clienti') disegnaClienti();
   if (PAGINA === 'archivio') disegnaArchivio();
   if (PAGINA === 'listino') disegnaListino();
   if (PAGINA === 'impostazioni') disegnaImpostazioni();
@@ -1445,6 +1516,141 @@ function filtraArchivio(valore) {
     : '<div class="scheda"><div class="vuoto-elenco">Nessun lavoro per questa ricerca.</div></div>';
 }
 
+// ── PAGINA CLIENTI ──
+
+let FILTRO_CLIENTI = '';
+
+function disegnaClienti() {
+  const c = document.getElementById('pagina-clienti');
+  if (!CARTELLA) { c.innerHTML = schermataBenvenuto(); return; }
+
+  let html = '<h2 class="titolo-pagina">Clienti</h2>';
+  html += '<p class="sottotitolo">' + CLIENTI.length +
+    (CLIENTI.length === 1 ? ' cliente' : ' clienti') + ' · telefono e mail stanno qui, il cantiere non li ha</p>';
+
+  html += '<div id="clienti-da-salvare" class="avvertenza" style="display:' +
+    (CLIENTI_DA_SALVARE ? 'block' : 'none') + '">' +
+    'Ci sono modifiche non ancora scritte su file. Restano qui finché premi Salva.</div>';
+
+  const mancanti = clientiMancanti();
+  html += '<div class="scheda"><div class="bottoni" style="margin-top:0">' +
+    '<button class="secondaria piccola" onclick="importaAnagrafica()"' +
+      ' title="Legge anagrafica-dal-telefono.json dalla cartella">Importa dal telefono</button>' +
+    (mancanti.length ? '<button class="secondaria piccola" onclick="prendiClientiDaiRapportini()">Aggiungi i ' +
+      mancanti.length + ' visti nei rapportini</button>' : '') +
+    '<button class="secondaria piccola" onclick="aggiungiCliente()">+ Aggiungi a mano</button>' +
+    '<button class="principale piccola" onclick="salvaClienti()">Salva</button>' +
+    '</div>' +
+    '<div class="meta" style="margin-top:10px">Importare non sovrascrive: i clienti che ci sono già ' +
+      'restano come li hai corretti, e arrivano solo quelli nuovi.</div>' +
+    '</div>';
+
+  html += '<div class="scheda"><input type="search" placeholder="Cerca un cliente" value="' +
+    perValore(FILTRO_CLIENTI) + '" oninput="filtraClienti(this.value)"></div>';
+
+  html += '<div id="elenco-clienti">' + righeClienti() + '</div>';
+  c.innerHTML = html;
+}
+
+function righeClienti() {
+  const filtro = FILTRO_CLIENTI.trim().toLowerCase();
+  const elenco = CLIENTI
+    .filter(c => !filtro || (c.nome + ' ' + c.citta).toLowerCase().includes(filtro))
+    .sort((a, b) => String(a.nome).localeCompare(String(b.nome)));
+  if (!elenco.length) {
+    return '<div class="scheda"><div class="vuoto-elenco">' +
+      (filtro ? 'Nessun cliente per questa ricerca.'
+              : 'Anagrafica vuota. Importala dal telefono, o prendi i clienti dai rapportini arrivati.') +
+      '</div></div>';
+  }
+  return elenco.map(c => {
+    const id = perOnclick(c.id);
+    const campo = (nome, etichetta, tipo) =>
+      '<td><input type="' + (tipo || 'text') + '" placeholder="' + etichetta + '" value="' +
+        perValore(c[nome]) + '" oninput="modificaCliente(\'' + id + '\', \'' + nome + '\', this.value)"></td>';
+    return '<div class="scheda"><table class="elenco scheda-cliente"><tbody>' +
+      '<tr>' + campo('nome', 'Nome') + campo('telefono', 'Telefono', 'tel') + '</tr>' +
+      '<tr>' + campo('indirizzo', 'Indirizzo') + campo('citta', 'Città') + '</tr>' +
+      '<tr>' + campo('email', 'Email', 'email') + campo('note', 'Note') + '</tr>' +
+      '</tbody></table>' +
+      '<div class="bottoni"><button class="pericolo piccola" onclick="eliminaCliente(\'' + id + '\')">Elimina</button></div>' +
+    '</div>';
+  }).join('');
+}
+
+// Come nell'archivio: ridisegnare tutto a ogni tasto farebbe perdere il fuoco.
+function filtraClienti(valore) {
+  FILTRO_CLIENTI = valore;
+  const el = document.getElementById('elenco-clienti');
+  if (el) el.innerHTML = righeClienti();
+}
+
+function aggiungiCliente() {
+  CLIENTI.push(sistemaCliente({ nome: '' }));
+  CLIENTI_DA_SALVARE = true;
+  disegnaClienti();
+}
+
+function eliminaCliente(id) {
+  const c = CLIENTI.find(x => x.id === id);
+  if (!c) return;
+  if (!confirm('Eliminare «' + (c.nome || 'senza nome') + '» dall\'anagrafica?')) return;
+  CLIENTI = CLIENTI.filter(x => x.id !== id);
+  CLIENTI_DA_SALVARE = true;
+  disegnaClienti();
+}
+
+// I clienti che compaiono sui rapportini ma non in anagrafica: il cantiere li ha
+// già scritti una volta, e farli ribattere sarebbe lavoro inventato.
+function clientiMancanti() {
+  const visti = new Map();
+  const daDoc = r => {
+    const c = r && r.cliente;
+    if (!c || !c.id || CLIENTI.some(x => x.id === c.id) || visti.has(c.id)) return;
+    visti.set(c.id, { id: c.id, nome: c.nome || '', indirizzo: c.indirizzo || '', citta: c.citta || '' });
+  };
+  ARRIVI.forEach(a => daDoc(a.doc));
+  ARCHIVIO.forEach(l => daDoc(l.rapportino));
+  return [...visti.values()];
+}
+
+async function prendiClientiDaiRapportini() {
+  const nuovi = clientiMancanti();
+  if (!nuovi.length) { avvisa('Nessun cliente nuovo nei rapportini'); return; }
+  CLIENTI = CLIENTI.concat(nuovi.map(sistemaCliente));
+  CLIENTI_DA_SALVARE = true;
+  if (!(await salvaClienti())) return;
+  disegnaClienti();
+  avvisa(nuovi.length === 1 ? 'Un cliente aggiunto' : nuovi.length + ' clienti aggiunti');
+}
+
+// Importare non sovrascrive: un cliente che c'è già resta com'è. L'ufficio ci ha
+// messo dentro numeri di telefono che il telefono non conosce, e un'importazione
+// che riscrive li cancellerebbe a ogni giro.
+async function importaAnagrafica() {
+  let doc;
+  try {
+    doc = JSON.parse(await leggiTesto(CARTELLA, FILE_ANAGRAFICA));
+  } catch (e) {
+    avvisa('Non trovo ' + FILE_ANAGRAFICA + ' nella cartella: esportala da ⚙️ Dati sul telefono', true);
+    return;
+  }
+  if (!doc || doc.tipo !== 'anagrafica' || !Array.isArray(doc.clienti)) {
+    avvisa('Quel file non è un\'anagrafica del telefono', true);
+    return;
+  }
+  const nuovi = doc.clienti.filter(c => c.id && !CLIENTI.some(x => x.id === c.id));
+  if (!nuovi.length) {
+    avvisa('Nessun cliente nuovo: ci sono già tutti');
+    return;
+  }
+  CLIENTI = CLIENTI.concat(nuovi.map(sistemaCliente));
+  CLIENTI_DA_SALVARE = true;
+  if (!(await salvaClienti())) return;
+  disegnaClienti();
+  avvisa(nuovi.length === 1 ? 'Un cliente importato' : nuovi.length + ' clienti importati');
+}
+
 // ── LA LAVAGNA ──
 // Non è un calendario. È la lavagna che in ufficio si tiene a matita: a sinistra
 // quello che c'è da fare e non ha ancora una data, a destra la settimana spezzata
@@ -1491,9 +1697,7 @@ function questaSettimana() {
 
 const bloccato = l => l.requisiti.length > 0;
 const piazzato = l => l.stato !== 'lista' && !!l.giorno && !!l.mezza;
-// Senza il flag il lavoro resta dov'è messo, per lungo che sia: spalmarlo su più
-// mezze giornate è una decisione di chi pianifica, non un calcolo.
-const mezzeOccupate = l => l.piuGiorni ? Math.max(1, Math.ceil((l.ore || 0) / ORE_MEZZA)) : 1;
+const mezzeOccupate = l => Math.max(1, Number(l.mezze) || 1);
 
 function mezzeDa(giorno, mezza, quante) {
   const elenco = [];
@@ -1514,11 +1718,13 @@ function copertura(l) {
   return mezzeDa(l.giorno, l.mezza, mezzeOccupate(l));
 }
 
+// Le ore si spalmano per quante mezze giornate occupa: sono un'indicazione per
+// chi guarda la colonna, non un vincolo. È l'utente a dire quanto è largo il
+// lavoro, e le ore lo seguono — non il contrario.
 function oreNellaMezza(l, giorno, mezza) {
   const c = copertura(l);
-  const i = c.findIndex(x => x.giorno === giorno && x.mezza === mezza);
-  if (i < 0) return 0;
-  return l.piuGiorni ? Math.max(0, Math.min(ORE_MEZZA, (l.ore || 0) - i * ORE_MEZZA)) : (l.ore || 0);
+  if (!c.some(x => x.giorno === giorno && x.mezza === mezza)) return 0;
+  return Number(((Number(l.ore) || 0) / c.length).toFixed(2));
 }
 
 // Tre regole per la coda: quello che non si può fare va in fondo, quello che è già
@@ -1554,12 +1760,17 @@ function cartellino(l) {
       (l.rimandato && inLista ? '<span class="rimandato-cart">slittato</span>' : '') +
       (inLista && l.quando ? '<span class="quando-cart">' + perValore(l.quando) + '</span>' : '') +
       l.requisiti.map(r => '<span class="requisito-cart">⚠ ' + perValore(r) + '</span>').join('') +
-      (piazzato(l) ? '<button type="button" class="bottone-cart' + (l.piuGiorni ? ' acceso' : '') +
-        '" onclick="event.stopPropagation(); cambiaPiuGiorni(\'' + id + '\')"' +
-        ' title="Spalma il lavoro sulle mezze giornate che gli servono">⧉ ' +
-        (l.piuGiorni ? mezze + ' mezze' : 'più giorni') + '</button>' : '') +
+      (piazzato(l) ? '<span class="larghezza-cart">' +
+        '<button type="button" class="bottone-cart" onclick="event.stopPropagation(); stringi(\'' + id + '\')"' +
+          (mezze === 1 ? ' disabled' : '') + ' title="Una mezza giornata in meno">−</button>' +
+        '<span class="mezze-cart">' + mezze + (mezze === 1 ? ' mezza' : ' mezze') + '</span>' +
+        '<button type="button" class="bottone-cart" onclick="event.stopPropagation(); allarga(\'' + id + '\')"' +
+          ' title="Allarga alla mezza giornata successiva">+</button>' +
+        '</span>' : '') +
       (inLista && l.origine ? '<span class="origine-cart">' + perValore(l.origine) + '</span>' : '') +
       (inLista ? '<button type="button" class="bottone-cart" style="margin-left:auto"' +
+        ' onclick="event.stopPropagation(); apriModuloLavoro(\'' + id + '\')" title="Modifica">✎</button>' +
+        '<button type="button" class="bottone-cart"' +
         ' onclick="event.stopPropagation(); togliDallaLavagna(\'' + id + '\')" title="Togli dalla lavagna">✕</button>' : '') +
     '</div>' +
     (ultimoGiorno && ultimoGiorno > sabato ? '<div class="sconfina-cart">continua la settimana prossima</div>' : '') +
@@ -1588,12 +1799,6 @@ function disegnaLavagna() {
     '<button class="secondaria piccola" onclick="questaSettimana()">Oggi</button>' +
   '</div>';
 
-  html += '<div class="legenda-lavagna">' +
-    '<span><i class="campione matita"></i><b>A matita</b> — previsto, il cliente non lo sa</span>' +
-    '<span><i class="campione penna"></i><b>Confermato</b> — il cliente sa che arrivate</span>' +
-    '<span><i class="campione bloccato"></i><b>Bloccato</b> — manca qualcosa per poterlo fare</span>' +
-  '</div>';
-
   html += '<div class="tavolo">';
 
   // ── la colonna di sinistra: quello che c'è da fare e non ha una data ──
@@ -1611,8 +1816,9 @@ function disegnaLavagna() {
       : '<div class="vuoto-mezza">Niente in attesa.<br>Quello che arriva dai rapportini compare qui.</div>') +
     '</div>';
   html += '<div class="bottoni">' +
-    '<button class="secondaria piccola" onclick="apriNuovoLavoro()">+ Aggiungi</button>' +
-    '<button class="secondaria piccola" onclick="importaProssimi()">Prendi dai rapportini</button>' +
+    '<button class="secondaria piccola" onclick="apriModuloLavoro()">+ Aggiungi</button>' +
+    '<button class="secondaria piccola" onclick="importaProssimi()"' +
+      ' title="Cerca nei rapportini i prossimi interventi segnati in cantiere">Prendi i prossimi interventi</button>' +
   '</div>';
   html += '<div id="nuovo-lavoro"></div>';
   html += '</section>';
@@ -1652,6 +1858,15 @@ function disegnaLavagna() {
   });
   html += '</section></div>';
 
+  // In fondo: serve quando non ti ricordi cosa vuol dire un tratteggio, e chi non
+  // se lo sta chiedendo non deve scavalcarla per arrivare alla lavagna.
+  html += '<div class="legenda-lavagna">' +
+    '<span><i class="campione matita"></i><b>A matita</b> — previsto, il cliente non lo sa</span>' +
+    '<span><i class="campione penna"></i><b>Confermato</b> — il cliente sa che arrivate</span>' +
+    '<span><i class="campione bloccato"></i><b>Bloccato</b> — manca qualcosa per poterlo fare</span>' +
+    '<span>Un clic sul cartellino conferma · <b>+</b> e <b>−</b> allargano il lavoro di mezza giornata</span>' +
+  '</div>';
+
   c.innerHTML = html;
 }
 
@@ -1683,7 +1898,7 @@ async function spostaLavoro(id, giorno, mezza) {
       'Se ' + cosa + ' bisogna avvisarlo. Procedere?')) return;
   }
   if (!giorno) {
-    l.stato = 'lista'; l.giorno = ''; l.mezza = ''; l.piuGiorni = false;
+    l.stato = 'lista'; l.giorno = ''; l.mezza = ''; l.mezze = 1;
     l.rimandato = true;   // era già stato programmato: torna in cima alla coda
   } else {
     if (l.giorno === giorno && l.mezza === mezza) return;
@@ -1703,10 +1918,20 @@ async function cambiaPenna(id) {
   disegnaLavagna();
 }
 
-async function cambiaPiuGiorni(id) {
+// Un passo per volta, in tutte e due le direzioni: è il modo in cui si allarga
+// un appuntamento sulla lavagna vera, con la matita.
+async function allarga(id) {
   const l = LAVAGNA.lavori.find(x => x.id === id);
   if (!l) return;
-  l.piuGiorni = !l.piuGiorni;
+  l.mezze = mezzeOccupate(l) + 1;
+  await salvaLavagna();
+  disegnaLavagna();
+}
+
+async function stringi(id) {
+  const l = LAVAGNA.lavori.find(x => x.id === id);
+  if (!l || mezzeOccupate(l) <= 1) return;
+  l.mezze = mezzeOccupate(l) - 1;
   await salvaLavagna();
   disegnaLavagna();
 }
@@ -1728,42 +1953,65 @@ async function hoVisto() {
 
 // ── aggiungere ──
 
-function apriNuovoLavoro() {
+// Lo stesso modulo per aggiungere e per correggere: quello che si sbaglia
+// scrivendo si sbaglia anche importando, e senza una via per rimetterci mano
+// l'unica strada sarebbe cancellare e riscrivere.
+function apriModuloLavoro(id) {
   const c = document.getElementById('nuovo-lavoro');
   if (!c) return;
+  const l = id ? LAVAGNA.lavori.find(x => x.id === id) : null;
+  if (id && !l) return;
+  const v = campo => perValore(l ? l[campo] : '');
   c.innerHTML = '<div class="scheda" style="margin-top:10px">' +
-    '<div class="titolo-sezione">Un lavoro nuovo</div>' +
-    '<input type="text" id="n-cliente" placeholder="Cliente" style="margin-bottom:6px">' +
-    '<input type="text" id="n-luogo" placeholder="Dove" style="margin-bottom:6px">' +
-    '<input type="text" id="n-cosa" placeholder="Cosa c\'è da fare" style="margin-bottom:6px">' +
-    '<input type="text" id="n-ore" placeholder="Stima ore" style="margin-bottom:6px">' +
-    '<input type="date" id="n-entro" style="margin-bottom:6px" title="Entro quando">' +
-    '<input type="text" id="n-requisito" placeholder="Manca qualcosa? (blocca il lavoro)">' +
+    '<div class="titolo-sezione">' + (l ? 'Correggi il lavoro' : 'Un lavoro nuovo') + '</div>' +
+    '<input type="hidden" id="n-id" value="' + perValore(id || '') + '">' +
+    '<input type="text" id="n-cliente" placeholder="Cliente" value="' + v('cliente') + '" style="margin-bottom:6px">' +
+    '<input type="text" id="n-luogo" placeholder="Dove" value="' + v('luogo') + '" style="margin-bottom:6px">' +
+    '<input type="text" id="n-cosa" placeholder="Cosa c\'è da fare" value="' + v('cosa') + '" style="margin-bottom:6px">' +
+    '<input type="text" id="n-ore" placeholder="Stima ore" value="' +
+      perValore(l && l.ore ? formattaQuantita(l.ore) : '') + '" style="margin-bottom:6px">' +
+    '<input type="date" id="n-entro" value="' + v('entro') + '" style="margin-bottom:6px" title="Entro quando">' +
+    '<input type="text" id="n-requisito" placeholder="Manca qualcosa? (blocca il lavoro)" value="' +
+      perValore(l && l.requisiti.length ? l.requisiti.join(', ') : '') + '">' +
     '<div class="bottoni">' +
-      '<button class="principale piccola" onclick="salvaNuovoLavoro()">Metti in coda</button>' +
-      '<button class="secondaria piccola" onclick="document.getElementById(\'nuovo-lavoro\').innerHTML = \'\'">Annulla</button>' +
+      '<button class="principale piccola" onclick="salvaModuloLavoro()">' +
+        (l ? 'Salva' : 'Metti in coda') + '</button>' +
+      '<button class="secondaria piccola" onclick="chiudiModuloLavoro()">Annulla</button>' +
     '</div></div>';
   document.getElementById('n-cliente').focus();
 }
 
-async function salvaNuovoLavoro() {
+function chiudiModuloLavoro() {
+  const c = document.getElementById('nuovo-lavoro');
+  if (c) c.innerHTML = '';
+}
+
+async function salvaModuloLavoro() {
   const valore = id => (document.getElementById(id) || {}).value || '';
   const cliente = valore('n-cliente').trim();
   if (!cliente) { avvisa('Serve almeno il cliente', true); return; }
   const entro = valore('n-entro');
-  const requisito = valore('n-requisito').trim();
-  LAVAGNA.lavori.push(sistemaLavoro({
+  const requisiti = valore('n-requisito').split(',').map(r => r.trim()).filter(r => r);
+  const campi = {
     cliente, luogo: valore('n-luogo').trim(), cosa: valore('n-cosa').trim(),
     ore: Number(valore('n-ore').replace(',', '.')) || 0,
     entro, quando: entro ? 'entro il ' + formattaData(entro) : '',
-    origine: 'aggiunto in ufficio',
-    requisiti: requisito ? [requisito] : [],
-    stato: 'lista',
-  }));
+    requisiti,
+  };
+
+  const id = valore('n-id');
+  const esistente = id ? LAVAGNA.lavori.find(x => x.id === id) : null;
+  if (esistente) {
+    // Si riparte da quello che c'era: il modulo non conosce dove sta sulla
+    // settimana né se è confermato, e ricostruirlo da zero lo staccherebbe.
+    Object.assign(esistente, campi);
+  } else {
+    LAVAGNA.lavori.push(sistemaLavoro({ ...campi, origine: 'aggiunto in ufficio', stato: 'lista' }));
+  }
   if (!(await salvaLavagna())) return;
-  document.getElementById('nuovo-lavoro').innerHTML = '';
+  chiudiModuloLavoro();
   disegnaLavagna();
-  avvisa('In coda: ' + cliente);
+  avvisa(esistente ? 'Corretto: ' + cliente : 'In coda: ' + cliente);
 }
 
 // Il cantiere segna già il prossimo intervento su ogni visita: è l'unico canale che
@@ -1772,11 +2020,18 @@ async function salvaNuovoLavoro() {
 // scartare non ricompare al giro dopo.
 async function importaProssimi() {
   const nuovi = [];
-  ARCHIVIO.forEach(lavoro => {
-    const r = lavoro.rapportino;
-    if (!r || !r.prossimo || !String(r.prossimo.cosa || '').trim()) return;
-    if (LAVAGNA.visti.includes(lavoro.id)) return;
-    LAVAGNA.visti.push(lavoro.id);
+  // Anche i rapportini appena arrivati, non solo quelli archiviati: il prossimo
+  // intervento lo si legge quando arriva, non dopo aver chiuso il conto, e
+  // guardare solo l'archivio faceva sembrare il bottone rotto.
+  const documenti = ARRIVI.map(a => a.doc)
+    .concat(ARCHIVIO.map(l => l.rapportino).filter(r => r));
+  const gia = new Set();
+  documenti.forEach(r => {
+    if (!r || !r.id || gia.has(r.id)) return;
+    gia.add(r.id);
+    if (!r.prossimo || !String(r.prossimo.cosa || '').trim()) return;
+    if (LAVAGNA.visti.includes(r.id)) return;
+    LAVAGNA.visti.push(r.id);
     const mese = nomeMese(r.prossimo.mese);
     const anno = String(r.prossimo.anno || '').trim();
     nuovi.push(sistemaLavoro({
@@ -1787,13 +2042,15 @@ async function importaProssimi() {
       quando: [mese, anno].filter(x => x).join(' '),
       origine: 'dal cantiere',
       stato: 'lista',
-      da: lavoro.id,
+      da: r.id,
     }));
   });
   if (!nuovi.length) {
     // Anche «niente di nuovo» va detto: senza, il bottone sembra rotto.
     await salvaLavagna();
-    avvisa('Nessun prossimo intervento nuovo nei rapportini');
+    avvisa(documenti.length
+      ? 'Nessun prossimo intervento nuovo: i rapportini letti non ne hanno, o li hai già presi'
+      : 'Nessun rapportino nella cartella da cui prenderli');
     return;
   }
   LAVAGNA.lavori = LAVAGNA.lavori.concat(nuovi);

@@ -672,6 +672,13 @@ select.form-control { background-image: url("data:image/svg+xml,%3Csvg xmlns='ht
 
       <div id="listino-vecchio-wrap"></div>
 
+      <div class="section-title">Per l'ufficio</div>
+      <div class="card" style="padding:14px">
+        <div class="dati-nota">L'anagrafica che hai qui, nel formato che l'app dell'ufficio importa.
+          Il file va messo nella cartella <strong>GiardinoApp</strong> su Drive.</div>
+        <button class="btn btn-secondary btn-sm" onclick="esportaAnagrafica()">Esporta anagrafica clienti</button>
+      </div>
+
       <div class="section-title">Esporta per analisi</div>
       <div class="card" style="padding:14px">
         <div class="dati-nota">Tabelle CSV da aprire sul computer con Excel o Fogli Google.</div>
@@ -2988,6 +2995,34 @@ function listinoPerUfficio() {
       prezzo: v.Prezzo, aCorpo: isSi(v.ACorpo),
     })),
   };
+}
+
+// L'anagrafica esce con il suo nome di file, diverso da quello dell'archivio
+// dell'ufficio: là dentro i clienti hanno anche telefono e mail, che qui non
+// esistono, e l'ufficio importa da questo file invece di farsi sovrascrivere.
+// Un file, un solo autore, anche quando i dati viaggiano.
+function anagraficaPerUfficio() {
+  return {
+    tipo: 'anagrafica', versione: 1, esportato: new Date().toISOString(),
+    clienti: (DB.clienti || []).map(c => ({
+      id: c.ClienteID, nome: c.Cliente || '',
+      indirizzo: c.Indirizzo || '', citta: c.Citta || '',
+      note: c.Note_cliente || '',
+    })),
+  };
+}
+
+async function esportaAnagrafica() {
+  const doc = anagraficaPerUfficio();
+  if (!doc.clienti.length) { showToast('⚠️ Non c\'è ancora nessun cliente'); return; }
+  const file = new File([JSON.stringify(doc, null, 2)],
+    'anagrafica-dal-telefono.json', { type: 'application/json' });
+  let esito;
+  try { esito = await consegnaFile(file); }
+  catch (e) { showToast('❌ Non riuscito: ' + (e.message || e)); return; }
+  showToast(esito === 'annullato'
+    ? '↩️ Annullato: il file non è uscito'
+    : `👥 ${doc.clienti.length} clienti pronti per l'ufficio`);
 }
 
 async function scaricaListinoPerUfficio() {

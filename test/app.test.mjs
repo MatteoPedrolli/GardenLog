@@ -198,6 +198,7 @@ try {
     return document.getElementById('listino-vecchio-wrap').innerHTML === '';
   }));
 
+
   // ── la coda di uscita: il lavoro resta al sicuro, la consegna riprova ──
   const CONSEGNA = 'https://consegna.esempio.invalid/exec';
   let rispostaFinta = { status: 'ok' };
@@ -448,6 +449,16 @@ try {
   await page.waitForTimeout(150);
   ok('cliente con apostrofo selezionabile',
     (await page.textContent('#f-visita-cliente-nome')).includes("Dall'Oglio"));
+
+  // ── l'anagrafica che il telefono passa all'ufficio ──
+  // Presa qui, con più di un cliente in archivio: in ufficio ne arriverà anche
+  // uno che nei rapportini non compare, ed è il caso che conta.
+  const anagraficaDalTelefono = await page.evaluate(() => anagraficaPerUfficio());
+  ok('l\'anagrafica esce con i clienti e il loro identificativo',
+    anagraficaDalTelefono.tipo === 'anagrafica' &&
+    anagraficaDalTelefono.clienti.length >= 2 &&
+    anagraficaDalTelefono.clienti.every(c => c.id),
+    JSON.stringify(anagraficaDalTelefono.clienti.map(c => c.nome)));
   await page.evaluate(() => closeDrawer('overlay-visita'));
 
   // ── rinumerare una fascia si porta dietro i clienti ──
@@ -855,7 +866,9 @@ try {
   ok('tornando indietro è ancora lì',
     (await pagU.textContent('#pagina-lavagna .giorni')).includes('Mario Rossi'));
 
-  // ── un lavoro lungo si spalma solo se glielo dici ──
+  // ── il lavoro si allarga a mano, mezza giornata per volta ──
+  // La larghezza la decide chi pianifica, non la stima ore: dedurla legava la
+  // lavagna a un numero messo a occhio.
   await pagU.evaluate(async id => {
     const l = LAVAGNA.lavori.find(x => x.id === id);
     l.ore = 20;
@@ -864,17 +877,33 @@ try {
   await pagU.waitForTimeout(150);
   ok('venti ore in una mezza giornata restano dove le metti',
     await pagU.evaluate(() => copertura(LAVAGNA.lavori[0]).length) === 1);
-  await pagU.evaluate(id => cambiaPiuGiorni(id), idLavoro);
+  await pagU.evaluate(async id => { await allarga(id); await allarga(id); }, idLavoro);
   await pagU.waitForTimeout(150);
   const spalmato = await pagU.evaluate(() => copertura(LAVAGNA.lavori[0]));
-  ok('col flag si allarga sulle mezze giornate che gli servono', spalmato.length === 3,
+  ok('due tocchi su + lo allargano di due mezze giornate', spalmato.length === 3,
     JSON.stringify(spalmato));
+  ok('e il − lo stringe di nuovo', await pagU.evaluate(async id => {
+    await stringi(id);
+    const largo = copertura(LAVAGNA.lavori[0]).length;
+    await allarga(id);
+    return largo;
+  }, idLavoro) === 2);
+  ok('sotto una mezza giornata non si scende', await pagU.evaluate(async id => {
+    const l = LAVAGNA.lavori.find(x => x.id === id);
+    const prima = l.mezze;
+    l.mezze = 1;
+    await stringi(id);
+    const dopo = l.mezze;
+    l.mezze = prima;
+    return dopo === 1;
+  }, idLavoro));
   // La domenica non si lavora. Va provato con un lavoro che ci arriva davvero:
   // partendo dal venerdì con tre mezze giornate si finisce il sabato, e la prova
   // passerebbe senza aver verificato niente.
   const oltreDomenica = await pagU.evaluate(async id => {
     const l = LAVAGNA.lavori.find(x => x.id === id);
     l.ore = 24;
+    l.mezze = 3;
     await spostaLavoro(id, '2026-09-26', 'mattina');   // sabato mattina
     return copertura(l);
   }, idLavoro);
@@ -892,14 +921,17 @@ try {
   await pagU.evaluate(async id => {
     const l = LAVAGNA.lavori.find(x => x.id === id);
     l.ore = 20;
+    l.mezze = 3;
     await spostaLavoro(id, '2026-09-25', 'mattina');
   }, idLavoro);
-  ok('le ore si dividono otto per mezza giornata, il resto nell\'ultima',
+  // Le ore seguono la larghezza, non il contrario: sono un'indicazione per chi
+  // guarda la colonna, non un vincolo sulla pianificazione.
+  ok('le ore si spalmano sulle mezze giornate che occupa',
     await pagU.evaluate(() => [
       oreNellaMezza(LAVAGNA.lavori[0], '2026-09-25', 'mattina'),
       oreNellaMezza(LAVAGNA.lavori[0], '2026-09-25', 'pomeriggio'),
       oreNellaMezza(LAVAGNA.lavori[0], '2026-09-26', 'mattina'),
-    ].join('|')) === '8|8|4');
+    ].join('|')) === '6.67|6.67|6.67');
 
   // ── rimetterlo in coda lo fa slittare, e lo dice ──
   await pagU.evaluate(async id => spostaLavoro(id, '', ''), idLavoro);
@@ -926,6 +958,114 @@ try {
 
   ok('un lavoro aggiunto a mano si rilegge dal file',
     await pagU.evaluate(async () => { await ricarica(); return LAVAGNA.lavori.length; }) === 4);
+
+  // ── correggere un lavoro senza cancellarlo e riscriverlo ──
+  ok('il modulo si riapre già compilato', await pagU.evaluate(() => {
+    disegnaLavagna();
+    apriModuloLavoro(LAVAGNA.lavori.find(l => l.cliente === 'Scade prima').id);
+    return document.getElementById('n-cliente').value === 'Scade prima';
+  }));
+  ok('e salvando corregge quello che c\'era invece di aggiungerne un altro',
+    await pagU.evaluate(async () => {
+      const prima = LAVAGNA.lavori.length;
+      document.getElementById('n-cliente').value = 'Scade prima, corretto';
+      document.getElementById('n-ore').value = '3';
+      await salvaModuloLavoro();
+      return LAVAGNA.lavori.length === prima &&
+        LAVAGNA.lavori.some(l => l.cliente === 'Scade prima, corretto' && l.ore === 3);
+    }));
+  // Il modulo non conosce dove sta sulla settimana né se è confermato:
+  // ricostruire il lavoro da zero lo staccherebbe dalla lavagna.
+  ok('correggere un lavoro già piazzato non lo stacca dal suo giorno',
+    await pagU.evaluate(async id => {
+      const l = LAVAGNA.lavori.find(x => x.id === id);
+      await spostaLavoro(id, '2026-09-24', 'mattina');
+      await cambiaPenna(id);
+      apriModuloLavoro(id);
+      document.getElementById('n-cosa').value = 'Potatura, con scala';
+      await salvaModuloLavoro();
+      return l.giorno === '2026-09-24' && l.mezza === 'mattina' &&
+        l.stato === 'confermato' && l.cosa === 'Potatura, con scala';
+    }, idLavoro));
+
+  // ── il prossimo intervento si prende anche da un rapportino appena arrivato ──
+  // È il caso normale: lo si legge quando arriva, non dopo aver chiuso il conto.
+  ok('un rapportino ancora in arrivo dà il suo prossimo intervento',
+    await pagU.evaluate(async d => {
+      const arrivi = await window.RADICE.getDirectoryHandle('rapportini');
+      const nuovo = { ...d, id: 'visita-appena-arrivata', revisione: 1,
+        cliente: { ...d.cliente, nome: 'Cliente Appena Arrivato' },
+        prossimo: { cosa: 'Arieggiatura', mese: '04', anno: '2027' } };
+      await scriviTesto(arrivi, nomeFileRapportino(nuovo), JSON.stringify(nuovo));
+      await ricarica();
+      if (!ARRIVI.some(a => a.doc.id === 'visita-appena-arrivata')) return 'non è arrivato';
+      const prima = LAVAGNA.lavori.length;
+      await importaProssimi();
+      return LAVAGNA.lavori.length === prima + 1 &&
+        LAVAGNA.lavori.some(l => l.cliente === 'Cliente Appena Arrivato' && l.entro === '2027-04-01');
+    }, doc) === true);
+
+  // ── la leggenda sta in fondo, dove non scavalca la lavagna ──
+  const paginaLavagna = await pagU.evaluate(() => {
+    disegnaLavagna();
+    return document.getElementById('pagina-lavagna').innerHTML;
+  });
+  ok('la leggenda viene dopo la settimana, non prima',
+    paginaLavagna.indexOf('legenda-lavagna') > paginaLavagna.indexOf('class="giorni"'),
+    'leggenda a ' + paginaLavagna.indexOf('legenda-lavagna'));
+
+  // ── l'anagrafica dell'ufficio ──
+  ok('parte vuota finché non la si riempie',
+    await pagU.evaluate(() => { vaiA('clienti'); return CLIENTI.length; }) === 0);
+  ok('i clienti visti nei rapportini si possono prendere da lì',
+    await pagU.evaluate(async () => {
+      const mancanti = clientiMancanti().length;
+      await prendiClientiDaiRapportini();
+      return mancanti > 0 && CLIENTI.length === mancanti;
+    }));
+  ok('e finiscono su file, non solo a schermo',
+    await pagU.evaluate(async () => {
+      const a = JSON.parse(await leggiTesto(window.RADICE, 'clienti.json'));
+      return a.tipo === 'anagrafica-ufficio' && a.clienti.length > 0;
+    }));
+
+  // Telefono e mail sono dell'ufficio: il cantiere non li conosce, e nessuna
+  // importazione deve cancellarli.
+  const telefonoMesso = await pagU.evaluate(async () => {
+    modificaCliente(CLIENTI[0].id, 'telefono', '0461 000111');
+    await salvaClienti();
+    return CLIENTI[0].id;
+  });
+  ok('importando dal telefono arrivano i clienti nuovi',
+    await pagU.evaluate(async doc => {
+      await scriviTesto(window.RADICE, 'anagrafica-dal-telefono.json', JSON.stringify(doc));
+      const prima = CLIENTI.length;
+      await importaAnagrafica();
+      return CLIENTI.length > prima;
+    }, anagraficaDalTelefono));
+  ok('ma un numero di telefono messo in ufficio non viene sovrascritto',
+    await pagU.evaluate(id => (CLIENTI.find(c => c.id === id) || {}).telefono, telefonoMesso) === '0461 000111');
+  ok('e reimportare non duplica niente',
+    await pagU.evaluate(async doc => {
+      const prima = CLIENTI.length;
+      await scriviTesto(window.RADICE, 'anagrafica-dal-telefono.json', JSON.stringify(doc));
+      await importaAnagrafica();
+      return CLIENTI.length === prima;
+    }, anagraficaDalTelefono));
+  ok('senza il file dal telefono lo dice invece di tacere',
+    await pagU.evaluate(async () => {
+      const salva = CARTELLA;
+      await scriviTesto(window.RADICE, 'anagrafica-dal-telefono.json', 'non è json');
+      await importaAnagrafica();
+      CARTELLA = salva;
+      return document.getElementById('avviso').classList.contains('brutto');
+    }));
+  ok('le modifiche non salvate sopravvivono a una rilettura',
+    await pagU.evaluate(async id => {
+      modificaCliente(id, 'email', 'prova@esempio.it');
+      await ricarica();
+      return (CLIENTI.find(c => c.id === id) || {}).email === 'prova@esempio.it' && CLIENTI_DA_SALVARE === true;
+    }, telefonoMesso));
 
   // Un lavoro archiviato da una versione futura può avere campi che questa non
   // sa leggere: fermarsi è meglio che mostrare un totale sbagliato.
