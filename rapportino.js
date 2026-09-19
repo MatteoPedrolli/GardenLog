@@ -124,6 +124,74 @@ function nomeFileRapportino(doc) {
   return `${data}-${pulito(doc.cliente?.nome) || 'cliente'}-${doc.id}.json`;
 }
 
+// ── L'APPUNTAMENTO COME DOCUMENTO ──
+// Il secondo documento che le due app si scambiano, e va nella direzione opposta
+// al rapportino solo nel tempo: il cantiere prenota, l'ufficio pianifica. Nasce
+// perché il prossimo intervento scritto su una visita è una nota — «torna a
+// marzo» — mentre una prenotazione è una richiesta di mettere qualcosa in
+// calendario, e le due cose non si assomigliano abbastanza da condividere un
+// campo.
+//
+// Denormalizzato come il rapportino, e per lo stesso motivo: l'ufficio deve
+// poterlo leggere anche se quel cliente non ce l'ha ancora in anagrafica.
+
+const VERSIONE_APPUNTAMENTO = 1;
+
+function costruisciAppuntamento({ prenotazione, cliente }) {
+  return {
+    tipo: 'appuntamento',
+    versione: VERSIONE_APPUNTAMENTO,
+    id: prenotazione.PrenotazioneID,
+    revisione: (Number(prenotazione.Revisione) || 0) + 1,
+    creato: new Date().toISOString(),
+    cliente: {
+      id: (cliente && cliente.ClienteID) || prenotazione.ClienteID || '',
+      nome: (cliente && cliente.Cliente) || prenotazione.Cliente || '',
+      indirizzo: (cliente && cliente.Indirizzo) || '',
+      citta: (cliente && cliente.Citta) || '',
+    },
+    cosa: prenotazione.Cosa || '',
+    ore: Number(prenotazione.Ore) || 0,
+    // Una data, non un mese: in ufficio serve a mettere in ordine la coda, e un
+    // mese scritto a parole non si ordina.
+    entro: prenotazione.Entro || '',
+    requisiti: String(prenotazione.Requisiti || '').split(',').map(r => r.trim()).filter(r => r),
+    note: prenotazione.Note || '',
+  };
+}
+
+function leggiAppuntamento(grezzo) {
+  let doc = grezzo;
+  if (typeof grezzo === 'string') {
+    try { doc = JSON.parse(grezzo); }
+    catch (e) { throw new Error('Il file non è leggibile: non è JSON valido'); }
+  }
+  if (!doc || doc.tipo !== 'appuntamento') throw new Error('Questo file non è un appuntamento');
+  const versione = Number(doc.versione) || 0;
+  if (versione > VERSIONE_APPUNTAMENTO) {
+    throw new Error(`Appuntamento di una versione più recente (${versione}): aggiorna l'app dell'ufficio`);
+  }
+  if (!doc.id) throw new Error('Appuntamento senza identificativo');
+  return {
+    ...doc,
+    versione: versione || 1,
+    revisione: Number(doc.revisione) || 1,
+    cliente: doc.cliente || { id: '', nome: '' },
+    ore: Number(doc.ore) || 0,
+    requisiti: Array.isArray(doc.requisiti) ? doc.requisiti : [],
+  };
+}
+
+function nomeFileAppuntamento(doc) {
+  const pulito = s => String(s || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '')
+    .replace(/[^a-zA-Z0-9]+/g, '-').replace(/^-|-$/g, '').toLowerCase();
+  const quando = (doc.entro || '').slice(0, 10) || 'senza-data';
+  return `${quando}-${pulito(doc.cliente && doc.cliente.nome) || 'cliente'}-${doc.id}.json`;
+}
+
 if (typeof module !== 'undefined' && module.exports) {
-  module.exports = { VERSIONE_RAPPORTINO, costruisciRapportino, leggiRapportino, nomeFileRapportino };
+  module.exports = {
+    VERSIONE_RAPPORTINO, costruisciRapportino, leggiRapportino, nomeFileRapportino,
+    VERSIONE_APPUNTAMENTO, costruisciAppuntamento, leggiAppuntamento, nomeFileAppuntamento,
+  };
 }

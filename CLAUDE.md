@@ -140,9 +140,17 @@ quel concime nel frattempo è stato cancellato.
 essere un rapportino, o venire da una versione futura. In quest'ultimo caso si
 ferma e lo dice, invece di archiviare un documento monco in silenzio.
 
+I documenti sono due. Il **rapportino** racconta un lavoro finito; l'**appuntamento**
+è una prenotazione fatta dal cantiere, col cliente davanti. Sono cose diverse e in
+ufficio le guardano due schermate diverse, quindi viaggiano separate e finiscono in
+due cartelle: `rapportini/` e `appuntamenti/`. Il prossimo intervento scritto su una
+visita resta quello che è — una nota, «torna a marzo» — e non è una prenotazione.
+
 Il trasporto sta in `ufficio/`: uno script Apps Script riceve dal telefono e
-deposita nella cartella Drive, che sul PC dell'ufficio è una cartella normale.
-Un file, un solo autore — il telefono deposita, l'ufficio legge.
+deposita nella cartella Drive, che sul PC dell'ufficio è una cartella normale. Lo
+script instrada per `tipo`: aggiungere un documento nuovo vuol dire aggiungere una
+riga a `CARTELLE` **e rifare la distribuzione**, o continua a girare la versione di
+prima. Un file, un solo autore — il telefono deposita, l'ufficio legge.
 
 **La consegna passa da una coda.** Il rapportino si salva sempre in locale e
 parte quando c'è rete: in giardino il campo spesso non c'è, e se l'invio fosse
@@ -235,11 +243,26 @@ di ricordarti di salvare è una lavagna che perde una settimana di pianificazion
 **Il sabato resta a disposizione**: c'è, ma non è una giornata come le altre e il
 piede della colonna lo dice.
 
-I lavori nascono da `prossimo` sui rapportini archiviati — l'unico canale che dal
-cantiere arriva in ufficio — o si aggiungono a mano. Ogni rapportino già guardato
-finisce in `visti`, così quello che l'ufficio ha scartato non ricompare al giro
-dopo. Sul telefono il mese è il valore di una select (`"03"`, non `"marzo"`):
-passa da `nomeMese()` prima di andare a schermo.
+**Quanto è largo un lavoro lo dice chi pianifica**, non la stima ore: `mezze` si
+alza e si abbassa di uno con `+` e `−`. Dedurlo dalle ore legava la lavagna a un
+numero messo a occhio, e chi pianifica sa cose che la stima non sa. Le ore seguono:
+si spalmano sulle mezze giornate occupate e restano un'indicazione per chi guarda
+la colonna.
+
+I lavori arrivano da tre parti:
+
+- le **prenotazioni** depositate in `appuntamenti/` entrano **da sole** a ogni
+  rilettura della cartella. Chi prenota è in giardino col cliente davanti, e
+  chiedere all'ufficio di ricopiarle vorrebbe dire perderne una ogni tanto;
+- i **prossimi interventi** segnati sui rapportini, col bottone — e si guardano
+  anche quelli *in arrivo*, non solo gli archiviati: il prossimo intervento si
+  legge quando arriva, non dopo aver chiuso il conto;
+- a mano, per le telefonate.
+
+Tutto quello che è già stato guardato finisce in `visti`, così quello che l'ufficio
+ha scartato non ricompare al giro dopo. Sul telefono il mese del prossimo intervento
+è il valore di una select (`"03"`, non `"marzo"`): passa da `nomeMese()` prima di
+andare a schermo.
 
 ## Il foglio che va al cliente
 
@@ -269,6 +292,21 @@ decisione resta di chi stampa.
 Il titolo della pagina viene cambiato prima di stampare, perché Chrome lo propone
 come nome del file in PDF, e rimesso a posto su `afterprint`: rimetterlo subito
 darebbe un file chiamato «GiardinoApp · Ufficio».
+
+## L'anagrafica: due archivi, non una copia
+
+L'ufficio ha il suo `clienti.json`, e **non è una copia** di quello del telefono:
+qui i clienti hanno telefono e mail — quello che serve per chiamare e confermare
+un appuntamento — e il cantiere non li conosce.
+
+Per questo il telefono esporta in un file a parte, `anagrafica-dal-telefono.json`,
+e l'ufficio **importa** da lì invece di leggerlo come proprio archivio. Un'importazione
+che sovrascrive cancellerebbe i numeri di telefono a ogni giro: arrivano solo i
+clienti nuovi, quelli che ci sono già restano come sono stati corretti. Resta valida
+la regola di sempre — un file, un solo autore — anche quando i dati viaggiano.
+
+Chi compare sui rapportini e non in anagrafica si aggiunge con un bottone: il
+cantiere l'ha già scritto una volta, e farlo ribattere sarebbe lavoro inventato.
 
 ## Il passaggio di consegne del listino
 

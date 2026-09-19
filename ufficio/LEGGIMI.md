@@ -18,11 +18,20 @@ La cartella, dopo un po' di lavoro, ha questa forma:
   GiardinoApp/
     rapportini/                    ← ci scrive il telefono, l'ufficio legge
       2026-09-18-mario-rossi-<id>.json
+    appuntamenti/                  ← ci scrive il telefono: le prenotazioni
+      2027-03-15-mario-rossi-<id>.json
     archivio/                      ← ci scrive l'ufficio
       2026/
         2026-09-18-mario-rossi-<id>.json
+    clienti.json                   ← l'anagrafica dell'ufficio
     listino.json                   ← i prezzi, solo dell'ufficio
+    impostazioni.json              ← l'intestazione del conto
+    lavagna.json                   ← la pianificazione
+    anagrafica-dal-telefono.json   ← il file che il telefono esporta, da importare
 ```
+
+Le prenotazioni depositate in `appuntamenti/` compaiono **da sole** sulla lavagna:
+non c'è niente da premere. Chi prenota è in giardino col cliente davanti.
 
 ## L'app dell'ufficio
 

@@ -639,6 +639,14 @@ select.form-control { background-image: url("data:image/svg+xml,%3Csvg xmlns='ht
 
     <!-- PROSSIMI INTERVENTI -->
     <div id="page-prossimi" class="page">
+      <div class="section-title">Prenota un appuntamento</div>
+      <div class="card" style="padding:14px">
+        <div class="dati-nota">Quello che prenoti qui compare da solo sulla lavagna dell'ufficio.
+          Parte quando c'è rete, come il rapportino.</div>
+        <button class="btn btn-primary" onclick="apriPrenotazione()">📅 Prenota</button>
+      </div>
+      <div id="prenotazioni-list"></div>
+
       <div class="section-title">Prossimi Interventi 📅</div>
       <div id="prossimi-list"></div>
     </div>
@@ -726,6 +734,60 @@ select.form-control { background-image: url("data:image/svg+xml,%3Csvg xmlns='ht
       <span class="icon">🌱</span><span>Prati</span>
     </button>
   </nav>
+</div>
+
+<!-- DRAWER PRENOTAZIONE -->
+<div class="overlay" id="overlay-prenotazione">
+  <div class="drawer">
+    <div class="drawer-handle"></div>
+    <div class="drawer-title">Prenota un appuntamento</div>
+
+    <div class="form-group">
+      <label class="form-label">Cliente</label>
+      <div class="addr-wrapper">
+        <input type="text" class="form-control" id="f-pren-cliente-search" placeholder="Cerca cliente..."
+               autocomplete="off" oninput="filtraClientiPrenotazione(this.value)"
+               onfocus="filtraClientiPrenotazione(this.value)">
+        <div class="suggestions" id="pren-cliente-suggestions" style="display:none"></div>
+      </div>
+      <input type="hidden" id="f-pren-cliente">
+      <div id="f-pren-cliente-selected" style="display:none; margin-top:6px; padding:8px 12px; background:var(--green-mist); border-radius:8px; font-size:0.85rem; font-weight:500; color:var(--green-deep)">
+        <span id="f-pren-cliente-nome"></span>
+        <button onclick="scollegaClientePrenotazione()" style="background:none;border:none;cursor:pointer;color:var(--text-light);font-size:1rem;float:right">✕</button>
+      </div>
+    </div>
+
+    <div class="form-group">
+      <label class="form-label">Cosa c'è da fare</label>
+      <input type="text" class="form-control" id="f-pren-cosa" placeholder="Es. Potatura siepe di lauro">
+    </div>
+
+    <div class="form-row">
+      <div class="form-group">
+        <label class="form-label">Stima ore</label>
+        <input type="number" class="form-control" id="f-pren-ore" step="0.5" min="0" placeholder="Es. 4">
+      </div>
+      <div class="form-group">
+        <label class="form-label">Entro quando</label>
+        <input type="date" class="form-control" id="f-pren-entro">
+      </div>
+    </div>
+
+    <div class="form-group">
+      <label class="form-label">Manca qualcosa? (blocca il lavoro)</label>
+      <input type="text" class="form-control" id="f-pren-requisiti" placeholder="Es. serve la piattaforma">
+    </div>
+
+    <div class="form-group">
+      <label class="form-label">Note per l'ufficio</label>
+      <textarea class="form-control" id="f-pren-note" rows="2" placeholder="Il cliente preferisce il mattino..."></textarea>
+    </div>
+
+    <button class="btn btn-primary" onclick="salvaPrenotazione()">📨 Manda in ufficio</button>
+    <div style="height:8px"></div>
+    <button class="btn btn-secondary" onclick="closeDrawer('overlay-prenotazione')">Annulla</button>
+    <div style="height:8px"></div>
+  </div>
 </div>
 
 <!-- DRAWER VOCE ARCHIVIO -->
@@ -949,14 +1011,14 @@ const IDB_STORE = 'stato';
 const IDB_CHIAVE = 'db';
 const MIRROR_KEY = 'giardinolog-db';
 const CACHE_SHEETS = 'giardino-db-v1';  // cache locale di quando si leggeva da Sheets
-const VERSIONE_DATI = 8;
+const VERSIONE_DATI = 9;
 
 // Le impostazioni stanno dentro DB, non in META, perché così finiscono nel
 // backup: un indirizzo da riscrivere dopo aver cambiato telefono è una seccatura
 // piccola, ma è la stessa categoria di dato che il backup deve salvare.
 const IMPOSTAZIONI_DEFAULT = { UrlRapportini: '', NomeMittente: '' };
 
-const COLLEZIONI = ['clienti', 'visite', 'operazioni', 'concimi', 'sementi', 'fitofarmaci', 'fasce', 'tipiOperazione', 'voci', 'coda',
+const COLLEZIONI = ['clienti', 'visite', 'operazioni', 'concimi', 'sementi', 'fitofarmaci', 'fasce', 'tipiOperazione', 'voci', 'coda', 'prenotazioni',
   // di passaggio: i prezzi vecchi in attesa di essere portati in ufficio
   'listinoVecchio'];
 
@@ -1211,6 +1273,15 @@ const MIGRAZIONI = {
     // un listino. Riscriverli cancellerebbe l'unica traccia che ne resta.
     return db;
   },
+
+  // 8 → 9: dal cantiere si può prenotare un appuntamento, e la prenotazione
+  // viaggia verso l'ufficio come un documento suo. Il prossimo intervento
+  // scritto su una visita resta quello che è — una nota, «torna a marzo» —
+  // mentre questa è una richiesta di mettere qualcosa sulla lavagna.
+  9: db => {
+    if (!Array.isArray(db.prenotazioni)) db.prenotazioni = [];
+    return db;
+  },
 };
 
 function migra(grezzo, versione) {
@@ -1288,6 +1359,7 @@ function renderAll() {
   renderClienti();
   renderVisite();
   renderProssimi();
+  renderPrenotazioni();
   renderPrati();
 }
 
@@ -2563,6 +2635,105 @@ function togliRigaConto(i) {
 let invioInCorso = false;
 let orologioCoda = null;
 
+// ── PRENOTARE UN APPUNTAMENTO ──
+// Si prenota dal giardino, col cliente davanti: è lì che si decide quando si
+// torna. La prenotazione parte verso l'ufficio dalla stessa coda del rapportino,
+// perché il campo manca nello stesso modo e il lavoro non si deve perdere.
+
+function apriPrenotazione() {
+  ['f-pren-cosa', 'f-pren-ore', 'f-pren-entro', 'f-pren-requisiti', 'f-pren-note']
+    .forEach(id => document.getElementById(id).value = '');
+  scollegaClientePrenotazione();
+  document.getElementById('overlay-prenotazione').classList.add('open');
+}
+
+function filtraClientiPrenotazione(q) {
+  const sug = document.getElementById('pren-cliente-suggestions');
+  if (!q || q.length < 1) { sug.style.display = 'none'; return; }
+  const trovati = DB.clienti.filter(c => c.Cliente?.toLowerCase().includes(q.toLowerCase())).slice(0, 6);
+  if (!trovati.length) { sug.style.display = 'none'; return; }
+  sug.innerHTML = trovati.map(c => `<div class="suggestion-item" onclick="scegliClientePrenotazione('${perOnclick(c.ClienteID)}', '${perOnclick(c.Cliente)}')">${perValore(c.Cliente)}<span style="float:right;font-size:0.72rem;color:var(--text-light)">${perValore(c.Citta)}</span></div>`).join('');
+  sug.style.display = 'block';
+}
+
+function scegliClientePrenotazione(id, nome) {
+  document.getElementById('f-pren-cliente').value = id;
+  document.getElementById('f-pren-cliente-nome').textContent = nome;
+  document.getElementById('f-pren-cliente-selected').style.display = 'block';
+  document.getElementById('f-pren-cliente-search').style.display = 'none';
+  document.getElementById('pren-cliente-suggestions').style.display = 'none';
+}
+
+function scollegaClientePrenotazione() {
+  document.getElementById('f-pren-cliente').value = '';
+  document.getElementById('f-pren-cliente-search').value = '';
+  document.getElementById('f-pren-cliente-search').style.display = 'block';
+  document.getElementById('f-pren-cliente-selected').style.display = 'none';
+  document.getElementById('pren-cliente-suggestions').style.display = 'none';
+}
+
+async function salvaPrenotazione() {
+  if (salvataggioInCorso) return;
+  const cid = document.getElementById('f-pren-cliente').value;
+  if (!cid) { showToast('⚠️ Scegli il cliente'); return; }
+  const cosa = document.getElementById('f-pren-cosa').value.trim();
+  if (!cosa) { showToast('⚠️ Scrivi cosa c\'è da fare'); return; }
+
+  const prenotazione = {
+    PrenotazioneID: 'pren-' + Date.now().toString(36),
+    ClienteID: cid,
+    Cosa: cosa,
+    Ore: document.getElementById('f-pren-ore').value,
+    Entro: document.getElementById('f-pren-entro').value,
+    Requisiti: document.getElementById('f-pren-requisiti').value.trim(),
+    Note: document.getElementById('f-pren-note').value.trim(),
+    Creata: new Date().toISOString(),
+    Consegnata: '',
+  };
+
+  salvataggioInCorso = true;
+  try {
+    DB.prenotazioni.push(prenotazione);
+    accodaAppuntamento(prenotazione);
+    // Prima si salva, poi si prova a consegnare: al contrario, una consegna
+    // andata a buon fine su un salvataggio fallito lascerebbe l'ufficio con un
+    // appuntamento che qui non esiste.
+    await salvaDB({ conta: false });
+    closeDrawer('overlay-prenotazione');
+    showToast('📤 Prenotazione in consegna');
+    renderAll();
+    svuotaCoda({ avvisa: true });
+  } finally {
+    salvataggioInCorso = false;
+  }
+}
+
+function accodaAppuntamento(prenotazione) {
+  const cliente = DB.clienti.find(c => c.ClienteID == prenotazione.ClienteID);
+  const doc = costruisciAppuntamento({ prenotazione, cliente });
+  DB.coda = DB.coda.filter(v => v.docID !== doc.id);
+  DB.coda.push({ docID: doc.id, doc, creato: new Date().toISOString(), tentativi: 0, errore: '' });
+  return doc;
+}
+
+function renderPrenotazioni() {
+  const el = document.getElementById('prenotazioni-list');
+  if (!el) return;
+  const elenco = [...(DB.prenotazioni || [])].sort((a, b) => String(b.Creata).localeCompare(String(a.Creata)));
+  if (!elenco.length) { el.innerHTML = ''; return; }
+  el.innerHTML = elenco.slice(0, 10).map(p => {
+    const c = DB.clienti.find(x => x.ClienteID == p.ClienteID);
+    const inCoda = (DB.coda || []).some(v => v.docID === p.PrenotazioneID);
+    return `<div class="card" style="padding:12px">
+      <div style="font-weight:600">${perValore(c ? c.Cliente : 'cliente eliminato')}</div>
+      <div style="font-size:0.85rem; color:var(--text-mid)">${perValore(p.Cosa)}</div>
+      <div style="font-size:0.78rem; color:var(--text-light); margin-top:4px">
+        ${p.Ore ? formattaQuantita(p.Ore) + ' h · ' : ''}${p.Entro ? 'entro il ' + new Date(p.Entro).toLocaleDateString('it-IT') + ' · ' : ''}${inCoda ? '📤 da consegnare' : '✅ in ufficio'}
+      </div>
+    </div>`;
+  }).join('');
+}
+
 function accodaRapportino(visita) {
   const cliente = DB.clienti.find(c => c.ClienteID == visita.ClienteID);
   const doc = costruisciRapportino({
@@ -2615,6 +2786,11 @@ async function svuotaCoda({ avvisa = false } = {}) {
         if (visita) {
           visita.Consegnato = new Date().toISOString();
           visita.Revisione = voce.doc.revisione;
+        }
+        const prenotazione = (DB.prenotazioni || []).find(p => p.PrenotazioneID === voce.docID);
+        if (prenotazione) {
+          prenotazione.Consegnata = new Date().toISOString();
+          prenotazione.Revisione = voce.doc.revisione;
         }
         consegnati++;
       } catch (e) {

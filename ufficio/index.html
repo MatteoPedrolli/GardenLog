@@ -404,6 +404,7 @@ input.vuoto { background: #fffdf5; border-color: #ecdca8; }
 
 const VERSIONE_LAVORO = 1;
 const CARTELLA_ARRIVI = 'rapportini';
+const CARTELLA_APPUNTAMENTI = 'appuntamenti';
 const CARTELLA_ARCHIVIO = 'archivio';
 const FILE_LISTINO = 'listino.json';
 const FILE_IMPOSTAZIONI = 'impostazioni.json';
@@ -605,6 +606,43 @@ async function ricarica() {
   LISTINO = await caricaListino();
   ARCHIVIO = await caricaArchivio();
   ARRIVI = await caricaArrivi();
+  await assorbiAppuntamenti();
+}
+
+// Le prenotazioni fatte dal cantiere entrano sulla lavagna da sole: chi prenota è
+// col cliente davanti, e chiedere all'ufficio di ricopiarle a mano vorrebbe dire
+// perderne una ogni tanto. Ognuna si guarda una volta sola — finita in «visti»,
+// non ricompare nemmeno se in ufficio l'hanno tolta apposta.
+async function assorbiAppuntamenti() {
+  const cartella = await sottocartella(CARTELLA, CARTELLA_APPUNTAMENTI, false);
+  if (!cartella) return;
+  const nuovi = [];
+  for (const nome of await elencaFile(cartella)) {
+    let doc;
+    try {
+      doc = leggiAppuntamento(await leggiTesto(cartella, nome));
+    } catch (e) {
+      ILLEGGIBILI.push({ nome: CARTELLA_APPUNTAMENTI + '/' + nome, motivo: e.message });
+      continue;
+    }
+    if (LAVAGNA.visti.includes(doc.id)) continue;
+    LAVAGNA.visti.push(doc.id);
+    nuovi.push(sistemaLavoro({
+      cliente: doc.cliente.nome || '',
+      luogo: doc.cliente.citta || '',
+      cosa: doc.cosa,
+      ore: doc.ore,
+      entro: doc.entro || '',
+      quando: doc.entro ? 'entro il ' + formattaData(doc.entro) : '',
+      origine: 'prenotato dal cantiere',
+      requisiti: doc.requisiti,
+      stato: 'lista',
+      da: doc.id,
+    }));
+  }
+  if (!nuovi.length) return;
+  LAVAGNA.lavori = LAVAGNA.lavori.concat(nuovi);
+  await salvaLavagna();
 }
 
 async function caricaListino() {
@@ -1804,7 +1842,12 @@ function disegnaLavagna() {
   // ── la colonna di sinistra: quello che c'è da fare e non ha una data ──
   const inCoda = LAVAGNA.lavori.filter(l => !piazzato(l)).sort(ordinaCoda);
   const rimasti = inCoda.filter(l => l.rimandato).length;
+  const prenotati = inCoda.filter(l => l.origine === 'prenotato dal cantiere' && !l.rimandato).length;
   html += '<section class="coda"><h3 class="titolo-colonna">Da pianificare</h3>';
+  if (prenotati) {
+    html += '<div class="rimasti" style="background:var(--green-mist); border-color:var(--green-light); color:var(--green-deep)">' +
+      '📨 ' + prenotati + (prenotati === 1 ? ' prenotazione arrivata' : ' prenotazioni arrivate') + ' dal cantiere</div>';
+  }
   if (rimasti) {
     html += '<div class="rimasti">⚠ ' + rimasti +
       (rimasti === 1 ? ' lavoro è slittato' : ' lavori sono slittati') +

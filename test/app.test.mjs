@@ -270,6 +270,48 @@ try {
   ok('la visita porta il numero di revisione consegnata',
     await page.evaluate(() => DB.visite[0].Revisione) >= 1);
   ok('il servizio è stato chiamato davvero', consegneRicevute >= 3, 'chiamate: ' + consegneRicevute);
+  // ── prenotare un appuntamento dal cantiere ──
+  // È l'altra direzione del ponte: il cantiere è col cliente davanti quando si
+  // decide quando si torna, e quella decisione deve arrivare sulla lavagna.
+  await page.click('#nav-prossimi');
+  await page.click('#page-prossimi .btn-primary');
+  await page.waitForTimeout(200);
+  ok('il pannello della prenotazione si apre',
+    await page.isVisible('#overlay-prenotazione .drawer'));
+  await page.fill('#f-pren-cliente-search', 'Mario');
+  await page.waitForTimeout(200);
+  await page.click('#pren-cliente-suggestions .suggestion-item');
+  await page.fill('#f-pren-cosa', 'Potatura siepe di lauro');
+  await page.fill('#f-pren-ore', '4');
+  await page.fill('#f-pren-entro', '2027-03-15');
+  await page.fill('#f-pren-requisiti', 'serve la scala lunga');
+  await page.click('#overlay-prenotazione .btn-primary');
+  await page.waitForTimeout(500);
+
+  ok('la prenotazione resta sul telefono',
+    await page.evaluate(() => DB.prenotazioni.length) === 1);
+  const docAppuntamento = await page.evaluate(() => {
+    const p = DB.prenotazioni[0];
+    const c = DB.clienti.find(x => x.ClienteID == p.ClienteID);
+    return costruisciAppuntamento({ prenotazione: p, cliente: c });
+  });
+  ok('il documento è un appuntamento, non un rapportino',
+    docAppuntamento.tipo === 'appuntamento' && docAppuntamento.cosa === 'Potatura siepe di lauro');
+  ok('porta il cliente per esteso, come il rapportino',
+    docAppuntamento.cliente.nome === 'Mario Rossi' && !!docAppuntamento.cliente.id);
+  ok('e i requisiti separati dalle virgole',
+    JSON.stringify(docAppuntamento.requisiti) === '["serve la scala lunga"]');
+  ok('la prenotazione è partita dalla stessa coda del rapportino',
+    await page.evaluate(() => DB.prenotazioni[0].Consegnata !== ''));
+  ok('un appuntamento di una versione futura si ferma e lo dice',
+    await page.evaluate(() => {
+      try { leggiAppuntamento({ tipo: 'appuntamento', versione: 99, id: 'x' }); return false; }
+      catch (e) { return e.message.includes('recente'); }
+    }));
+  ok('il nome del file resta leggibile a occhio',
+    await page.evaluate(d => /^2027-03-15-mario-rossi-/.test(nomeFileAppuntamento(d)), docAppuntamento),
+    await page.evaluate(d => nomeFileAppuntamento(d), docAppuntamento));
+
   await page.evaluate(() => { DB.visite[0].Consegnato = ''; return salvaDB({ conta: false }); });
   await ctx.unroute(CONSEGNA);
 
@@ -1004,6 +1046,43 @@ try {
       return LAVAGNA.lavori.length === prima + 1 &&
         LAVAGNA.lavori.some(l => l.cliente === 'Cliente Appena Arrivato' && l.entro === '2027-04-01');
     }, doc) === true);
+
+  // ── le prenotazioni dal cantiere arrivano sulla lavagna da sole ──
+  // Nessun bottone da premere: chi prenota è in giardino, e chiedere all'ufficio
+  // di ricopiare vorrebbe dire perderne una ogni tanto.
+  ok('una prenotazione depositata compare in coda senza premere niente',
+    await pagU.evaluate(async d => {
+      const cartella = await window.RADICE.getDirectoryHandle('appuntamenti', { create: true });
+      await scriviTesto(cartella, nomeFileAppuntamento(d), JSON.stringify(d));
+      const prima = LAVAGNA.lavori.length;
+      await ricarica();
+      const l = LAVAGNA.lavori.find(x => x.da === d.id);
+      return LAVAGNA.lavori.length === prima + 1 && !!l &&
+        l.origine === 'prenotato dal cantiere' && l.entro === '2027-03-15' &&
+        l.requisiti.length === 1;
+    }, docAppuntamento) === true);
+  ok('e la colonna lo dice a chi guarda',
+    (await pagU.evaluate(() => { vaiA('lavagna'); return document.getElementById('pagina-lavagna').innerHTML; }))
+      .includes('prenotazione arrivata'));
+  ok('ricaricando non ne compare una seconda',
+    await pagU.evaluate(async () => {
+      const prima = LAVAGNA.lavori.length;
+      await ricarica();
+      return LAVAGNA.lavori.length === prima;
+    }));
+  // Una prenotazione bloccata da un requisito va in fondo alla coda come le altre.
+  ok('arriva bloccata se il cantiere ha detto che manca qualcosa',
+    await pagU.evaluate(d => {
+      const l = LAVAGNA.lavori.find(x => x.da === d.id);
+      return bloccato(l);
+    }, docAppuntamento));
+  ok('un file di appuntamento illeggibile si vede invece di sparire',
+    await pagU.evaluate(async () => {
+      const cartella = await window.RADICE.getDirectoryHandle('appuntamenti');
+      await scriviTesto(cartella, 'rotto.json', '{"tipo":"appunta');
+      await ricarica();
+      return ILLEGGIBILI.some(f => f.nome.includes('appuntamenti/rotto.json'));
+    }));
 
   // ── la leggenda sta in fondo, dove non scavalca la lavagna ──
   const paginaLavagna = await pagU.evaluate(() => {
