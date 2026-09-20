@@ -301,7 +301,9 @@ try {
   await page.click('#pren-cliente-suggestions .suggestion-item');
   await page.fill('#f-pren-cosa', 'Potatura siepe di lauro');
   await page.fill('#f-pren-ore', '4');
-  await page.fill('#f-pren-entro', '2027-03-15');
+  // Si sceglie un giorno e conta la sua settimana: il 15 marzo 2027 è un lunedì,
+  // e la settimana resta quella anche scegliendo il mercoledì dopo.
+  await page.fill('#f-pren-settimana', '2027-03-17');
   await page.fill('#f-pren-requisiti', 'serve la scala lunga');
   await page.click('#overlay-prenotazione .btn-primary');
   await page.waitForTimeout(500);
@@ -315,6 +317,14 @@ try {
   });
   ok('il documento è un appuntamento, non un rapportino',
     docAppuntamento.tipo === 'appuntamento' && docAppuntamento.cosa === 'Potatura siepe di lauro');
+  // Non un giorno preciso: quando si prenota in giardino il giorno non si sa
+  // ancora, e fingere di saperlo vorrebbe dire spostarlo tre volte.
+  ok('porta la settimana, scritta come il lunedì che la apre',
+    docAppuntamento.settimana === '2027-03-15', docAppuntamento.settimana);
+  ok('e si legge sempre nello stesso modo',
+    await page.evaluate(() => etichettaSettimana('2027-03-15')) === 'dal 15/03 · settimana 11');
+  ok('la schermata mostra la settimana scelta, non la data battuta',
+    (await page.textContent('#prenotazioni-list')).includes('settimana 11'));
   ok('porta il cliente per esteso, come il rapportino',
     docAppuntamento.cliente.nome === 'Mario Rossi' && !!docAppuntamento.cliente.id);
   ok('e i requisiti separati dalle virgole',
@@ -324,11 +334,17 @@ try {
   ok('un appuntamento di una versione futura si ferma e lo dice',
     await page.evaluate(() => {
       try { leggiAppuntamento({ tipo: 'appuntamento', versione: 99, id: 'x' }); return false; }
-      catch (e) { return e.message.includes('recente'); }
+      catch (e) { return e.message.includes('versione'); }
     }));
   ok('il nome del file resta leggibile a occhio',
     await page.evaluate(d => /^2027-03-15-mario-rossi-/.test(nomeFileAppuntamento(d)), docAppuntamento),
     await page.evaluate(d => nomeFileAppuntamento(d), docAppuntamento));
+  // In costruzione non si converte: o è di questa versione, o non si legge.
+  ok('un appuntamento di un\'altra versione viene rifiutato',
+    await page.evaluate(() => {
+      try { leggiAppuntamento({ tipo: 'appuntamento', versione: 1, id: 'x' }); return false; }
+      catch (e) { return e.message.includes('versione'); }
+    }));
 
   await page.evaluate(() => { DB.visite[0].Consegnato = ''; return salvaDB({ conta: false }); });
   await ctx.unroute(CONSEGNA);
@@ -864,10 +880,14 @@ try {
     return LAVAGNA.lavori.length;
   });
   ok('il prossimo intervento segnato in cantiere arriva sulla lavagna', presi === 1);
-  ok('col mese scritto a parole, non col numero della select',
-    await pagU.evaluate(() => LAVAGNA.lavori[0].quando) === 'marzo 2027');
-  ok('e con una data che serve a mettere in ordine la coda',
-    await pagU.evaluate(() => LAVAGNA.lavori[0].entro) === '2027-03-01');
+  // Il cantiere segna mese e anno; la coda ragiona per settimane: si prende la
+  // settimana in cui cade il primo del mese. Non è una scadenza, è un posto in
+  // fila.
+  ok('col mese del cantiere tradotto in una settimana',
+    await pagU.evaluate(() => LAVAGNA.lavori[0].settimana) === '2027-03-01',
+    await pagU.evaluate(() => LAVAGNA.lavori[0].settimana));
+  ok('e scritta sul cartellino sempre nello stesso modo',
+    await pagU.evaluate(() => etichettaSettimana(LAVAGNA.lavori[0].settimana)) === 'dal 01/03 · settimana 9');
   // Lo stesso rapportino non deve tornare a ogni clic sul bottone.
   ok('un secondo giro non lo duplica',
     await pagU.evaluate(async () => { await importaProssimi(); return LAVAGNA.lavori.length; }) === 1);
@@ -973,18 +993,66 @@ try {
     ].join('|')) === '6.67|6.67|6.67');
 
   // ── rimetterlo in coda lo fa slittare, e lo dice ──
-  await pagU.evaluate(async id => spostaLavoro(id, '', ''), idLavoro);
+  // La sua settimana torna quella mostrata: un lavoro previsto per marzo non
+  // comparirebbe in coda a settembre, ed è proprio la regola che vogliamo.
+  await pagU.evaluate(async id => {
+    LAVAGNA.lavori.find(x => x.id === id).settimana = '2026-09-21';
+    await spostaLavoro(id, '', '');
+  }, idLavoro);
   await pagU.waitForTimeout(150);
   ok('tornato in coda, il lavoro è segnato come slittato',
     await pagU.evaluate(() => LAVAGNA.lavori[0].stato === 'lista' && LAVAGNA.lavori[0].rimandato === true));
   ok('e la coda lo dice a schermo',
     (await pagU.textContent('#pagina-lavagna')).includes('slittat'));
 
+  // ── quello che è per più avanti non sta in mezzo ai piedi ──
+  // Settimana dopo settimana la colonna diventava un elenco di cose che non si
+  // potevano ancora toccare. Ora si vede quello che è ora di pianificare.
+  const codaFiltrata = await pagU.evaluate(() => {
+    SETTIMANA = lunediDi(new Date('2026-09-21T12:00:00'));
+    MOSTRA_FUTURI = false;
+    LAVAGNA.lavori.push(sistemaLavoro({ cliente: 'Per adesso', settimana: '2026-09-21', stato: 'lista' }));
+    LAVAGNA.lavori.push(sistemaLavoro({ cliente: 'Per fra un mese', settimana: '2026-10-19', stato: 'lista' }));
+    LAVAGNA.lavori.push(sistemaLavoro({ cliente: 'Senza settimana', stato: 'lista' }));
+    disegnaLavagna();
+    return document.querySelector('#pagina-lavagna .coda').innerHTML;
+  });
+  ok('quello della settimana mostrata si vede', codaFiltrata.includes('Per adesso'));
+  // Senza settimana non ha un momento suo: quindi è adesso.
+  ok('e anche quello senza settimana', codaFiltrata.includes('Senza settimana'));
+  ok('quello di fra un mese no', !codaFiltrata.includes('Per fra un mese'));
+  // Il pallino nella barra conta quello che la colonna mostra: se contasse
+  // anche quello nascosto, uno dei due mentirebbe.
+  ok('e il pallino conta quello che la colonna mostra',
+    await pagU.evaluate(() => daPianificareOra().length ===
+      document.querySelectorAll('#pagina-lavagna .coda-lista .cartellino').length));
+  // Nascondere senza dire quanto, e senza un modo per guardarlo, è il tipo di
+  // aiuto che fa perdere un lavoro.
+  ok('ma la colonna dice quanti ne sta tenendo da parte',
+    /\d+ lavor[oi] (è|sono) per (una settimana dopo|le settimane dopo)/.test(codaFiltrata), codaFiltrata.slice(0, 300));
+  ok('e si possono guardare lo stesso',
+    (await pagU.evaluate(() => { mostraFuturi(); return document.querySelector('#pagina-lavagna .coda').innerHTML; }))
+      .includes('Per fra un mese'));
+  // Spostandosi avanti con le frecce compare da solo: la settimana mostrata è
+  // quella che decide, non l'oggi.
+  ok('e passando a quella settimana compare da solo',
+    await pagU.evaluate(() => {
+      mostraFuturi();   // rimesso com'era
+      SETTIMANA = lunediDi(new Date('2026-10-19T12:00:00'));
+      disegnaLavagna();
+      return document.querySelector('#pagina-lavagna .coda').innerHTML.includes('Per fra un mese');
+    }));
+  await pagU.evaluate(() => {
+    LAVAGNA.lavori = LAVAGNA.lavori.filter(l => !['Per adesso', 'Per fra un mese', 'Senza settimana'].includes(l.cliente));
+    SETTIMANA = lunediDi(new Date('2026-09-21T12:00:00'));
+    disegnaLavagna();
+  });
+
   // ── l'ordine della coda: bloccati in fondo, slittati in cima ──
   const ordine = await pagU.evaluate(async () => {
-    LAVAGNA.lavori.push(sistemaLavoro({ cliente: 'Scade prima', entro: '2026-10-01', stato: 'lista' }));
-    LAVAGNA.lavori.push(sistemaLavoro({ cliente: 'Scade dopo', entro: '2026-12-01', stato: 'lista' }));
-    LAVAGNA.lavori.push(sistemaLavoro({ cliente: 'Bloccato', entro: '2026-09-22',
+    LAVAGNA.lavori.push(sistemaLavoro({ cliente: 'Scade prima', settimana: '2026-09-21', stato: 'lista' }));
+    LAVAGNA.lavori.push(sistemaLavoro({ cliente: 'Scade dopo', settimana: '2026-09-22', stato: 'lista' }));
+    LAVAGNA.lavori.push(sistemaLavoro({ cliente: 'Bloccato', settimana: '2026-09-21',
       requisiti: ['serve la piattaforma'], stato: 'lista' }));
     await salvaLavagna();
     disegnaLavagna();
@@ -1041,7 +1109,7 @@ try {
       const prima = LAVAGNA.lavori.length;
       await importaProssimi();
       return LAVAGNA.lavori.length === prima + 1 &&
-        LAVAGNA.lavori.some(l => l.cliente === 'Cliente Appena Arrivato' && l.entro === '2027-04-01');
+        LAVAGNA.lavori.some(l => l.cliente === 'Cliente Appena Arrivato' && l.settimana === '2027-03-29');
     }, doc) === true);
 
   // ── le prenotazioni dal cantiere arrivano sulla lavagna da sole ──
@@ -1055,12 +1123,16 @@ try {
       await ricarica();
       const l = LAVAGNA.lavori.find(x => x.da === d.id);
       return LAVAGNA.lavori.length === prima + 1 && !!l &&
-        l.origine === 'prenotato dal cantiere' && l.entro === '2027-03-15' &&
+        l.origine === 'prenotato dal cantiere' && l.settimana === '2027-03-15' &&
         l.requisiti.length === 1;
     }, docAppuntamento) === true);
-  ok('e la colonna lo dice a chi guarda',
-    (await pagU.evaluate(() => { vaiA('lavagna'); return document.getElementById('pagina-lavagna').innerHTML; }))
-      .includes('prenotazione arrivata'));
+  ok('e la colonna lo dice a chi guarda, una volta arrivata la sua settimana',
+    (await pagU.evaluate(() => {
+      SETTIMANA = lunediDi(new Date('2027-03-15T12:00:00'));
+      vaiA('lavagna');
+      return document.getElementById('pagina-lavagna').innerHTML;
+    })).includes('prenotazione arrivata'));
+  await pagU.evaluate(() => { SETTIMANA = lunediDi(new Date('2026-09-21T12:00:00')); disegnaLavagna(); });
   ok('ricaricando non ne compare una seconda',
     await pagU.evaluate(async () => {
       const prima = LAVAGNA.lavori.length;

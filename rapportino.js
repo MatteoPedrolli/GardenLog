@@ -130,7 +130,49 @@ function nomeFileRapportino(doc) {
 // Denormalizzato come il rapportino, e per lo stesso motivo: l'ufficio deve
 // poterlo leggere anche se quel cliente non ce l'ha ancora in anagrafica.
 
-const VERSIONE_APPUNTAMENTO = 1;
+const VERSIONE_APPUNTAMENTO = 2;
+
+// ── LE SETTIMANE ──
+// Un appuntamento non si fissa in un giorno preciso ma in una settimana, e una
+// settimana si identifica col **lunedì che la apre**: una data sola, che si
+// ordina da sé e non ha i pasticci di capodanno dei numeri di settimana (la
+// settimana 1 può cominciare a dicembre). Il numero resta per leggerla.
+//
+// Sta qui perché la usano tutte e due le app, e due definizioni di «quale
+// settimana» che divergono sarebbero peggio di nessuna.
+
+function lunediDellaSettimana(data) {
+  const d = new Date(data);
+  if (isNaN(d)) return '';
+  // Mezzogiorno, non mezzanotte: con l'ora legale e i fusi, una data a
+  // mezzanotte scivola al giorno prima passando per toISOString.
+  d.setHours(12, 0, 0, 0);
+  d.setDate(d.getDate() - ((d.getDay() + 6) % 7));
+  return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') +
+    '-' + String(d.getDate()).padStart(2, '0');
+}
+
+function numeroSettimana(data) {
+  const d = new Date(data);
+  if (isNaN(d)) return 0;
+  d.setHours(12, 0, 0, 0);
+  // Il giovedì decide a quale anno appartiene la settimana: è la regola ISO.
+  d.setDate(d.getDate() + 3 - ((d.getDay() + 6) % 7));
+  const primo = new Date(d.getFullYear(), 0, 4);
+  primo.setHours(12, 0, 0, 0);
+  primo.setDate(primo.getDate() + 3 - ((primo.getDay() + 6) % 7));
+  return 1 + Math.round((d - primo) / (7 * 86400000));
+}
+
+// Come si scrive una settimana, ovunque compaia: «dal 22/06 · settimana 26».
+function etichettaSettimana(lunedi) {
+  if (!lunedi) return '';
+  const d = new Date(lunedi + 'T12:00:00');
+  if (isNaN(d)) return '';
+  const giorno = String(d.getDate()).padStart(2, '0');
+  const mese = String(d.getMonth() + 1).padStart(2, '0');
+  return `dal ${giorno}/${mese} · settimana ${numeroSettimana(d)}`;
+}
 
 function costruisciAppuntamento({ prenotazione, cliente }) {
   return {
@@ -147,9 +189,10 @@ function costruisciAppuntamento({ prenotazione, cliente }) {
     },
     cosa: prenotazione.Cosa || '',
     ore: Number(prenotazione.Ore) || 0,
-    // Una data, non un mese: in ufficio serve a mettere in ordine la coda, e un
-    // mese scritto a parole non si ordina.
-    entro: prenotazione.Entro || '',
+    // La settimana in cui andrebbe fatto, scritta come il lunedì che la apre.
+    // Non un giorno preciso: quando si prenota in giardino il giorno non si sa
+    // ancora, e fingere di saperlo vorrebbe dire spostarlo tre volte.
+    settimana: prenotazione.Settimana ? lunediDellaSettimana(prenotazione.Settimana) : '',
     requisiti: String(prenotazione.Requisiti || '').split(',').map(r => r.trim()).filter(r => r),
     note: prenotazione.Note || '',
   };
@@ -163,16 +206,19 @@ function leggiAppuntamento(grezzo) {
   }
   if (!doc || doc.tipo !== 'appuntamento') throw new Error('Questo file non è un appuntamento');
   const versione = Number(doc.versione) || 0;
-  if (versione > VERSIONE_APPUNTAMENTO) {
-    throw new Error(`Appuntamento di una versione più recente (${versione}): aggiorna l'app dell'ufficio`);
+  // Finché si è in costruzione non si converte niente: o è di questa versione,
+  // o non si legge. Un documento letto male è peggio di uno rifiutato.
+  if (versione !== VERSIONE_APPUNTAMENTO) {
+    throw new Error(`Appuntamento della versione ${versione || '?'}: questa app legge la ${VERSIONE_APPUNTAMENTO}`);
   }
   if (!doc.id) throw new Error('Appuntamento senza identificativo');
   return {
     ...doc,
-    versione: versione || 1,
+    versione,
     revisione: Number(doc.revisione) || 1,
     cliente: doc.cliente || { id: '', nome: '' },
     ore: Number(doc.ore) || 0,
+    settimana: doc.settimana || '',
     requisiti: Array.isArray(doc.requisiti) ? doc.requisiti : [],
   };
 }
@@ -180,7 +226,7 @@ function leggiAppuntamento(grezzo) {
 function nomeFileAppuntamento(doc) {
   const pulito = s => String(s || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '')
     .replace(/[^a-zA-Z0-9]+/g, '-').replace(/^-|-$/g, '').toLowerCase();
-  const quando = (doc.entro || '').slice(0, 10) || 'senza-data';
+  const quando = (doc.settimana || '').slice(0, 10) || 'senza-settimana';
   return `${quando}-${pulito(doc.cliente && doc.cliente.nome) || 'cliente'}-${doc.id}.json`;
 }
 
@@ -188,5 +234,6 @@ if (typeof module !== 'undefined' && module.exports) {
   module.exports = {
     VERSIONE_RAPPORTINO, costruisciRapportino, leggiRapportino, nomeFileRapportino,
     VERSIONE_APPUNTAMENTO, costruisciAppuntamento, leggiAppuntamento, nomeFileAppuntamento,
+    lunediDellaSettimana, numeroSettimana, etichettaSettimana,
   };
 }

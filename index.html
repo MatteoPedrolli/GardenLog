@@ -768,8 +768,10 @@ select.form-control { background-image: url("data:image/svg+xml,%3Csvg xmlns='ht
         <input type="number" class="form-control" id="f-pren-ore" step="0.5" min="0" placeholder="Es. 4">
       </div>
       <div class="form-group">
-        <label class="form-label">Entro quando</label>
-        <input type="date" class="form-control" id="f-pren-entro">
+        <label class="form-label">In che settimana</label>
+        <input type="date" class="form-control" id="f-pren-settimana"
+               oninput="mostraSettimanaScelta()">
+        <div id="f-pren-settimana-eco" class="dati-nota" style="margin:4px 0 0"></div>
       </div>
     </div>
 
@@ -1010,7 +1012,7 @@ const IDB_NOME = 'giardinolog';
 const IDB_STORE = 'stato';
 const IDB_CHIAVE = 'db';
 const MIRROR_KEY = 'giardinolog-db';
-const VERSIONE_DATI = 10;
+const VERSIONE_DATI = 11;
 
 // Le impostazioni stanno dentro DB, non in META, perché così finiscono nel
 // backup: un indirizzo da riscrivere dopo aver cambiato telefono è una seccatura
@@ -2552,8 +2554,9 @@ let orologioCoda = null;
 // perché il campo manca nello stesso modo e il lavoro non si deve perdere.
 
 function apriPrenotazione() {
-  ['f-pren-cosa', 'f-pren-ore', 'f-pren-entro', 'f-pren-requisiti', 'f-pren-note']
+  ['f-pren-cosa', 'f-pren-ore', 'f-pren-settimana', 'f-pren-requisiti', 'f-pren-note']
     .forEach(id => document.getElementById(id).value = '');
+  mostraSettimanaScelta();
   scollegaClientePrenotazione();
   document.getElementById('overlay-prenotazione').classList.add('open');
 }
@@ -2583,6 +2586,17 @@ function scollegaClientePrenotazione() {
   document.getElementById('pren-cliente-suggestions').style.display = 'none';
 }
 
+// Si sceglie un giorno qualunque e conta la sua settimana: un calendario lo sanno
+// usare tutti i telefoni, e quando si prenota in giardino il giorno preciso non si
+// sa ancora. Sotto al campo compare la settimana che ne esce, o si finisce per
+// credere di aver fissato una data.
+function mostraSettimanaScelta() {
+  const eco = document.getElementById('f-pren-settimana-eco');
+  if (!eco) return;
+  const scelto = document.getElementById('f-pren-settimana').value;
+  eco.textContent = scelto ? etichettaSettimana(lunediDellaSettimana(scelto)) : '';
+}
+
 async function salvaPrenotazione() {
   if (salvataggioInCorso) return;
   const cid = document.getElementById('f-pren-cliente').value;
@@ -2595,7 +2609,7 @@ async function salvaPrenotazione() {
     ClienteID: cid,
     Cosa: cosa,
     Ore: document.getElementById('f-pren-ore').value,
-    Entro: document.getElementById('f-pren-entro').value,
+    Settimana: lunediDellaSettimana(document.getElementById('f-pren-settimana').value),
     Requisiti: document.getElementById('f-pren-requisiti').value.trim(),
     Note: document.getElementById('f-pren-note').value.trim(),
     Creata: new Date().toISOString(),
@@ -2639,7 +2653,7 @@ function renderPrenotazioni() {
       <div style="font-weight:600">${perValore(c ? c.Cliente : 'cliente eliminato')}</div>
       <div style="font-size:0.85rem; color:var(--text-mid)">${perValore(p.Cosa)}</div>
       <div style="font-size:0.78rem; color:var(--text-light); margin-top:4px">
-        ${p.Ore ? formattaQuantita(p.Ore) + ' h · ' : ''}${p.Entro ? 'entro il ' + new Date(p.Entro).toLocaleDateString('it-IT') + ' · ' : ''}${inCoda ? '📤 da consegnare' : '✅ in ufficio'}
+        ${p.Ore ? formattaQuantita(p.Ore) + ' h · ' : ''}${p.Settimana ? etichettaSettimana(p.Settimana) + ' · ' : ''}${inCoda ? '📤 da consegnare' : '✅ in ufficio'}
       </div>
     </div>`;
   }).join('');

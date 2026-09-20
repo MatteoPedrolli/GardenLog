@@ -248,6 +248,29 @@ il cliente non lo sa; `confermato` vuol dire che il cliente sa che arrivate, e s
 vede evidenziato. Spostare o togliere un confermato chiede conferma: vuol dire che
 qualcuno deve telefonare, e non può succedere per un trascinamento distratto.
 
+**Un appuntamento si fissa in una settimana, non in un giorno.** Il giorno lo
+decide chi pianifica trascinando il cartellino; prometterlo prima vorrebbe dire
+spostarlo tre volte. Una settimana si scrive come il **lunedì che la apre** —
+una data sola, che si ordina da sé e non ha i pasticci di capodanno dei numeri di
+settimana — e si legge sempre nello stesso modo, da `etichettaSettimana()`: «dal
+22/06 · settimana 26». Quelle tre funzioni stanno in `rapportino.js` perché le
+usano tutte e due le app, e due idee diverse di «quale settimana» sarebbero
+peggio di nessuna.
+
+Nei moduli si sceglie **un giorno qualunque** e conta la sua settimana: un
+calendario lo sanno usare tutti i telefoni, mentre `<input type="week">` su iOS
+diventa una casella di testo. Sotto al campo compare la settimana che ne esce, o
+si finisce per credere di aver fissato una data.
+
+**Quello che è per più avanti non sta in mezzo ai piedi.** La colonna mostra i
+lavori della settimana guardata e di quelle già passate; gli altri restano da
+parte, contati, con un bottone per guardarli — nascondere senza dire quanto è il
+tipo di aiuto che fa perdere un lavoro. Un lavoro **senza settimana** si vede
+sempre: non ha un momento suo, quindi è adesso. Il riferimento è la settimana
+mostrata e non l'oggi, così spostandosi avanti con le frecce i lavori di quella
+settimana compaiono da soli — e il pallino nella barra conta quello che la
+colonna mostra, o uno dei due mente.
+
 **Tre regole per la coda**, in quest'ordine: quello che non si può fare (ha un
 requisito aperto) va in fondo, quello che è già slittato va in cima, e per il resto
 conta chi scade prima. Dentro i giorni non si ordina niente: lì l'ordine lo dà chi
@@ -277,7 +300,9 @@ I lavori arrivano da tre parti:
   chiedere all'ufficio di ricopiarle vorrebbe dire perderne una ogni tanto;
 - i **prossimi interventi** segnati sui rapportini, col bottone — e si guardano
   anche quelli *in arrivo*, non solo gli archiviati: il prossimo intervento si
-  legge quando arriva, non dopo aver chiuso il conto;
+  legge quando arriva, non dopo aver chiuso il conto. Il cantiere segna mese e
+  anno, e `settimanaDaMeseAnno()` prende la settimana in cui cade il primo del
+  mese: non è una scadenza, è un posto in fila;
 - a mano, per le telefonate.
 
 Tutto quello che è già stato guardato finisce in `visti`, così quello che l'ufficio

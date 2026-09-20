@@ -230,6 +230,11 @@ input.vuoto { background: #fffdf5; border-color: #ecdca8; }
   border-radius: var(--radius-sm); background: var(--earth-light);
   border: 1px solid var(--earth); color: var(--earth); font-size: 0.8rem;
 }
+.piu-avanti {
+  display: flex; align-items: center; gap: 10px; margin-top: 8px; padding: 8px 11px;
+  border-radius: var(--radius-sm); background: var(--white);
+  border: 1px dashed var(--border); color: var(--text-light); font-size: 0.78rem;
+}
 
 /* Le mezze giornate devono stare in riga fra un giorno e l'altro: con sei colonne
    indipendenti il pomeriggio di martedì finiva più in alto di quello di lunedì, e
@@ -435,6 +440,7 @@ const CARTELLA_ARCHIVIO = 'archivio';
 const FILE_LISTINO = 'listino.json';
 const FILE_IMPOSTAZIONI = 'impostazioni.json';
 const FILE_LAVAGNA = 'lavagna.json';
+const VERSIONE_LAVAGNA = 2;
 const FILE_CLIENTI = 'clienti.json';
 const FILE_ANAGRAFICA = 'anagrafica-dal-telefono.json';
 
@@ -462,11 +468,12 @@ let LISTINO = { tipo: 'listino', versione: 1, voci: [] };
 let LISTINO_DA_SALVARE = false;
 let IMPOSTAZIONI = { ...IMPOSTAZIONI_VUOTE };
 let IMPOSTAZIONI_DA_SALVARE = false;
-let LAVAGNA = { tipo: 'lavagna', versione: 1, lavori: [], visti: [] };
+let LAVAGNA = { tipo: 'lavagna', versione: VERSIONE_LAVAGNA, lavori: [], visti: [] };
 let CLIENTI = [];
 let CLIENTI_DA_SALVARE = false;
 let SETTIMANA = null;   // il lunedì della settimana mostrata
 let TRASCINATO = null;
+let MOSTRA_FUTURI = false;
 let ARRIVI = [];
 let ILLEGGIBILI = [];
 let ARCHIVIO = [];
@@ -658,8 +665,7 @@ async function assorbiAppuntamenti() {
       luogo: doc.cliente.citta || '',
       cosa: doc.cosa,
       ore: doc.ore,
-      entro: doc.entro || '',
-      quando: doc.entro ? 'entro il ' + formattaData(doc.entro) : '',
+      settimana: doc.settimana || '',
       origine: 'prenotato dal cantiere',
       requisiti: doc.requisiti,
       stato: 'lista',
@@ -776,21 +782,24 @@ async function caricaLavagna() {
   try {
     const l = JSON.parse(await leggiTesto(CARTELLA, FILE_LAVAGNA));
     if (!l || l.tipo !== 'lavagna') throw new Error('non è una lavagna');
-    if ((Number(l.versione) || 0) > 1) {
-      throw new Error('Lavagna di una versione più recente: aggiorna l\'app');
+    // In costruzione non si converte: o è di questa versione, o si riparte.
+    if ((Number(l.versione) || 0) !== VERSIONE_LAVAGNA) {
+      throw new Error('Lavagna della versione ' + (l.versione || '?') +
+        ': questa app legge la ' + VERSIONE_LAVAGNA + ', si riparte da vuota');
     }
     return {
-      tipo: 'lavagna', versione: 1,
+      tipo: 'lavagna', versione: VERSIONE_LAVAGNA,
       lavori: Array.isArray(l.lavori) ? l.lavori.map(sistemaLavoro) : [],
       visti: Array.isArray(l.visti) ? l.visti : [],
     };
   } catch (e) {
-    // Nessuna lavagna ancora, o illeggibile: si parte vuota. Se era illeggibile va
-    // detto, o una settimana di pianificazione sparirebbe senza un rumore.
-    if (String(e.message || '').includes('recente')) {
+    // Nessuna lavagna ancora, o illeggibile: si parte vuota. Se c'era e non si è
+    // potuta leggere va detto, o una settimana di pianificazione sparirebbe
+    // senza un rumore.
+    if (String(e.message || '').includes('versione')) {
       ILLEGGIBILI.push({ nome: FILE_LAVAGNA, motivo: e.message });
     }
-    return { tipo: 'lavagna', versione: 1, lavori: [], visti: [] };
+    return { tipo: 'lavagna', versione: VERSIONE_LAVAGNA, lavori: [], visti: [] };
   }
 }
 
@@ -799,8 +808,10 @@ function sistemaLavoro(l) {
     id: l.id || 'l' + Math.random().toString(36).slice(2),
     cliente: l.cliente || '', luogo: l.luogo || '', cosa: l.cosa || '',
     ore: Number(l.ore) || 0,
-    quando: l.quando || '',      // come si legge sul cartellino: «marzo 2027»
-    entro: l.entro || '',        // la data che mette in ordine la coda
+    // La settimana in cui andrebbe fatto, scritta come il lunedì che la apre.
+    // Non un giorno preciso: il giorno lo decide chi pianifica trascinandolo,
+    // e prometterlo prima vorrebbe dire spostarlo tre volte.
+    settimana: l.settimana ? lunediDellaSettimana(l.settimana) : '',
     origine: l.origine || '',
     requisiti: Array.isArray(l.requisiti) ? l.requisiti.filter(r => r) : [],
     rimandato: !!l.rimandato,
@@ -1255,7 +1266,9 @@ function disegna() {
   const pallino = document.getElementById('pallino-arrivi');
   pallino.textContent = ARRIVI.length;
   pallino.classList.toggle('visibile', ARRIVI.length > 0);
-  const daPianificare = LAVAGNA.lavori.filter(l => !piazzato(l)).length;
+  // Il pallino conta quello che si può pianificare adesso, non tutto quello che
+  // c'è in archivio: un numero che comprende marzo prossimo non dice niente.
+  const daPianificare = daPianificareOra().length;
   const pallinoL = document.getElementById('pallino-lavagna');
   pallinoL.textContent = daPianificare;
   pallinoL.classList.toggle('visibile', daPianificare > 0);
@@ -1940,13 +1953,13 @@ async function importaAnagrafica() {
 // quello che c'è da fare e non ha ancora una data, a destra la settimana spezzata
 // in mezze giornate. Niente si muove da solo — nemmeno passando di settimana.
 
+// lunediDellaSettimana, numeroSettimana ed etichettaSettimana stanno in
+// rapportino.js: le usano tutte e due le app, e due idee diverse di «quale
+// settimana» sarebbero peggio di nessuna. Qui restano le due che servono a
+// muoversi avanti e indietro, che lavorano su oggetti Date.
+
 function lunediDi(data) {
-  const d = new Date(data);
-  // Mezzogiorno, non mezzanotte: con l'ora legale e i fusi, una data a mezzanotte
-  // scivola al giorno prima passando da toISOString.
-  d.setHours(12, 0, 0, 0);
-  d.setDate(d.getDate() - ((d.getDay() + 6) % 7));
-  return d;
+  return new Date(lunediDellaSettimana(data) + 'T12:00:00');
 }
 
 function isoData(d) {
@@ -1954,17 +1967,6 @@ function isoData(d) {
   x.setHours(12, 0, 0, 0);
   return x.getFullYear() + '-' + String(x.getMonth() + 1).padStart(2, '0') +
     '-' + String(x.getDate()).padStart(2, '0');
-}
-
-function numeroSettimana(data) {
-  const d = new Date(data);
-  d.setHours(12, 0, 0, 0);
-  // Il giovedì decide a quale anno appartiene la settimana: è la regola ISO.
-  d.setDate(d.getDate() + 3 - ((d.getDay() + 6) % 7));
-  const primo = new Date(d.getFullYear(), 0, 4);
-  primo.setHours(12, 0, 0, 0);
-  primo.setDate(primo.getDate() + 3 - ((primo.getDay() + 6) % 7));
-  return 1 + Math.round((d - primo) / (7 * 86400000));
 }
 
 function cambiaSettimana(passo) {
@@ -1980,6 +1982,20 @@ function questaSettimana() {
 }
 
 const bloccato = l => l.requisiti.length > 0;
+
+// Un lavoro previsto per una settimana che deve ancora arrivare non è «da
+// pianificare»: è solo rumore in cima alla colonna, e settimana dopo settimana
+// la colonna diventava un elenco di cose che non si potevano ancora toccare.
+// Senza settimana invece si vede sempre: non ha un momento suo, quindi è adesso.
+const perPiuAvanti = (l, settimanaMostrata) =>
+  !!l.settimana && !!settimanaMostrata && l.settimana > settimanaMostrata;
+
+// Il riferimento è la settimana che si sta guardando, non l'oggi: il pallino
+// nella barra e la colonna devono dire la stessa cosa, o uno dei due mente.
+function daPianificareOra() {
+  const riferimento = SETTIMANA ? isoData(SETTIMANA) : lunediDellaSettimana(new Date());
+  return LAVAGNA.lavori.filter(l => !piazzato(l) && !perPiuAvanti(l, riferimento));
+}
 const piazzato = l => l.stato !== 'lista' && !!l.giorno && !!l.mezza;
 const mezzeOccupate = l => Math.max(1, Number(l.mezze) || 1);
 
@@ -2017,8 +2033,8 @@ function oreNellaMezza(l, giorno, mezza) {
 function ordinaCoda(a, b) {
   if (bloccato(a) !== bloccato(b)) return bloccato(a) ? 1 : -1;
   if (a.rimandato !== b.rimandato) return a.rimandato ? -1 : 1;
-  if (!a.entro !== !b.entro) return a.entro ? -1 : 1;
-  return String(a.entro).localeCompare(String(b.entro));
+  if (!a.settimana !== !b.settimana) return a.settimana ? -1 : 1;
+  return String(a.settimana).localeCompare(String(b.settimana));
 }
 
 function cartellino(l) {
@@ -2042,7 +2058,7 @@ function cartellino(l) {
     '<div class="riga-cart">' +
       (l.ore ? '<span class="ore-cart">~' + formattaQuantita(l.ore) + ' h</span>' : '') +
       (l.rimandato && inLista ? '<span class="rimandato-cart">slittato</span>' : '') +
-      (inLista && l.quando ? '<span class="quando-cart">' + perValore(l.quando) + '</span>' : '') +
+      (inLista && l.settimana ? '<span class="quando-cart">' + perValore(etichettaSettimana(l.settimana)) + '</span>' : '') +
       l.requisiti.map(r => '<span class="requisito-cart">⚠ ' + perValore(r) + '</span>').join('') +
       (piazzato(l) ? '<span class="larghezza-cart">' +
         '<button type="button" class="bottone-cart" onclick="event.stopPropagation(); stringi(\'' + id + '\')"' +
@@ -2086,7 +2102,10 @@ function disegnaLavagna() {
   html += '<div class="tavolo">';
 
   // ── la colonna di sinistra: quello che c'è da fare e non ha una data ──
-  const inCoda = LAVAGNA.lavori.filter(l => !piazzato(l)).sort(ordinaCoda);
+  const settimanaMostrata = isoData(SETTIMANA);
+  const tuttaLaCoda = LAVAGNA.lavori.filter(l => !piazzato(l)).sort(ordinaCoda);
+  const piuAvanti = tuttaLaCoda.filter(l => perPiuAvanti(l, settimanaMostrata));
+  const inCoda = MOSTRA_FUTURI ? tuttaLaCoda : tuttaLaCoda.filter(l => !perPiuAvanti(l, settimanaMostrata));
   const rimasti = inCoda.filter(l => l.rimandato).length;
   const prenotati = inCoda.filter(l => l.origine === 'prenotato dal cantiere' && !l.rimandato).length;
   html += '<section class="coda"><h3 class="titolo-colonna">Da pianificare</h3>';
@@ -2104,6 +2123,16 @@ function disegnaLavagna() {
     (inCoda.length ? inCoda.map(cartellino).join('')
       : '<div class="vuoto-mezza">Niente in attesa.<br>Quello che arriva dai rapportini compare qui.</div>') +
     '</div>';
+  // Nascondere qualcosa senza dire quanto e senza un modo per guardarlo è il
+  // tipo di aiuto che fa perdere un lavoro: il conto sta lì, e si apre.
+  if (piuAvanti.length || MOSTRA_FUTURI) {
+    html += '<div class="piu-avanti">' +
+      (piuAvanti.length
+        ? piuAvanti.length + (piuAvanti.length === 1 ? ' lavoro è per una settimana dopo' : ' lavori sono per le settimane dopo')
+        : 'Niente per le settimane dopo') +
+      '<button class="bottone-cart" style="margin-left:auto" onclick="mostraFuturi()">' +
+      (MOSTRA_FUTURI ? 'Nascondi' : 'Mostra') + '</button></div>';
+  }
   html += '<div class="bottoni">' +
     '<button class="secondaria piccola" onclick="apriModuloLavoro()">+ Aggiungi</button>' +
     '<button class="secondaria piccola" onclick="importaProssimi()"' +
@@ -2234,6 +2263,11 @@ async function togliDallaLavagna(id) {
   disegnaLavagna();
 }
 
+function mostraFuturi() {
+  MOSTRA_FUTURI = !MOSTRA_FUTURI;
+  disegnaLavagna();
+}
+
 async function hoVisto() {
   LAVAGNA.lavori.forEach(l => { if (!piazzato(l)) l.rimandato = false; });
   await salvaLavagna();
@@ -2259,7 +2293,10 @@ function apriModuloLavoro(id) {
     '<input type="text" id="n-cosa" placeholder="Cosa c\'è da fare" value="' + v('cosa') + '" style="margin-bottom:6px">' +
     '<input type="text" id="n-ore" placeholder="Stima ore" value="' +
       perValore(l && l.ore ? formattaQuantita(l.ore) : '') + '" style="margin-bottom:6px">' +
-    '<input type="date" id="n-entro" value="' + v('entro') + '" style="margin-bottom:6px" title="Entro quando">' +
+    '<input type="date" id="n-settimana" value="' + v('settimana') + '" style="margin-bottom:6px"' +
+      ' title="In che settimana" oninput="ecoSettimanaLavoro()">' +
+    '<div id="n-settimana-eco" class="meta" style="margin-bottom:6px">' +
+      perValore(etichettaSettimana(l ? l.settimana : '')) + '</div>' +
     '<input type="text" id="n-requisito" placeholder="Manca qualcosa? (blocca il lavoro)" value="' +
       perValore(l && l.requisiti.length ? l.requisiti.join(', ') : '') + '">' +
     '<div class="bottoni">' +
@@ -2268,6 +2305,15 @@ function apriModuloLavoro(id) {
       '<button class="secondaria piccola" onclick="chiudiModuloLavoro()">Annulla</button>' +
     '</div></div>';
   document.getElementById('n-cliente').focus();
+}
+
+// Si sceglie un giorno qualunque e conta la sua settimana. Sotto al campo
+// compare quale, o si finisce per credere di aver fissato una data.
+function ecoSettimanaLavoro() {
+  const eco = document.getElementById('n-settimana-eco');
+  if (!eco) return;
+  const scelto = (document.getElementById('n-settimana') || {}).value || '';
+  eco.textContent = scelto ? etichettaSettimana(lunediDellaSettimana(scelto)) : '';
 }
 
 function chiudiModuloLavoro() {
@@ -2279,12 +2325,11 @@ async function salvaModuloLavoro() {
   const valore = id => (document.getElementById(id) || {}).value || '';
   const cliente = valore('n-cliente').trim();
   if (!cliente) { avvisa('Serve almeno il cliente', true); return; }
-  const entro = valore('n-entro');
   const requisiti = valore('n-requisito').split(',').map(r => r.trim()).filter(r => r);
   const campi = {
     cliente, luogo: valore('n-luogo').trim(), cosa: valore('n-cosa').trim(),
     ore: Number(valore('n-ore').replace(',', '.')) || 0,
-    entro, quando: entro ? 'entro il ' + formattaData(entro) : '',
+    settimana: lunediDellaSettimana(valore('n-settimana')),
     requisiti,
   };
 
@@ -2321,14 +2366,12 @@ async function importaProssimi() {
     if (!r.prossimo || !String(r.prossimo.cosa || '').trim()) return;
     if (LAVAGNA.visti.includes(r.id)) return;
     LAVAGNA.visti.push(r.id);
-    const mese = nomeMese(r.prossimo.mese);
     const anno = String(r.prossimo.anno || '').trim();
     nuovi.push(sistemaLavoro({
       cliente: (r.cliente && r.cliente.nome) || '',
       luogo: (r.cliente && r.cliente.citta) || '',
       cosa: r.prossimo.cosa,
-      entro: dataDaMeseAnno(r.prossimo.mese, anno),
-      quando: [mese, anno].filter(x => x).join(' '),
+      settimana: settimanaDaMeseAnno(r.prossimo.mese, anno),
       origine: 'dal cantiere',
       stato: 'lista',
       da: r.id,
@@ -2367,13 +2410,14 @@ function nomeMese(mese) {
   return i < 0 ? String(mese || '') : MESI[i];
 }
 
-// La coda ha bisogno di una data per mettere in ordine, e il cantiere dà mese e
-// anno: si prende il primo del mese. Non è una scadenza, è un ordine.
-function dataDaMeseAnno(mese, anno) {
+// Il cantiere segna mese e anno; la coda ragiona per settimane. Si prende la
+// settimana in cui cade il primo del mese: non è una scadenza, è un posto in
+// fila, e chi pianifica la sposta dove vuole.
+function settimanaDaMeseAnno(mese, anno) {
   const i = indiceMese(mese);
   const a = Number(anno);
   if (i < 0 || !a) return '';
-  return a + '-' + String(i + 1).padStart(2, '0') + '-01';
+  return lunediDellaSettimana(new Date(a, i, 1));
 }
 
 // ── LISTINO ──
