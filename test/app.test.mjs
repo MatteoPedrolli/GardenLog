@@ -203,8 +203,18 @@ try {
   const CONSEGNA = 'https://consegna.esempio.invalid/exec';
   let rispostaFinta = { status: 'ok' };
   let consegneRicevute = 0;
+  let rifiuta = null;   // quando è impostato, il servizio respinge solo quel tipo
   await ctx.route(CONSEGNA, r => {
     consegneRicevute++;
+    if (rifiuta) {
+      const doc = JSON.parse(r.request().postData() || '{}');
+      if (doc.tipo === rifiuta) {
+        return r.fulfill({ status: 200, contentType: 'application/json',
+          body: JSON.stringify({ status: 'error', msg: 'non è un rapportino' }) });
+      }
+      return r.fulfill({ status: 200, contentType: 'application/json',
+        body: JSON.stringify({ status: 'ok' }) });
+    }
     if (rispostaFinta === 'html') {
       // Apps Script risponde 200 con una pagina HTML quando qualcosa va storto:
       // è la trappola che aveva già fregato la vecchia app col foglio.
@@ -260,6 +270,33 @@ try {
   await page.waitForTimeout(300);
   ok('un errore dichiarato dal servizio non fa sparire il rapportino',
     await page.evaluate(() => DB.coda.length === 1 && DB.coda[0].errore.includes('cartella')));
+
+  // ── un documento rifiutato non tiene in ostaggio quelli dietro ──
+  // È successo davvero: una prenotazione mandata a una distribuzione vecchia
+  // dello script veniva respinta, e i rapportini dietro non partivano più.
+  // Il servizio che non risponde ferma la fila; un documento che il servizio
+  // rifiuta no, o un lavoro fatto resta sul telefono per colpa di un altro.
+  rifiuta = 'appuntamento';
+  await page.evaluate(() => {
+    DB.coda = [
+      { docID: 'p-rifiutata', tipo: 'appuntamento', tentativi: 0, errore: '',
+        doc: { tipo: 'appuntamento', id: 'p-rifiutata', revisione: 1 } },
+      { docID: 'r-buono', tipo: 'rapportino', tentativi: 0, errore: '',
+        doc: { tipo: 'rapportino', id: 'r-buono', revisione: 1 } },
+    ];
+  });
+  await page.evaluate(() => svuotaCoda());
+  await page.waitForTimeout(400);
+  ok('il documento rifiutato resta in coda col suo errore',
+    await page.evaluate(() => DB.coda.length === 1 && DB.coda[0].docID === 'p-rifiutata' &&
+      DB.coda[0].errore.includes('rapportino')));
+  ok('ma quello dietro parte lo stesso',
+    await page.evaluate(() => !DB.coda.some(v => v.docID === 'r-buono')));
+  ok('e il banner dice di che documento si tratta, non "rapportino" e basta',
+    await page.evaluate(() => { aggiornaAvvisoCoda(); return document.getElementById('avviso-coda').innerHTML; })
+      .then(h => h.includes('prenotazione')));
+  rifiuta = null;
+  await page.evaluate(async () => { DB.coda = []; accodaRapportino(DB.visite[0]); await salvaDB({ conta: false }); });
 
   // e finalmente va a buon fine
   rispostaFinta = { status: 'ok' };

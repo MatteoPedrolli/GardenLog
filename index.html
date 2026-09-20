@@ -2712,7 +2712,7 @@ function accodaAppuntamento(prenotazione) {
   const cliente = DB.clienti.find(c => c.ClienteID == prenotazione.ClienteID);
   const doc = costruisciAppuntamento({ prenotazione, cliente });
   DB.coda = DB.coda.filter(v => v.docID !== doc.id);
-  DB.coda.push({ docID: doc.id, doc, creato: new Date().toISOString(), tentativi: 0, errore: '' });
+  DB.coda.push({ docID: doc.id, tipo: doc.tipo, doc, creato: new Date().toISOString(), tentativi: 0, errore: '' });
   return doc;
 }
 
@@ -2749,7 +2749,7 @@ function accodaRapportino(visita) {
   // Una sola voce per visita: se correggi e rimandi, in coda resta la versione
   // buona invece di accodarsi alla precedente e farne partire due.
   DB.coda = DB.coda.filter(v => v.docID !== doc.id);
-  DB.coda.push({ docID: doc.id, doc, creato: new Date().toISOString(), tentativi: 0, errore: '' });
+  DB.coda.push({ docID: doc.id, tipo: doc.tipo, doc, creato: new Date().toISOString(), tentativi: 0, errore: '' });
   return doc;
 }
 
@@ -2765,16 +2765,27 @@ async function consegnaRapportino(doc) {
   let risposta;
   try { risposta = JSON.parse(testo); }
   catch (e) { throw new Error('Il servizio ha risposto con un errore, non con una conferma'); }
-  if (risposta?.status === 'error') throw new Error(risposta.msg || 'errore dal servizio');
+  if (risposta?.status === 'error') {
+    // Il servizio ha risposto, e ha rifiutato proprio questo documento: è una
+    // cosa diversa dal servizio che non risponde. Riprovare all'infinito non lo
+    // farà passare, e tenere fermi quelli dietro sarebbe il danno peggiore.
+    const e = new Error(risposta.msg || 'errore dal servizio');
+    e.rifiutato = true;
+    throw e;
+  }
   if (risposta?.status !== 'ok') throw new Error('Risposta inattesa dal servizio');
   return risposta;
+}
+
+function comeSiChiama(voce) {
+  return voce && voce.tipo === 'appuntamento' ? 'prenotazione' : 'rapportino';
 }
 
 // Prova a svuotare la coda. Silenziosa di suo: viene chiamata all'avvio, al
 // ritorno della rete e ogni tanto, e non deve interrompere chi sta lavorando.
 async function svuotaCoda({ avvisa = false } = {}) {
   if (invioInCorso || !DB.coda.length) return;
-  if (!navigator.onLine) { if (avvisa) showToast('📭 Nessuna rete: il rapportino parte appena torna'); return; }
+  if (!navigator.onLine) { if (avvisa) showToast('📭 Nessuna rete: quello che c\'è parte appena torna'); return; }
   invioInCorso = true;
   let consegnati = 0, ultimoErrore = '';
   try {
@@ -2797,13 +2808,17 @@ async function svuotaCoda({ avvisa = false } = {}) {
         voce.tentativi = (voce.tentativi || 0) + 1;
         voce.errore = e.message || String(e);
         ultimoErrore = voce.errore;
-        break;   // se il servizio non risponde, inutile insistere sugli altri
+        // Un documento rifutato resta in coda col suo errore, ma non ferma la
+        // fila: un rapportino di lavoro fatto non può restare qui dentro perché
+        // davanti c'è una prenotazione che il servizio non sa leggere.
+        if (e.rifiutato) continue;
+        break;   // il servizio non risponde: inutile insistere sugli altri
       }
     }
     await salvaDB({ conta: false });
     renderAll();
     aggiornaAvvisoCoda();
-    if (consegnati && avvisa) showToast(`📨 ${consegnati === 1 ? 'Rapportino consegnato' : consegnati + ' rapportini consegnati'}`);
+    if (consegnati && avvisa) showToast(`📨 ${consegnati === 1 ? 'Consegnato' : consegnati + ' documenti consegnati'}`);
     if (ultimoErrore && avvisa) showToast('⚠️ Non consegnato: ' + ultimoErrore);
   } finally {
     invioInCorso = false;
@@ -2819,11 +2834,16 @@ function aggiornaAvvisoCoda() {
   el.style.display = n ? 'flex' : 'none';
   if (!n) return;
   const conErrore = DB.coda.find(v => v.errore);
+  // Dire "rapportino" anche quando è una prenotazione mandava a cercare nel
+  // posto sbagliato: chi legge deve sapere quale documento è fermo.
+  const cosa = n === 1
+    ? '1 ' + comeSiChiama(DB.coda[0]) + ' da consegnare'
+    : n + ' documenti da consegnare';
   el.innerHTML = `<span style="font-size:1.3rem">📤</span>
     <div style="flex:1">
-      <div style="font-weight:600">${n === 1 ? '1 rapportino da consegnare' : n + ' rapportini da consegnare'}</div>
+      <div style="font-weight:600">${cosa}</div>
       <div style="font-size:0.78rem; opacity:0.85">${conErrore
-        ? perValore(conErrore.errore)
+        ? perValore(comeSiChiama(conErrore) + ': ' + conErrore.errore)
         : 'partono da soli appena c’è rete · tocca per riprovare adesso'}</div>
     </div>`;
 }

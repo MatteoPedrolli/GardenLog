@@ -157,6 +157,16 @@ parte quando c'è rete: in giardino il campo spesso non c'è, e se l'invio fosse
 l'unica strada il lavoro si perderebbe proprio dove si fa. `svuotaCoda()` gira
 all'avvio, al ritorno della rete e ogni due minuti mentre l'app è aperta.
 
+**Un documento rifiutato non tiene in ostaggio quelli dietro.** Il servizio che
+non risponde ferma la fila — inutile insistere — ma un documento che il servizio
+*ha letto e respinto* no: resta in coda col suo errore e gli altri passano. È
+successo davvero, con una prenotazione mandata a una distribuzione vecchia dello
+script: veniva respinta, e i rapportini dietro non partivano più. Un lavoro fatto
+non può restare sul telefono per colpa di un altro documento.
+
+Il banner della coda dice **di che documento** si tratta: chiamare «rapportino»
+una prenotazione ferma manda a cercare nel posto sbagliato.
+
 Niente esce dalla coda senza una conferma esplicita. Apps Script risponde 200
 anche quando fallisce, con una pagina HTML al posto del JSON — la stessa
 trappola del vecchio foglio — e un servizio può rispondere JSON valido che non
