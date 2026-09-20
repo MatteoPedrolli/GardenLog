@@ -250,12 +250,22 @@ qualcuno deve telefonare, e non può succedere per un trascinamento distratto.
 
 **Un appuntamento si fissa in una settimana, non in un giorno.** Il giorno lo
 decide chi pianifica trascinando il cartellino; prometterlo prima vorrebbe dire
-spostarlo tre volte. Una settimana si scrive come il **lunedì che la apre** —
-una data sola, che si ordina da sé e non ha i pasticci di capodanno dei numeri di
-settimana — e si legge sempre nello stesso modo, da `etichettaSettimana()`: «dal
-22/06 · settimana 26». Quelle tre funzioni stanno in `rapportino.js` perché le
-usano tutte e due le app, e due idee diverse di «quale settimana» sarebbero
-peggio di nessuna.
+spostarlo tre volte. Una settimana si **identifica col lunedì che la apre** — una
+data sola, che si ordina da sé e non è ambigua in nessuna convenzione — e si
+**legge** sempre nello stesso modo, da `etichettaSettimana()`: «dal 22/06 ·
+settimana 26». Quelle funzioni stanno in `rapportino.js` perché le usano tutte e
+due le app, e due idee diverse di «quale settimana» sarebbero peggio di nessuna.
+
+**La settimana 1 è quella che contiene il 1° gennaio**, e le settimane partono di
+lunedì: è come si contano sul calendario appeso in ufficio. Non è la regola ISO,
+che fa partire la settimana 1 dal primo giovedì e ogni tanto tira fuori una
+settimana 53 a fine dicembre. Le due coincidono per quasi tutto l'anno e
+divergono solo a cavallo di capodanno — ed è lì che i test guardano. Il numero
+conta perché è quello che si dice a voce: se il capo o il commercialista dicono
+«settimana 40», dev'essere la stessa dell'app.
+
+Anche così, **ogni tanto un anno ha 53 settimane**: 52 settimane da 7 giorni
+fanno 364, e il calendario slitta. Non è un difetto della regola, è aritmetica.
 
 Nei moduli si sceglie **un giorno qualunque** e conta la sua settimana: un
 calendario lo sanno usare tutti i telefoni, mentre `<input type="week">` su iOS

@@ -152,16 +152,34 @@ function lunediDellaSettimana(data) {
     '-' + String(d.getDate()).padStart(2, '0');
 }
 
+// La settimana 1 è quella che contiene il 1° gennaio, e le settimane partono di
+// lunedì. È come si contano sul calendario appeso in ufficio, ed è la regola che
+// conta: se il capo o il commercialista dicono «settimana 40» deve essere la
+// stessa di qui.
+//
+// Non è la regola ISO, che fa partire la settimana 1 dal primo giovedì e ogni
+// tanto tira fuori una settimana 53 a fine dicembre. Le due coincidono per quasi
+// tutto l'anno e divergono solo a cavallo di capodanno.
+function lunediDellaPrimaSettimana(anno) {
+  return lunediDellaSettimana(new Date(anno, 0, 1));
+}
+
 function numeroSettimana(data) {
-  const d = new Date(data);
-  if (isNaN(d)) return 0;
-  d.setHours(12, 0, 0, 0);
-  // Il giovedì decide a quale anno appartiene la settimana: è la regola ISO.
-  d.setDate(d.getDate() + 3 - ((d.getDay() + 6) % 7));
-  const primo = new Date(d.getFullYear(), 0, 4);
-  primo.setHours(12, 0, 0, 0);
-  primo.setDate(primo.getDate() + 3 - ((primo.getDay() + 6) % 7));
-  return 1 + Math.round((d - primo) / (7 * 86400000));
+  const lunedi = lunediDellaSettimana(data);
+  if (!lunedi) return 0;
+  // A quale anno appartiene questa settimana? A fine dicembre può già essere la
+  // prima dell'anno dopo, e i primi giorni di gennaio possono essere ancora
+  // dell'anno prima: si guarda dove cade rispetto ai due inizi possibili.
+  const annoSolare = Number(lunedi.slice(0, 4));
+  let anno = annoSolare + 1;
+  let primo = lunediDellaPrimaSettimana(anno);
+  if (lunedi < primo) {
+    anno = annoSolare;
+    primo = lunediDellaPrimaSettimana(anno);
+    if (lunedi < primo) primo = lunediDellaPrimaSettimana(--anno);
+  }
+  const giorni = (new Date(lunedi + 'T12:00:00') - new Date(primo + 'T12:00:00')) / 86400000;
+  return 1 + Math.round(giorni / 7);
 }
 
 // Come si scrive una settimana, ovunque compaia: «dal 22/06 · settimana 26».
@@ -234,6 +252,6 @@ if (typeof module !== 'undefined' && module.exports) {
   module.exports = {
     VERSIONE_RAPPORTINO, costruisciRapportino, leggiRapportino, nomeFileRapportino,
     VERSIONE_APPUNTAMENTO, costruisciAppuntamento, leggiAppuntamento, nomeFileAppuntamento,
-    lunediDellaSettimana, numeroSettimana, etichettaSettimana,
+    lunediDellaSettimana, lunediDellaPrimaSettimana, numeroSettimana, etichettaSettimana,
   };
 }

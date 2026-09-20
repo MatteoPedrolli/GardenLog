@@ -322,9 +322,36 @@ try {
   ok('porta la settimana, scritta come il lunedì che la apre',
     docAppuntamento.settimana === '2027-03-15', docAppuntamento.settimana);
   ok('e si legge sempre nello stesso modo',
-    await page.evaluate(() => etichettaSettimana('2027-03-15')) === 'dal 15/03 · settimana 11');
+    await page.evaluate(() => etichettaSettimana('2027-03-15')) === 'dal 15/03 · settimana 12',
+    await page.evaluate(() => etichettaSettimana('2027-03-15')));
   ok('la schermata mostra la settimana scelta, non la data battuta',
-    (await page.textContent('#prenotazioni-list')).includes('settimana 11'));
+    (await page.textContent('#prenotazioni-list')).includes('settimana 12'));
+
+  // ── come si contano le settimane ──
+  // La settimana 1 è quella che contiene il 1° gennaio, come sul calendario
+  // appeso in ufficio: se il capo dice «settimana 40» dev'essere questa. Non è
+  // la regola ISO, che parte dal primo giovedì e a fine dicembre tira fuori una
+  // settimana 53. Le due divergono solo a cavallo di capodanno, ed è lì che
+  // vanno guardate.
+  const settimane = await page.evaluate(() => [
+    '2025-12-29', '2026-01-01', '2026-09-21', '2026-12-21', '2026-12-27',
+    '2026-12-28', '2027-01-01',
+  ].map(g => g + '=' + numeroSettimana(new Date(g + 'T12:00:00'))).join(' '));
+  ok('il 1° gennaio sta nella settimana 1', settimane.includes('2026-01-01=1'), settimane);
+  ok('e ci sta anche il lunedì che apre quella settimana, pur essendo di dicembre',
+    settimane.includes('2025-12-29=1'), settimane);
+  ok('il 2026 finisce alla 52, non alla 53',
+    settimane.includes('2026-12-21=52') && settimane.includes('2026-12-27=52'), settimane);
+  ok('e il lunedì dopo è già la 1 dell\'anno nuovo',
+    settimane.includes('2026-12-28=1') && settimane.includes('2027-01-01=1'), settimane);
+  ok('in mezzo all\'anno non cambia niente', settimane.includes('2026-09-21=39'), settimane);
+  // 52 settimane da 7 giorni fanno 364: il calendario slitta, e ogni tanto un
+  // anno ne ha 53. Non è un difetto della regola, è l'aritmetica.
+  ok('un anno può averne 53, e non è un errore', await page.evaluate(() => {
+    const quante = a => Math.round((new Date(lunediDellaPrimaSettimana(a + 1) + 'T12:00:00') -
+      new Date(lunediDellaPrimaSettimana(a) + 'T12:00:00')) / (7 * 86400000));
+    return quante(2026) === 52 && quante(2028) === 53;
+  }));
   ok('porta il cliente per esteso, come il rapportino',
     docAppuntamento.cliente.nome === 'Mario Rossi' && !!docAppuntamento.cliente.id);
   ok('e i requisiti separati dalle virgole',
@@ -893,7 +920,8 @@ try {
     await pagU.evaluate(() => LAVAGNA.lavori[0].settimana) === '2027-03-01',
     await pagU.evaluate(() => LAVAGNA.lavori[0].settimana));
   ok('e scritta sul cartellino sempre nello stesso modo',
-    await pagU.evaluate(() => etichettaSettimana(LAVAGNA.lavori[0].settimana)) === 'dal 01/03 · settimana 9');
+    await pagU.evaluate(() => etichettaSettimana(LAVAGNA.lavori[0].settimana)) === 'dal 01/03 · settimana 10',
+    await pagU.evaluate(() => etichettaSettimana(LAVAGNA.lavori[0].settimana)));
   // Lo stesso rapportino non deve tornare a ogni clic sul bottone.
   ok('un secondo giro non lo duplica',
     await pagU.evaluate(async () => { await importaProssimi(); return LAVAGNA.lavori.length; }) === 1);
