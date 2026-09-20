@@ -925,8 +925,6 @@ function costruisciConteggio(doc, precedenti) {
       manuale = true;
     } else if (inListino && inListino.prezzo !== '' && inListino.prezzo != null) {
       prezzo = Number(inListino.prezzo);
-    } else if (r.prezzoProposto != null) {
-      prezzo = Number(r.prezzoProposto);
     }
     return {
       chiave: r.chiave || '',

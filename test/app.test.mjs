@@ -180,25 +180,6 @@ try {
   ok('le quantità hanno la virgola, non il punto',
     await page.evaluate(() => formattaQuantita(11.5) === '11,5'));
 
-  // ── il passaggio di consegne del listino ──
-  // I prezzi già scritti sul telefono non si buttano via a un aggiornamento:
-  // restano da parte finché non sono stati portati in ufficio.
-  const listinoDalTelefono = await page.evaluate(() => {
-    DB.listinoVecchio = [{ VoceID: 'manodopera', Nome: 'Manodopera', Unita: 'h', Prezzo: 32, ACorpo: '' }];
-    renderListinoVecchio();
-    return listinoPerUfficio();
-  });
-  ok('finché ci sono prezzi da portare, la pagina Dati lo dice',
-    (await page.textContent('#listino-vecchio-wrap')).includes('passato in ufficio'));
-  ok('ed esce un documento, non una tabella da ribattere',
-    listinoDalTelefono.tipo === 'listino' && listinoDalTelefono.voci[0].prezzo === 32);
-  ok('la scheda sparisce quando il giro è fatto', await page.evaluate(() => {
-    delete DB.listinoVecchio;
-    renderListinoVecchio();
-    return document.getElementById('listino-vecchio-wrap').innerHTML === '';
-  }));
-
-
   // ── la coda di uscita: il lavoro resta al sicuro, la consegna riprova ──
   const CONSEGNA = 'https://consegna.esempio.invalid/exec';
   let rispostaFinta = { status: 'ok' };
@@ -367,10 +348,8 @@ try {
     JSON.stringify(doc.operazioni.map(o => o.prodotto)));
   ok('le righe del conto portano le quantità', doc.righe.length === 4);
   // Il documento porta le quantità e non i prezzi: il listino sta in ufficio.
-  // Il campo resta nel formato, sempre vuoto, perché i rapportini già depositati
-  // su Drive lo contengono e devono continuare a leggersi.
   ok('nessun prezzo viaggia più dal cantiere',
-    doc.righe.every(r => r.prezzoProposto === null));
+    doc.righe.every(r => r.prezzoProposto === undefined));
   ok('ma le quantità sì', doc.righe.find(r => r.chiave === 'manodopera').quantita === 8);
   ok('l\'identificativo è quello della visita, così una correzione sostituisce',
     doc.id === await page.evaluate(() => DB.visite[0].VisitaID));
@@ -427,7 +406,7 @@ try {
 
   // ── backup ──
   const backup = await page.evaluate(() =>
-    JSON.stringify({ app: 'GiardinoApp', versione: 2, esportato: new Date().toISOString(), db: DB }));
+    JSON.stringify({ app: 'GiardinoApp', versione: VERSIONE_DATI, esportato: new Date().toISOString(), db: DB }));
   await page.evaluate(() => { DB.clienti = []; DB.visite = []; DB.operazioni = []; return salvaDB(); });
   ok('dati azzerati per la prova', await page.evaluate(() => DB.clienti.length) === 0);
   await page.click('.topbar-action');
@@ -437,73 +416,69 @@ try {
     await page.evaluate(() => DB.clienti.length === 1 && DB.visite.length === 1 && DB.operazioni.length === 2));
   ok('contatore modifiche azzerato dal backup', await page.evaluate(() => META.modificheDalBackup) === 0);
 
-  // ── migrazioni ──
-  ok('backup senza versione attraversa le migrazioni', await page.evaluate(() => {
-    const db = migra({ clienti: [{ ClienteID: 'x', Cliente: 'Vecchio', FasciaID: '2', Target_N_g_m2_anno: 99 }] });
-    return db.clienti[0].Target_N_g_m2_anno === undefined && db.clienti[0].Cliente === 'Vecchio';
+  // ── modalità costruzione: i dati di un'altra versione non si convertono ──
+  // Finché il sistema non è in servizio in azienda non si scrivono migrazioni.
+  // Quello che non si sa leggere non viene convertito, ma nemmeno buttato: si
+  // mette da parte e si può scaricare.
+  ok('un database nuovo nasce con i suoi archivi di partenza',
+    await page.evaluate(() => {
+      const db = datiIniziali();
+      return db.fasce.length === 3 && db.tipiOperazione.length > 0 && db.voci.length > 0
+        && db.clienti.length === 0;
+    }));
+  // L'aggancio tipo → voce stava dentro una migrazione: un database nuovo ci
+  // passava dentro per finta pur di raccoglierlo. Ora sta sul tipo.
+  ok('e coi tipi già agganciati alle loro voci',
+    await page.evaluate(() => {
+      const db = datiIniziali();
+      const conc = db.tipiOperazione.find(t => t.TipoID === 'concimazione');
+      const taglio = db.tipiOperazione.find(t => t.TipoID === 'taglio-prato');
+      const tratt = db.tipiOperazione.find(t => t.TipoID === 'trattamento-fitosanitario');
+      return conc.VoceID === 'concime' && taglio.VoceID === '' && tratt.VoceID === 'trattamento';
+    }));
+  ok('i dati di questa versione si leggono',
+    await page.evaluate(() => {
+      const db = leggiDati({ clienti: [{ ClienteID: 'y', Cliente: 'Nuovo' }] }, VERSIONE_DATI);
+      return !!db && db.clienti[0].Cliente === 'Nuovo';
+    }));
+  ok('quelli di un\'altra versione no, e lo dicono restituendo niente',
+    await page.evaluate(() => leggiDati({ clienti: [] }, 7) === null &&
+      leggiDati({ clienti: [] }, 99) === null && leggiDati({ clienti: [] }, undefined) === null));
+  ok('un database vuoto resta leggibile',
+    await page.evaluate(() => COLLEZIONI.every(k => Array.isArray(leggiDati(null, VERSIONE_DATI)[k]))));
+
+  // Questa è la parte che conta: rompere la compatibilità non vuol dire
+  // cancellare di nascosto. Quei dati sono l'unica copia rimasta.
+  ok('i dati di un\'altra versione finiscono da parte, non nel cestino',
+    await page.evaluate(() => {
+      mettiDaParte({ versione: 7, db: { clienti: [{ ClienteID: 'vecchio', Cliente: 'Da recuperare' }] } });
+      const vecchi = datiMessiDaParte();
+      return !!vecchi && vecchi.versione === 7 && vecchi.db.clienti[0].Cliente === 'Da recuperare';
+    }));
+  ok('e la pagina Dati offre di scaricarli',
+    (await page.evaluate(() => { renderDatiDaParte(); return document.getElementById('dati-da-parte-wrap').innerHTML; }))
+      .includes('scaricaDatiDaParte'));
+  ok('in home resta un avviso che non sparisce da solo',
+    await page.evaluate(() => {
+      aggiornaAvvisoDatiDaParte();
+      return document.getElementById('avviso-dati-vecchi').style.display === 'flex';
+    }));
+  ok('si cancellano solo con una conferma',
+    await page.evaluate(() => {
+      scartaDatiDaParte();   // il giro di prova accetta ogni conferma
+      return datiMessiDaParte() === null &&
+        document.getElementById('avviso-dati-vecchi').style.display === 'none';
+    }));
+
+  // Un backup di un'altra versione non si importa a metà: o è di questa
+  // versione o resta nel file, da riaprire quando serve.
+  ok('un backup di un\'altra versione viene rifiutato', await page.evaluate(async () => {
+    const quanti = DB.clienti.length;
+    const file = new File([JSON.stringify({ app: 'GiardinoApp', versione: 7,
+      db: { clienti: [{ ClienteID: 'z', Cliente: 'Altra versione' }] } })], 'vecchio.json');
+    await importaBackup({ files: [file], value: '' });
+    return DB.clienti.length === quanti && !DB.clienti.some(c => c.ClienteID === 'z');
   }));
-  ok('migrazione regge un database vuoto',
-    await page.evaluate(() => COLLEZIONI.every(k => Array.isArray(migra(null)[k]))));
-  ok('la migrazione riaggancia le operazioni vecchie', await page.evaluate(() => {
-    const db = migra({ operazioni: [
-      { OperazioneID:'a', Tipo_operazione:'Potatura', Flag_siepe:'Sì' },
-      { OperazioneID:'b', Tipo_operazione:'Concimazione', Dose_kg:7 },
-      { OperazioneID:'c', Tipo_operazione:'Diserbo', Flag_prato:'Sì' },
-    ] }, 2);
-    const [a, b, c] = db.operazioni;
-    return a.TipoID === 'potatura-siepi'
-        && b.TipoID === 'concimazione' && b.Quantita === 7 && b.Dose_kg === undefined
-        && c.TipoID === 'diserbo-selettivo'
-        && db.tipiOperazione.length === 13;
-  }));
-  ok('migrazione 4 → 5 senza calpestare i prezzi già messi', await page.evaluate(() => {
-    const db = migra({
-      voci: [{ VoceID:'trasferimento', Nome:'Trasferimento', Prezzo: 45 }],
-      tipiOperazione: [{ TipoID:'trattamento-fitosanitario', Nome:'Trattamento fitosanitario', VoceID:'fitofarmaco' }],
-    }, 4);
-    const trasf = db.voci.find(v => v.VoceID === 'trasferimento');
-    const tipo = db.tipiOperazione.find(t => t.TipoID === 'trattamento-fitosanitario');
-    // Il prezzo non è più sulla voce — il listino è passato in ufficio — ma non è
-    // stato buttato: un backup di due versioni fa lo attraversa e lo consegna.
-    return isSi(trasf.ACorpo) && trasf.Prezzo === undefined
-        && db.listinoVecchio.some(v => v.VoceID === 'trasferimento' && v.Prezzo === 45)
-        && db.voci.some(v => v.VoceID === 'trattamento')
-        && tipo.VoceID === 'trattamento';
-  }));
-  // ── 7 → 8: il listino passa in ufficio ──
-  ok('la migrazione 8 toglie i prezzi dalle voci', await page.evaluate(() => {
-    const db = migra({ voci: [
-      { VoceID:'manodopera', Nome:'Manodopera', Unita:'h', Prezzo: 32 },
-      { VoceID:'piante', Nome:'Piante', Unita:'n', Prezzo: '' },
-    ], impostazioni: { MostraImporti: 'Sì' } }, 7);
-    return db.voci.every(v => v.Prezzo === undefined) && db.impostazioni.MostraImporti === undefined;
-  }));
-  // Cancellare a un aggiornamento un listino costruito in mesi sarebbe
-  // imperdonabile: quello che c'era resta finché non è stato portato di là.
-  ok('ma li mette da parte invece di buttarli', await page.evaluate(() => {
-    const db = migra({ voci: [
-      { VoceID:'manodopera', Nome:'Manodopera', Unita:'h', Prezzo: 32 },
-      { VoceID:'piante', Nome:'Piante', Unita:'n', Prezzo: '' },
-    ] }, 7);
-    return db.listinoVecchio.length === 1 && db.listinoVecchio[0].Prezzo === 32;
-  }));
-  ok('e senza prezzi da salvare non lascia niente in giro', await page.evaluate(() => {
-    const db = migra({ voci: [{ VoceID:'piante', Nome:'Piante', Prezzo: '' }] }, 7);
-    return db.listinoVecchio === undefined || db.listinoVecchio.length === 0;
-  }));
-  ok('i conti delle visite già registrate non si riscrivono', await page.evaluate(() => {
-    const db = migra({ visite: [{ VisitaID:'v1', Conto: [{ Chiave:'manodopera', Quantita: 8, Prezzo: 30 }] }] }, 7);
-    return db.visite[0].Conto[0].Prezzo === 30;
-  }));
-  ok('un aggancio scelto a mano non viene riscritto dalla migrazione', await page.evaluate(() => {
-    const db = migra({
-      voci: [{ VoceID:'trasferimento', Nome:'Trasferimento' }],
-      tipiOperazione: [{ TipoID:'trattamento-fitosanitario', VoceID:'concime' }],
-    }, 4);
-    return db.tipiOperazione[0].VoceID === 'concime';
-  }));
-  ok('dati già aggiornati passano indenni',
-    await page.evaluate(() => migra({ clienti: [{ ClienteID: 'y', Cliente: 'Nuovo' }] }, 2).clienti[0].Cliente === 'Nuovo'));
 
   // ── CSV ──
   const csv = await page.evaluate(() => {
@@ -832,17 +807,6 @@ try {
     }));
   ok('le voci viste nei rapportini e non in listino si possono importare',
     await pagU.evaluate(() => vociMancanti().length) >= 1);
-
-  // Il giro completo: i prezzi che stavano sul telefono arrivano in ufficio senza
-  // che nessuno li ribatta. È il motivo per cui il file esce in questo formato.
-  ok('il listino esportato dal telefono lo legge l\'ufficio così com\'è',
-    await pagU.evaluate(async doc => {
-      await scriviTesto(window.RADICE, 'listino.json', JSON.stringify(doc));
-      LISTINO_DA_SALVARE = false;
-      await ricarica();
-      const v = LISTINO.voci.find(x => x.voceID === 'manodopera');
-      return !!v && Number(v.prezzo) === 32;
-    }, listinoDalTelefono));
 
   // ── il foglio che va al cliente ──
   await pagU.evaluate(() => {

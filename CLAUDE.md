@@ -51,17 +51,29 @@ si fanno notare: il calcolo di azoto e potassio, la persistenza dopo la
 ricarica, il backup, le eliminazioni a cascata, l'apertura offline. Se una
 funzionalità nuova tocca i dati, merita una verifica lì dentro.
 
-## Quando cambia lo schema dei dati
+## Modalità costruzione
 
-Tutto quello che entra — da IndexedDB, da un backup, dal vecchio foglio Google —
-passa da `migra()`. Per cambiare la forma dei dati:
+Il sistema **non è ancora in servizio in azienda**, e finché non lo è vale questa
+regola: **non si scrivono migrazioni**. Lo schema cambia quando serve, si alza
+`VERSIONE_DATI`, e i dati di una versione diversa non vengono convertiti.
 
-1. alza `VERSIONE_DATI`
-2. aggiungi la voce corrispondente in `MIGRAZIONI`
-3. verifica che regga anche su dati già a posto e su un database vuoto
+Mantenere nove passaggi di conversione per dati che nessuno userà più costava più
+di quanto valessero, e ogni passaggio era una cosa in più che poteva rompersi
+senza farsi notare. Gli archivi di partenza stavano lì dentro: un database nuovo
+attraversava le migrazioni *per finta* pur di raccoglierli. Ora stanno in
+`datiIniziali()`, dove si leggono.
 
-I backup esportati mesi fa devono continuare ad aprirsi. È il motivo per cui
-quell'imbuto esiste.
+**Rompere la compatibilità non vuol dire cancellare di nascosto.** Quello che non
+si sa leggere finisce in `CHIAVE_DA_PARTE` prima che il primo salvataggio lo
+ricopra, la home mostra un avviso che resta, e dalla pagina Dati si scarica come
+file. Sono l'unica copia rimasta: si cancellano solo con una conferma. Un backup
+di un'altra versione, allo stesso modo, viene rifiutato invece che importato a
+metà — il file resta lì, da riaprire quando servirà.
+
+**Il giorno in cui l'azienda ci lavora davvero questa regola si rovescia.** Da lì
+in poi ogni cambio di schema vuole la sua migrazione, o si perdono dati veri. Chi
+fa quel passaggio alza `VERSIONE_DATI` un'ultima volta, rimette l'imbuto e
+riscrive questa sezione.
 
 ## La schermata visita è un rapporto, non un registro
 
@@ -203,10 +215,9 @@ data e cliente, e un cliente rinominato sul telefono metterebbe lo stesso lavoro
 in archivio due volte — pronto per essere fatturato due volte. Per questo
 `archivia()` riusa il nome del file già in archivio, se c'è.
 
-**Il listino dell'ufficio è quello vero.** Il `prezzoProposto` che arriva dal
-cantiere vale solo dove il listino tace. E come sul telefono, un prezzo scritto a
-mano non viene mai risovrascritto: sopravvive anche a una correzione rimandata dal
-cantiere.
+**Il listino dell'ufficio è l'unico che c'è.** Dal cantiere arrivano quantità e
+niente prezzi. Un prezzo scritto a mano non viene mai risovrascritto dal listino:
+sopravvive anche a una correzione rimandata dal cantiere.
 
 **Il listino si modifica a video e si scrive su file col bottone.** Finché resta da
 salvare, `LISTINO_DA_SALVARE` impedisce a una rilettura della cartella di
@@ -350,18 +361,6 @@ la regola di sempre — un file, un solo autore — anche quando i dati viaggian
 Chi compare sui rapportini e non in anagrafica si aggiunge con un bottone: il
 cantiere l'ha già scritto una volta, e farlo ribattere sarebbe lavoro inventato.
 
-## Il passaggio di consegne del listino
-
-I prezzi stavano sul telefono e ora stanno in ufficio. La migrazione 8 li toglie
-da `DB.voci`, ma **non li butta via**: quelli scritti finiscono in
-`DB.listinoVecchio`, e la pagina Dati mostra una scheda per scaricarli come
-`listino.json` — già nel formato che l'app dell'ufficio legge, o qualcuno
-dovrebbe ribattere dieci prezzi a mano. La scheda sparisce quando l'elenco è
-vuoto, e si svuota solo con una conferma esplicita.
-
-Cancellare a un aggiornamento un listino costruito in mesi sarebbe imperdonabile:
-è lo stesso principio del backup, applicato a un dato che sta cambiando casa.
-
 ## Come arrivano gli aggiornamenti
 
 Il service worker serve la copia in cache e scarica la versione nuova in
@@ -392,8 +391,9 @@ ha continuato a servire la versione di tre mesi prima.
   letti con `isSi()`: i backup vecchi contengono di tutto.
 - I target azoto/potassio non stanno sul cliente ma sulla fascia, e si
   ricalcolano con `applicaFasce()` a ogni caricamento e dopo ogni modifica.
-- Il vecchio endpoint Apps Script sopravvive solo dentro `importaDaSheets()`,
-  per la migrazione una tantum. Non usarlo per altro.
+- L'aggancio tipo → voce sta su `TIPI_DEFAULT`, in un posto solo. `VoceID` vuoto
+  non è una dimenticanza: potature, taglio prato e arieggiatura sono manodopera,
+  già contata dalle ore, e collegarle vorrebbe dire fatturarle due volte.
 - I tipi di operazione di partenza hanno identificativi parlanti e stabili
   (`concimazione`, `potatura-siepi`…) perché il codice li cerca per
   identificativo e mai per nome: chi rinomina un tipo non deve svuotare il

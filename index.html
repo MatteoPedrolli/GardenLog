@@ -589,6 +589,7 @@ select.form-control { background-image: url("data:image/svg+xml,%3Csvg xmlns='ht
     <div id="page-home" class="page active">
       <div id="avviso-coda" class="avviso" style="display:none" onclick="svuotaCoda({ avvisa: true })"></div>
       <div id="avviso-backup" class="avviso" style="display:none" onclick="navTo('dati')"></div>
+      <div id="avviso-dati-vecchi" class="avviso" style="display:none" onclick="navTo('dati')"></div>
       <div class="hero">
         <div class="hero-date" id="hero-date"></div>
         <div class="hero-greeting">Buongiorno! 👋</div>
@@ -678,7 +679,7 @@ select.form-control { background-image: url("data:image/svg+xml,%3Csvg xmlns='ht
         </div>
       </div>
 
-      <div id="listino-vecchio-wrap"></div>
+      <div id="dati-da-parte-wrap"></div>
 
       <div class="section-title">Per l'ufficio</div>
       <div class="card" style="padding:14px">
@@ -706,7 +707,6 @@ select.form-control { background-image: url("data:image/svg+xml,%3Csvg xmlns='ht
       <div class="section-title">Vecchio foglio Google</div>
       <div class="card" style="padding:14px">
         <div class="dati-nota">L'app non usa più Google Sheets. Questo serve una volta sola, per portare qui lo storico che è rimasto sul foglio — o per recuperarlo su un altro dispositivo finché il foglio esiste. Sostituisce i dati presenti e richiede connessione.</div>
-        <button class="btn btn-secondary" id="btn-sheets" onclick="importaDaSheets()">⬇️ Importa dal foglio Google</button>
       </div>
     </div>
 
@@ -1010,17 +1010,14 @@ const IDB_NOME = 'giardinolog';
 const IDB_STORE = 'stato';
 const IDB_CHIAVE = 'db';
 const MIRROR_KEY = 'giardinolog-db';
-const CACHE_SHEETS = 'giardino-db-v1';  // cache locale di quando si leggeva da Sheets
-const VERSIONE_DATI = 9;
+const VERSIONE_DATI = 10;
 
 // Le impostazioni stanno dentro DB, non in META, perché così finiscono nel
 // backup: un indirizzo da riscrivere dopo aver cambiato telefono è una seccatura
 // piccola, ma è la stessa categoria di dato che il backup deve salvare.
 const IMPOSTAZIONI_DEFAULT = { UrlRapportini: '', NomeMittente: '' };
 
-const COLLEZIONI = ['clienti', 'visite', 'operazioni', 'concimi', 'sementi', 'fitofarmaci', 'fasce', 'tipiOperazione', 'voci', 'coda', 'prenotazioni',
-  // di passaggio: i prezzi vecchi in attesa di essere portati in ufficio
-  'listinoVecchio'];
+const COLLEZIONI = ['clienti', 'visite', 'operazioni', 'concimi', 'sementi', 'fitofarmaci', 'fasce', 'tipiOperazione', 'voci', 'coda', 'prenotazioni'];
 
 // Fasce di partenza per chi apre l'app la prima volta: numeri da correggere
 // in Archivi, non verità rivelate. Chi arriva da Sheets o da un backup se li
@@ -1044,20 +1041,23 @@ const FASCE_DEFAULT = [
 // prato/siepe: a cosa appartiene il lavoro. Prima erano due interruttori da
 //   ricordarsi di accendere, e scordarli faceva sparire l'operazione dal
 //   report Prati. Ora lo sa il tipo, e non c'è più niente da ricordare.
+// VoceID vuoto non è una dimenticanza: potature, taglio prato e arieggiatura
+// sono manodopera, già contata dalle ore. Collegarle a una voce vorrebbe dire
+// fatturarle due volte.
 const TIPI_DEFAULT = [
-  { TipoID:'taglio-prato',            Nome:'Taglio prato',             dettaglio:'niente',      Unita:'',      Prato:'Sì', Siepe:'',   Ordine:1 },
-  { TipoID:'potatura-siepi',          Nome:'Potatura siepi',           dettaglio:'niente',      Unita:'',      Prato:'',   Siepe:'Sì', Ordine:2 },
-  { TipoID:'potatura-arbusti',        Nome:'Potatura arbusti',         dettaglio:'niente',      Unita:'',      Prato:'',   Siepe:'',   Ordine:3 },
-  { TipoID:'concimazione',            Nome:'Concimazione',             dettaglio:'concime',     Unita:'kg',    Prato:'Sì', Siepe:'',   Ordine:4 },
-  { TipoID:'arieggiatura',            Nome:'Arieggiatura',             dettaglio:'niente',      Unita:'',      Prato:'Sì', Siepe:'',   Ordine:5 },
-  { TipoID:'semina',                  Nome:'Semina',                   dettaglio:'semente',     Unita:'kg',    Prato:'Sì', Siepe:'',   Ordine:6 },
-  { TipoID:'diserbo-selettivo',       Nome:'Diserbo selettivo',        dettaglio:'fitofarmaco', Unita:'l',     Prato:'Sì', Siepe:'',   Ordine:7 },
-  { TipoID:'diserbo-totale',          Nome:'Diserbo totale',           dettaglio:'fitofarmaco', Unita:'l',     Prato:'',   Siepe:'',   Ordine:8 },
-  { TipoID:'trattamento-fitosanitario', Nome:'Trattamento fitosanitario', dettaglio:'fitofarmaco', Unita:'l',  Prato:'',   Siepe:'',   Ordine:9 },
-  { TipoID:'apporto-terriccio',       Nome:'Apporto terriccio',        dettaglio:'quantita',    Unita:'sacchi', Prato:'Sì', Siepe:'',  Ordine:10 },
-  { TipoID:'posa-tappeto-erboso',     Nome:'Posa tappeto erboso',      dettaglio:'quantita',    Unita:'m²',    Prato:'Sì', Siepe:'',   Ordine:11 },
-  { TipoID:'piantumazione',           Nome:'Piantumazione',            dettaglio:'quantita',    Unita:'n',     Prato:'',   Siepe:'',   Ordine:12 },
-  { TipoID:'scarico-verde',           Nome:'Scarico verde',            dettaglio:'quantita',    Unita:'kg',    Prato:'',   Siepe:'',   Ordine:13 },
+  { TipoID:'taglio-prato',            Nome:'Taglio prato',             dettaglio:'niente',      Unita:'',      Prato:'Sì', Siepe:'',   VoceID:'',                  Ordine:1 },
+  { TipoID:'potatura-siepi',          Nome:'Potatura siepi',           dettaglio:'niente',      Unita:'',      Prato:'',   Siepe:'Sì', VoceID:'',                  Ordine:2 },
+  { TipoID:'potatura-arbusti',        Nome:'Potatura arbusti',         dettaglio:'niente',      Unita:'',      Prato:'',   Siepe:'',   VoceID:'',                  Ordine:3 },
+  { TipoID:'concimazione',            Nome:'Concimazione',             dettaglio:'concime',     Unita:'kg',    Prato:'Sì', Siepe:'',   VoceID:'concime',           Ordine:4 },
+  { TipoID:'arieggiatura',            Nome:'Arieggiatura',             dettaglio:'niente',      Unita:'',      Prato:'Sì', Siepe:'',   VoceID:'',                  Ordine:5 },
+  { TipoID:'semina',                  Nome:'Semina',                   dettaglio:'semente',     Unita:'kg',    Prato:'Sì', Siepe:'',   VoceID:'semente',           Ordine:6 },
+  { TipoID:'diserbo-selettivo',       Nome:'Diserbo selettivo',        dettaglio:'fitofarmaco', Unita:'l',     Prato:'Sì', Siepe:'',   VoceID:'fitofarmaco',       Ordine:7 },
+  { TipoID:'diserbo-totale',          Nome:'Diserbo totale',           dettaglio:'fitofarmaco', Unita:'l',     Prato:'',   Siepe:'',   VoceID:'fitofarmaco',       Ordine:8 },
+  { TipoID:'trattamento-fitosanitario', Nome:'Trattamento fitosanitario', dettaglio:'fitofarmaco', Unita:'l',  Prato:'',   Siepe:'',   VoceID:'trattamento',       Ordine:9 },
+  { TipoID:'apporto-terriccio',       Nome:'Apporto terriccio',        dettaglio:'quantita',    Unita:'sacchi', Prato:'Sì', Siepe:'',  VoceID:'terriccio',         Ordine:10 },
+  { TipoID:'posa-tappeto-erboso',     Nome:'Posa tappeto erboso',      dettaglio:'quantita',    Unita:'m²',    Prato:'Sì', Siepe:'',   VoceID:'tappeto-erboso',    Ordine:11 },
+  { TipoID:'piantumazione',           Nome:'Piantumazione',            dettaglio:'quantita',    Unita:'n',     Prato:'',   Siepe:'',   VoceID:'piante',            Ordine:12 },
+  { TipoID:'scarico-verde',           Nome:'Scarico verde',            dettaglio:'quantita',    Unita:'kg',    Prato:'',   Siepe:'',   VoceID:'smaltimento-verde', Ordine:13 },
 ];
 
 // Le voci del conto di fine lavoro. Il prezzo è facoltativo apposta: dove
@@ -1080,17 +1080,6 @@ const VOCI_DEFAULT = [
 // Quale voce di conto nasce da quale lavoro. Potature, taglio prato e
 // arieggiatura non compaiono: sono manodopera, e la manodopera la calcolano
 // già le fasce orarie. Metterle anche qui vorrebbe dire fatturarle due volte.
-const VOCE_PER_TIPO = {
-  'concimazione': 'concime',
-  'semina': 'semente',
-  'diserbo-selettivo': 'fitofarmaco',
-  'diserbo-totale': 'fitofarmaco',
-  'trattamento-fitosanitario': 'trattamento',
-  'apporto-terriccio': 'terriccio',
-  'posa-tappeto-erboso': 'tappeto-erboso',
-  'piantumazione': 'piante',
-  'scarico-verde': 'smaltimento-verde',
-};
 
 // ── STATE ──
 let DB = { clienti: [], visite: [], operazioni: [], concimi: [], sementi: [], fitofarmaci: [], fasce: [] };
@@ -1151,148 +1140,70 @@ function normalizzaDB(grezzo) {
   return pulito;
 }
 
-// ── MIGRAZIONI ──
-// Ogni dato che entra — da IndexedDB, da un backup, dal vecchio foglio — passa
-// di qui e ne esce alla versione corrente. È l'unico posto in cui aggiungere un
-// passaggio quando lo schema cambia: così un backup esportato oggi si riapre
-// anche fra due versioni, invece di far ripartire da capo chi lo tira fuori.
+// ── MODALITÀ COSTRUZIONE ──
+// Finché il sistema non è in servizio in azienda **non si scrivono migrazioni**.
+// Lo schema cambia quando serve, si alza VERSIONE_DATI, e i dati di una versione
+// diversa non vengono convertiti: vengono messi da parte e si riparte puliti.
+// Mantenere nove passaggi di conversione per dati che nessuno userà più costava
+// più di quanto valessero, e ogni passaggio era una cosa in più che poteva
+// rompersi senza farsi notare.
 //
-// Per aggiungere un passaggio: alza VERSIONE_DATI e scrivi qui la voce con il
-// numero nuovo. Deve funzionare anche su dati già a posto, perché un backup
-// senza versione viene trattato come il più vecchio e li attraversa tutti.
-const MIGRAZIONI = {
-  // 1 → 2: i target azoto/potassio stavano copiati su ogni cliente, congelati
-  // al momento del salvataggio. Ora si leggono dalla fascia a ogni caricamento,
-  // così correggere una fascia aggiorna davvero tutti i suoi clienti.
-  2: db => {
-    db.clienti.forEach(c => { delete c.Target_N_g_m2_anno; delete c.Target_K_g_m2_anno; });
-    return db;
-  },
+// Il giorno in cui l'azienda ci lavora davvero **questa regola si rovescia**: da
+// lì in poi ogni cambio di schema vuole la sua migrazione, o si perdono dati
+// veri. Chi fa quel passaggio alza VERSIONE_DATI un'ultima volta, rimette
+// l'imbuto e riscrive questa sezione.
+//
+// Nel frattempo niente si cancella di nascosto: quello che non si sa leggere
+// finisce in DATI_MESSI_DA_PARTE e si può scaricare dalla pagina Dati.
 
-  // 2 → 3: i tipi di operazione erano un elenco fisso dentro un menu a tendina.
-  // Ora sono un archivio, e ogni operazione punta al suo tipo invece di
-  // portarsi dietro solo un nome. Le vecchie righe vanno riagganciate, e le
-  // due che erano ambigue si risolvono guardando dove erano state fatte:
-  // una potatura con il flag siepe era una potatura di siepi, un diserbo sul
-  // prato era selettivo — sul prato il totale non lo usa nessuno.
-  3: db => {
-    if (!db.tipiOperazione.length) db.tipiOperazione = TIPI_DEFAULT.map(t => ({ ...t }));
-    const perNome = new Map(db.tipiOperazione.map(t => [String(t.Nome).toLowerCase(), t]));
-    db.operazioni.forEach(o => {
-      const vecchio = String(o.Tipo_operazione || '').trim();
-      let tipo = perNome.get(vecchio.toLowerCase());
-      if (!tipo && vecchio === 'Potatura')
-        tipo = db.tipiOperazione.find(t => t.TipoID === (isSi(o.Flag_siepe) ? 'potatura-siepi' : 'potatura-arbusti'));
-      if (!tipo && vecchio === 'Diserbo')
-        tipo = db.tipiOperazione.find(t => t.TipoID === (isSi(o.Flag_prato) ? 'diserbo-selettivo' : 'diserbo-totale'));
-      if (tipo) {
-        o.TipoID = tipo.TipoID;
-        o.Tipo_operazione = tipo.Nome;
-        if (!o.Unita) o.Unita = tipo.Unita || '';
-      } else {
-        // tipo non riconosciuto (era "Altro", o una voce scritta a mano):
-        // resta senza agganci, col nome che aveva. Non si inventa niente.
-        o.TipoID = o.TipoID || '';
-      }
-      // Dose_kg mentiva già: le dosi dei liquidi sono in litri e le piante si
-      // contano a numero. Il campo diventa una quantità con la sua unità.
-      if (o.Quantita == null) o.Quantita = o.Dose_kg ?? '';
-      delete o.Dose_kg;
-    });
-    return db;
-  },
+const CHIAVE_DA_PARTE = 'giardino-dati-di-un-altra-versione';
+let DATI_MESSI_DA_PARTE = false;
 
-  // 3 → 4: arrivano le voci del conto di fine lavoro, e ogni tipo di
-  // operazione impara a quale voce corrisponde. Sui tipi aggiunti a mano non
-  // si tocca niente: l'aggancio se lo sceglie chi li ha creati.
-  4: db => {
-    if (!db.voci.length) db.voci = VOCI_DEFAULT.map(v => ({ ...v }));
-    db.tipiOperazione.forEach(t => {
-      if (t.VoceID == null) t.VoceID = VOCE_PER_TIPO[t.TipoID] || '';
-    });
-    return db;
-  },
-
-  // 4 → 5: il trasferimento c'è a ogni lavoro e si valuta a occhio, quindi
-  // compare da solo nel conto invece di aggiungerlo ogni volta — aggiungerlo a
-  // mano era il modo migliore per scordarselo. E il trattamento fitosanitario
-  // non si fattura a litri ma a corpo: il prodotto e la dose restano nella
-  // visita, dove servono al registro dei trattamenti, ma nel conto sono una
-  // cifra sola.
-  5: db => {
-    const trasferimento = db.voci.find(v => v.VoceID === 'trasferimento');
-    if (trasferimento && trasferimento.ACorpo == null) trasferimento.ACorpo = 'Sì';
-    if (!db.voci.some(v => v.VoceID === 'trattamento')) {
-      db.voci.push({ VoceID:'trattamento', Nome:'Trattamento fitosanitario',
-        Unita:'', ACorpo:'Sì', Ordine:7 });
-    }
-    // solo dove è rimasto l'aggancio di partenza: se l'hai cambiato tu, resta il tuo
-    db.tipiOperazione.forEach(t => {
-      if (t.TipoID === 'trattamento-fitosanitario' && t.VoceID === 'fitofarmaco') t.VoceID = 'trattamento';
-    });
-    return db;
-  },
-
-  // 5 → 6: arrivano le impostazioni del rapportino — a chi va la mail e con
-  // che nome firmarla.
-  6: db => {
-    db.impostazioni = { ...IMPOSTAZIONI_DEFAULT, ...(db.impostazioni || {}) };
-    return db;
-  },
-
-  // 6 → 7: il rapportino non parte più per mail ma verso la cartella di Drive
-  // dell'ufficio, e ci arriva quando c'è rete. Serve una coda: in giardino il
-  // campo spesso non c'è, e un invio fallito non deve perdere il lavoro.
-  7: db => {
-    db.impostazioni = { ...IMPOSTAZIONI_DEFAULT, ...(db.impostazioni || {}) };
-    delete db.impostazioni.EmailAzienda;
-    return db;
-  },
-
-  // 7 → 8: il listino passa in ufficio. Il cantiere dice cosa è stato fatto e
-  // quanto — la cosa che solo lui sa — e quanto vale lo decide chi fattura, in
-  // un posto solo invece che su due dispositivi che divergono.
-  //
-  // I prezzi non si buttano via di nascosto: quelli scritti finiscono in
-  // listinoVecchio, che serve solo a portarli in ufficio e si svuota da Dati
-  // quando il giro è fatto. Cancellare a un aggiornamento un listino costruito
-  // in mesi sarebbe imperdonabile.
-  8: db => {
-    const conPrezzo = (db.voci || []).filter(v => v.Prezzo !== '' && v.Prezzo != null);
-    if (conPrezzo.length) {
-      db.listinoVecchio = conPrezzo.map(v => ({
-        VoceID: v.VoceID, Nome: v.Nome, Unita: v.Unita || '',
-        Prezzo: v.Prezzo, ACorpo: v.ACorpo || '',
-      }));
-    }
-    (db.voci || []).forEach(v => { delete v.Prezzo; });
-    db.impostazioni = { ...IMPOSTAZIONI_DEFAULT, ...(db.impostazioni || {}) };
-    delete db.impostazioni.MostraImporti;
-    // I conti delle visite già registrate non si toccano: sono il registro di
-    // quello che è stato fatturato prima che il listino passasse in ufficio, non
-    // un listino. Riscriverli cancellerebbe l'unica traccia che ne resta.
-    return db;
-  },
-
-  // 8 → 9: dal cantiere si può prenotare un appuntamento, e la prenotazione
-  // viaggia verso l'ufficio come un documento suo. Il prossimo intervento
-  // scritto su una visita resta quello che è — una nota, «torna a marzo» —
-  // mentre questa è una richiesta di mettere qualcosa sulla lavagna.
-  9: db => {
-    if (!Array.isArray(db.prenotazioni)) db.prenotazioni = [];
-    return db;
-  },
-};
-
-function migra(grezzo, versione) {
-  let v = Number(versione) || 1;
-  let db = normalizzaDB(grezzo);
-  while (v < VERSIONE_DATI) {
-    v++;
-    const passo = MIGRAZIONI[v];
-    if (passo) db = normalizzaDB(passo(db));
-  }
+// Un database nuovo non nasce vuoto: gli archivi di partenza stavano dentro le
+// migrazioni, che erano il posto sbagliato — servivano a convertire, non a
+// seminare, e un database appena creato ci passava dentro per finta pur di
+// raccoglierli. Ora stanno qui, dove si leggono.
+function datiIniziali() {
+  const db = normalizzaDB(null);
+  db.fasce = FASCE_DEFAULT.map(f => ({ ...f }));
+  db.tipiOperazione = TIPI_DEFAULT.map(t => ({ ...t }));
+  db.voci = VOCI_DEFAULT.map(v => ({ ...v }));
   return db;
+}
+
+// Restituisce i dati pronti, o null se sono di un'altra versione.
+function leggiDati(grezzo, versione) {
+  if (Number(versione) !== VERSIONE_DATI) return null;
+  return normalizzaDB(grezzo);
+}
+
+// I dati che non si sanno leggere non si buttano: si spostano su una chiave a
+// parte prima che il primo salvataggio li ricopra. È la stessa idea del backup —
+// l'unica copia di qualcosa non sparisce perché il formato è cambiato.
+function mettiDaParte(payload) {
+  try {
+    localStorage.setItem(CHIAVE_DA_PARTE, JSON.stringify({
+      messiDaParte: new Date().toISOString(),
+      versione: payload?.versione ?? null,
+      db: payload?.db ?? null,
+      meta: payload?.meta ?? null,
+    }));
+    DATI_MESSI_DA_PARTE = true;
+  } catch (e) {
+    // Se non c'è spazio nemmeno per metterli da parte, va detto: è l'unico
+    // momento in cui quei dati esistono ancora.
+    DATI_MESSI_DA_PARTE = false;
+    console.warn('dati vecchi non messi da parte', e);
+  }
+}
+
+function datiMessiDaParte() {
+  try {
+    const raw = localStorage.getItem(CHIAVE_DA_PARTE);
+    return raw ? JSON.parse(raw) : null;
+  } catch (e) {
+    return null;
+  }
 }
 
 // I target N/K non stanno sul cliente ma sulla fascia: ricalcolarli a ogni
@@ -1331,18 +1242,17 @@ async function caricaDB() {
     try { const raw = localStorage.getItem(MIRROR_KEY); if (raw) payload = JSON.parse(raw); }
     catch (e) { console.warn('localStorage non leggibile', e); }
   }
-  // Prima apertura dopo il passaggio al locale: i dati sono ancora nella
-  // vecchia cache di Sheets. Recuperarli evita di ripartire da zero.
-  if (!payload?.db) {
-    try {
-      const raw = localStorage.getItem(CACHE_SHEETS);
-      const vecchio = raw ? JSON.parse(raw) : null;
-      if (vecchio?.db) payload = { db: vecchio.db, meta: null };
-    } catch (e) { /* cache vecchia illeggibile: pazienza */ }
+  if (!payload?.db) { DB = datiIniziali(); return false; }   // prima apertura
+
+  const dati = leggiDati(payload.db, payload.versione);
+  if (!dati) {
+    mettiDaParte(payload);
+    DB = datiIniziali();
+    return false;
   }
-  DB = migra(payload?.db, payload?.versione);
-  if (payload?.meta) META = { ...META, ...payload.meta };
-  return !!payload?.db;
+  DB = dati;
+  if (payload.meta) META = { ...META, ...payload.meta };
+  return true;
 }
 
 // Senza questo iOS e Android possono cancellare i dati del sito quando serve
@@ -1374,6 +1284,7 @@ async function init() {
   renderAll();
   aggiornaAvvisoBackup();
   aggiornaAvvisoCoda();
+  aggiornaAvvisoDatiDaParte();
   avviaOrologioCoda();
   svuotaCoda();
   chiediPersistenza();
@@ -2827,6 +2738,22 @@ async function svuotaCoda({ avvisa = false } = {}) {
 
 // L'avviso in home dice quanti rapportini stanno ancora sul telefono. Non è un
 // dettaglio tecnico: finché sono lì, in ufficio quel lavoro non esiste.
+// Un avviso che resta, non un toast: trovare dati di un'altra versione è la
+// cosa più grave che possa capitare all'avvio, e chi apre l'app deve incontrarla
+// anche se in quel momento stava pensando ad altro.
+function aggiornaAvvisoDatiDaParte() {
+  const el = document.getElementById('avviso-dati-vecchi');
+  if (!el) return;
+  const vecchi = datiMessiDaParte();
+  el.style.display = vecchi ? 'flex' : 'none';
+  if (!vecchi) return;
+  el.innerHTML = `<span style="font-size:1.3rem">📦</span>
+    <div style="flex:1">
+      <div style="font-weight:600">Dati di una versione precedente messi da parte</div>
+      <div style="font-size:0.78rem; opacity:0.85">Non sono stati convertiti, ma nemmeno persi · tocca per vederli</div>
+    </div>`;
+}
+
 function aggiornaAvvisoCoda() {
   const el = document.getElementById('avviso-coda');
   if (!el) return;
@@ -3035,14 +2962,16 @@ async function importaBackup(input) {
     showToast('❌ Questo file non è un backup di GiardinoApp');
     return;
   }
-  // Un backup fatto da una versione futura dell'app può contenere campi che
-  // questa non conosce e che l'import butterebbe via in silenzio. Meglio un
-  // avviso che una perdita scoperta fra sei mesi.
-  const versioneFile = Number(payload?.versione) || 1;
-  if (versioneFile > VERSIONE_DATI && !confirm(
-      `Questo backup arriva da una versione più recente dell'app (${versioneFile}, qui siamo alla ${VERSIONE_DATI}).\n\n` +
-      'Quello che questa versione non conosce andrà perso. Aggiornare l\'app prima di importare sarebbe più prudente.\n\nImportare lo stesso?')) return;
-  const nuovo = migra(arrivo, versioneFile);
+  // In modalità costruzione non si converte niente: un backup di un'altra
+  // versione può avere campi che questa non conosce o non avere quelli che
+  // servono, e importarlo lo stesso vorrebbe dire dati storti scoperti fra sei
+  // mesi. Si rifiuta, e il file resta lì da riaprire quando serve.
+  const versioneFile = Number(payload?.versione) || 0;
+  const nuovo = leggiDati(arrivo, versioneFile);
+  if (!nuovo) {
+    showToast(`❌ Backup della versione ${versioneFile || '?'}: questa app è alla ${VERSIONE_DATI} e non lo converte`);
+    return;
+  }
   const quando = payload?.esportato
     ? new Date(payload.esportato).toLocaleDateString('it-IT')
     : 'data sconosciuta';
@@ -3154,43 +3083,56 @@ function renderDati() {
   const firma = document.getElementById('f-imp-firma');
   if (firma) firma.value = imp.NomeMittente || '';
   renderArchivi();
-  renderListinoVecchio();
+  renderDatiDaParte();
   renderDiagnostica();
 }
 
-// I prezzi sono passati in ufficio, ma quelli già scritti sul telefono non si
-// buttano via a un aggiornamento: restano qui finché non li hai portati di là.
-// La scheda sparisce da sola quando il giro è fatto.
-function renderListinoVecchio() {
-  const el = document.getElementById('listino-vecchio-wrap');
+// Compare solo se all'avvio sono stati trovati dati di un'altra versione. Sono
+// l'unica copia rimasta di quello che c'era: si scaricano come file e si
+// cancellano solo con una conferma.
+function renderDatiDaParte() {
+  const el = document.getElementById('dati-da-parte-wrap');
   if (!el) return;
-  const vecchio = DB.listinoVecchio || [];
-  if (!vecchio.length) { el.innerHTML = ''; return; }
-  el.innerHTML = `<div class="section-title">Il listino è passato in ufficio</div>
+  const vecchi = datiMessiDaParte();
+  if (!vecchi) { el.innerHTML = ''; return; }
+  const conta = k => (vecchi.db && Array.isArray(vecchi.db[k]) ? vecchi.db[k].length : 0);
+  const quando = vecchi.messiDaParte
+    ? new Date(vecchi.messiDaParte).toLocaleDateString('it-IT') : '';
+  el.innerHTML = `<div class="section-title">Dati di una versione precedente</div>
     <div class="card" style="padding:14px">
-      <div class="dati-nota">I prezzi ora stanno nell'app dell'ufficio, in un posto solo.
-        ${vecchio.length} ${vecchio.length === 1 ? 'voce che avevi' : 'voci che avevi'} qui
-        ${vecchio.length === 1 ? 'aspetta' : 'aspettano'} di essere ${vecchio.length === 1 ? 'portata' : 'portate'} di là.</div>
+      <div class="dati-nota">Aprendo questa versione dell'app${quando ? ' il ' + quando : ''} sono stati trovati
+        dati nel formato della versione ${vecchi.versione ?? '?'}. Non sono stati convertiti — siamo ancora in
+        costruzione — ma nemmeno buttati: ci sono ${conta('clienti')} clienti, ${conta('visite')} visite
+        e ${conta('operazioni')} operazioni.</div>
       <div style="display:flex; gap:8px; flex-wrap:wrap">
-        <button class="btn btn-secondary btn-sm" onclick="scaricaListinoPerUfficio()">Scarica listino.json</button>
-        <button class="btn btn-secondary btn-sm" onclick="scartaListinoVecchio()">Fatto, cancellalo</button>
+        <button class="btn btn-secondary btn-sm" onclick="scaricaDatiDaParte()">Scarica il file</button>
+        <button class="btn btn-secondary btn-sm" onclick="scartaDatiDaParte()">Cancellali</button>
       </div>
-      <div class="dati-nota" style="margin-top:10px">Il file va messo nella cartella
-        <strong>GiardinoApp</strong> su Drive, accanto a <code>rapportini</code>: l'app dell'ufficio lo legge da lì.</div>
+      <div class="dati-nota" style="margin-top:10px">Da qui si recuperano a mano le cose che servono —
+        l'anagrafica prima di tutto.</div>
     </div>`;
 }
 
-// Esce già nel formato che l'app dell'ufficio legge, ed è il punto: se uscisse in
-// un formato suo qualcuno dovrebbe ribattere dieci prezzi a mano, che è il lavoro
-// che questo passaggio deve evitare.
-function listinoPerUfficio() {
-  return {
-    tipo: 'listino', versione: 1, aggiornato: new Date().toISOString(),
-    voci: (DB.listinoVecchio || []).map(v => ({
-      voceID: v.VoceID, voce: v.Nome, unita: v.Unita || '',
-      prezzo: v.Prezzo, aCorpo: isSi(v.ACorpo),
-    })),
-  };
+async function scaricaDatiDaParte() {
+  const vecchi = datiMessiDaParte();
+  if (!vecchi) return;
+  const file = new File([JSON.stringify(vecchi, null, 2)],
+    `giardinolog-versione-${vecchi.versione ?? 'ignota'}-${dataFile()}.json`, { type: 'application/json' });
+  let esito;
+  try { esito = await consegnaFile(file); }
+  catch (e) { showToast('❌ Non riuscito: ' + (e.message || e)); return; }
+  // Una condivisione annullata non è un file salvato, e questa è l'unica copia.
+  showToast(esito === 'annullato' ? '↩️ Annullato: il file non è uscito' : '💾 Dati vecchi salvati');
+}
+
+function scartaDatiDaParte() {
+  if (!confirm('Cancellare i dati della versione precedente?\n\n' +
+    'Sono l\'unica copia rimasta: fallo solo se hai già salvato il file o se non ti servono.')) return;
+  try { localStorage.removeItem(CHIAVE_DA_PARTE); } catch (e) { /* già non c'è */ }
+  DATI_MESSI_DA_PARTE = false;
+  renderDatiDaParte();
+  aggiornaAvvisoDatiDaParte();
+  showToast('🗑️ Cancellati');
 }
 
 // L'anagrafica esce con il suo nome di file, diverso da quello dell'archivio
@@ -3219,27 +3161,6 @@ async function esportaAnagrafica() {
   showToast(esito === 'annullato'
     ? '↩️ Annullato: il file non è uscito'
     : `👥 ${doc.clienti.length} clienti pronti per l'ufficio`);
-}
-
-async function scaricaListinoPerUfficio() {
-  if (!(DB.listinoVecchio || []).length) return;
-  const contenuto = JSON.stringify(listinoPerUfficio(), null, 2);
-  const file = new File([contenuto], 'listino.json', { type: 'application/json' });
-  let esito;
-  try { esito = await consegnaFile(file); }
-  catch (e) { showToast('❌ Non riuscito: ' + (e.message || e)); return; }
-  // Una condivisione annullata non è un file consegnato: dirlo eviterebbe di
-  // cancellare dei prezzi credendo di averli messi al sicuro.
-  showToast(esito === 'annullato' ? '↩️ Annullato: il file non è uscito' : '🏷️ listino.json pronto');
-}
-
-async function scartaListinoVecchio() {
-  if (!confirm('Cancellare i prezzi vecchi da questo telefono?\n\n' +
-    'Fallo solo se li hai già portati nell\'app dell\'ufficio: da qui non si recuperano più.')) return;
-  delete DB.listinoVecchio;
-  await salvaDB();
-  renderListinoVecchio();
-  showToast('🏷️ Prezzi vecchi cancellati');
 }
 
 function renderArchivi() {
@@ -3377,46 +3298,6 @@ async function eliminaVoceArchivio(tipo, id) {
   showToast('🗑 Eliminato');
   renderDati();
   renderAll();
-}
-
-// ── MIGRAZIONE DA GOOGLE SHEETS (una tantum) ──
-// L'app non parla più con il foglio: questo serve solo a portare qui lo
-// storico la prima volta, o a recuperarlo finché il foglio esiste ancora.
-const SHEETS_API = 'https://script.google.com/macros/s/AKfycbx8vlMzgRiJYJqHQwPOdT-aDy0tMOFdHx8G3citRM1dO2gWyIUcvo1zj3YhNC-PGoEI/exec';
-
-async function importaDaSheets() {
-  if (!confirm('Scarica i dati dal vecchio foglio Google e sostituisce quelli di questo dispositivo.\n\nServe la connessione. Procedere?')) return;
-  const btn = document.getElementById('btn-sheets');
-  if (btn) { btn.disabled = true; btn.textContent = '⏳ Scarico dal foglio...'; }
-  try {
-    const leggi = async foglio => {
-      const r = await fetch(SHEETS_API + '?' + new URLSearchParams({ action: 'getAll', foglio }));
-      const testo = await r.text();
-      let j;
-      // Apps Script risponde 200 anche quando fallisce, mandando una pagina
-      // HTML di errore al posto del JSON.
-      try { j = JSON.parse(testo); }
-      catch (e) { throw new Error(foglio + ': il foglio ha risposto con un errore'); }
-      if (j?.status === 'error') throw new Error(foglio + ': ' + (j.msg || 'errore dal foglio'));
-      return Array.isArray(j) ? j : [];
-    };
-    const fogli = ['CLIENTI','VISITE','OPERAZIONI','CONCIMI','SEMENTI','FITOFARMACI','FASCE'];
-    const [clienti, visite, operazioni, concimi, sementi, fitofarmaci, fasce] =
-      await Promise.all(fogli.map(leggi));
-    // Il foglio è fermo allo schema di partenza: lo faccio passare dalle
-    // migrazioni come qualsiasi altro dato che arriva da fuori.
-    DB = migra({ clienti, visite, operazioni, concimi, sementi, fitofarmaci, fasce }, 1);
-    applicaFasce();
-    if (!await salvaDB()) return;
-    showToast(`✅ Importati ${DB.clienti.length} clienti e ${DB.visite.length} visite`);
-    updateStats();
-    renderAll();
-    renderDati();
-  } catch (e) {
-    showToast('❌ ' + (e.message || e));
-  } finally {
-    if (btn) { btn.disabled = false; btn.textContent = '⬇️ Importa dal foglio Google'; }
-  }
 }
 
 // ── UTILS ──
