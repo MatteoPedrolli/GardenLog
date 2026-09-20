@@ -284,6 +284,7 @@ input.vuoto { background: #fffdf5; border-color: #ecdca8; }
 .cliente-cart { font-weight: 600; font-size: 0.86rem; }
 .luogo-cart { font-size: 0.7rem; color: var(--text-light); }
 .cosa-cart { font-size: 0.78rem; color: var(--text-mid); }
+.note-cart { font-size: 0.72rem; color: var(--text-light); font-style: italic; }
 .riga-cart { display: flex; align-items: center; gap: 5px; flex-wrap: wrap; margin-top: 2px; }
 .ore-cart {
   font-size: 0.72rem; font-weight: 600; color: var(--green-mid);
@@ -440,6 +441,9 @@ const CARTELLA_ARCHIVIO = 'archivio';
 const FILE_LISTINO = 'listino.json';
 const FILE_IMPOSTAZIONI = 'impostazioni.json';
 const FILE_LAVAGNA = 'lavagna.json';
+// L'agenda che l'ufficio manda in cantiere: la scrive qui, il telefono la legge
+// passando dal servizio. È l'unico file che esce dall'ufficio verso il telefono.
+const FILE_AGENDA = 'agenda.json';
 const VERSIONE_LAVAGNA = 2;
 const FILE_CLIENTI = 'clienti.json';
 const FILE_ANAGRAFICA = 'anagrafica-dal-telefono.json';
@@ -665,6 +669,7 @@ async function assorbiAppuntamenti() {
       luogo: doc.cliente.citta || '',
       cosa: doc.cosa,
       ore: doc.ore,
+      note: doc.note || '',
       settimana: doc.settimana || '',
       origine: 'prenotato dal cantiere',
       requisiti: doc.requisiti,
@@ -814,6 +819,11 @@ function sistemaLavoro(l) {
     settimana: l.settimana ? lunediDellaSettimana(l.settimana) : '',
     origine: l.origine || '',
     requisiti: Array.isArray(l.requisiti) ? l.requisiti.filter(r => r) : [],
+    // Quello che il cantiere ha scritto pensando alla prossima volta: «il cliente
+    // preferisce il mattino», «chiedere della chiave del cancello». Arriva con la
+    // prenotazione e torna in giardino con l'agenda — è l'unica cosa che fa il
+    // giro completo.
+    note: l.note || '',
     rimandato: !!l.rimandato,
     stato: l.stato === 'matita' || l.stato === 'confermato' ? l.stato : 'lista',
     // La posizione è una data vera, non un posto nella griglia: un indice dentro la
@@ -837,9 +847,29 @@ async function salvaLavagna() {
     await scriviTesto(CARTELLA, FILE_LAVAGNA, JSON.stringify({
       ...LAVAGNA, aggiornato: new Date().toISOString(),
     }, null, 2));
-    return true;
   } catch (e) {
     avvisa('Non ho potuto salvare la lavagna: ' + e.message, true);
+    return false;
+  }
+  // L'agenda si riscrive con la lavagna, sempre: sta qui e non in un bottone
+  // perché chi pianifica sposta un cartellino e passa al successivo, e un'agenda
+  // da aggiornare a mano è un'agenda che in giardino dice il giorno sbagliato.
+  await salvaAgenda();
+  return true;
+}
+
+// I prossimi sei appuntamenti pianificati, per chi è in giardino. Un file a parte
+// e non un pezzo di lavagna.json: quello porta tutto — luoghi, ore, requisiti — e
+// deve restare in ufficio.
+async function salvaAgenda() {
+  try {
+    await scriviTesto(CARTELLA, FILE_AGENDA,
+      JSON.stringify(costruisciAgenda(LAVAGNA.lavori), null, 2));
+    return true;
+  } catch (e) {
+    // Non blocca la pianificazione — la lavagna è già salvata — ma non si tace:
+    // un'agenda ferma a ieri manda qualcuno nel posto sbagliato.
+    avvisa('Lavagna salvata, ma non ho potuto aggiornare l\'agenda per il cantiere: ' + e.message, true);
     return false;
   }
 }
@@ -2049,6 +2079,7 @@ function cartellino(l) {
     '<div class="cliente-cart">' + perValore(l.cliente || 'senza nome') + '</div>' +
     (l.luogo ? '<div class="luogo-cart">' + perValore(l.luogo) + '</div>' : '') +
     (l.cosa ? '<div class="cosa-cart">' + perValore(l.cosa) + '</div>' : '') +
+    (l.note ? '<div class="note-cart">' + perValore(l.note) + '</div>' : '') +
     '<div class="riga-cart">' +
       (l.ore ? '<span class="ore-cart">~' + formattaQuantita(l.ore) + ' h</span>' : '') +
       (l.rimandato && inLista ? '<span class="rimandato-cart">slittato</span>' : '') +
@@ -2290,7 +2321,9 @@ function apriModuloLavoro(id) {
     '<div id="n-settimana-eco" class="meta" style="margin-bottom:6px">' +
       perValore(etichettaSettimana(l ? l.settimana : '')) + '</div>' +
     '<input type="text" id="n-requisito" placeholder="Manca qualcosa? (blocca il lavoro)" value="' +
-      perValore(l && l.requisiti.length ? l.requisiti.join(', ') : '') + '">' +
+      perValore(l && l.requisiti.length ? l.requisiti.join(', ') : '') + '" style="margin-bottom:6px">' +
+    '<textarea id="n-note" rows="2" placeholder="Note — tornano in giardino con l\'agenda">' +
+      perValore(l ? l.note : '') + '</textarea>' +
     '<div class="bottoni">' +
       '<button class="principale piccola" onclick="salvaModuloLavoro()">' +
         (l ? 'Salva' : 'Metti in coda') + '</button>' +
@@ -2323,6 +2356,7 @@ async function salvaModuloLavoro() {
     ore: Number(valore('n-ore').replace(',', '.')) || 0,
     settimana: lunediDellaSettimana(valore('n-settimana')),
     requisiti,
+    note: valore('n-note').trim(),
   };
 
   const id = valore('n-id');

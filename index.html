@@ -125,6 +125,7 @@ html, body {
   color: var(--green-deep);
   padding: 20px 18px 12px;
 }
+.agenda-quando { font-family: var(--font-body); font-size: 0.78rem; font-weight: 400; color: var(--text-light); }
 
 .card {
   background: var(--white);
@@ -615,7 +616,7 @@ select.form-control { background-image: url("data:image/svg+xml,%3Csvg xmlns='ht
           </div>
           <div class="quick-card" onclick="navTo('prossimi')">
             <span class="quick-icon">📅</span>
-            <div><div class="quick-label">Prossimi interventi</div><div class="quick-sub">Pianifica lavori</div></div>
+            <div><div class="quick-label">Prossimi interventi</div><div class="quick-sub">Dall'ufficio e prenotazioni</div></div>
           </div>
         </div>
       </div>
@@ -640,6 +641,10 @@ select.form-control { background-image: url("data:image/svg+xml,%3Csvg xmlns='ht
 
     <!-- PROSSIMI INTERVENTI -->
     <div id="page-prossimi" class="page">
+      <div class="section-title">In programma <span id="agenda-quando" class="agenda-quando"></span></div>
+      <div id="agenda-list"></div>
+      <button class="btn btn-secondary" style="margin:0 18px" onclick="scaricaAgenda({ avvisa: true })">🔄 Aggiorna dall'ufficio</button>
+
       <div class="section-title">Prenota un appuntamento</div>
       <div class="card" style="padding:14px">
         <div class="dati-nota">Quello che prenoti qui compare da solo sulla lavagna dell'ufficio.
@@ -1123,6 +1128,12 @@ function normalizzaDB(grezzo) {
   const pulito = {};
   COLLEZIONI.forEach(k => { pulito[k] = Array.isArray(grezzo?.[k]) ? grezzo[k] : []; });
   pulito.impostazioni = { ...IMPOSTAZIONI_DEFAULT, ...(grezzo?.impostazioni || {}) };
+  // L'ultima agenda scaricata dall'ufficio. Non è una collezione e non è un dato
+  // nostro: è una copia di quello che l'ufficio ha pianificato, tenuta qui perché
+  // in giardino il campo spesso non c'è e l'agenda serve proprio lì. Assente vuol
+  // dire «non ancora scaricata», che è un valore buono: non c'è niente da
+  // convertire, quindi non alza VERSIONE_DATI.
+  pulito.agenda = grezzo?.agenda && grezzo.agenda.tipo === 'agenda' ? grezzo.agenda : null;
   return pulito;
 }
 
@@ -1265,6 +1276,7 @@ function renderAll() {
   renderClienti();
   renderVisite();
   renderPrenotazioni();
+  renderAgenda();
   renderPrati();
 }
 
@@ -1282,6 +1294,7 @@ async function init() {
   aggiornaAvvisoDatiDaParte();
   avviaOrologioCoda();
   svuotaCoda();
+  scaricaAgenda();
   chiediPersistenza();
   registraServiceWorker();
   armaIndietro();
@@ -1317,6 +1330,10 @@ function navTo(page) {
   document.getElementById('topbar-action-btn').style.display =
     ['prati','prossimi','dati'].includes(page) ? 'none' : 'flex';
   if (page === 'dati') renderDati();
+  // Aprendo la pagina si riprova a scaricare l'agenda, ma non a ogni tocco: in
+  // ufficio la lavagna cambia qualche volta al giorno, e una richiesta per ogni
+  // occhiata sarebbe traffico per niente.
+  if (page === 'prossimi' && Date.now() - agendaScaricataA > 300000) scaricaAgenda();
 }
 
 // ── TASTO INDIETRO ──
@@ -2586,6 +2603,76 @@ function accodaAppuntamento(prenotazione) {
   return doc;
 }
 
+// ── L'AGENDA CHE ARRIVA DALL'UFFICIO ──
+// L'unico documento che viaggia dall'ufficio al telefono. Si scarica quando c'è
+// rete e si tiene nel DB: in giardino il campo spesso non c'è, ed è lì che serve
+// sapere dove si va domani.
+let agendaInCorso = false;
+let agendaScaricataA = 0;
+
+function indirizzoAgenda() {
+  const url = (DB.impostazioni?.UrlRapportini || '').trim();
+  if (!url) return '';
+  return url + (url.includes('?') ? '&' : '?') + 'documento=agenda';
+}
+
+async function scaricaAgenda({ avvisa = false } = {}) {
+  if (agendaInCorso) return false;
+  const url = indirizzoAgenda();
+  if (!url) { if (avvisa) showToast('⚙️ Manca l\'indirizzo di consegna: impostalo in Dati'); return false; }
+  if (!navigator.onLine) { if (avvisa) showToast('📭 Nessuna rete: resta l\'agenda scaricata prima'); return false; }
+  agendaInCorso = true;
+  agendaScaricataA = Date.now();
+  try {
+    // Stessa trappola dell'invio: Apps Script risponde 200 con una pagina HTML
+    // quando fallisce, e un JSON che non è un'agenda non è un'agenda.
+    const r = await fetch(url, { cache: 'no-store' });
+    const agenda = leggiAgenda(await r.text());
+    DB.agenda = agenda;
+    await salvaDB({ conta: false });
+    renderAgenda();
+    if (avvisa) showToast(agenda.appuntamenti.length
+      ? '📅 Agenda aggiornata: ' + agenda.appuntamenti.length + (agenda.appuntamenti.length === 1 ? ' appuntamento' : ' appuntamenti')
+      : '📅 Agenda aggiornata: niente in programma');
+    return true;
+  } catch (e) {
+    // Un'agenda che non si scarica non è un guasto: quella di prima resta, e va
+    // detto solo a chi ha chiesto di aggiornarla.
+    if (avvisa) showToast('⚠️ Agenda non aggiornata: ' + (e.message || e));
+    return false;
+  } finally {
+    agendaInCorso = false;
+  }
+}
+
+function renderAgenda() {
+  const el = document.getElementById('agenda-list');
+  const quando = document.getElementById('agenda-quando');
+  if (!el) return;
+  const agenda = DB.agenda;
+  if (quando) {
+    quando.textContent = agenda?.aggiornata
+      ? '· dall\'ufficio il ' + new Date(agenda.aggiornata).toLocaleDateString('it-IT', { day: 'numeric', month: 'long' })
+      : '';
+  }
+  if (!agenda) {
+    el.innerHTML = `<div class="card" style="padding:14px"><div class="dati-nota">
+      L'ufficio manda qui le mezze giornate già pianificate. Tocca «Aggiorna
+      dall'ufficio» quando hai rete: quello che arriva resta anche senza campo.</div></div>`;
+    return;
+  }
+  if (!agenda.appuntamenti.length) {
+    el.innerHTML = `<div class="card" style="padding:14px"><div class="dati-nota">
+      Niente in programma sulla lavagna dell'ufficio.</div></div>`;
+    return;
+  }
+  el.innerHTML = agenda.appuntamenti.map(a => `<div class="card" style="padding:12px">
+    <div style="font-size:0.78rem; color:var(--primary); font-weight:600">${perValore(etichettaMezzaGiornata(a.giorno, a.mezza))}</div>
+    <div style="font-weight:600">${perValore(a.cliente || 'senza cliente')}</div>
+    ${a.note ? `<div style="font-size:0.82rem; color:var(--text-mid); margin-top:4px; font-style:italic">${perValore(a.note)}</div>` : ''}
+  </div>`).join('');
+}
+
 function renderPrenotazioni() {
   const el = document.getElementById('prenotazioni-list');
   if (!el) return;
@@ -2737,7 +2824,7 @@ function aggiornaAvvisoCoda() {
 function avviaOrologioCoda() {
   // Alla ripresa della rete e ogni due minuti mentre l'app è aperta: abbastanza
   // spesso da non farti aspettare, abbastanza raro da non scaldare il telefono.
-  window.addEventListener('online', () => svuotaCoda());
+  window.addEventListener('online', () => { svuotaCoda(); scaricaAgenda(); });
   clearInterval(orologioCoda);
   orologioCoda = setInterval(() => svuotaCoda(), 120000);
 }

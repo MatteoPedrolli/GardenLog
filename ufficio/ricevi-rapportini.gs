@@ -17,8 +17,14 @@
  *
  * PERCHÉ "CHIUNQUE": l'app sul telefono non è collegata a un account Google, e
  * non può autenticarsi. Chi conosce l'indirizzo può depositare un file in questa
- * cartella — non leggere, non cancellare: doPost scrive e basta. Se l'indirizzo
- * dovesse girare, si rifà la distribuzione e cambia.
+ * cartella e leggere l'agenda — nient'altro: non l'archivio, non il listino, non
+ * l'anagrafica. Se l'indirizzo dovesse girare, si rifà la distribuzione e cambia.
+ *
+ * L'AGENDA È L'UNICA COSA CHE SI LEGGE, ed è il motivo per cui contiene solo
+ * giorno, mezza giornata, cliente e note: chi la scrive (l'app dell'ufficio) tiene
+ * indirizzi, telefoni, ore e prezzi fuori dal file proprio perché questo
+ * indirizzo è pubblico per chi lo conosce. Chi aggiungesse un campo lì lo
+ * pubblicherebbe qui.
  */
 
 const CARTELLA_RADICE = 'GiardinoApp';
@@ -29,6 +35,13 @@ const CARTELLA_RADICE = 'GiardinoApp';
 const CARTELLE = {
   rapportino: 'rapportini',
   appuntamento: 'appuntamenti',
+};
+
+// E un file solo che il telefono può leggere. L'elenco sta qui e non nella
+// richiesta: il nome del file non si prende mai da chi chiama, o l'indirizzo
+// diventerebbe un modo per leggersi il listino o l'anagrafica.
+const LEGGIBILI = {
+  agenda: 'agenda.json',
 };
 
 function doPost(e) {
@@ -55,18 +68,38 @@ function doPost(e) {
   }
 }
 
-// Serve a verificare dal browser che la distribuzione risponda, senza scrivere niente.
-function doGet() {
-  return risposta({ status: 'ok', servizio: 'rapportini', versione: 2,
-    accetta: Object.keys(CARTELLE) });
+// Senza parametri serve a verificare dal browser che la distribuzione risponda.
+// Con ?documento=agenda restituisce l'agenda scritta dall'ufficio: è l'unica
+// lettura che questo servizio concede, e l'unico file che può nominare.
+function doGet(e) {
+  try {
+    const quale = (e && e.parameter && e.parameter.documento) || '';
+    if (!quale) {
+      return risposta({ status: 'ok', servizio: 'rapportini', versione: 3,
+        accetta: Object.keys(CARTELLE), leggibili: Object.keys(LEGGIBILI) });
+    }
+    // Un nome preso da una lista, non dalla richiesta: così l'indirizzo non
+    // diventa un modo per leggere il listino o l'anagrafica.
+    const nome = LEGGIBILI[quale];
+    if (!nome) throw new Error('documento non leggibile: ' + quale);
+
+    const radice = sottocartella(DriveApp.getRootFolder(), CARTELLA_RADICE);
+    const file = radice.getFilesByName(nome);
+    if (!file.hasNext()) throw new Error('l\'ufficio non ha ancora scritto ' + nome);
+    return ContentService.createTextOutput(file.next().getBlob().getDataAsString())
+      .setMimeType(ContentService.MimeType.JSON);
+  } catch (err) {
+    return risposta({ status: 'error', msg: String((err && err.message) || err) });
+  }
 }
 
 function nomeFile(doc) {
   const pulito = String((doc.cliente && doc.cliente.nome) || 'cliente')
     .replace(/[^a-zA-Z0-9]+/g, '-').replace(/^-|-$/g, '').toLowerCase();
-  // Il rapportino porta la data del lavoro, l'appuntamento quella entro cui
-  // andrebbe fatto: in entrambi i casi la cartella resta leggibile a occhio.
-  const data = String(doc.data || doc.entro || '').slice(0, 10) || 'senza-data';
+  // Il rapportino porta la data del lavoro, l'appuntamento il lunedì della
+  // settimana in cui andrebbe fatto: in entrambi i casi la cartella resta
+  // leggibile a occhio.
+  const data = String(doc.data || doc.settimana || '').slice(0, 10) || 'senza-data';
   return data + '-' + pulito + '-' + doc.id + '.json';
 }
 

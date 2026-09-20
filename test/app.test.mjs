@@ -198,6 +198,22 @@ try {
     return r.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(rispostaFinta) });
   });
 
+  // L'agenda viaggia sullo stesso indirizzo, in lettura. La rotta si registra qui
+  // e non dove si verifica, perché il telefono la chiede a ogni avvio: le prove
+  // dell'agenda stanno in fondo, ma gli avvii cominciano adesso.
+  let agendaDalServizio = null;
+  let tipoAgenda = 'application/json';
+  let agendaChieste = 0;
+  await ctx.route(CONSEGNA + '?documento=agenda', r => {
+    agendaChieste++;
+    return r.fulfill({
+      status: 200, contentType: tipoAgenda,
+      body: agendaDalServizio === null
+        ? JSON.stringify({ status: 'error', msg: 'l\'ufficio non ha ancora scritto agenda.json' })
+        : agendaDalServizio,
+    });
+  });
+
   ok('senza indirizzo di consegna non parte niente e lo dice', await page.evaluate(async () => {
     DB.impostazioni.UrlRapportini = '';
     try { await consegnaRapportino({ tipo: 'rapportino', id: 'x' }); return false; }
@@ -299,6 +315,7 @@ try {
   // e la settimana resta quella anche scegliendo il mercoledì dopo.
   await page.fill('#f-pren-settimana', '2027-03-17');
   await page.fill('#f-pren-requisiti', 'serve la scala lunga');
+  await page.fill('#f-pren-note', 'chiedere della chiave del cancello');
   await page.click('#overlay-prenotazione .btn-primary');
   await page.waitForTimeout(500);
 
@@ -311,6 +328,10 @@ try {
   });
   ok('il documento è un appuntamento, non un rapportino',
     docAppuntamento.tipo === 'appuntamento' && docAppuntamento.cosa === 'Potatura siepe di lauro');
+  // Da quando il prossimo intervento non si scrive più in fondo alla visita, le
+  // note della prenotazione sono il posto dove va quello che c'era da ricordare.
+  ok('e porta le note, che sono quello che serve la prossima volta',
+    docAppuntamento.note === 'chiedere della chiave del cancello', docAppuntamento.note);
   // Non un giorno preciso: quando si prenota in giardino il giorno non si sa
   // ancora, e fingere di saperlo vorrebbe dire spostarlo tre volte.
   ok('porta la settimana, scritta come il lunedì che la apre',
@@ -685,6 +706,15 @@ try {
   ok('il service worker del cantiere non mette in cache l\'app dell\'ufficio', !ufficioInCache);
   await page.goto(BASE, { waitUntil: 'load' });
   await page.waitForTimeout(400);
+
+  // Tornare online: setOffline(false) da solo non basta, perché la pagina se ne
+  // accorge un momento dopo — e chi guarda navigator.onLine si fermerebbe prima
+  // di provare, facendo passare le verifiche per il motivo sbagliato.
+  const tornaOnline = async () => {
+    await ctx.setOffline(false);
+    await page.waitForFunction(() => navigator.onLine);
+    await page.waitForTimeout(250);
+  };
 
   // ── offline ──
   await ctx.setOffline(true);
@@ -1152,9 +1182,22 @@ try {
       const prima = LAVAGNA.lavori.length;
       document.getElementById('n-cliente').value = 'Scade prima, corretto';
       document.getElementById('n-ore').value = '3';
+      document.getElementById('n-note').value = 'citofono sulla destra';
       await salvaModuloLavoro();
       return LAVAGNA.lavori.length === prima &&
         LAVAGNA.lavori.some(l => l.cliente === 'Scade prima, corretto' && l.ore === 3);
+    }));
+  // Le note dell'ufficio finiscono nello stesso campo di quelle del cantiere: da
+  // lì tornano in giardino con l'agenda, e sono l'unica cosa che fa il giro.
+  ok('le note battute in ufficio si salvano e si vedono sul cartellino',
+    await pagU.evaluate(async () => {
+      const l = LAVAGNA.lavori.find(x => x.cliente === 'Scade prima, corretto');
+      const suFile = JSON.parse(await leggiTesto(window.RADICE, 'lavagna.json'))
+        .lavori.find(x => x.cliente === 'Scade prima, corretto');
+      disegnaLavagna();
+      return l.note === 'citofono sulla destra' &&
+        suFile.note === 'citofono sulla destra' &&
+        document.getElementById('pagina-lavagna').innerHTML.includes('citofono sulla destra');
     }));
   // Il modulo non conosce dove sta sulla settimana né se è confermato:
   // ricostruire il lavoro da zero lo staccherebbe dalla lavagna.
@@ -1333,6 +1376,153 @@ try {
   ok('un file che non è un lavoro archiviato viene respinto',
     await pagU.evaluate(() => {
       try { leggiLavoro('{"tipo":"altro"}'); return false; } catch (e) { return true; }
+    }));
+
+  // ── la prenotazione dal cantiere entra da sola, con le sue note ──
+  // Chi prenota è in giardino col cliente davanti: chiedere all'ufficio di
+  // ricopiarle vorrebbe dire perderne una ogni tanto. Il documento non è
+  // inventato — è quello che l'app del cantiere ha prodotto all'inizio del giro.
+  const prenotata = await pagU.evaluate(async d => {
+    const cartella = await window.RADICE.getDirectoryHandle('appuntamenti', { create: true });
+    await scriviTesto(cartella, nomeFileAppuntamento(d), JSON.stringify(d));
+    await ricarica();
+    return LAVAGNA.lavori.find(l => l.da === d.id) || null;
+  }, docAppuntamento);
+  ok('la prenotazione depositata compare sulla lavagna senza premere niente',
+    !!prenotata && prenotata.origine === 'prenotato dal cantiere',
+    JSON.stringify(prenotata && prenotata.origine));
+  ok('con la settimana, non con un giorno inventato',
+    prenotata && prenotata.settimana === '2027-03-15' && !prenotata.giorno,
+    prenotata && prenotata.settimana + ' / ' + prenotata.giorno);
+  // Era un difetto vero: le note del cantiere venivano lette e buttate via, e
+  // sono proprio la cosa che deve tornare in giardino.
+  ok('e con le note scritte in giardino, che l\'ufficio non deve perdere',
+    prenotata && prenotata.note === 'chiedere della chiave del cancello',
+    prenotata && prenotata.note);
+  ok('rileggendo la cartella non entra una seconda volta',
+    await pagU.evaluate(async id => {
+      const quanti = LAVAGNA.lavori.filter(l => l.da === id).length;
+      await ricarica();
+      return quanti === 1 && LAVAGNA.lavori.filter(l => l.da === id).length === 1;
+    }, docAppuntamento.id));
+
+  // ── l'agenda che l'ufficio manda in cantiere ──
+  // Il terzo documento, e il primo che va nell'altro verso. Porta solo giorno,
+  // mezza giornata, cliente e note: passa per un indirizzo pubblico per chi lo
+  // conosce, e quello che non parte non si può perdere per strada.
+  //
+  // I giorni sono contati da oggi e non scritti a mano: l'agenda guarda avanti, e
+  // una data fissa in un test funziona finché non arriva quel giorno.
+  const agendaPrima = JSON.parse(await pagU.evaluate(async () => {
+    const fraGiorni = n => { const d = new Date(); d.setDate(d.getDate() + n); return dataISO(d); };
+    window.GIORNI = { ieri: fraGiorni(-1), presto: fraGiorni(1), dopo: fraGiorni(3) };
+    LAVAGNA.lavori = [
+      sistemaLavoro({ cliente: 'Ieri', giorno: window.GIORNI.ieri, mezza: 'mattina', stato: 'confermato' }),
+      sistemaLavoro({ cliente: 'Pomeriggio', giorno: window.GIORNI.presto, mezza: 'pomeriggio',
+        luogo: 'via dei Tigli 4', ore: 6, requisiti: ['serve la piattaforma'],
+        note: 'chiedere della chiave del cancello', stato: 'confermato' }),
+      sistemaLavoro({ cliente: 'Mattina', giorno: window.GIORNI.presto, mezza: 'mattina', stato: 'matita' }),
+      sistemaLavoro({ cliente: 'In coda', settimana: window.GIORNI.presto, stato: 'lista' }),
+    ];
+    for (let i = 1; i <= 6; i++) {
+      LAVAGNA.lavori.push(sistemaLavoro({ cliente: 'Numero ' + i, giorno: fraGiorni(20 + i), mezza: 'mattina' }));
+    }
+    await salvaLavagna();
+    // Tollerante di proposito: se l'agenda non c'è la verifica deve fallire e
+    // dirlo, non far morire tutto il giro con un NotFoundError.
+    window.leggiAgendaScritta = async () => {
+      try { return await leggiTesto(window.RADICE, 'agenda.json'); }
+      catch (e) { return '{"mancante":true,"appuntamenti":[]}'; }
+    };
+    return await window.leggiAgendaScritta();
+  }));
+  ok('la lavagna salvandosi scrive l\'agenda per il cantiere',
+    agendaPrima.tipo === 'agenda' && agendaPrima.versione === 1);
+  ok('ci stanno solo i sei appuntamenti più vicini',
+    agendaPrima.appuntamenti.length === 6, String(agendaPrima.appuntamenti.length));
+  ok('in ordine, prima la mattina e poi il pomeriggio',
+    agendaPrima.appuntamenti[0]?.cliente === 'Mattina' && agendaPrima.appuntamenti[1]?.cliente === 'Pomeriggio',
+    agendaPrima.appuntamenti.map(a => a.cliente).join(' → '));
+  ok('quello di ieri non ci sta: l\'agenda guarda avanti',
+    !agendaPrima.appuntamenti.some(a => a.cliente === 'Ieri'));
+  ok('e nemmeno quello che è ancora in coda, che non ha un giorno suo',
+    !agendaPrima.appuntamenti.some(a => a.cliente === 'In coda'));
+  ok('le note ci sono: sono l\'unica cosa che fa il giro completo',
+    agendaPrima.appuntamenti[1]?.note === 'chiedere della chiave del cancello');
+
+  // «Li aggiorna alla modifica del calendario»: non c'è un bottone da ricordarsi.
+  const agendaScritta = await pagU.evaluate(async () => {
+    const l = LAVAGNA.lavori.find(x => x.cliente === 'Mattina');
+    await spostaLavoro(l.id, window.GIORNI.dopo, 'pomeriggio');
+    return await window.leggiAgendaScritta();
+  });
+  const agenda = JSON.parse(agendaScritta);
+  const spostato = (agenda.appuntamenti || []).find(a => a.cliente === 'Mattina');
+  ok('spostando un cartellino l\'agenda si riscrive da sola',
+    !!spostato && spostato.giorno === await pagU.evaluate(() => window.GIORNI.dopo),
+    spostato && spostato.giorno);
+  // Il vincolo che conta: quello che non parte non si può leggere per strada.
+  ok('niente indirizzi, ore, requisiti o prezzi nell\'agenda',
+    agenda.appuntamenti.length > 0 &&
+    agenda.appuntamenti.every(a => Object.keys(a).sort().join(',') === 'cliente,giorno,mezza,note') &&
+    !agendaScritta.includes('Tigli') && !agendaScritta.includes('piattaforma'),
+    Object.keys(agenda.appuntamenti[0] || {}).join(','));
+
+  // E ora il giro completo: quel file esatto, letto dall'app del cantiere. Se le
+  // due app non si capiscono si vede qui, come per il rapportino.
+  await tornaOnline();
+  agendaDalServizio = agendaScritta;
+  await page.goto(BASE, { waitUntil: 'load' });
+  await page.waitForTimeout(500);
+  const scaricata = await page.evaluate(async u => {
+    DB.impostazioni.UrlRapportini = u;
+    const esito = await scaricaAgenda();
+    navTo('prossimi');
+    return { esito, quanti: DB.agenda?.appuntamenti.length || 0,
+      atteso: DB.agenda?.appuntamenti[0]
+        ? etichettaMezzaGiornata(DB.agenda.appuntamenti[0].giorno, DB.agenda.appuntamenti[0].mezza) : '—',
+      schermo: document.getElementById('agenda-list').innerHTML };
+  }, CONSEGNA);
+  ok('il telefono scarica l\'agenda scritta dall\'ufficio',
+    scaricata.esito === true && scaricata.quanti === 6, JSON.stringify(scaricata.esito));
+  ok('e la mostra con giorno, cliente e note',
+    scaricata.schermo.includes(scaricata.atteso) &&
+    scaricata.schermo.includes('Pomeriggio') &&
+    scaricata.schermo.includes('chiedere della chiave del cancello'),
+    scaricata.atteso + ' | ' + scaricata.schermo.slice(0, 160));
+
+  // In giardino il campo spesso non c'è, ed è lì che l'agenda serve.
+  await ctx.setOffline(true);
+  await page.goto(BASE, { waitUntil: 'load' });
+  await page.waitForTimeout(600);
+  ok('senza rete resta l\'agenda scaricata prima',
+    await page.evaluate(() => { navTo('prossimi'); return DB.agenda?.appuntamenti.length; }) === 6);
+  ok('e non finge di aggiornarla',
+    await page.evaluate(async () => await scaricaAgenda()) === false);
+
+  // Un'agenda di un'altra versione si rifiuta, e quella di prima resta: mostrarne
+  // una letta a metà manderebbe qualcuno nel posto sbagliato.
+  await tornaOnline();
+  agendaDalServizio = JSON.stringify({ tipo: 'agenda', versione: 99, appuntamenti: [] });
+  const primaDiRifiutare = agendaChieste;
+  ok('un\'agenda di un\'altra versione non sostituisce quella buona',
+    await page.evaluate(async () => {
+      const esito = await scaricaAgenda();
+      return esito === false && DB.agenda?.appuntamenti.length === 6;
+    }));
+  // Senza questo la verifica sopra passerebbe anche se il documento non fosse
+  // mai stato chiesto: «false» lo restituisce anche chi si è fermato prima.
+  ok('e per dirlo l\'ha davvero chiesta', agendaChieste > primaDiRifiutare,
+    primaDiRifiutare + ' → ' + agendaChieste);
+
+  // Apps Script risponde 200 con una pagina HTML quando fallisce: la stessa
+  // trappola dell'invio, e vale anche in lettura.
+  tipoAgenda = 'text/html';
+  agendaDalServizio = '<html>Errore</html>';
+  ok('una pagina HTML al posto dell\'agenda non cancella quella che c\'è',
+    await page.evaluate(async () => {
+      const esito = await scaricaAgenda();
+      return esito === false && DB.agenda?.appuntamenti.length === 6;
     }));
 
   ok('nessun errore JavaScript nell\'app dell\'ufficio', erroriU.length === 0, erroriU.join(' | '));

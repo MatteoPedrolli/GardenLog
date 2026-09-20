@@ -6,11 +6,14 @@ cartella normale del disco.
 
 ```
   TELEFONO ──POST──→ Apps Script ──→ Drive: GiardinoApp/rapportini/
-                                        │
-                                   Drive per desktop
-                                        ↓
-                                     PC UFFICIO ──→ prezzi, archivio
+      ↑                                 │
+      │                            Drive per desktop
+      │                                 ↓
+      └──GET agenda──← Apps Script ← PC UFFICIO ──→ prezzi, archivio
 ```
+
+Nell'altro verso torna una cosa sola: l'**agenda**, i prossimi sei appuntamenti
+già pianificati. Tutto il resto resta in ufficio.
 
 La cartella, dopo un po' di lavoro, ha questa forma:
 
@@ -27,11 +30,32 @@ La cartella, dopo un po' di lavoro, ha questa forma:
     listino.json                   ← i prezzi, solo dell'ufficio
     impostazioni.json              ← l'intestazione del conto
     lavagna.json                   ← la pianificazione
+    agenda.json                    ← ci scrive l'ufficio, il telefono la legge
     anagrafica-dal-telefono.json   ← il file che il telefono esporta, da importare
 ```
 
 Le prenotazioni depositate in `appuntamenti/` compaiono **da sole** sulla lavagna:
 non c'è niente da premere. Chi prenota è in giardino col cliente davanti.
+
+## L'agenda: l'unica cosa che torna in cantiere
+
+`agenda.json` lo scrive l'ufficio e lo legge il telefono, ed è l'unico file che va
+in quel verso. Si riscrive **a ogni salvataggio della lavagna** — cioè a ogni
+mossa: un'agenda da aggiornare a mano è un'agenda che in giardino dice il giorno
+sbagliato.
+
+Contiene i **prossimi sei appuntamenti** già piazzati su una mezza giornata, da
+oggi in avanti, e di ognuno solo **giorno, mezza giornata, cliente e note**. Non
+indirizzi, non telefoni, non ore, non prezzi: l'indirizzo dello script è pubblico
+per chi lo conosce, e quello che non parte non si può leggere per strada. Chi
+aggiunge un campo lì lo pubblica là.
+
+Le note sì, e sono il motivo per cui l'agenda esiste: sono la cosa che fa il giro
+completo. Il cantiere le scrive prenotando, l'ufficio se le tiene sul cartellino,
+e tornano in giardino il giorno del lavoro.
+
+Sul telefono l'agenda si scarica quando c'è rete e **resta salvata**: in giardino
+il campo spesso non c'è, ed è lì che serve sapere dove si va domani.
 
 ## L'app dell'ufficio
 
@@ -61,6 +85,12 @@ svuotata e il telefono cambiato.
 distribuire come applicazione web. Le istruzioni sono in testa al file.
 L'indirizzo che ne esce va incollato nell'app, in Dati → Rapportino.
 
+Quando lo script cambia **non basta salvare**: va rifatta la distribuzione
+(Distribuisci → Gestisci distribuzioni → matita → Versione: **nuova**), o continua
+a girare quella di prima. E va rifatta sulla distribuzione che c'è già, non come
+distribuzione nuova: una nuova dà un indirizzo diverso, e il telefono continua a
+parlare col vecchio.
+
 **2. Google Drive per desktop** sul PC dell'ufficio, collegato allo stesso
 account. La cartella `GiardinoApp` diventa così una cartella vera sul disco, e
 l'app dell'ufficio ci accede direttamente.
@@ -77,8 +107,9 @@ backup.
 ## Chi scrive cosa
 
 Un file, un solo autore. Il telefono deposita in `rapportini/` e non tocca
-altro; l'ufficio legge da lì e scrive nel suo archivio. Nessuno sovrascrive il
-lavoro di nessuno, e non serve nessuna sincronizzazione bidirezionale.
+altro; l'ufficio legge da lì, scrive nel suo archivio e scrive `agenda.json`, che
+il telefono legge e non tocca. Nessuno sovrascrive il lavoro di nessuno, e non
+serve nessuna sincronizzazione bidirezionale.
 
 Per questo un rapportino risulta «in arrivo» perché **l'archivio non ne ha ancora
 una copia a quella revisione**, non perché qualcuno lo abbia spostato: l'ufficio

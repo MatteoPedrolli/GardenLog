@@ -139,6 +139,16 @@ const VERSIONE_APPUNTAMENTO = 2;
 // Sta qui perché la usano tutte e due le app, e due definizioni di «quale
 // settimana» che divergono sarebbero peggio di nessuna.
 
+// Una data come la scrivono i documenti: aaaa-mm-gg, letta in ora locale. Non
+// toISOString, che passa per UTC e a Trento restituisce il giorno prima per
+// tutta la sera.
+function dataISO(data) {
+  const d = data instanceof Date ? data : new Date(data);
+  if (isNaN(d)) return '';
+  return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') +
+    '-' + String(d.getDate()).padStart(2, '0');
+}
+
 function lunediDellaSettimana(data) {
   const d = new Date(data);
   if (isNaN(d)) return '';
@@ -146,8 +156,7 @@ function lunediDellaSettimana(data) {
   // mezzanotte scivola al giorno prima passando per toISOString.
   d.setHours(12, 0, 0, 0);
   d.setDate(d.getDate() - ((d.getDay() + 6) % 7));
-  return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') +
-    '-' + String(d.getDate()).padStart(2, '0');
+  return dataISO(d);
 }
 
 // La settimana 1 è quella che contiene il 1° gennaio, e le settimane partono di
@@ -246,10 +255,97 @@ function nomeFileAppuntamento(doc) {
   return `${quando}-${pulito(doc.cliente && doc.cliente.nome) || 'cliente'}-${doc.id}.json`;
 }
 
+// ── L'AGENDA COME DOCUMENTO ──
+// Il terzo documento, e il primo che va **dall'ufficio al cantiere**: le mezze
+// giornate già pianificate, così chi è in giardino sa dove si va domani senza
+// telefonare in ufficio.
+//
+// Porta **solo** giorno, mezza giornata, nome del cliente e note. Non indirizzi,
+// non telefoni, non ore, non prezzi: viaggia per un indirizzo che è pubblico per
+// chi lo conosce, e quello che non parte non si può perdere per strada. Le note
+// sono lì perché sono l'unica cosa che fa il giro completo — il cantiere le
+// scrive prenotando, l'ufficio le tiene sul cartellino, e tornano in giardino.
+//
+// Sei appuntamenti e non tutti: è l'orizzonte che serve in cantiere. Oltre, la
+// pianificazione cambia ancora e una lista lunga sarebbe una lista sbagliata.
+
+const VERSIONE_AGENDA = 1;
+const APPUNTAMENTI_IN_AGENDA = 6;
+
+// L'ordine è quello della lavagna letta da sinistra: prima il giorno, poi la
+// mattina e poi il pomeriggio.
+function primaLaMattina(mezza) {
+  return mezza === 'pomeriggio' ? '2' : '1';
+}
+
+// Prende i lavori della lavagna e ne ricava l'agenda. Solo quelli che hanno un
+// giorno: un lavoro ancora in colonna non ha un momento suo, e metterlo in agenda
+// vorrebbe dire prometterlo.
+function costruisciAgenda(lavori, oggi) {
+  const da = oggi ? dataISO(oggi) : dataISO(new Date());
+  const voci = (lavori || [])
+    .filter(l => l && l.giorno && l.giorno >= da)
+    .sort((a, b) => (a.giorno + primaLaMattina(a.mezza)).localeCompare(b.giorno + primaLaMattina(b.mezza)))
+    .slice(0, APPUNTAMENTI_IN_AGENDA)
+    .map(l => ({
+      giorno: l.giorno,
+      mezza: l.mezza === 'pomeriggio' ? 'pomeriggio' : 'mattina',
+      cliente: l.cliente || '',
+      note: l.note || '',
+    }));
+  return {
+    tipo: 'agenda',
+    versione: VERSIONE_AGENDA,
+    aggiornata: new Date().toISOString(),
+    da,
+    appuntamenti: voci,
+  };
+}
+
+function leggiAgenda(grezzo) {
+  let doc = grezzo;
+  if (typeof grezzo === 'string') {
+    try { doc = JSON.parse(grezzo); }
+    catch (e) { throw new Error('Il file non è leggibile: non è JSON valido'); }
+  }
+  if (!doc || doc.tipo !== 'agenda') throw new Error('Questo file non è un\'agenda');
+  const versione = Number(doc.versione) || 0;
+  // Come per gli altri documenti: o è di questa versione, o si rifiuta. Mostrare
+  // un\'agenda letta a metà manderebbe qualcuno nel posto sbagliato.
+  if (versione !== VERSIONE_AGENDA) {
+    throw new Error(`Agenda della versione ${versione || '?'}: questa app legge la ${VERSIONE_AGENDA}`);
+  }
+  return {
+    tipo: 'agenda',
+    versione,
+    aggiornata: doc.aggiornata || '',
+    da: doc.da || '',
+    appuntamenti: (Array.isArray(doc.appuntamenti) ? doc.appuntamenti : [])
+      .filter(a => a && a.giorno)
+      .map(a => ({
+        giorno: String(a.giorno).slice(0, 10),
+        mezza: a.mezza === 'pomeriggio' ? 'pomeriggio' : 'mattina',
+        cliente: a.cliente || '',
+        note: a.note || '',
+      })),
+  };
+}
+
+// Come si legge una mezza giornata: «Mar 23/06 mattina».
+function etichettaMezzaGiornata(giorno, mezza) {
+  const d = new Date(giorno + 'T12:00:00');
+  if (isNaN(d)) return '';
+  const nomi = ['Dom', 'Lun', 'Mar', 'Mer', 'Gio', 'Ven', 'Sab'];
+  const gg = String(d.getDate()).padStart(2, '0');
+  const mm = String(d.getMonth() + 1).padStart(2, '0');
+  return `${nomi[d.getDay()]} ${gg}/${mm} ${mezza === 'pomeriggio' ? 'pomeriggio' : 'mattina'}`;
+}
+
 if (typeof module !== 'undefined' && module.exports) {
   module.exports = {
     VERSIONE_RAPPORTINO, costruisciRapportino, leggiRapportino, nomeFileRapportino,
     VERSIONE_APPUNTAMENTO, costruisciAppuntamento, leggiAppuntamento, nomeFileAppuntamento,
-    lunediDellaSettimana, lunediDellaPrimaSettimana, numeroSettimana, etichettaSettimana,
+    VERSIONE_AGENDA, APPUNTAMENTI_IN_AGENDA, costruisciAgenda, leggiAgenda, etichettaMezzaGiornata,
+    dataISO, lunediDellaSettimana, lunediDellaPrimaSettimana, numeroSettimana, etichettaSettimana,
   };
 }

@@ -108,6 +108,15 @@ prossima volta si scrive nelle note della prenotazione.
 Il promemoria che compare aprendo una visita (`mostraPromemoria`) legge da lì: le
 prenotazioni sono il posto dove sta scritto cosa si era detto di fare.
 
+**La pagina Prossimi guarda in due direzioni.** In cima c'è l'agenda che arriva
+dall'ufficio — dove si va, con le note di chi c'è stato prima — e sotto quello che
+si è prenotato da qui. `DB.agenda` è una copia di quello che l'ufficio ha deciso,
+non un dato nostro: si riscrive intera a ogni scaricamento e non si modifica a mano.
+Sta nel DB perché in giardino il campo spesso non c'è, ed è lì che serve; assente
+vuol dire «non ancora scaricata», che è un valore buono e non chiede una
+migrazione. Un'agenda che non si scarica **non cancella quella di prima**: vecchia
+di un giorno è un'informazione, il vuoto no.
+
 ## Le voci da conteggiare
 
 **Visita e conto sono la stessa schermata.** In fondo, dopo le operazioni, c'è
@@ -163,10 +172,26 @@ quel concime nel frattempo è stato cancellato.
 essere un rapportino, o venire da una versione futura. In quest'ultimo caso si
 ferma e lo dice, invece di archiviare un documento monco in silenzio.
 
-I documenti sono due. Il **rapportino** racconta un lavoro finito; l'**appuntamento**
+I documenti sono tre. Il **rapportino** racconta un lavoro finito; l'**appuntamento**
 è una prenotazione fatta dal cantiere, col cliente davanti. Sono cose diverse e in
 ufficio le guardano due schermate diverse, quindi viaggiano separate e finiscono in
-due cartelle: `rapportini/` e `appuntamenti/`.
+due cartelle: `rapportini/` e `appuntamenti/`. Il terzo è l'**agenda**, e va
+nell'altro verso: la scrive l'ufficio e la legge il telefono.
+
+**L'agenda porta quattro campi e non uno di più**: giorno, mezza giornata, cliente,
+note. Non è economia di formato, è la ragione per cui esiste così: è l'unico
+documento che si *legge* dall'indirizzo dello script, che è pubblico per chi lo
+conosce. Indirizzi, telefoni, ore, requisiti e prezzi restano in ufficio, e chi
+aggiunge un campo a `costruisciAgenda()` lo pubblica là.
+
+Le note sì, e sono il motivo per cui l'agenda vale la pena: sono la cosa che fa il
+giro completo. Il cantiere le scrive prenotando, l'ufficio se le tiene sul
+cartellino, e tornano in giardino il giorno del lavoro.
+
+Sei appuntamenti, da oggi in avanti, e solo quelli già piazzati su una mezza
+giornata: un lavoro ancora in colonna non ha un momento suo, e metterlo in agenda
+vorrebbe dire prometterlo. Oltre i sei la pianificazione cambia ancora, e una lista
+lunga sarebbe una lista sbagliata.
 
 Entrambi, in modalità costruzione, si leggono **solo alla loro versione corrente**:
 o il documento è di questa versione, o si rifiuta dicendolo. Archiviare un
@@ -176,7 +201,13 @@ Il trasporto sta in `ufficio/`: uno script Apps Script riceve dal telefono e
 deposita nella cartella Drive, che sul PC dell'ufficio è una cartella normale. Lo
 script instrada per `tipo`: aggiungere un documento nuovo vuol dire aggiungere una
 riga a `CARTELLE` **e rifare la distribuzione**, o continua a girare la versione di
-prima. Un file, un solo autore — il telefono deposita, l'ufficio legge.
+prima. Un file, un solo autore — il telefono deposita, l'ufficio legge, e l'agenda
+è l'unico file dove i ruoli si scambiano.
+
+**In lettura lo script sa nominare un file solo.** `doGet` prende il nome da
+`LEGGIBILI`, non dalla richiesta: un nome che arriva da chi chiama farebbe di quel
+`?documento=` un modo per leggersi il listino o l'anagrafica. La lista è di due
+righe e va tenuta corta per la stessa ragione.
 
 **La consegna passa da una coda.** Il rapportino si salva sempre in locale e
 parte quando c'è rete: in giardino il campo spesso non c'è, e se l'invio fosse
@@ -307,6 +338,9 @@ spalmare un lavoro è una decisione, non un calcolo. La domenica si salta.
 
 **La lavagna si salva a ogni mossa**, senza un bottone: una lavagna che ti chiede
 di ricordarti di salvare è una lavagna che perde una settimana di pianificazione.
+E con lei si riscrive `agenda.json`, dentro `salvaLavagna()` e non in un bottone a
+parte: chi pianifica sposta un cartellino e passa al successivo, e un'agenda da
+aggiornare a mano è un'agenda che in giardino dice il giorno sbagliato.
 
 **Il sabato resta a disposizione**: c'è, ma non è una giornata come le altre e il
 piede della colonna lo dice.
