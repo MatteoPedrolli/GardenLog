@@ -78,7 +78,7 @@ riscrive questa sezione.
 ## La schermata visita è un rapporto, non un registro
 
 Segue l'ordine del rapportino che si consegna a fine lavoro: cliente, ore,
-operazioni, note, prossimo intervento. Non è estetica — scorrere lo schermo
+operazioni, note. Non è estetica — scorrere lo schermo
 nello stesso ordine del foglio evita di tradurre da una forma all'altra alla
 fine di una giornata di lavoro. Chi la riordina perde quel vantaggio.
 
@@ -96,6 +96,17 @@ quantita) e i flag prato/siepe li mette il tipo, non l'utente.
 I campi che l'utente compila usano `oninput`, non `onchange`: con `onchange` il
 modello resta indietro fino al blur. E non si ridisegna l'elenco mentre si
 scrive — si aggiorna solo quello che cambia, o il campo sparisce da sotto le dita.
+
+**Il prossimo intervento non si scrive più qui.** Era un campo in fondo alla
+visita, e adesso è una **prenotazione**: viaggia col suo documento e finisce sulla
+lavagna dell'ufficio. Scriverlo in tutti e due i posti voleva dire due posti dove
+cercarlo e due da tenere allineati. In fondo alla visita resta una scorciatoia che
+apre la prenotazione **col cliente già messo** — è quello che hai davanti, farlo
+ricercare sarebbe lavoro inventato — e quello che c'era da ricordare per la
+prossima volta si scrive nelle note della prenotazione.
+
+Il promemoria che compare aprendo una visita (`mostraPromemoria`) legge da lì: le
+prenotazioni sono il posto dove sta scritto cosa si era detto di fare.
 
 ## Le voci da conteggiare
 
@@ -155,8 +166,11 @@ ferma e lo dice, invece di archiviare un documento monco in silenzio.
 I documenti sono due. Il **rapportino** racconta un lavoro finito; l'**appuntamento**
 è una prenotazione fatta dal cantiere, col cliente davanti. Sono cose diverse e in
 ufficio le guardano due schermate diverse, quindi viaggiano separate e finiscono in
-due cartelle: `rapportini/` e `appuntamenti/`. Il prossimo intervento scritto su una
-visita resta quello che è — una nota, «torna a marzo» — e non è una prenotazione.
+due cartelle: `rapportini/` e `appuntamenti/`.
+
+Entrambi, in modalità costruzione, si leggono **solo alla loro versione corrente**:
+o il documento è di questa versione, o si rifiuta dicendolo. Archiviare un
+documento monco senza dirlo a nessuno è il guasto peggiore che possa capitare qui.
 
 Il trasporto sta in `ufficio/`: uno script Apps Script riceve dal telefono e
 deposita nella cartella Drive, che sul PC dell'ufficio è una cartella normale. Lo
@@ -303,17 +317,12 @@ numero messo a occhio, e chi pianifica sa cose che la stima non sa. Le ore seguo
 si spalmano sulle mezze giornate occupate e restano un'indicazione per chi guarda
 la colonna.
 
-I lavori arrivano da tre parti:
+I lavori arrivano da due parti:
 
 - le **prenotazioni** depositate in `appuntamenti/` entrano **da sole** a ogni
   rilettura della cartella. Chi prenota è in giardino col cliente davanti, e
   chiedere all'ufficio di ricopiarle vorrebbe dire perderne una ogni tanto;
-- i **prossimi interventi** segnati sui rapportini, col bottone — e si guardano
-  anche quelli *in arrivo*, non solo gli archiviati: il prossimo intervento si
-  legge quando arriva, non dopo aver chiuso il conto. Il cantiere segna mese e
-  anno, e `settimanaDaMeseAnno()` prende la settimana in cui cade il primo del
-  mese: non è una scadenza, è un posto in fila;
-- a mano, per le telefonate.
+- a mano, per le telefonate e per quello che decide l'ufficio.
 
 Tutto quello che è già stato guardato finisce in `visti`, così quello che l'ufficio
 ha scartato non ricompare al giro dopo. Sul telefono il mese del prossimo intervento

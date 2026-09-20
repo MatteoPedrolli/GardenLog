@@ -1423,12 +1423,6 @@ function disegnaLavoro() {
     html += '<div class="scheda"><div class="titolo-sezione">Note dal cantiere</div><p>' +
       perValore(d.note) + '</p></div>';
   }
-  if (d.prossimo && d.prossimo.cosa) {
-    html += '<div class="scheda"><div class="titolo-sezione">Prossimo intervento</div><p>' +
-      perValore(d.prossimo.cosa) +
-      (d.prossimo.mese ? ' <span class="meta">— ' + perValore(nomeMese(d.prossimo.mese)) + ' ' + perValore(d.prossimo.anno) + '</span>' : '') +
-      '</p></div>';
-  }
 
   html += '<div class="scheda"><div class="titolo-sezione">Conto</div>';
   html += '<table class="elenco"><thead><tr><th>Voce</th><th class="num">Quantità</th>' +
@@ -2135,8 +2129,6 @@ function disegnaLavagna() {
   }
   html += '<div class="bottoni">' +
     '<button class="secondaria piccola" onclick="apriModuloLavoro()">+ Aggiungi</button>' +
-    '<button class="secondaria piccola" onclick="importaProssimi()"' +
-      ' title="Cerca nei rapportini i prossimi interventi segnati in cantiere">Prendi i prossimi interventi</button>' +
   '</div>';
   html += '<div id="nuovo-lavoro"></div>';
   html += '</section>';
@@ -2346,78 +2338,6 @@ async function salvaModuloLavoro() {
   chiudiModuloLavoro();
   disegnaLavagna();
   avvisa(esistente ? 'Corretto: ' + cliente : 'In coda: ' + cliente);
-}
-
-// Il cantiere segna già il prossimo intervento su ogni visita: è l'unico canale che
-// dal campo arriva in ufficio, e sarebbe sciocco farlo riscrivere a mano. Ogni
-// rapportino letto finisce in «visti», così quello che l'ufficio ha già deciso di
-// scartare non ricompare al giro dopo.
-async function importaProssimi() {
-  const nuovi = [];
-  // Anche i rapportini appena arrivati, non solo quelli archiviati: il prossimo
-  // intervento lo si legge quando arriva, non dopo aver chiuso il conto, e
-  // guardare solo l'archivio faceva sembrare il bottone rotto.
-  const documenti = ARRIVI.map(a => a.doc)
-    .concat(ARCHIVIO.map(l => l.rapportino).filter(r => r));
-  const gia = new Set();
-  documenti.forEach(r => {
-    if (!r || !r.id || gia.has(r.id)) return;
-    gia.add(r.id);
-    if (!r.prossimo || !String(r.prossimo.cosa || '').trim()) return;
-    if (LAVAGNA.visti.includes(r.id)) return;
-    LAVAGNA.visti.push(r.id);
-    const anno = String(r.prossimo.anno || '').trim();
-    nuovi.push(sistemaLavoro({
-      cliente: (r.cliente && r.cliente.nome) || '',
-      luogo: (r.cliente && r.cliente.citta) || '',
-      cosa: r.prossimo.cosa,
-      settimana: settimanaDaMeseAnno(r.prossimo.mese, anno),
-      origine: 'dal cantiere',
-      stato: 'lista',
-      da: r.id,
-    }));
-  });
-  if (!nuovi.length) {
-    // Anche «niente di nuovo» va detto: senza, il bottone sembra rotto.
-    await salvaLavagna();
-    avvisa(documenti.length
-      ? 'Nessun prossimo intervento nuovo: i rapportini letti non ne hanno, o li hai già presi'
-      : 'Nessun rapportino nella cartella da cui prenderli');
-    return;
-  }
-  LAVAGNA.lavori = LAVAGNA.lavori.concat(nuovi);
-  if (!(await salvaLavagna())) return;
-  disegnaLavagna();
-  avvisa(nuovi.length === 1 ? 'Un lavoro messo in coda' : nuovi.length + ' lavori messi in coda');
-}
-
-const MESI = ['gennaio', 'febbraio', 'marzo', 'aprile', 'maggio', 'giugno',
-  'luglio', 'agosto', 'settembre', 'ottobre', 'novembre', 'dicembre'];
-
-// Sul telefono il mese del prossimo intervento è il valore di una select, cioè
-// "03" e non "marzo": è quello che viaggia nel rapportino. Si accetta anche il nome
-// scritto, perché un backup vecchio può contenere di tutto.
-function indiceMese(mese) {
-  const t = String(mese || '').trim().toLowerCase();
-  if (!t) return -1;
-  const n = Number(t);
-  if (n >= 1 && n <= 12) return n - 1;
-  return MESI.indexOf(t);
-}
-
-function nomeMese(mese) {
-  const i = indiceMese(mese);
-  return i < 0 ? String(mese || '') : MESI[i];
-}
-
-// Il cantiere segna mese e anno; la coda ragiona per settimane. Si prende la
-// settimana in cui cade il primo del mese: non è una scadenza, è un posto in
-// fila, e chi pianifica la sposta dove vuole.
-function settimanaDaMeseAnno(mese, anno) {
-  const i = indiceMese(mese);
-  const a = Number(anno);
-  if (i < 0 || !a) return '';
-  return lunediDellaSettimana(new Date(a, i, 1));
 }
 
 // ── LISTINO ──

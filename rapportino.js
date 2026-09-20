@@ -10,7 +10,7 @@
 // i nomi viaggiano insieme ai riferimenti. Un rapportino si legge da solo, anche
 // fra due anni, anche se nel frattempo quel concime è stato cancellato.
 
-const VERSIONE_RAPPORTINO = 1;
+const VERSIONE_RAPPORTINO = 2;
 
 function costruisciRapportino({ visita, cliente, operazioni, tipi, voci, concimi, sementi, fitofarmaci }) {
   const nomeProdotto = (o) => {
@@ -67,12 +67,10 @@ function costruisciRapportino({ visita, cliente, operazioni, tipi, voci, concimi
       quantita: r.Quantita === '' || r.Quantita == null ? null : Number(r.Quantita),
       unita: r.Unita || '',
     })),
+    // Niente «prossimo intervento»: quello che c'è da fare la prossima volta è
+    // una prenotazione, e viaggia col suo documento. Scriverlo anche qui voleva
+    // dire due posti dove cercarlo e due da tenere allineati.
     note: visita.Note_visita || '',
-    prossimo: {
-      cosa: visita.Prossimo_intervento || '',
-      mese: visita.Mese_prossimo_intervento || '',
-      anno: visita.Anno_prossimo_intervento || '',
-    },
   };
 }
 
@@ -91,21 +89,21 @@ function leggiRapportino(grezzo) {
   }
   if (!doc || doc.tipo !== 'rapportino') throw new Error('Questo file non è un rapportino');
   const versione = Number(doc.versione) || 0;
-  // Una versione più nuova può contenere campi che questa non sa leggere:
-  // meglio fermarsi che archiviare un documento monco senza dirlo a nessuno.
-  if (versione > VERSIONE_RAPPORTINO) {
-    throw new Error(`Rapportino di una versione più recente (${versione}): aggiorna l'app dell'ufficio`);
+  // Finché si è in costruzione non si converte niente: o è di questa versione,
+  // o non si legge. Archiviare un documento monco senza dirlo a nessuno è il
+  // guasto peggiore che possa capitare qui dentro.
+  if (versione !== VERSIONE_RAPPORTINO) {
+    throw new Error(`Rapportino della versione ${versione || '?'}: questa app legge la ${VERSIONE_RAPPORTINO}`);
   }
   if (!doc.id) throw new Error('Rapportino senza identificativo');
   return {
     ...doc,
-    versione: versione || 1,
+    versione,
     revisione: Number(doc.revisione) || 1,
     cliente: doc.cliente || { id: '', nome: '' },
     ore: doc.ore || { fasce: [], totale: 0 },
     operazioni: Array.isArray(doc.operazioni) ? doc.operazioni : [],
     righe: Array.isArray(doc.righe) ? doc.righe : [],
-    prossimo: doc.prossimo || { cosa: '', mese: '', anno: '' },
   };
 }
 

@@ -646,10 +646,9 @@ select.form-control { background-image: url("data:image/svg+xml,%3Csvg xmlns='ht
           Parte quando c'è rete, come il rapportino.</div>
         <button class="btn btn-primary" onclick="apriPrenotazione()">📅 Prenota</button>
       </div>
-      <div id="prenotazioni-list"></div>
 
-      <div class="section-title">Prossimi Interventi 📅</div>
-      <div id="prossimi-list"></div>
+      <div class="section-title">Prenotati</div>
+      <div id="prenotazioni-list"></div>
     </div>
 
     <!-- DATI E BACKUP -->
@@ -728,7 +727,7 @@ select.form-control { background-image: url("data:image/svg+xml,%3Csvg xmlns='ht
       <span class="icon">📋</span><span>Registro</span>
     </button>
     <button class="nav-item" id="nav-prossimi" onclick="navTo('prossimi')">
-      <span class="icon">📅</span><span>Prossimi</span>
+      <span class="icon">📅</span><span>Appuntamenti</span>
     </button>
     <button class="nav-item" id="nav-prati" onclick="navTo('prati')">
       <span class="icon">🌱</span><span>Prati</span>
@@ -971,26 +970,11 @@ select.form-control { background-image: url("data:image/svg+xml,%3Csvg xmlns='ht
       <div class="rapporto-sez">Note</div>
       <textarea class="form-control" id="f-visita-note" rows="3" placeholder="Osservazioni, variazioni, cose da ricordare..."></textarea>
 
-      <div class="rapporto-sez">Prossimo intervento</div>
-      <input type="text" class="form-control" id="f-visita-prossimo" placeholder="Es. Potatura siepe">
-      <div class="form-row" style="margin-top:10px">
-        <div class="form-group">
-          <label class="form-label">Mese previsto</label>
-          <select class="form-control" id="f-visita-mese">
-            <option value="">–</option>
-            <option value="01">Gennaio</option><option value="02">Febbraio</option>
-            <option value="03">Marzo</option><option value="04">Aprile</option>
-            <option value="05">Maggio</option><option value="06">Giugno</option>
-            <option value="07">Luglio</option><option value="08">Agosto</option>
-            <option value="09">Settembre</option><option value="10">Ottobre</option>
-            <option value="11">Novembre</option><option value="12">Dicembre</option>
-          </select>
-        </div>
-        <div class="form-group">
-          <label class="form-label">Anno previsto</label>
-          <input type="number" class="form-control" id="f-visita-anno" placeholder="2026" min="2024" max="2030">
-        </div>
-      </div>
+      <div class="rapporto-sez">Il prossimo</div>
+      <div class="dati-nota" style="margin:0 0 10px">Quello che c'è da fare la prossima volta si prenota:
+        arriva in ufficio e finisce sulla lavagna. Le cose da ricordare si scrivono nelle note della prenotazione.</div>
+      <button class="btn btn-secondary" onclick="prenotaDaVisita()">📅 Prenota il prossimo intervento</button>
+      <div style="height:14px"></div>
 
       <button class="btn btn-primary" id="btn-salva-visita" onclick="saveVisita()">💾 Salva</button>
       <div style="height:8px"></div>
@@ -1012,7 +996,7 @@ const IDB_NOME = 'giardinolog';
 const IDB_STORE = 'stato';
 const IDB_CHIAVE = 'db';
 const MIRROR_KEY = 'giardinolog-db';
-const VERSIONE_DATI = 11;
+const VERSIONE_DATI = 12;
 
 // Le impostazioni stanno dentro DB, non in META, perché così finiscono nel
 // backup: un indirizzo da riscrivere dopo aver cambiato telefono è una seccatura
@@ -1280,7 +1264,6 @@ function renderAll() {
   renderHome();
   renderClienti();
   renderVisite();
-  renderProssimi();
   renderPrenotazioni();
   renderPrati();
 }
@@ -1529,68 +1512,6 @@ function renderVisite() {
 }
 
 // ── PROSSIMI INTERVENTI ──
-function renderProssimi() {
-  const list = document.getElementById('prossimi-list');
-  if (!list) return;
-  // collect visite with prossimo intervento
-  const items = DB.visite
-    .filter(v => v.Prossimo_intervento || v.Mese_prossimo_intervento)
-    .map(v => {
-      const c = DB.clienti.find(x => x.ClienteID == v.ClienteID);
-      const mese = parseInt(v.Mese_prossimo_intervento) || 13;
-      const anno = parseInt(v.Anno_prossimo_intervento) || 9999;
-      return { v, c, sortKey: anno * 100 + mese };
-    })
-    // keep only the latest visita per client (most recent prossimo)
-    .reduce((acc, item) => {
-      const existing = acc.find(x => x.c?.ClienteID === item.c?.ClienteID);
-      if (!existing) acc.push(item);
-      else if (item.v.Data > existing.v.Data) {
-        acc[acc.indexOf(existing)] = item;
-      }
-      return acc;
-    }, [])
-    .sort((a, b) => a.sortKey - b.sortKey);
-
-  if (!items.length) {
-    list.innerHTML = '<div class="empty"><div class="empty-icon">📅</div><div class="empty-text">Nessun intervento pianificato</div></div>';
-    return;
-  }
-
-  const oggi = new Date();
-  list.innerHTML = items.map(({ v, c }) => {
-    const nome = c ? c.Cliente : v.ClienteID;
-    const citta = c?.Citta || '';
-    const mese = v.Mese_prossimo_intervento;
-    const anno = v.Anno_prossimo_intervento;
-    const dataStr = mese ? meseNome(mese) + (anno ? ' ' + anno : '') : '';
-    // check urgency
-    let urgClass = '', urgLabel = '';
-    if (mese && anno) {
-      const target = new Date(parseInt(anno), parseInt(mese) - 1, 1);
-      const diffDays = (target - oggi) / 86400000;
-      if (diffDays < 0) { urgClass = 'rosso'; urgLabel = 'Scaduto'; }
-      else if (diffDays < 30) { urgClass = 'giallo'; urgLabel = 'Imminente'; }
-      else { urgClass = 'verde'; urgLabel = dataStr; }
-    }
-    return `<div class="card" style="padding:14px">
-      <div style="display:flex; align-items:center; gap:12px">
-        <div class="semaforo ${urgClass}" style="width:12px;height:12px;flex-shrink:0"></div>
-        <div style="flex:1">
-          <div style="font-weight:600; font-size:0.95rem">${nome}</div>
-          <div style="font-size:0.78rem; color:var(--text-light)">${citta}</div>
-          <div style="font-size:0.82rem; color:var(--text-mid); margin-top:3px">${v.Prossimo_intervento || ''}</div>
-        </div>
-        <div style="text-align:right; flex-shrink:0">
-          <div style="font-size:0.82rem; font-weight:600; color:var(--green-deep)">${dataStr}</div>
-          ${urgClass === 'rosso' ? '<div style="font-size:0.68rem;color:var(--red);font-weight:600">SCADUTO</div>' : ''}
-        </div>
-      </div>
-      <button class="btn btn-secondary btn-sm" style="margin-top:10px;width:100%" onclick="segnaFatto('${v.VisitaID}')">✓ Fatto — cancella prossimo intervento</button>
-    </div>`;
-  }).join('');
-}
-
 // ── PRATI REPORT ──
 function calcPratoData(c, anno) {
   const targetN = parseFloat(c.Target_N_g_m2_anno) || 0;
@@ -2212,14 +2133,20 @@ function togliOperazione(i) {
 // Quello che alla visita precedente avevi previsto di fare. Lo mostro e basta,
 // senza spuntare niente da solo: un'operazione segnata come fatta senza che
 // nessuno l'abbia guardata finisce in un rapportino, e poi in fattura.
+// Quello che era previsto per questo cliente lo dicono le prenotazioni: da quando
+// il prossimo intervento si prenota invece di scriverlo in fondo alla visita, è lì
+// che sta scritto cosa si era detto di fare.
 function mostraPromemoria(clienteID) {
   const el = document.getElementById('op-promemoria');
   if (!el) return;
-  const ultima = DB.visite
-    .filter(v => v.ClienteID == clienteID && v.Prossimo_intervento && v.VisitaID !== editVisitaID)
-    .sort((a, b) => String(b.Data || '').localeCompare(String(a.Data || '')))[0];
+  const ultima = (DB.prenotazioni || [])
+    .filter(p => p.ClienteID == clienteID && p.Cosa)
+    .sort((a, b) => String(b.Creata || '').localeCompare(String(a.Creata || '')))[0];
   el.style.display = ultima ? 'block' : 'none';
-  if (ultima) el.textContent = '📌 Era previsto: ' + ultima.Prossimo_intervento;
+  if (ultima) {
+    el.textContent = '📌 Era prenotato: ' + ultima.Cosa +
+      (ultima.Settimana ? ' — ' + etichettaSettimana(ultima.Settimana) : '');
+  }
 }
 
 // ── APERTURA E SALVATAGGIO ──
@@ -2231,7 +2158,7 @@ function openNuovaVisita() {
   oreEreditate = '';
   document.getElementById('drawer-visita-titolo').textContent = 'Nuova Visita';
   bloccaSalvataggio(false);
-  ['f-visita-note', 'f-visita-prossimo', 'f-visita-mese', 'f-visita-anno', 'f-op-libera', 'f-conto-libera']
+  ['f-visita-note', 'f-op-libera', 'f-conto-libera']
     .forEach(id => { document.getElementById(id).value = ''; });
   document.getElementById('f-visita-data').value = new Date().toISOString().split('T')[0];
   clearVisitaCliente();
@@ -2253,9 +2180,6 @@ function openModificaVisita(vid) {
   oreEreditate = pendingFasce.length ? '' : (v.Ore_Visita || '');
   document.getElementById('f-visita-data').value = v.Data ? new Date(v.Data).toISOString().split('T')[0] : '';
   document.getElementById('f-visita-note').value = v.Note_visita || '';
-  document.getElementById('f-visita-prossimo').value = v.Prossimo_intervento || '';
-  document.getElementById('f-visita-mese').value = v.Mese_prossimo_intervento ? String(v.Mese_prossimo_intervento).padStart(2, '0') : '';
-  document.getElementById('f-visita-anno').value = v.Anno_prossimo_intervento || '';
   document.getElementById('f-op-libera').value = '';
   document.getElementById('f-conto-libera').value = '';
   clearVisitaCliente();
@@ -2368,9 +2292,6 @@ async function saveVisita({ invia = false } = {}) {
     Ore_Visita: fasce.length ? Number(oreTotali(fasce).toFixed(2)) : (precedente?.Ore_Visita || ''),
     ClienteID: cid,
     Note_visita: document.getElementById('f-visita-note').value.trim(),
-    Prossimo_intervento: document.getElementById('f-visita-prossimo').value.trim(),
-    Mese_prossimo_intervento: document.getElementById('f-visita-mese').value,
-    Anno_prossimo_intervento: document.getElementById('f-visita-anno').value,
     Conto: contoCorrente.map(r => ({ ...r })),
   };
 
@@ -2563,6 +2484,17 @@ let orologioCoda = null;
 // torna. La prenotazione parte verso l'ufficio dalla stessa coda del rapportino,
 // perché il campo manca nello stesso modo e il lavoro non si deve perdere.
 
+// Dalla visita: il cliente è già quello che hai davanti, e quello che c'era da
+// dire per la prossima volta lo scrivi nelle note della prenotazione. Prima si
+// chiude la visita — o si resterebbe con due pannelli aperti uno sull'altro.
+function prenotaDaVisita() {
+  const cid = document.getElementById('f-visita-cliente').value;
+  const nome = document.getElementById('f-visita-cliente-nome').textContent;
+  closeDrawer('overlay-visita');
+  apriPrenotazione();
+  if (cid) scegliClientePrenotazione(cid, nome);
+}
+
 function apriPrenotazione() {
   ['f-pren-cosa', 'f-pren-ore', 'f-pren-settimana', 'f-pren-requisiti', 'f-pren-note']
     .forEach(id => document.getElementById(id).value = '');
@@ -2590,6 +2522,9 @@ function scegliClientePrenotazione(id, nome) {
 
 function scollegaClientePrenotazione() {
   document.getElementById('f-pren-cliente').value = '';
+  // Anche il nome, non solo il campo nascosto: lasciato lì resta il cliente di
+  // prima, invisibile ma pronto a ricomparire alla prossima apertura.
+  document.getElementById('f-pren-cliente-nome').textContent = '';
   document.getElementById('f-pren-cliente-search').value = '';
   document.getElementById('f-pren-cliente-search').style.display = 'block';
   document.getElementById('f-pren-cliente-selected').style.display = 'none';
@@ -3043,12 +2978,12 @@ function righeCSV(tipo) {
   };
 
   if (tipo === 'visite') return {
-    intestazioni: ['Data','Cliente','Citta','Ore','Operazioni','Note','Prossimo intervento','Mese prossimo','Anno prossimo'],
+    intestazioni: ['Data','Cliente','Citta','Ore','Operazioni','Note'],
     righe: [...DB.visite].sort(perData).map(v => {
       const c = cliente(v.ClienteID);
       return [v.Data, c?.Cliente || v.ClienteID, c?.Citta || '', v.Ore_Visita,
         DB.operazioni.filter(o => o.VisitaID == v.VisitaID).length,
-        v.Note_visita, v.Prossimo_intervento, v.Mese_prossimo_intervento, v.Anno_prossimo_intervento];
+        v.Note_visita];
     }),
   };
 
@@ -3351,36 +3286,11 @@ function perOnclick(v) {
     .replace(/</g, '&lt;');
 }
 
-async function segnaFatto(visitaID) {
-  const v = DB.visite.find(x => x.VisitaID == visitaID);
-  if (!v) return;
-  v.Prossimo_intervento = '';
-  v.Mese_prossimo_intervento = '';
-  v.Anno_prossimo_intervento = '';
-  if (!await salvaDB()) return;
-  showToast('✅ Intervento segnato come fatto');
-  renderProssimi();
-  renderVisite();
-}
-
 function generateID() {
   // Prefisso temporale: due ID generati nello stesso millisecondo si
   // distinguono per la parte casuale, due di millisecondi diversi non
   // possono collidere affatto.
   return Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
-}
-
-function meseNome(m) {
-  const mesi = ['','Gen','Feb','Mar','Apr','Mag','Giu','Lug','Ago','Set','Ott','Nov','Dic'];
-  return mesi[parseInt(m)] || m;
-}
-
-// Per esteso: un'abbreviazione va bene in un elenco stretto, non in un
-// documento che finisce in una mail.
-function meseNomeLungo(m) {
-  const mesi = ['','Gennaio','Febbraio','Marzo','Aprile','Maggio','Giugno',
-    'Luglio','Agosto','Settembre','Ottobre','Novembre','Dicembre'];
-  return mesi[parseInt(m)] || m;
 }
 
 // ── SERVICE WORKER ──

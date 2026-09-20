@@ -139,12 +139,6 @@ try {
   await page.locator('#fasce-list .fascia').first().locator('input[type=number]').fill('2');
   await page.waitForTimeout(200);
 
-  // Il prossimo intervento è l'unica cosa che dal cantiere arriva in ufficio come
-  // lavoro da pianificare: la lavagna lo prende da qui.
-  await page.fill('#f-visita-prossimo', 'Potatura siepe di lauro');
-  await page.selectOption('#f-visita-mese', '03');
-  await page.fill('#f-visita-anno', '2027');
-
   await page.click('#btn-salva-visita');
   await page.waitForTimeout(300);
   ok('visita salvata', await page.evaluate(() => DB.visite.length) === 1);
@@ -358,6 +352,14 @@ try {
     JSON.stringify(docAppuntamento.requisiti) === '["serve la scala lunga"]');
   ok('la prenotazione è partita dalla stessa coda del rapportino',
     await page.evaluate(() => DB.prenotazioni[0].Consegnata !== ''));
+  // Da quando il prossimo intervento si prenota, è lì che sta scritto cosa si
+  // era detto di fare: aprendo una visita per quel cliente lo si ritrova.
+  ok('e riaprendo una visita per quel cliente il promemoria lo ricorda',
+    await page.evaluate(() => {
+      mostraPromemoria(DB.prenotazioni[0].ClienteID);
+      const el = document.getElementById('op-promemoria');
+      return el.style.display === 'block' && el.textContent.includes('Potatura siepe di lauro');
+    }));
   ok('un appuntamento di una versione futura si ferma e lo dice',
     await page.evaluate(() => {
       try { leggiAppuntamento({ tipo: 'appuntamento', versione: 99, id: 'x' }); return false; }
@@ -385,6 +387,13 @@ try {
     concimi: DB.concimi, sementi: DB.sementi, fitofarmaci: DB.fitofarmaci,
   }));
   ok('il documento porta il cliente e la data', doc.cliente.nome === 'Mario Rossi' && !!doc.data);
+  // Quello che c'è da fare la prossima volta è una prenotazione, e viaggia col
+  // suo documento: scriverlo anche qui voleva dire due posti da tenere allineati.
+  ok('e non porta più il prossimo intervento', doc.prossimo === undefined);
+  ok('un rapportino di un\'altra versione viene rifiutato', await page.evaluate(() => {
+    try { leggiRapportino({ tipo: 'rapportino', versione: 1, id: 'x' }); return false; }
+    catch (e) { return e.message.includes('versione'); }
+  }));
   ok('il documento porta le ore calcolate', doc.ore.totale === 8 && doc.ore.fasce.length === 1);
   ok('il nome del prodotto viaggia col documento, non solo il codice',
     doc.operazioni.some(o => o.prodotto === 'Nitrophoska'),
@@ -411,7 +420,7 @@ try {
   // sa leggere: archiviarlo monco in silenzio sarebbe il guasto peggiore.
   ok('un rapportino di una versione futura si ferma e lo dice', await page.evaluate(() => {
     try { leggiRapportino({ tipo:'rapportino', versione: 99, id:'x' }); return false; }
-    catch (e) { return e.message.includes('recente'); }
+    catch (e) { return e.message.includes('versione'); }
   }));
   ok('il nome del file resta leggibile a occhio', await page.evaluate(d =>
     /^\d{4}-\d{2}-\d{2}-mario-rossi-/.test(nomeFileRapportino(d)), doc));
@@ -438,7 +447,36 @@ try {
     await page.locator('#conto-righe .conto-riga').first().locator('input').first().inputValue() === '8');
   ok('la riga aggiunta a mano non sparisce',
     (await page.textContent('#conto-righe')).includes('Noleggio rullo'));
-  await page.evaluate(() => closeDrawer('overlay-visita'));
+
+  // ── il prossimo intervento non si scrive più in fondo alla visita ──
+  // Quello che c'è da fare la prossima volta è una prenotazione: viaggia col suo
+  // documento e finisce sulla lavagna. Scriverlo anche qui voleva dire due posti
+  // dove cercarlo e due da tenere allineati.
+  ok('la visita non ha più il campo del prossimo intervento',
+    await page.locator('#f-visita-prossimo').count() === 0);
+  ok('ma ha la scorciatoia per prenotarlo',
+    (await page.textContent('#overlay-visita .drawer')).includes('Prenota il prossimo intervento'));
+
+  // Il cliente è quello che hai davanti: farlo ricercare un'altra volta sarebbe
+  // lavoro inventato.
+  await page.evaluate(() => prenotaDaVisita());
+  await page.waitForTimeout(250);
+  // Si guarda il campo nascosto, che è lo stato vero: il nome a video resta
+  // scritto anche quando il cliente è stato scollegato, e fidarsene vuol dire
+  // scrivere una prova che passa da sola.
+  ok('la scorciatoia apre la prenotazione col cliente già messo',
+    await page.evaluate(() => document.getElementById('f-pren-cliente').value) ===
+    await page.evaluate(() => DB.visite[0].ClienteID));
+  ok('e il nome si vede', (await page.textContent('#f-pren-cliente-nome')).includes('Mario Rossi'));
+  ok('aprendo la prenotazione da zero non resta il cliente di prima',
+    await page.evaluate(() => {
+      apriPrenotazione();
+      return document.getElementById('f-pren-cliente').value === '' &&
+        document.getElementById('f-pren-cliente-nome').textContent === '';
+    }));
+  ok('e chiude la visita, invece di lasciare due pannelli uno sull\'altro',
+    !(await page.evaluate(() => document.getElementById('overlay-visita').classList.contains('open'))));
+  await page.evaluate(() => closeDrawer('overlay-prenotazione'));
   await page.waitForTimeout(150);
 
   // ── report prati ──
@@ -908,23 +946,26 @@ try {
   ok('ogni giorno è spezzato in mattina e pomeriggio',
     await pagU.locator('#pagina-lavagna .giorno').first().locator('.mezza').count() === 2);
 
-  const presi = await pagU.evaluate(async () => {
-    await importaProssimi();
+  // Un lavoro messo in coda a mano, per le prove che seguono: le prenotazioni dal
+  // cantiere hanno il loro giro più avanti.
+  const messoAMano = await pagU.evaluate(async () => {
+    apriModuloLavoro();
+    document.getElementById('n-cliente').value = 'Mario Rossi Junior';
+    document.getElementById('n-cosa').value = 'Potatura siepe di lauro';
+    document.getElementById('n-ore').value = '4';
+    document.getElementById('n-settimana').value = '2026-09-23';
+    await salvaModuloLavoro();
     return LAVAGNA.lavori.length;
   });
-  ok('il prossimo intervento segnato in cantiere arriva sulla lavagna', presi === 1);
-  // Il cantiere segna mese e anno; la coda ragiona per settimane: si prende la
-  // settimana in cui cade il primo del mese. Non è una scadenza, è un posto in
-  // fila.
-  ok('col mese del cantiere tradotto in una settimana',
-    await pagU.evaluate(() => LAVAGNA.lavori[0].settimana) === '2027-03-01',
+  ok('un lavoro aggiunto a mano entra in coda', messoAMano === 1);
+  // Si sceglie un giorno e conta la sua settimana: il mercoledì 23 sta nella
+  // settimana che apre lunedì 21.
+  ok('col giorno scelto agganciato alla sua settimana',
+    await pagU.evaluate(() => LAVAGNA.lavori[0].settimana) === '2026-09-21',
     await pagU.evaluate(() => LAVAGNA.lavori[0].settimana));
   ok('e scritta sul cartellino sempre nello stesso modo',
-    await pagU.evaluate(() => etichettaSettimana(LAVAGNA.lavori[0].settimana)) === 'dal 01/03 · settimana 10',
+    await pagU.evaluate(() => etichettaSettimana(LAVAGNA.lavori[0].settimana)) === 'dal 21/09 · settimana 39',
     await pagU.evaluate(() => etichettaSettimana(LAVAGNA.lavori[0].settimana)));
-  // Lo stesso rapportino non deve tornare a ogni clic sul bottone.
-  ok('un secondo giro non lo duplica',
-    await pagU.evaluate(async () => { await importaProssimi(); return LAVAGNA.lavori.length; }) === 1);
 
   // ── dalla coda alla settimana: a matita ──
   const idLavoro = await pagU.evaluate(() => LAVAGNA.lavori[0].id);
@@ -1128,64 +1169,6 @@ try {
       return l.giorno === '2026-09-24' && l.mezza === 'mattina' &&
         l.stato === 'confermato' && l.cosa === 'Potatura, con scala';
     }, idLavoro));
-
-  // ── il prossimo intervento si prende anche da un rapportino appena arrivato ──
-  // È il caso normale: lo si legge quando arriva, non dopo aver chiuso il conto.
-  ok('un rapportino ancora in arrivo dà il suo prossimo intervento',
-    await pagU.evaluate(async d => {
-      const arrivi = await window.RADICE.getDirectoryHandle('rapportini');
-      const nuovo = { ...d, id: 'visita-appena-arrivata', revisione: 1,
-        cliente: { ...d.cliente, nome: 'Cliente Appena Arrivato' },
-        prossimo: { cosa: 'Arieggiatura', mese: '04', anno: '2027' } };
-      await scriviTesto(arrivi, nomeFileRapportino(nuovo), JSON.stringify(nuovo));
-      await ricarica();
-      if (!ARRIVI.some(a => a.doc.id === 'visita-appena-arrivata')) return 'non è arrivato';
-      const prima = LAVAGNA.lavori.length;
-      await importaProssimi();
-      return LAVAGNA.lavori.length === prima + 1 &&
-        LAVAGNA.lavori.some(l => l.cliente === 'Cliente Appena Arrivato' && l.settimana === '2027-03-29');
-    }, doc) === true);
-
-  // ── le prenotazioni dal cantiere arrivano sulla lavagna da sole ──
-  // Nessun bottone da premere: chi prenota è in giardino, e chiedere all'ufficio
-  // di ricopiare vorrebbe dire perderne una ogni tanto.
-  ok('una prenotazione depositata compare in coda senza premere niente',
-    await pagU.evaluate(async d => {
-      const cartella = await window.RADICE.getDirectoryHandle('appuntamenti', { create: true });
-      await scriviTesto(cartella, nomeFileAppuntamento(d), JSON.stringify(d));
-      const prima = LAVAGNA.lavori.length;
-      await ricarica();
-      const l = LAVAGNA.lavori.find(x => x.da === d.id);
-      return LAVAGNA.lavori.length === prima + 1 && !!l &&
-        l.origine === 'prenotato dal cantiere' && l.settimana === '2027-03-15' &&
-        l.requisiti.length === 1;
-    }, docAppuntamento) === true);
-  ok('e la colonna lo dice a chi guarda, una volta arrivata la sua settimana',
-    (await pagU.evaluate(() => {
-      SETTIMANA = lunediDi(new Date('2027-03-15T12:00:00'));
-      vaiA('lavagna');
-      return document.getElementById('pagina-lavagna').innerHTML;
-    })).includes('prenotazione arrivata'));
-  await pagU.evaluate(() => { SETTIMANA = lunediDi(new Date('2026-09-21T12:00:00')); disegnaLavagna(); });
-  ok('ricaricando non ne compare una seconda',
-    await pagU.evaluate(async () => {
-      const prima = LAVAGNA.lavori.length;
-      await ricarica();
-      return LAVAGNA.lavori.length === prima;
-    }));
-  // Una prenotazione bloccata da un requisito va in fondo alla coda come le altre.
-  ok('arriva bloccata se il cantiere ha detto che manca qualcosa',
-    await pagU.evaluate(d => {
-      const l = LAVAGNA.lavori.find(x => x.da === d.id);
-      return bloccato(l);
-    }, docAppuntamento));
-  ok('un file di appuntamento illeggibile si vede invece di sparire',
-    await pagU.evaluate(async () => {
-      const cartella = await window.RADICE.getDirectoryHandle('appuntamenti');
-      await scriviTesto(cartella, 'rotto.json', '{"tipo":"appunta');
-      await ricarica();
-      return ILLEGGIBILI.some(f => f.nome.includes('appuntamenti/rotto.json'));
-    }));
 
   // ── la leggenda sta in fondo, dove non scavalca la lavagna ──
   const paginaLavagna = await pagU.evaluate(() => {
