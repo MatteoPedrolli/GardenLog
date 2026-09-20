@@ -471,6 +471,12 @@ try {
       const vecchi = datiMessiDaParte();
       return !!vecchi && vecchi.versione === 7 && vecchi.db.clienti[0].Cliente === 'Da recuperare';
     }));
+  // Un archivio vuoto di un'altra versione non è roba da salvare, e un avviso
+  // che resta a video per niente insegna a ignorare gli avvisi.
+  ok('un archivio vuoto non merita un avviso',
+    await page.evaluate(() => contieneQualcosa({ clienti: [], visite: [], voci: [{ VoceID: 'x' }] }) === false &&
+      contieneQualcosa({ clienti: [{ ClienteID: 'c' }] }) === true &&
+      contieneQualcosa(null) === false));
   ok('e la pagina Dati offre di scaricarli',
     (await page.evaluate(() => { renderDatiDaParte(); return document.getElementById('dati-da-parte-wrap').innerHTML; }))
       .includes('scaricaDatiDaParte'));

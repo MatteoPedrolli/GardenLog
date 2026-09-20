@@ -1179,6 +1179,13 @@ function leggiDati(grezzo, versione) {
   return normalizzaDB(grezzo);
 }
 
+// Gli archivi di partenza non contano: ci sono anche in un database appena nato.
+// Quello che conta è il lavoro — clienti, visite, operazioni, prenotazioni.
+function contieneQualcosa(db) {
+  return ['clienti', 'visite', 'operazioni', 'prenotazioni', 'coda']
+    .some(k => Array.isArray(db?.[k]) && db[k].length > 0);
+}
+
 // I dati che non si sanno leggere non si buttano: si spostano su una chiave a
 // parte prima che il primo salvataggio li ricopra. È la stessa idea del backup —
 // l'unica copia di qualcosa non sparisce perché il formato è cambiato.
@@ -1248,7 +1255,10 @@ async function caricaDB() {
 
   const dati = leggiDati(payload.db, payload.versione);
   if (!dati) {
-    mettiDaParte(payload);
+    // Vale la pena metterli da parte solo se dentro c'è qualcosa: un archivio
+    // vuoto di un'altra versione non è roba da salvare, e un avviso che resta a
+    // video per niente insegna a ignorare gli avvisi.
+    if (contieneQualcosa(payload.db)) mettiDaParte(payload);
     DB = datiIniziali();
     return false;
   }
