@@ -105,6 +105,10 @@ apre la prenotazione **col cliente già messo** — è quello che hai davanti, f
 ricercare sarebbe lavoro inventato — e quello che c'era da ricordare per la
 prossima volta si scrive nelle note della prenotazione.
 
+Le note sono **l'unico campo di testo** della prenotazione, e sono obbligatorie:
+un cartellino col solo nome del cliente non dice niente a chi pianifica, e in
+giardino non si può più chiedere.
+
 Il promemoria che compare aprendo una visita (`mostraPromemoria`) legge da lì: le
 prenotazioni sono il posto dove sta scritto cosa si era detto di fare.
 
@@ -347,11 +351,12 @@ piede della colonna lo dice.
 
 **Un cartellino ha un campo di testo, non due.** «Cosa c'è da fare» e «cosa
 ricordare» erano due caselle per dire la stessa cosa, e una delle due restava
-sempre indietro: adesso c'è solo `note`. Il documento dell'appuntamento porta
-ancora i suoi due campi — il telefono non è cambiato — e `uniscoNote()` li fonde
-entrando, come fa con i lavori salvati prima. Le note sono anche l'unica cosa che
-fa il giro completo, quindi quel campo è il posto dove scrivere le operazioni: da
-lì partono per l'agenda e tornano in giardino.
+sempre indietro: adesso c'è solo `note`, in tutte e due le app e nel documento
+dell'appuntamento. Le note sono anche l'unica cosa che fa il giro completo, quindi
+quel campo è il posto dove scrivere le operazioni: da lì partono per l'agenda e
+tornano in giardino. `uniscoNote()` resta perché i lavori salvati sulla lavagna
+prima del cambio portano il campo separato, e quel testo l'aveva battuto chi
+pianifica.
 
 **Quanto è largo un lavoro lo dice chi pianifica**, non la stima ore: `mezze` si
 alza e si abbassa di uno con `+` e `−`. Dedurlo dalle ore legava la lavagna a un

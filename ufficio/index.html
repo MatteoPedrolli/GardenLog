@@ -669,9 +669,7 @@ async function assorbiAppuntamenti() {
       cliente: doc.cliente.nome || '',
       luogo: doc.cliente.citta || '',
       ore: doc.ore,
-      // Il documento dell'appuntamento porta ancora i due campi separati; qui
-      // diventano uno, perché sulla lavagna ce n'è uno.
-      note: uniscoNote(doc.cosa, doc.note),
+      note: doc.note || '',
       settimana: doc.settimana || '',
       origine: 'prenotato dal cantiere',
       requisiti: doc.requisiti,

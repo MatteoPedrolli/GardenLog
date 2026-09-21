@@ -127,8 +127,14 @@ function nomeFileRapportino(doc) {
 //
 // Denormalizzato come il rapportino, e per lo stesso motivo: l'ufficio deve
 // poterlo leggere anche se quel cliente non ce l'ha ancora in anagrafica.
+//
+// **Un campo di testo, non due.** Portava un «cosa c'è da fare» accanto alle
+// note, ed erano due caselle per dire la stessa cosa: una delle due restava
+// sempre indietro, e in ufficio arrivavano da riunire. Quello che c'è da fare si
+// scrive nelle note, che sono anche l'unica cosa che fa il giro completo — da lì
+// finiscono sull'agenda e tornano in giardino.
 
-const VERSIONE_APPUNTAMENTO = 2;
+const VERSIONE_APPUNTAMENTO = 3;
 
 // ── LE SETTIMANE ──
 // Un appuntamento non si fissa in un giorno preciso ma in una settimana, e una
@@ -212,7 +218,6 @@ function costruisciAppuntamento({ prenotazione, cliente }) {
       indirizzo: (cliente && cliente.Indirizzo) || '',
       citta: (cliente && cliente.Citta) || '',
     },
-    cosa: prenotazione.Cosa || '',
     ore: Number(prenotazione.Ore) || 0,
     // La settimana in cui andrebbe fatto, scritta come il lunedì che la apre.
     // Non un giorno preciso: quando si prenota in giardino il giorno non si sa

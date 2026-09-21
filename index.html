@@ -761,11 +761,6 @@ select.form-control { background-image: url("data:image/svg+xml,%3Csvg xmlns='ht
       </div>
     </div>
 
-    <div class="form-group">
-      <label class="form-label">Cosa c'è da fare</label>
-      <input type="text" class="form-control" id="f-pren-cosa" placeholder="Es. Potatura siepe di lauro">
-    </div>
-
     <div class="form-row">
       <div class="form-group">
         <label class="form-label">Stima ore</label>
@@ -785,8 +780,9 @@ select.form-control { background-image: url("data:image/svg+xml,%3Csvg xmlns='ht
     </div>
 
     <div class="form-group">
-      <label class="form-label">Note per l'ufficio</label>
-      <textarea class="form-control" id="f-pren-note" rows="2" placeholder="Il cliente preferisce il mattino..."></textarea>
+      <label class="form-label">Cosa c'è da fare, e cosa ricordare</label>
+      <textarea class="form-control" id="f-pren-note" rows="3" placeholder="Potatura siepe di lauro. Il cliente preferisce il mattino, chiedere della chiave del cancello..."></textarea>
+      <div class="dati-nota" style="margin:4px 0 0">Finisce sul cartellino dell'ufficio e torna qui con l'agenda il giorno del lavoro.</div>
     </div>
 
     <button class="btn btn-primary" onclick="salvaPrenotazione()">📨 Manda in ufficio</button>
@@ -1001,7 +997,7 @@ const IDB_NOME = 'giardinolog';
 const IDB_STORE = 'stato';
 const IDB_CHIAVE = 'db';
 const MIRROR_KEY = 'giardinolog-db';
-const VERSIONE_DATI = 12;
+const VERSIONE_DATI = 13;
 
 // Le impostazioni stanno dentro DB, non in META, perché così finiscono nel
 // backup: un indirizzo da riscrivere dopo aver cambiato telefono è una seccatura
@@ -2157,11 +2153,11 @@ function mostraPromemoria(clienteID) {
   const el = document.getElementById('op-promemoria');
   if (!el) return;
   const ultima = (DB.prenotazioni || [])
-    .filter(p => p.ClienteID == clienteID && p.Cosa)
+    .filter(p => p.ClienteID == clienteID && p.Note)
     .sort((a, b) => String(b.Creata || '').localeCompare(String(a.Creata || '')))[0];
   el.style.display = ultima ? 'block' : 'none';
   if (ultima) {
-    el.textContent = '📌 Era prenotato: ' + ultima.Cosa +
+    el.textContent = '📌 Era prenotato: ' + ultima.Note +
       (ultima.Settimana ? ' — ' + etichettaSettimana(ultima.Settimana) : '');
   }
 }
@@ -2513,7 +2509,7 @@ function prenotaDaVisita() {
 }
 
 function apriPrenotazione() {
-  ['f-pren-cosa', 'f-pren-ore', 'f-pren-settimana', 'f-pren-requisiti', 'f-pren-note']
+  ['f-pren-ore', 'f-pren-settimana', 'f-pren-requisiti', 'f-pren-note']
     .forEach(id => document.getElementById(id).value = '');
   mostraSettimanaScelta();
   scollegaClientePrenotazione();
@@ -2563,17 +2559,16 @@ async function salvaPrenotazione() {
   if (salvataggioInCorso) return;
   const cid = document.getElementById('f-pren-cliente').value;
   if (!cid) { showToast('⚠️ Scegli il cliente'); return; }
-  const cosa = document.getElementById('f-pren-cosa').value.trim();
-  if (!cosa) { showToast('⚠️ Scrivi cosa c\'è da fare'); return; }
+  const note = document.getElementById('f-pren-note').value.trim();
+  if (!note) { showToast('⚠️ Scrivi cosa c\'è da fare'); return; }
 
   const prenotazione = {
     PrenotazioneID: 'pren-' + Date.now().toString(36),
     ClienteID: cid,
-    Cosa: cosa,
     Ore: document.getElementById('f-pren-ore').value,
     Settimana: lunediDellaSettimana(document.getElementById('f-pren-settimana').value),
     Requisiti: document.getElementById('f-pren-requisiti').value.trim(),
-    Note: document.getElementById('f-pren-note').value.trim(),
+    Note: note,
     Creata: new Date().toISOString(),
     Consegnata: '',
   };
@@ -2683,7 +2678,7 @@ function renderPrenotazioni() {
     const inCoda = (DB.coda || []).some(v => v.docID === p.PrenotazioneID);
     return `<div class="card" style="padding:12px">
       <div style="font-weight:600">${perValore(c ? c.Cliente : 'cliente eliminato')}</div>
-      <div style="font-size:0.85rem; color:var(--text-mid)">${perValore(p.Cosa)}</div>
+      <div style="font-size:0.85rem; color:var(--text-mid); white-space:pre-line">${perValore(p.Note)}</div>
       <div style="font-size:0.78rem; color:var(--text-light); margin-top:4px">
         ${p.Ore ? formattaQuantita(p.Ore) + ' h · ' : ''}${p.Settimana ? etichettaSettimana(p.Settimana) + ' · ' : ''}${inCoda ? '📤 da consegnare' : '✅ in ufficio'}
       </div>

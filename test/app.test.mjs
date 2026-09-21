@@ -309,13 +309,14 @@ try {
   await page.fill('#f-pren-cliente-search', 'Mario');
   await page.waitForTimeout(200);
   await page.click('#pren-cliente-suggestions .suggestion-item');
-  await page.fill('#f-pren-cosa', 'Potatura siepe di lauro');
   await page.fill('#f-pren-ore', '4');
   // Si sceglie un giorno e conta la sua settimana: il 15 marzo 2027 è un lunedì,
   // e la settimana resta quella anche scegliendo il mercoledì dopo.
   await page.fill('#f-pren-settimana', '2027-03-17');
   await page.fill('#f-pren-requisiti', 'serve la scala lunga');
-  await page.fill('#f-pren-note', 'chiedere della chiave del cancello');
+  // Un campo solo per cosa c'è da fare e cosa ricordare: erano due caselle per
+  // dire la stessa cosa, e una restava sempre indietro.
+  await page.fill('#f-pren-note', 'Potatura siepe di lauro\nchiedere della chiave del cancello');
   await page.click('#overlay-prenotazione .btn-primary');
   await page.waitForTimeout(500);
 
@@ -327,11 +328,32 @@ try {
     return costruisciAppuntamento({ prenotazione: p, cliente: c });
   });
   ok('il documento è un appuntamento, non un rapportino',
-    docAppuntamento.tipo === 'appuntamento' && docAppuntamento.cosa === 'Potatura siepe di lauro');
+    docAppuntamento.tipo === 'appuntamento' && docAppuntamento.versione === 3,
+    docAppuntamento.tipo + ' v' + docAppuntamento.versione);
   // Da quando il prossimo intervento non si scrive più in fondo alla visita, le
-  // note della prenotazione sono il posto dove va quello che c'era da ricordare.
-  ok('e porta le note, che sono quello che serve la prossima volta',
-    docAppuntamento.note === 'chiedere della chiave del cancello', docAppuntamento.note);
+  // note della prenotazione sono il posto dove va cosa c'è da fare e cosa
+  // ricordare. Sono anche l'unica cosa che fa il giro completo.
+  ok('e porta le note, che sono quello che c\'è da fare e da ricordare',
+    docAppuntamento.note === 'Potatura siepe di lauro\nchiedere della chiave del cancello' &&
+    !('cosa' in docAppuntamento),
+    JSON.stringify(docAppuntamento.note));
+  ok('nel pannello non c\'è un secondo campo per la stessa cosa',
+    await page.evaluate(() => !document.getElementById('f-pren-cosa')));
+  // Un cartellino col solo nome del cliente non dice niente a chi pianifica, e in
+  // giardino non si può più chiedere. Sta in uno scenario suo perché se passasse
+  // il pannello si chiuderebbe, e le prove dopo si schianterebbero invece di
+  // dire cosa non va.
+  ok('senza scrivere cosa c\'è da fare non si prenota',
+    await page.evaluate(async () => {
+      const quante = DB.prenotazioni.length;
+      apriPrenotazione();
+      document.getElementById('f-pren-cliente').value = DB.clienti[0].ClienteID;
+      await salvaPrenotazione();
+      const fermato = DB.prenotazioni.length === quante &&
+        document.getElementById('overlay-prenotazione').classList.contains('open');
+      closeDrawer('overlay-prenotazione');
+      return fermato;
+    }));
   // Non un giorno preciso: quando si prenota in giardino il giorno non si sa
   // ancora, e fingere di saperlo vorrebbe dire spostarlo tre volte.
   ok('porta la settimana, scritta come il lunedì che la apre',
@@ -392,7 +414,7 @@ try {
   // In costruzione non si converte: o è di questa versione, o non si legge.
   ok('un appuntamento di un\'altra versione viene rifiutato',
     await page.evaluate(() => {
-      try { leggiAppuntamento({ tipo: 'appuntamento', versione: 1, id: 'x' }); return false; }
+      try { leggiAppuntamento({ tipo: 'appuntamento', versione: 2, id: 'x' }); return false; }
       catch (e) { return e.message.includes('versione'); }
     }));
 
