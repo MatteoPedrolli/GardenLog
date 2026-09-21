@@ -704,9 +704,13 @@ select.form-control { background-image: url("data:image/svg+xml,%3Csvg xmlns='ht
 
       <div class="section-title">Per l'ufficio</div>
       <div class="card" style="padding:14px">
-        <div class="dati-nota">L'anagrafica che hai qui, nel formato che l'app dell'ufficio importa.
-          Il file va messo nella cartella <strong>GiardinoApp</strong> su Drive.</div>
-        <button class="btn btn-secondary btn-sm" onclick="esportaAnagrafica()">Esporta anagrafica clienti</button>
+        <div class="dati-nota">L'anagrafica e l'elenco dei prodotti che hai qui, nel formato che l'app
+          dell'ufficio importa. I file vanno messi nella cartella <strong>GiardinoApp</strong> su Drive.
+          L'ufficio aggiunge quello che sa lui — telefoni, mail, prezzi — e importare non glielo cancella.</div>
+        <div style="display:flex; gap:8px; flex-wrap:wrap">
+          <button class="btn btn-secondary btn-sm" onclick="esportaAnagrafica()">Esporta anagrafica clienti</button>
+          <button class="btn btn-secondary btn-sm" onclick="esportaProdotti()">Esporta prodotti</button>
+        </div>
       </div>
 
       <div class="section-title">Esporta per analisi</div>
@@ -3153,6 +3157,39 @@ function anagraficaPerUfficio() {
       note: c.Note_cliente || '',
     })),
   };
+}
+
+// Concimi, sementi e fitofarmaci come li conosce il cantiere. Il prezzo non c'è
+// e non ci deve essere: qui si dice **cosa esiste**, l'ufficio ci attacca quanto
+// costa. È la stessa divisione dei clienti — il campo sa il nome, l'ufficio sa il
+// numero di telefono — e per la stessa ragione l'archivio resta sul telefono: in
+// giardino senza rete devi poter scegliere un concime, e le percentuali di azoto
+// e potassio servono al riquadro del prato, non a chi fattura.
+function prodottiPerUfficio() {
+  const prodotti = [];
+  (DB.concimi || []).forEach(c => prodotti.push({
+    id: c.ConcimeID, genere: 'concime', nome: c.Concime || '' }));
+  (DB.sementi || []).forEach(x => prodotti.push({
+    id: x.SementeID, genere: 'semente', nome: x.Nome_commerciale || '' }));
+  (DB.fitofarmaci || []).forEach(x => prodotti.push({
+    id: x.FitofarmacaID, genere: 'fitofarmaco', nome: x.Nome_commerciale || '' }));
+  return {
+    tipo: 'prodotti', versione: 1, esportato: new Date().toISOString(),
+    prodotti: prodotti.filter(p => p.id && p.nome),
+  };
+}
+
+async function esportaProdotti() {
+  const doc = prodottiPerUfficio();
+  if (!doc.prodotti.length) { showToast('⚠️ Non c\'è ancora nessun prodotto'); return; }
+  const file = new File([JSON.stringify(doc, null, 2)],
+    'prodotti-dal-telefono.json', { type: 'application/json' });
+  let esito;
+  try { esito = await consegnaFile(file); }
+  catch (e) { showToast('❌ Non riuscito: ' + (e.message || e)); return; }
+  showToast(esito === 'annullato'
+    ? '↩️ Annullato: il file non è uscito'
+    : `🧪 ${doc.prodotti.length} prodotti pronti per l'ufficio`);
 }
 
 async function esportaAnagrafica() {

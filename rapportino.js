@@ -10,7 +10,7 @@
 // i nomi viaggiano insieme ai riferimenti. Un rapportino si legge da solo, anche
 // fra due anni, anche se nel frattempo quel concime è stato cancellato.
 
-const VERSIONE_RAPPORTINO = 2;
+const VERSIONE_RAPPORTINO = 3;
 
 function costruisciRapportino({ visita, cliente, operazioni, tipi, voci, concimi, sementi, fitofarmaci }) {
   const nomeProdotto = (o) => {
@@ -47,7 +47,16 @@ function costruisciRapportino({ visita, cliente, operazioni, tipi, voci, concimi
     operazioni: (operazioni || []).map(o => {
       const tipo = (tipi || []).find(t => t.TipoID === o.TipoID);
       return {
+        // L'identificativo dell'operazione è la chiave di giunzione con la riga
+        // del conto, che porta già lo stesso valore in `chiave`. Senza, l'ufficio
+        // vede «Concime 25 kg» e non sa *quale* concime, anche se il nome sta
+        // due campi più in là: due concimi diversi si fatturavano uguale.
+        id: o.OperazioneID || '',
         tipoID: o.TipoID || '',
+        // Il riferimento al prodotto viaggia accanto al nome, come sempre qui:
+        // l'identificativo serve al listino, il nome a leggere il documento fra
+        // due anni anche se quel prodotto è stato cancellato.
+        prodottoID: o.ConcimeID || o.SementeID || o.FitofarmacaID || '',
         nome: o.Tipo_operazione || tipo?.Nome || '',
         descrizione: o.Descrizione || '',
         quantita: o.Quantita === '' || o.Quantita == null ? null : Number(o.Quantita),

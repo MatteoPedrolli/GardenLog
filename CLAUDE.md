@@ -178,6 +178,24 @@ restano sull'operazione, dove servono al registro dei trattamenti. È la ragione
 per cui agronomia e conto sono due elenchi distinti sulla stessa visita: lo
 stesso fatto si misura in modi diversi a seconda di chi lo legge.
 
+**«Concime» è una categoria, «Nitrophoska» è quello che hai comprato.** Due
+concimi diversi costano diverso, e con la sola voce generica si fatturavano
+uguale. Il listino dell'ufficio ha quindi due elenchi: le **voci** e i
+**prodotti**. Quando un prodotto ha un prezzo suo quello vince; quando non ce
+l'ha, vale ancora la voce — e la pagina Listino dice quali prodotti sono stati
+usati senza averne uno, o te ne accorgeresti solo da un totale più basso.
+
+La giunzione è `chiave` sulla riga ↔ `id` sull'operazione: la riga la portava già,
+l'operazione no, e mancando quella l'ufficio vedeva «Concime 25 kg» senza sapere
+quale. Un prodotto segnato **a corpo** in ufficio vale 1 in elenco: i litri
+restano sull'operazione, dove servono al registro dei trattamenti.
+
+**Il nome del prodotto non esce.** La riga porta `prodotto` in un campo suo e
+`voce` resta generica: il foglio e la mail stampano `voce`, l'ufficio legge
+`voceConProdotto()`. È la stessa divisione di ore e operazioni — l'ufficio vede
+tutto, al cliente va il conto — e tiene i nomi commerciali dei diserbi fuori da un
+documento che esce.
+
 I `Conto` delle visite già registrate **conservano i loro `Prezzo`**: sono il
 registro di quello che è stato fatturato prima che il listino passasse in
 ufficio, non un listino. Riscriverli cancellerebbe l'unica traccia che ne resta.
@@ -506,6 +524,14 @@ la regola di sempre — un file, un solo autore — anche quando i dati viaggian
 
 Chi compare sui rapportini e non in anagrafica si aggiunge con un bottone: il
 cantiere l'ha già scritto una volta, e farlo ribattere sarebbe lavoro inventato.
+
+**I prodotti seguono la stessa regola.** Concimi, sementi e fitofarmaci vivono sul
+telefono — in giardino senza rete devi poter scegliere un concime, e N% e K%
+servono al riquadro del prato, non a chi fattura. Il telefono esporta
+`prodotti-dal-telefono.json`, l'ufficio importa i nuovi e **tiene i prezzi** di
+quelli che ha già. Il verso non si inverte: un prezzo sbagliato perché il telefono
+non ha scaricato l'ultimo listino è un errore che paga il cliente, mentre l'agenda
+può arrivare vecchia di un giorno senza danni.
 
 ## Come arrivano gli aggiornamenti
 

@@ -501,6 +501,7 @@ const FILE_AGENDA = 'agenda.json';
 const VERSIONE_LAVAGNA = 2;
 const FILE_CLIENTI = 'clienti.json';
 const FILE_ANAGRAFICA = 'anagrafica-dal-telefono.json';
+const FILE_PRODOTTI = 'prodotti-dal-telefono.json';
 
 // Una mezza giornata sono otto ore di manodopera: quattro d'orologio in due. Serve
 // a sapere quante mezze giornate occupa un lavoro lungo, non a dichiarare piena una
@@ -519,7 +520,7 @@ const IMPOSTAZIONI_VUOTE = {
 };
 
 let CARTELLA = null;
-let LISTINO = { tipo: 'listino', versione: 1, voci: [] };
+let LISTINO = { tipo: 'listino', versione: 1, voci: [], prodotti: [] };
 // Il listino si modifica a video e si scrive su file solo col bottone. Finché
 // resta da salvare, nessuna rilettura della cartella lo deve sovrascrivere: un
 // prezzo appena battuto che sparisce a un Ricontrolla è lavoro perso in silenzio.
@@ -747,11 +748,18 @@ async function caricaListino() {
     const testo = await leggiTesto(CARTELLA, FILE_LISTINO);
     const l = JSON.parse(testo);
     if (!l || l.tipo !== 'listino') throw new Error('non è un listino');
-    return { tipo: 'listino', versione: Number(l.versione) || 1, voci: Array.isArray(l.voci) ? l.voci : [] };
+    // `prodotti` è arrivato dopo: un listino scritto prima non ce l'ha, e
+    // l'assenza è un valore buono — vuol dire «nessun prezzo per prodotto
+    // ancora». Niente versione nuova, niente prezzi da ribattere.
+    return {
+      tipo: 'listino', versione: Number(l.versione) || 1,
+      voci: Array.isArray(l.voci) ? l.voci : [],
+      prodotti: Array.isArray(l.prodotti) ? l.prodotti.map(sistemaProdotto) : [],
+    };
   } catch (e) {
     // Nessun listino ancora: si parte vuoto e si scrive al primo salvataggio.
     // Non lo creo qui, o un permesso di sola lettura fallirebbe all'apertura.
-    return { tipo: 'listino', versione: 1, voci: [] };
+    return { tipo: 'listino', versione: 1, voci: [], prodotti: [] };
   }
 }
 
@@ -1016,11 +1024,41 @@ function voceInListino(voceID) {
   return LISTINO.voci.find(v => v.voceID === voceID) || null;
 }
 
+function sistemaProdotto(p) {
+  return {
+    prodottoID: p.prodottoID || p.id || '',
+    genere: p.genere || '',
+    nome: p.nome || '',
+    prezzo: p.prezzo === '' || p.prezzo == null ? '' : Number(p.prezzo),
+    aCorpo: !!p.aCorpo,
+  };
+}
+
+function prodottoInListino(prodottoID) {
+  if (!prodottoID) return null;
+  return LISTINO.prodotti.find(p => p.prodottoID === prodottoID) || null;
+}
+
+// Da quale prodotto nasce una riga del conto. La riga porta `chiave` =
+// l'identificativo dell'operazione, e l'operazione porta il prodotto: è la
+// giunzione che mancava, e senza di lei due concimi diversi si fatturavano
+// uguale perché la voce è una sola, «Concime».
+function prodottoDellaRiga(doc, riga) {
+  if (!riga.chiave || riga.chiave === 'manodopera') return null;
+  const op = (doc.operazioni || []).find(o => o.id && o.id === riga.chiave);
+  return op && op.prodottoID ? { id: op.prodottoID, nome: op.prodotto || '' } : null;
+}
+
 function costruisciConteggio(doc, precedenti) {
   const vecchie = Array.isArray(precedenti) ? precedenti : [];
   const righe = (doc.righe || []).map(r => {
     const vecchia = vecchie.find(x => x.chiave && x.chiave === r.chiave);
     const inListino = voceInListino(r.voceID);
+    // Il prodotto, quando c'è, vince sulla voce: «Concime» è una categoria,
+    // «Nitrophoska Gold» è quello che hai comprato. La voce resta la rete per
+    // quando un prodotto nuovo non ha ancora il suo prezzo.
+    const daProdotto = prodottoDellaRiga(doc, r);
+    const inProdotti = daProdotto ? prodottoInListino(daProdotto.id) : null;
     let prezzo = '';
     let manuale = false;
     if (vecchia && vecchia.manuale) {
@@ -1028,15 +1066,25 @@ function costruisciConteggio(doc, precedenti) {
       // chi l'ha messo sapeva qualcosa che il listino non sa.
       prezzo = vecchia.prezzo;
       manuale = true;
+    } else if (inProdotti && inProdotti.prezzo !== '' && inProdotti.prezzo != null) {
+      prezzo = Number(inProdotti.prezzo);
     } else if (inListino && inListino.prezzo !== '' && inListino.prezzo != null) {
       prezzo = Number(inListino.prezzo);
     }
+    const aCorpo = inProdotti ? inProdotti.aCorpo : !!(inListino && inListino.aCorpo);
     return {
       chiave: r.chiave || '',
       voceID: r.voceID || '',
+      // La voce resta quella generica, «Concime». Il nome del prodotto sta in un
+      // campo suo perché **non va al cliente**: il foglio e la mail stampano la
+      // voce, e il nome commerciale — diserbi compresi — resta in ufficio. È la
+      // stessa divisione di ore e operazioni: l'ufficio vede tutto, al cliente
+      // va il conto.
       voce: (inListino && inListino.voce) || r.voce || '',
-      quantita: r.quantita == null ? '' : Number(r.quantita),
-      unita: (inListino && inListino.unita) || r.unita || '',
+      prodottoID: daProdotto ? daProdotto.id : '',
+      prodotto: daProdotto ? daProdotto.nome : '',
+      quantita: aCorpo ? 1 : (r.quantita == null ? '' : Number(r.quantita)),
+      unita: aCorpo ? '' : ((inListino && inListino.unita) || r.unita || ''),
       prezzo,
       manuale,
     };
@@ -1045,6 +1093,13 @@ function costruisciConteggio(doc, precedenti) {
   // restano dove sono, come sul telefono.
   vecchie.filter(r => !r.chiave).forEach(r => righe.push({ ...r }));
   return righe;
+}
+
+// Come si legge una riga **in ufficio**: la voce più il prodotto, quando c'è.
+// Il foglio del cliente e la mail usano `r.voce` e basta, e non passano di qui:
+// il nome commerciale — diserbi compresi — non esce su un documento.
+function voceConProdotto(r) {
+  return r.prodotto ? r.voce + ' — ' + r.prodotto : r.voce;
 }
 
 function importoRiga(r) {
@@ -1185,6 +1240,7 @@ async function salvaListino() {
     versione: 1,
     aggiornato: new Date().toISOString(),
     voci: LISTINO.voci,
+    prodotti: LISTINO.prodotti,
   };
   try {
     await scriviTesto(CARTELLA, FILE_LISTINO, JSON.stringify(da_salvare, null, 2));
@@ -1566,7 +1622,7 @@ function disegnaLavoro() {
   LAVORO.righe.forEach((r, i) => {
     const imp = importoRiga(r);
     html += '<tr>' +
-      '<td>' + (r.chiave ? perValore(r.voce) :
+      '<td>' + (r.chiave ? perValore(voceConProdotto(r)) :
         '<input type="text" value="' + perValore(r.voce) + '" oninput="modificaRiga(' + i + ', \'voce\', this.value)">') + '</td>' +
       '<td class="num"><input type="text" class="quantita" value="' + perValore(formattaQuantita(r.quantita)) +
         '" oninput="modificaRiga(' + i + ', \'quantita\', this.value)"></td>' +
@@ -1806,7 +1862,7 @@ function disegnaArchiviato() {
     '<th>Unità</th><th class="num">Prezzo</th><th class="num">Importo</th></tr></thead><tbody>';
   l.righe.forEach(riga => {
     const imp = importoRiga(riga);
-    html += '<tr><td>' + perValore(riga.voce) + '</td>' +
+    html += '<tr><td>' + perValore(voceConProdotto(riga)) + '</td>' +
       '<td class="num">' + perValore(formattaQuantita(riga.quantita)) + '</td>' +
       '<td class="meta">' + perValore(riga.unita) + '</td>' +
       '<td class="num">' + (riga.prezzo === '' || riga.prezzo == null ? '' : formattaEuro(riga.prezzo)) + '</td>' +
@@ -2560,6 +2616,54 @@ function disegnaListino() {
   '</div>';
   html += '</div>';
 
+  // ── i prodotti, con il prezzo che vince sulla voce generica ──
+  html += '<div class="scheda"><div class="titolo-sezione">Prodotti</div>';
+  html += '<p class="meta">«Concime» è una categoria, «Nitrophoska Gold» è quello che hai comprato. ' +
+    'Quando un prodotto ha un prezzo suo, quello vince sulla voce generica; se non ce l\'ha, ' +
+    'vale ancora la voce.</p>';
+  html += '<table class="elenco"><thead><tr><th>Prodotto</th><th>Genere</th>' +
+    '<th class="num">Prezzo</th><th>A corpo</th><th></th></tr></thead><tbody>';
+  if (!LISTINO.prodotti.length) {
+    html += '<tr><td colspan="5"><div class="vuoto-elenco">Nessun prodotto. ' +
+      'Esporta i prodotti dal telefono e importali qui sotto.</div></td></tr>';
+  }
+  [...LISTINO.prodotti]
+    .sort((a, b) => (a.genere + a.nome).localeCompare(b.genere + b.nome, 'it'))
+    .forEach(pr => {
+      const id = perOnclick(pr.prodottoID);
+      html += '<tr>' +
+        '<td><input type="text" value="' + perValore(pr.nome) +
+          '" oninput="modificaProdotto(\'' + id + '\', \'nome\', this.value)"></td>' +
+        '<td class="meta">' + perValore(pr.genere || '—') + '</td>' +
+        '<td class="num"><input type="text" class="prezzo' + (pr.prezzo === '' || pr.prezzo == null ? ' vuoto' : '') +
+          '" value="' + perValore(formattaQuantita(pr.prezzo)) +
+          '" oninput="modificaProdotto(\'' + id + '\', \'prezzo\', this.value)"></td>' +
+        '<td><input type="checkbox" style="width:auto"' + (pr.aCorpo ? ' checked' : '') +
+          ' onchange="prodottoACorpo(\'' + id + '\', this.checked)"></td>' +
+        '<td class="num"><button class="pericolo piccola" onclick="eliminaProdotto(\'' + id + '\')">✕</button></td>' +
+      '</tr>';
+    });
+  html += '</tbody></table>';
+  html += '<div class="bottoni">' +
+    '<button class="secondaria" onclick="importaProdotti()">Importa i prodotti dal telefono</button>' +
+    '<button class="principale" onclick="salvaListino()">Salva il listino</button>' +
+  '</div></div>';
+
+  // Quelli visti nei rapportini che non hanno ancora un prezzo: senza questo
+  // elenco te ne accorgeresti solo da un totale più basso del dovuto.
+  const senzaPrezzo = prodottiMancanti();
+  if (senzaPrezzo.length) {
+    html += '<div class="scheda"><div class="titolo-sezione">Prodotti usati e non in listino</div>';
+    html += '<p class="meta">Finché non hanno un prezzo, queste righe valgono quello della voce generica.</p>';
+    html += '<table class="elenco"><tbody>';
+    senzaPrezzo.forEach(pr => {
+      html += '<tr><td>' + perValore(pr.nome) + '</td><td class="meta">' + perValore(pr.unita) + '</td>' +
+        '<td class="num"><button class="secondaria piccola" onclick="aggiungiProdotto(\'' +
+          perOnclick(pr.prodottoID) + '\', \'' + perOnclick(pr.nome) + '\', \'\')">Mettilo in listino</button></td></tr>';
+    });
+    html += '</tbody></table></div>';
+  }
+
   const nonInListino = vociMancanti();
   if (nonInListino.length) {
     html += '<div class="scheda"><div class="titolo-sezione">Voci viste nei rapportini e non in listino</div>';
@@ -2579,6 +2683,81 @@ function disegnaListino() {
 
 // Le voci del conto nascono sul telefono, e il listino dell'ufficio parte vuoto:
 // invece di farle riscrivere a mano, si prendono da quello che è già arrivato.
+// I prodotti visti nei rapportini che non hanno ancora un prezzo qui. Senza
+// questo elenco te ne accorgeresti solo guardando un totale più basso del dovuto.
+function prodottiMancanti() {
+  const visti = new Map();
+  const daDoc = d => (d.operazioni || []).forEach(o => {
+    if (!o.prodottoID || prodottoInListino(o.prodottoID) || visti.has(o.prodottoID)) return;
+    visti.set(o.prodottoID, { prodottoID: o.prodottoID, nome: o.prodotto || '', unita: o.unita || '' });
+  });
+  ARRIVI.forEach(a => daDoc(a.doc));
+  ARCHIVIO.forEach(l => { if (l.rapportino) daDoc(l.rapportino); });
+  return [...visti.values()];
+}
+
+function aggiungiProdotto(prodottoID, nome, genere) {
+  if (prodottoInListino(prodottoID)) return;
+  LISTINO.prodotti.push(sistemaProdotto({ prodottoID, nome, genere, prezzo: '', aCorpo: false }));
+  LISTINO_DA_SALVARE = true;
+  disegnaListino();
+}
+
+function modificaProdotto(prodottoID, campo, valore) {
+  const p = prodottoInListino(prodottoID);
+  if (!p) return;
+  p[campo] = campo === 'prezzo' ? (valore.trim() === '' ? '' : Number(valore.replace(',', '.'))) : valore;
+  LISTINO_DA_SALVARE = true;
+  const avviso = document.getElementById('listino-da-salvare');
+  if (avviso) avviso.style.display = 'block';
+}
+
+function prodottoACorpo(prodottoID, si) {
+  const p = prodottoInListino(prodottoID);
+  if (!p) return;
+  p.aCorpo = !!si;
+  LISTINO_DA_SALVARE = true;
+  disegnaListino();
+}
+
+function eliminaProdotto(prodottoID) {
+  const p = prodottoInListino(prodottoID);
+  if (!p) return;
+  if (!confirm('Togliere «' + (p.nome || 'senza nome') + '» dal listino? I lavori già archiviati tengono il prezzo che avevano.')) return;
+  LISTINO.prodotti = LISTINO.prodotti.filter(x => x.prodottoID !== prodottoID);
+  LISTINO_DA_SALVARE = true;
+  disegnaListino();
+}
+
+// Stessa regola dell'anagrafica: arrivano i prodotti nuovi, e quelli che ci sono
+// già tengono il prezzo. Un'importazione che sovrascrive cancellerebbe il listino
+// a ogni giro, ed è esattamente il lavoro che nessuno rifà volentieri.
+async function importaProdotti() {
+  let doc;
+  try {
+    doc = JSON.parse(await leggiTesto(CARTELLA, FILE_PRODOTTI));
+  } catch (e) {
+    avvisa('Non trovo ' + FILE_PRODOTTI + ' nella cartella: esportalo da ⚙️ Dati sul telefono', true);
+    return;
+  }
+  if (!doc || doc.tipo !== 'prodotti' || !Array.isArray(doc.prodotti)) {
+    avvisa('Quel file non è un elenco prodotti del telefono', true);
+    return;
+  }
+  const nuovi = doc.prodotti.filter(p => p.id && !prodottoInListino(p.id));
+  if (!nuovi.length) {
+    avvisa('Nessun prodotto nuovo: ci sono già tutti');
+    return;
+  }
+  LISTINO.prodotti = LISTINO.prodotti.concat(nuovi.map(p =>
+    sistemaProdotto({ prodottoID: p.id, nome: p.nome, genere: p.genere, prezzo: '', aCorpo: false })));
+  LISTINO_DA_SALVARE = true;
+  if (!(await salvaListino())) return;
+  avvisa(nuovi.length === 1
+    ? 'Un prodotto importato: mettigli il prezzo'
+    : nuovi.length + ' prodotti importati: mettigli il prezzo');
+}
+
 function vociMancanti() {
   const viste = new Map();
   const daDoc = d => (d.righe || []).forEach(r => {

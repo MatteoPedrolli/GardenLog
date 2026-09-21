@@ -32,6 +32,7 @@ La cartella, dopo un po' di lavoro, ha questa forma:
     lavagna.json                   ← la pianificazione
     agenda.json                    ← ci scrive l'ufficio, il telefono la legge
     anagrafica-dal-telefono.json   ← il file che il telefono esporta, da importare
+    prodotti-dal-telefono.json     ← concimi, sementi e fitofarmaci, da importare
 ```
 
 Le prenotazioni depositate in `appuntamenti/` compaiono **da sole** sulla lavagna:

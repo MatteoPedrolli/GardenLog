@@ -527,6 +527,29 @@ try {
   ok('il nome del prodotto viaggia col documento, non solo il codice',
     doc.operazioni.some(o => o.prodotto === 'Nitrophoska'),
     JSON.stringify(doc.operazioni.map(o => o.prodotto)));
+  // La riga del conto porta `chiave` = l'identificativo dell'operazione, ma
+  // l'operazione non portava il suo: la giunzione era monca, e l'ufficio vedeva
+  // «Concime 25 kg» senza sapere quale. Due concimi diversi si fatturavano uguale.
+  const conConcime = doc.operazioni.find(o => o.prodotto === 'Nitrophoska');
+  ok('l\'operazione porta il suo identificativo, che è la chiave della riga',
+    !!conConcime.id && doc.righe.some(r => r.chiave === conConcime.id),
+    conConcime.id + ' · chiavi: ' + doc.righe.map(r => r.chiave).join(', '));
+  ok('e il riferimento al prodotto, che serve al listino',
+    !!conConcime.prodottoID &&
+    conConcime.prodottoID === await page.evaluate(() => DB.concimi[0].ConcimeID),
+    conConcime.prodottoID);
+
+  // ── i prodotti che il telefono passa all'ufficio ──
+  // Stessa divisione dei clienti: il campo sa cosa esiste, l'ufficio quanto
+  // costa. L'archivio resta qui perché in giardino senza rete devi poter
+  // scegliere un concime, e N% e K% servono al riquadro del prato.
+  const prodotti = await page.evaluate(() => prodottiPerUfficio());
+  ok('l\'elenco prodotti porta concimi, sementi e fitofarmaci',
+    prodotti.tipo === 'prodotti' && prodotti.prodotti.length >= 1 &&
+    prodotti.prodotti.some(p => p.genere === 'concime'),
+    JSON.stringify(prodotti.prodotti.map(p => p.genere)));
+  ok('con identificativo e nome, e nessun prezzo',
+    prodotti.prodotti.every(p => p.id && p.nome && p.prezzo === undefined));
   ok('le righe del conto portano le quantità', doc.righe.length === 4);
   // Il documento porta le quantità e non i prezzi: il listino sta in ufficio.
   ok('nessun prezzo viaggia più dal cantiere',
@@ -966,6 +989,80 @@ try {
   ok('e dice quante ne ha lasciate fuori', conto.escluse >= 1, JSON.stringify(conto));
   ok('l\'avvertenza sul totale incompleto è a schermo',
     (await pagU.textContent('#pagina-lavoro')).includes('fuori dal totale'));
+
+  // ── il prezzo per prodotto ──
+  // «Concime» è una categoria, «Nitrophoska» è quello che hai comprato: due
+  // concimi diversi costano diverso, e con la sola voce generica si fatturavano
+  // uguale. La voce resta la rete per chi non ha ancora un prezzo suo.
+  const perProdotto = await pagU.evaluate(() => {
+    const doc = ARRIVI[0] ? ARRIVI[0].doc : LAVORO.doc;
+    const op = doc.operazioni.find(o => o.prodottoID);
+    const riga = op && doc.righe.find(r => r.chiave === op.id);
+    // Senza la giunzione le verifiche devono fallire e dirlo, non far morire il
+    // giro con un errore che non spiega niente.
+    if (!op || !riga) return { monco: true, soloVoce: {}, prezzo: null, voce: '', nome: '', id: '' };
+    // Prima: solo la voce generica.
+    importaVoce(riga.voceID, 'Concime', 'kg');
+    modificaVoce(riga.voceID, 'prezzo', '2');
+    apriLavoro(doc.id);
+    const conVoce = LAVORO.righe.find(r => r.chiave === op.id);
+    const soloVoce = { prezzo: conVoce.prezzo, prodotto: conVoce.prodotto, voce: conVoce.voce };
+    // Poi: il prodotto ha il suo.
+    aggiungiProdotto(op.prodottoID, op.prodotto, 'concime');
+    modificaProdotto(op.prodottoID, 'prezzo', '3,5');
+    apriLavoro(doc.id);
+    const conProdotto = LAVORO.righe.find(r => r.chiave === op.id);
+    return { soloVoce, prezzo: conProdotto.prezzo, prodotto: conProdotto.prodotto,
+      voce: conProdotto.voce, nome: op.prodotto, id: op.prodottoID };
+  });
+  ok('la riga del conto si aggancia alla sua operazione',
+    !perProdotto.monco, 'manca la giunzione fra riga e operazione');
+  ok('senza prezzo suo, il prodotto prende quello della voce generica',
+    perProdotto.soloVoce.prezzo === 2, JSON.stringify(perProdotto.soloVoce));
+  ok('ma la riga dice già di quale prodotto si tratta',
+    perProdotto.soloVoce.prodotto === 'Nitrophoska', perProdotto.soloVoce.prodotto);
+  ok('col suo prezzo in listino, il prodotto vince sulla voce',
+    perProdotto.prezzo === 3.5, String(perProdotto.prezzo));
+  // La voce resta quella generica: il nome commerciale non deve finire sul
+  // foglio che esce, e il foglio stampa `voce`.
+  ok('e la voce resta generica, perché è quella che va al cliente',
+    perProdotto.voce === 'Concime', perProdotto.voce);
+  ok('in ufficio invece si legge voce e prodotto insieme',
+    (await pagU.textContent('#pagina-lavoro')).includes('Concime — Nitrophoska'));
+
+  // I fitosanitari si fatturano a corpo: nell'elenco valgono 1, e i litri
+  // restano sull'operazione dove servono al registro dei trattamenti.
+  ok('un prodotto a corpo si conta una volta, non a misura',
+    await pagU.evaluate(id => {
+      if (!id) return false;
+      const doc = ARRIVI[0] ? ARRIVI[0].doc : LAVORO.doc;
+      prodottoACorpo(id, true);
+      apriLavoro(doc.id);
+      const r = LAVORO.righe.find(x => x.prodottoID === id);
+      const op = doc.operazioni.find(o => o.prodottoID === id);
+      prodottoACorpo(id, false);
+      apriLavoro(doc.id);
+      return r.quantita === 1 && r.unita === '' && op.quantita !== 1;
+    }, perProdotto.id));
+
+  // Stessa regola dell'anagrafica: arrivano i nuovi, i prezzi già messi restano.
+  ok('importando i prodotti dal telefono i prezzi già messi non si perdono',
+    await pagU.evaluate(async (dati) => {
+      await scriviTesto(window.RADICE, 'prodotti-dal-telefono.json', JSON.stringify(dati));
+      if (!dati.prodotti[0].id || !prodottoInListino(dati.prodotti[0].id)) return false;
+      const prima = prodottoInListino(dati.prodotti[0].id).prezzo;
+      await importaProdotti();
+      const dopo = prodottoInListino(dati.prodotti[0].id);
+      return dopo.prezzo === prima && LISTINO.prodotti.some(p => p.prodottoID === 'nuovo-1');
+    }, { tipo: 'prodotti', versione: 1, prodotti: [
+      { id: perProdotto.id, genere: 'concime', nome: perProdotto.nome },
+      { id: 'nuovo-1', genere: 'semente', nome: 'Loietto da rigenerazione' },
+    ] }));
+  ok('e quelli nuovi entrano senza prezzo, da mettere',
+    await pagU.evaluate(() => !!prodottoInListino('nuovo-1') && prodottoInListino('nuovo-1').prezzo === ''));
+  // importaProdotti scrive il listino su file: qui lo rimetto «da salvare»
+  // com'era, o la prova più avanti non troverebbe più niente da salvare.
+  await pagU.evaluate(() => { LISTINO_DA_SALVARE = true; });
 
   // un prezzo scritto a mano è una decisione, e non va risovrascritta
   await pagU.evaluate(() => {
