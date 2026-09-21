@@ -494,3 +494,6 @@ ha continuato a servire la versione di tre mesi prima.
   da zero cancella quello che non vede. È già successo.
 - Le pagine che sono testo nudo, non schede, devono darsi il margine laterale
   da sole: `#content` non ne ha, e gli importi finiscono oltre il bordo.
+- Lo stesso vale nei pannelli: il margine lo dà `.drawer-body`, non `.drawer`.
+  Quello che si vede va lì dentro, o campi e bottoni arrivano a filo dello
+  schermo. È già successo al pannello della prenotazione.

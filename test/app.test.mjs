@@ -306,6 +306,26 @@ try {
   await page.waitForTimeout(200);
   ok('il pannello della prenotazione si apre',
     await page.isVisible('#overlay-prenotazione .drawer'));
+  // Il margine laterale lo dà .drawer-body: .drawer non ne ha, e un pannello che
+  // se lo dimentica manda campi e bottoni a filo dello schermo. È già successo.
+  ok('e i campi non arrivano al bordo dello schermo',
+    await page.evaluate(() => {
+      const pannello = document.querySelector('#overlay-prenotazione .drawer');
+      const bordo = pannello.getBoundingClientRect();
+      return [...pannello.querySelectorAll('.form-control, .btn')].every(el => {
+        const r = el.getBoundingClientRect();
+        return r.left - bordo.left >= 12 && bordo.right - r.right >= 12;
+      });
+    }));
+  // La stessa regola per tutti i pannelli, detta una volta: quello che si vede
+  // sta dentro .drawer-body, o il margine non ce l'ha.
+  ok('e vale per ogni pannello: niente campi fuori da drawer-body',
+    await page.evaluate(() => [...document.querySelectorAll('.drawer')]
+      .every(d => ![...d.children].some(figlio =>
+        figlio.matches('.form-control, .btn, .form-group, .form-row')))),
+    await page.evaluate(() => [...document.querySelectorAll('.drawer')]
+      .filter(d => [...d.children].some(f => f.matches('.form-control, .btn, .form-group, .form-row')))
+      .map(d => d.parentElement.id).join(', ')));
   await page.fill('#f-pren-cliente-search', 'Mario');
   await page.waitForTimeout(200);
   await page.click('#pren-cliente-suggestions .suggestion-item');
