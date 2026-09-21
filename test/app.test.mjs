@@ -1164,6 +1164,79 @@ try {
     (await pagU.evaluate(() => { disegnaLavagna(); return document.getElementById('pagina-lavagna').innerHTML; }))
       .includes('cartellino confermato'));
 
+  // ── la spunta: fatto, eseguito ──
+  // Fatto è un interruttore sopra matita/confermato, non un terzo stato: così
+  // togliendo la spunta il lavoro ritrova da sé dov'era, senza che nessuno debba
+  // ricordarselo. E «confermato» continua a voler dire che il cliente lo sa.
+  const spuntato = await pagU.evaluate(async id => {
+    await spuntaFatto(id);
+    const l = LAVAGNA.lavori.find(x => x.id === id);
+    disegnaLavagna();
+    return { fatto: l.fatto, stato: l.stato,
+      html: document.getElementById('pagina-lavagna').innerHTML };
+  }, idLavoro);
+  ok('la spunta segna il lavoro come fatto', spuntato.fatto === true);
+  ok('e non cancella se era a matita o confermato', spuntato.stato === 'confermato', spuntato.stato);
+  ok('il cartellino diventa blu', spuntato.html.includes('cartellino confermato fatto'));
+  ok('e lo dice anche a parole, non solo col colore',
+    spuntato.html.includes('stato-cart">fatto'));
+  // Spostare una cosa già avvenuta non vuol dire niente: prima si toglie la spunta.
+  ok('un lavoro fatto non si trascina', spuntato.html.includes('draggable="false"'));
+
+  const ritornato = await pagU.evaluate(async id => {
+    // Il clic sul cartellino non deve fare niente finché è fatto.
+    await cambiaPenna(id);
+    const dopoClic = LAVAGNA.lavori.find(x => x.id === id).stato;
+    await spuntaFatto(id);
+    const l = LAVAGNA.lavori.find(x => x.id === id);
+    const suFile = JSON.parse(await leggiTesto(window.RADICE, 'lavagna.json'))
+      .lavori.find(x => x.id === id);
+    return { dopoClic, fatto: l.fatto, stato: l.stato, suFileFatto: suFile.fatto };
+  }, idLavoro);
+  ok('finché è fatto il clic non lo rimette a matita', ritornato.dopoClic === 'confermato');
+  ok('togliendo la spunta torna confermato, com\'era', 
+    ritornato.fatto === false && ritornato.stato === 'confermato', JSON.stringify(ritornato));
+  ok('e la spunta finisce su file, non solo a schermo', ritornato.suFileFatto === false);
+  // Scriverla non basta: va anche riletta. Senza il campo in sistemaLavoro la
+  // spunta spariva al primo Ricontrolla, e nessuno se ne accorgeva.
+  ok('e si rilegge dalla cartella, invece di sparire al Ricontrolla',
+    await pagU.evaluate(async id => {
+      await spuntaFatto(id);
+      await ricarica();
+      const l = LAVAGNA.lavori.find(x => x.id === id);
+      const tornato = !!(l && l.fatto);
+      await spuntaFatto(id);   // rimesso com'era per le prove che seguono
+      return tornato;
+    }, idLavoro));
+
+  // ── le colonne non si pestano i piedi ──
+  // La colonna del giorno si dimensionava sul contenuto e sbordava su quella
+  // dopo: le ore della mattina finivano sopra il «MATTINA» del giorno accanto.
+  // Si vedeva solo a occhio, quindi qui si misura.
+  await pagU.setViewportSize({ width: 1280, height: 800 });
+  const sbordo = await pagU.evaluate(() => {
+    // Un cartellino con dentro del testo vero, in una colonna stretta: su una
+    // lavagna quasi vuota lo sbordo non si manifesta e la prova non prova niente.
+    const finto = sistemaLavoro({ cliente: 'Amministrazione Condominio Tigli',
+      luogo: 'Trento', note: 'Siepe perimetrale e potatura del grande tiglio', ore: 6,
+      giorno: LAVAGNA.lavori.find(l => l.giorno).giorno, mezza: 'pomeriggio', stato: 'confermato' });
+    LAVAGNA.lavori.push(finto);
+    disegnaLavagna();
+    const fuori = Math.max(0, ...[...document.querySelectorAll('#pagina-lavagna .giorno')].map(g => {
+      const b = g.getBoundingClientRect();
+      return Math.max(0, ...[...g.querySelectorAll('*')].map(e => e.getBoundingClientRect().right - b.right));
+    }));
+    const larga = document.querySelector('#pagina-lavagna .giorno').getBoundingClientRect().width;
+    LAVAGNA.lavori = LAVAGNA.lavori.filter(l => l !== finto);
+    disegnaLavagna();
+    return { fuori, larga: Math.round(larga) };
+  });
+  ok('nessuna colonna sborda su quella accanto',
+    Math.round(sbordo.fuori) === 0, sbordo.fuori + 'px, colonna ' + sbordo.larga + 'px');
+  ok('e la prova è stata fatta su colonne davvero strette',
+    sbordo.larga < 130, sbordo.larga + 'px');
+  await pagU.setViewportSize({ width: 1280, height: 720 });
+
   // ── niente si muove da solo cambiando settimana ──
   await pagU.evaluate(() => { cambiaSettimana(1); });
   ok('cambiando settimana il cartellino non si porta dietro',

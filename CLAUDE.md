@@ -327,9 +327,24 @@ sposterebbero da soli cambiando settimana — che è esattamente quello che non 
 succedere.
 
 **Matita e penna sono due stati, non due colori.** `matita` vuol dire previsto e
-il cliente non lo sa; `confermato` vuol dire che il cliente sa che arrivate, e si
-vede evidenziato. Spostare o togliere un confermato chiede conferma: vuol dire che
-qualcuno deve telefonare, e non può succedere per un trascinamento distratto.
+il cliente non lo sa; `confermato` vuol dire che il cliente sa che arrivate.
+Spostare o togliere un confermato chiede conferma: vuol dire che qualcuno deve
+telefonare, e non può succedere per un trascinamento distratto.
+
+**Grigio, verde, blu — e la parola accanto.** Grigio previsto, verde confermato,
+blu fatto. Il colore da solo non basta: si perde a chi distingue male verde e
+grigio, e sulla carta. Ogni cartellino dice anche a parole dove sta.
+
+**`fatto` è un interruttore, non un terzo stato.** Sta sopra matita e confermato,
+così togliendo la spunta il lavoro ritrova da sé dov'era, e «confermato» continua
+a voler dire che il cliente lo sa. Si mette **a mano**, con la sua casella, e non
+arriva dal rapportino anche se l'informazione lì ci sarebbe: su questa lavagna
+niente si muove da solo, e un cartellino che diventa blu perché è comparso un file
+in una cartella è esattamente quello che quella regola vieta. Chi pianifica sa di
+esserci stato prima che il rapportino arrivi, e a volte il rapportino non arriva.
+
+Un lavoro fatto **non si trascina e non cambia penna**: spostare una cosa già
+avvenuta non vuol dire niente. Prima si toglie la spunta.
 
 **Un appuntamento si fissa in una settimana, non in un giorno.** Il giorno lo
 decide chi pianifica trascinando il cartellino; prometterlo prima vorrebbe dire
@@ -511,6 +526,21 @@ Dopo aver pubblicato, controllare sempre l'esito della pubblicazione su GitHub
 prima di dire che è in linea: una volta è fallita per un timeout loro e il sito
 ha continuato a servire la versione di tre mesi prima.
 
+## La cromia: carta e inchiostro
+
+**L'app non ha un colore suo: ce l'hanno gli stati.** Era tutta verde, e sulla
+lavagna il verde di «confermato» finiva sopra un banner verde, una pastiglia verde
+e un bottone verde: smetteva di essere un'informazione e diventava arredamento.
+Le variabili si chiamano `--inchiostro`, `--ocra`, `--velo`, `--foglio`, e non
+`--green-*`, perché un nome che mente costa più di una rinominazione.
+
+L'accento sta nella **metà calda** della ruota apposta, lontano sia dal verde sia
+dal blu. Chi un giorno volesse rifare la cromia ha questo vincolo: gli stati della
+lavagna vengono prima.
+
+Le due app usano la stessa palette. I verdi rimasti sul telefono — la pastiglia
+del prato, quella della siepe — non sono cromia: dicono di che pianta si parla.
+
 ## Cose da sapere prima di metterci mano
 
 - L'interfaccia usa `onclick="funzione()"`, quindi le funzioni devono restare
@@ -536,6 +566,10 @@ ha continuato a servire la versione di tre mesi prima.
   da zero cancella quello che non vede. È già successo.
 - Le pagine che sono testo nudo, non schede, devono darsi il margine laterale
   da sole: `#content` non ne ha, e gli importi finiscono oltre il bordo.
+- Una colonna della lavagna cresce fino al suo contenuto più largo e sborda su
+  quella accanto: è già successo con la fila `−/1 mezza/+`, che non andava a capo
+  e spingeva le ore sopra il «MATTINA» del giorno dopo. Si vede solo a occhio, per
+  questo il giro di prova **misura** lo sbordo su una finestra stretta.
 - Lo stesso vale nei pannelli: il margine lo dà `.drawer-body`, non `.drawer`.
   Quello che si vede va lì dentro, o campi e bottoni arrivano a filo dello
   schermo. È già successo al pannello della prenotazione.

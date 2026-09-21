@@ -10,28 +10,34 @@
 <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@400;600;700&family=DM+Sans:wght@300;400;500;600&display=swap" rel="stylesheet">
 <style>
 :root {
-  --green-deep: #1a3a1a;
-  --green-mid: #2d6a2d;
-  --green-light: #4a9e4a;
-  --green-pale: #d4edda;
-  --green-mist: #eef7ee;
-  --earth: #8B6914;
-  --earth-light: #f5ecd7;
-  --cream: #faf8f3;
+  /* ── CARTA E INCHIOSTRO ──
+     L'app non ha un colore suo: ce l'hanno gli stati. Serve per la lavagna, dove
+     grigio, verde e blu dicono «a matita», «confermato» e «fatto» — sopra un'app
+     verde il verde smetteva di essere un'informazione e diventava arredamento.
+     L'accento sta nella metà calda della ruota apposta, lontano da tutti e due. */
+  --inchiostro: #24211c;
+  --inchiostro-tenue: #4a443a;
+  --ocra: #a8894a;
+  --velo: #e8e1d2;
+  --foglio: #f3efe4;
+  --earth: #9a6b1f;
+  --earth-light: #f6ecd8;
+  --cream: #faf7f0;
   --white: #ffffff;
-  --text: #1a1a1a;
-  --text-mid: #444;
-  --text-light: #888;
-  --border: #dde8dd;
-  --red: #c0392b;
-  --yellow: #e67e22;
+  --text: #1f1c17;
+  --text-mid: #4a443a;
+  --text-light: #8a8175;
+  --border: #e2dccd;
+  --red: #b03a2e;
+  --yellow: #c87f0a;
   --radius: 14px;
   --radius-sm: 9px;
-  --shadow: 0 2px 14px rgba(26,58,26,0.08);
+  --shadow: 0 2px 14px rgba(36,33,28,0.09);
   --font-display: 'Playfair Display', serif;
   --font-body: 'DM Sans', sans-serif;
   --barra-l: 240px;
 }
+
 
 *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
@@ -51,7 +57,7 @@ body {
 #barra {
   width: var(--barra-l);
   flex-shrink: 0;
-  background: var(--green-deep);
+  background: var(--inchiostro);
   color: var(--white);
   display: flex; flex-direction: column;
   position: sticky; top: 0; height: 100dvh;
@@ -73,9 +79,9 @@ body {
   border-left: 3px solid transparent; transition: all 0.15s; width: 100%;
 }
 .voce-barra:hover { background: rgba(255,255,255,0.07); color: var(--white); }
-.voce-barra.attiva { background: rgba(255,255,255,0.12); color: var(--white); border-left-color: var(--green-light); }
+.voce-barra.attiva { background: rgba(255,255,255,0.12); color: var(--white); border-left-color: var(--ocra); }
 .voce-barra .pallino {
-  margin-left: auto; background: var(--green-light); color: var(--green-deep);
+  margin-left: auto; background: var(--ocra); color: var(--inchiostro);
   font-size: 0.7rem; font-weight: 600; min-width: 21px; height: 21px;
   border-radius: 11px; display: none; align-items: center; justify-content: center; padding: 0 6px;
 }
@@ -104,7 +110,7 @@ p.sottotitolo { color: var(--text-light); font-size: 0.88rem; margin-bottom: 22p
   box-shadow: var(--shadow);
 }
 .scheda.cliccabile { cursor: pointer; transition: all 0.15s; }
-.scheda.cliccabile:hover { border-color: var(--green-light); transform: translateY(-1px); }
+.scheda.cliccabile:hover { border-color: var(--ocra); transform: translateY(-1px); }
 
 .riga-scheda { display: flex; align-items: baseline; gap: 12px; flex-wrap: wrap; }
 .nome-cliente { font-family: var(--font-display); font-size: 1.15rem; font-weight: 600; }
@@ -114,9 +120,9 @@ p.sottotitolo { color: var(--text-light); font-size: 0.88rem; margin-bottom: 22p
   font-size: 0.7rem; font-weight: 600; text-transform: uppercase; letter-spacing: 0.05em;
   padding: 3px 9px; border-radius: 20px; white-space: nowrap;
 }
-.etichetta.nuovo { background: var(--green-pale); color: var(--green-deep); }
+.etichetta.nuovo { background: var(--velo); color: var(--inchiostro); }
 .etichetta.corretto { background: #fdebd0; color: #9c5700; }
-.etichetta.fatturato { background: var(--green-mist); color: var(--green-mid); }
+.etichetta.fatturato { background: var(--foglio); color: var(--inchiostro-tenue); }
 .etichetta.da-fatturare { background: var(--earth-light); color: var(--earth); }
 
 button.principale, button.secondaria, button.pericolo {
@@ -124,10 +130,10 @@ button.principale, button.secondaria, button.pericolo {
   padding: 10px 18px; border-radius: var(--radius-sm); cursor: pointer;
   border: 1px solid transparent; transition: all 0.15s;
 }
-button.principale { background: var(--green-mid); color: var(--white); }
-button.principale:hover { background: var(--green-deep); }
+button.principale { background: var(--inchiostro-tenue); color: var(--white); }
+button.principale:hover { background: var(--inchiostro); }
 button.secondaria { background: var(--white); color: var(--text-mid); border-color: var(--border); }
-button.secondaria:hover { border-color: var(--green-light); color: var(--green-mid); }
+button.secondaria:hover { border-color: var(--ocra); color: var(--inchiostro-tenue); }
 button.pericolo { background: var(--white); color: var(--red); border-color: #f2d4d0; }
 button.piccola { padding: 6px 12px; font-size: 0.82rem; }
 .bottoni { display: flex; gap: 10px; flex-wrap: wrap; margin-top: 18px; }
@@ -151,7 +157,7 @@ input[type=text], input[type=number], input[type=search], textarea, select {
   border: 1px solid var(--border); border-radius: var(--radius-sm);
   padding: 8px 10px; background: var(--white); width: 100%;
 }
-input:focus, textarea:focus, select:focus { outline: none; border-color: var(--green-light); }
+input:focus, textarea:focus, select:focus { outline: none; border-color: var(--ocra); }
 input.prezzo, input.quantita { width: 96px; text-align: right; }
 input.vuoto { background: #fffdf5; border-color: #ecdca8; }
 
@@ -174,7 +180,7 @@ input.vuoto { background: #fffdf5; border-color: #ecdca8; }
 
 #avviso {
   position: fixed; bottom: 22px; left: 50%; transform: translateX(-50%) translateY(10px);
-  background: var(--green-deep); color: var(--white); padding: 12px 22px;
+  background: var(--inchiostro); color: var(--white); padding: 12px 22px;
   border-radius: 24px; font-size: 0.9rem; opacity: 0; pointer-events: none;
   transition: all 0.25s; z-index: 100; max-width: 70vw; text-align: center;
 }
@@ -200,7 +206,7 @@ input.vuoto { background: #fffdf5; border-color: #ecdca8; }
   border: 1px solid var(--border); background: var(--white); color: var(--text);
   font-size: 1rem; display: grid; place-items: center; font-family: var(--font-body);
 }
-.freccia-sett:hover { border-color: var(--green-light); color: var(--green-mid); }
+.freccia-sett:hover { border-color: var(--ocra); color: var(--inchiostro-tenue); }
 
 .legenda-lavagna {
   display: flex; gap: 18px; flex-wrap: wrap; font-size: 0.78rem; color: var(--text-light);
@@ -208,8 +214,9 @@ input.vuoto { background: #fffdf5; border-color: #ecdca8; }
 }
 .legenda-lavagna b { font-weight: 600; color: var(--text); }
 .campione { display: inline-block; width: 22px; height: 10px; border-radius: 2px; vertical-align: middle; margin-right: 6px; }
-.campione.matita { border: 1px dashed #8a9280; }
-.campione.penna { background: #fbe28c; border: 1px solid #e4c44f; }
+.campione.matita { border: 1px dashed #9aa0a6; }
+.campione.penna { background: #f1faf3; border: 1px solid #2f8f4e; }
+.campione.fatto { background: #eef6fb; border: 1px solid #2a6f9e; }
 .campione.bloccato { background: var(--earth-light); border: 1px solid var(--earth); }
 
 .tavolo { display: flex; gap: 14px; align-items: flex-start; }
@@ -224,7 +231,7 @@ input.vuoto { background: #fffdf5; border-color: #ecdca8; }
   border: 1px solid var(--border); display: flex; flex-direction: column; gap: 8px;
   min-height: 160px;
 }
-.coda-lista.sopra { border-color: var(--green-light); background: var(--green-mist); }
+.coda-lista.sopra { border-color: var(--ocra); background: var(--foglio); }
 .rimasti {
   display: flex; align-items: center; gap: 10px; margin-bottom: 8px; padding: 9px 11px;
   border-radius: var(--radius-sm); background: var(--earth-light);
@@ -244,11 +251,22 @@ input.vuoto { background: #fffdf5; border-color: #ecdca8; }
 .giorni { flex: 1; min-width: 0; display: grid; gap: 10px;
   grid-template-columns: repeat(6, minmax(0, 1fr));
   grid-template-rows: auto auto auto auto; align-items: start; }
-.giorno { display: grid; grid-row: span 4; grid-template-rows: subgrid; gap: 6px; }
+/* Le colonne si pestavano i piedi: le ore della mattina finivano sopra il
+   «MATTINA» del giorno accanto e il totale sopra «giornata». La colonna cresceva
+   fino al contenuto più largo, e il contenuto più largo era la fila −/1 mezza/+
+   dentro il cartellino, che non andava a capo (vedi .larghezza-cart, 17px dei 20
+   sbordati; gli altri 3 erano una parola lunga senza overflow-wrap).
+   Queste due righe non sono la cura — misurandole non spostano un pixel — ma
+   sono l'igiene di una griglia dentro una griglia, e senza di loro la prossima
+   cosa che non sa stringersi ricomincia da capo. */
+.giorno {
+  display: grid; grid-row: span 4; grid-template-rows: subgrid;
+  grid-template-columns: minmax(0, 1fr); gap: 6px; min-width: 0;
+}
 .giorno-testa { display: flex; align-items: baseline; gap: 6px; }
 .giorno-nome { font-size: 0.82rem; font-weight: 600; }
 .giorno-data { font-size: 0.72rem; color: var(--text-light); }
-.giorno.oggi .giorno-nome { color: var(--green-mid); }
+.giorno.oggi .giorno-nome { color: var(--inchiostro-tenue); }
 .giorno.sabato .giorno-nome { color: var(--text-light); font-weight: 500; }
 .mezza-etichetta {
   font-size: 0.64rem; text-transform: uppercase; letter-spacing: 0.06em;
@@ -258,9 +276,10 @@ input.vuoto { background: #fffdf5; border-color: #ecdca8; }
 .mezza-corpo {
   padding: 6px; border-radius: var(--radius-sm); background: var(--white);
   border: 1px solid var(--border); display: flex; flex-direction: column; gap: 6px;
-  min-height: 86px;
+  min-height: 86px; min-width: 0;
 }
-.mezza-corpo.sopra { border-color: var(--green-light); background: var(--green-mist); }
+.mezza-corpo.sopra { border-color: var(--ocra); background: var(--foglio); }
+.mezza { min-width: 0; }
 .giorno-piede {
   align-self: end; font-size: 0.74rem; color: var(--text-light);
   display: flex; justify-content: space-between; border-top: 1px solid var(--border); padding-top: 5px;
@@ -270,17 +289,47 @@ input.vuoto { background: #fffdf5; border-color: #ecdca8; }
 .cartellino {
   background: var(--cream); border: 1px solid var(--border); border-radius: var(--radius-sm);
   padding: 8px 9px; cursor: grab; display: flex; flex-direction: column; gap: 2px;
+  min-width: 0; overflow-wrap: anywhere;
 }
 .cartellino:active { cursor: grabbing; }
+/* ── I TRE STATI ──
+   Grigio previsto, verde confermato, blu fatto. Il colore non basta da solo — si
+   perde a chi distingue male verde e grigio, e sulla carta — quindi ogni
+   cartellino dice anche a parole dove sta, in .stato-cart.
+   Nessuno dei tre usa il bordo sinistro: quello è di «bloccato», e un lavoro
+   confermato che non si può fare deve poter dire tutte e due le cose. */
 /* A matita: previsto, il cliente non lo sa ancora. Il tratteggio è la matita. */
-.cartellino.matita { border-style: dashed; border-color: #8a9280; background: transparent; }
+.cartellino.matita { border-style: dashed; border-color: #9aa0a6; background: transparent; }
 .cartellino.matita .cliente-cart { color: var(--text-mid); }
-/* A penna: il cliente ha confermato. Evidenziato, come sul foglio in ufficio. */
-.cartellino.confermato { border-color: #e4c44f; background: var(--white); }
-.cartellino.confermato .cliente-cart {
-  background: linear-gradient(transparent 58%, #fbe28c 58%); padding: 0 2px; margin-left: -2px;
-}
+.cartellino.matita .stato-cart { color: #5f6469; background: #eceef0; }
+/* A penna: il cliente sa che arrivate. */
+.cartellino.confermato { border-color: #2f8f4e; background: #f1faf3; }
+.cartellino.confermato .cliente-cart { color: #1c5c33; }
+.cartellino.confermato .stato-cart { color: #1c5c33; background: #d6efdd; }
+/* Fatto: è storia. Non è un terzo stato ma un interruttore sopra gli altri due,
+   così togliendo la spunta il lavoro ritrova da sé se era a matita o confermato. */
+.cartellino.fatto { border-color: #2a6f9e; background: #eef6fb; cursor: default; }
+.cartellino.fatto .cliente-cart { color: #1d4e6f; }
+.cartellino.fatto .cosa-cart, .cartellino.fatto .luogo-cart { opacity: 0.72; }
+.cartellino.fatto .stato-cart { color: #1d4e6f; background: #d5e8f4; }
 .cartellino.bloccato { border-left: 3px solid var(--earth); }
+
+.stato-cart {
+  font-size: 0.64rem; font-weight: 700; text-transform: uppercase;
+  letter-spacing: 0.04em; padding: 1px 6px; border-radius: 999px;
+}
+.testa-cart { display: flex; align-items: flex-start; gap: 6px; }
+/* Una classe e non «> div»: il selettore generico prendeva anche la spunta e a
+   parità di specificità vinceva lui, allargando la casella a tutta riga. */
+.testa-cart .testo-cart { flex: 1; min-width: 0; }
+.spunta-cart {
+  flex: 0 0 20px; width: 20px; height: 20px; border-radius: 5px; padding: 0;
+  border: 1.5px solid var(--border); background: var(--white);
+  display: flex; align-items: center; justify-content: center;
+  font-size: 0.8rem; line-height: 1; cursor: pointer; color: transparent;
+}
+.spunta-cart:hover { border-color: #2a6f9e; }
+.cartellino.fatto .spunta-cart { border-color: #2a6f9e; background: #2a6f9e; color: #fff; }
 .cliente-cart { font-weight: 600; font-size: 0.86rem; }
 .luogo-cart { font-size: 0.7rem; color: var(--text-light); }
 /* Le note dicono che lavoro è, quindi si leggono: white-space le tiene sulle
@@ -288,8 +337,8 @@ input.vuoto { background: #fffdf5; border-color: #ecdca8; }
 .cosa-cart { font-size: 0.78rem; color: var(--text-mid); white-space: pre-line; }
 .riga-cart { display: flex; align-items: center; gap: 5px; flex-wrap: wrap; margin-top: 2px; }
 .ore-cart {
-  font-size: 0.72rem; font-weight: 600; color: var(--green-mid);
-  background: var(--green-mist); padding: 1px 7px; border-radius: 999px;
+  font-size: 0.72rem; font-weight: 600; color: var(--inchiostro-tenue);
+  background: var(--foglio); padding: 1px 7px; border-radius: 999px;
 }
 .quando-cart, .origine-cart { font-size: 0.68rem; color: var(--text-light); }
 .requisito-cart {
@@ -305,9 +354,13 @@ input.vuoto { background: #fffdf5; border-color: #ecdca8; }
   border: 1px solid var(--border); background: transparent; color: var(--text-light);
   padding: 1px 8px; border-radius: 999px;
 }
-.bottone-cart.acceso { border-color: var(--green-light); color: var(--green-mid); background: var(--green-mist); }
+.bottone-cart.acceso { border-color: var(--ocra); color: var(--inchiostro-tenue); background: var(--foglio); }
 .bottone-cart[disabled] { opacity: 0.35; cursor: default; }
-.larghezza-cart { display: inline-flex; align-items: center; gap: 4px; }
+.larghezza-cart { display: inline-flex; align-items: center; gap: 4px;
+  /* Su una finestra stretta la colonna scende sotto i 120px e i tre comandi non
+     ci stanno: vanno a capo invece di sbordare sul giorno accanto. */
+  flex-wrap: wrap;
+}
 .mezze-cart { font-size: 0.68rem; color: var(--text-light); min-width: 46px; text-align: center; }
 .seguito-cart {
   border: 1px dashed var(--border); border-radius: var(--radius-sm); padding: 5px 8px;
@@ -324,8 +377,8 @@ input.vuoto { background: #fffdf5; border-color: #ecdca8; }
   padding: 10px 12px; cursor: pointer; font-family: var(--font-body); text-align: left;
   color: var(--text); transition: all 0.15s; width: 100%;
 }
-.voce-stato:hover { border-color: var(--green-light); }
-.voce-stato.attiva { border-color: var(--green-mid); background: var(--green-mist); }
+.voce-stato:hover { border-color: var(--ocra); }
+.voce-stato.attiva { border-color: var(--inchiostro-tenue); background: var(--foglio); }
 .stato-nome { font-size: 0.9rem; font-weight: 500; }
 .stato-conta { font-size: 0.8rem; color: var(--text-light); }
 .stato-somma {
@@ -833,6 +886,10 @@ function sistemaLavoro(l) {
     note: l.note || '',
     rimandato: !!l.rimandato,
     stato: l.stato === 'matita' || l.stato === 'confermato' ? l.stato : 'lista',
+    // Fatto è un interruttore, non un terzo stato: così togliendo la spunta il
+    // lavoro ritrova da sé se era a matita o confermato, senza che nessuno debba
+    // ricordarselo — e «confermato» continua a voler dire che il cliente lo sa.
+    fatto: !!l.fatto,
     // La posizione è una data vera, non un posto nella griglia: un indice dentro la
     // settimana mostrata farebbe spostare i cartellini da soli cambiando settimana,
     // e niente su questa lavagna si muove da solo.
@@ -2111,9 +2168,18 @@ function ordinaCoda(a, b) {
   return String(a.settimana).localeCompare(String(b.settimana));
 }
 
+// Come si legge lo stato, a parole. Il colore da solo si perde.
+function etichettaStato(l) {
+  if (l.fatto) return 'fatto';
+  if (!piazzato(l)) return bloccato(l) ? 'bloccato' : 'in attesa';
+  return l.stato === 'confermato' ? 'confermato' : 'a matita';
+}
+
 function cartellino(l) {
   const classi = ['cartellino'];
   if (piazzato(l)) classi.push(l.stato);
+  // Il blu sta sopra gli altri due: quando è fatto, è quello che si vede.
+  if (l.fatto) classi.push('fatto');
   if (bloccato(l)) classi.push('bloccato');
   const inLista = !piazzato(l);
   const mezze = mezzeOccupate(l);
@@ -2122,19 +2188,32 @@ function cartellino(l) {
   const sabato = isoData(new Date(new Date(SETTIMANA).setDate(SETTIMANA.getDate() + 5)));
   const id = perOnclick(l.id);
 
-  return '<article class="' + classi.join(' ') + '" draggable="true"' +
-      ' ondragstart="iniziaTrascino(event, \'' + id + '\')"' +
-      (piazzato(l) ? ' onclick="cambiaPenna(\'' + id + '\')"' : '') +
-      ' title="' + (piazzato(l) ? 'Un clic per confermare o tornare a matita' : 'Trascinalo in una mezza giornata') + '">' +
-    '<div class="cliente-cart">' + perValore(l.cliente || 'senza nome') + '</div>' +
-    (l.luogo ? '<div class="luogo-cart">' + perValore(l.luogo) + '</div>' : '') +
+  // Un lavoro fatto non si trascina e non cambia penna: spostare una cosa già
+  // avvenuta non vuol dire niente. Prima si toglie la spunta.
+  return '<article class="' + classi.join(' ') + '" draggable="' + (l.fatto ? 'false' : 'true') + '"' +
+      (l.fatto ? '' : ' ondragstart="iniziaTrascino(event, \'' + id + '\')"') +
+      (piazzato(l) && !l.fatto ? ' onclick="cambiaPenna(\'' + id + '\')"' : '') +
+      ' title="' + (l.fatto ? 'Fatto: togli la spunta per rimetterlo in gioco'
+        : piazzato(l) ? 'Un clic per confermare o tornare a matita' : 'Trascinalo in una mezza giornata') + '">' +
+    '<div class="testa-cart">' +
+      '<div class="testo-cart">' +
+        '<div class="cliente-cart">' + perValore(l.cliente || 'senza nome') + '</div>' +
+        (l.luogo ? '<div class="luogo-cart">' + perValore(l.luogo) + '</div>' : '') +
+      '</div>' +
+      // La spunta è un comando suo: il clic sul cartellino continua a fare
+      // matita/confermato, e con tre stati su un clic solo non sapresti dove sei.
+      (piazzato(l) ? '<button type="button" class="spunta-cart"' +
+        ' onclick="event.stopPropagation(); spuntaFatto(\'' + id + '\')"' +
+        ' title="' + (l.fatto ? 'Rimettilo da fare' : 'Segna che è stato fatto') + '">✓</button>' : '') +
+    '</div>' +
     (l.note ? '<div class="cosa-cart">' + perValore(l.note) + '</div>' : '') +
     '<div class="riga-cart">' +
+      '<span class="stato-cart">' + etichettaStato(l) + '</span>' +
       (l.ore ? '<span class="ore-cart">~' + formattaQuantita(l.ore) + ' h</span>' : '') +
       (l.rimandato && inLista ? '<span class="rimandato-cart">slittato</span>' : '') +
       (inLista && l.settimana ? '<span class="quando-cart">' + perValore(etichettaSettimana(l.settimana)) + '</span>' : '') +
       l.requisiti.map(r => '<span class="requisito-cart">⚠ ' + perValore(r) + '</span>').join('') +
-      (piazzato(l) ? '<span class="larghezza-cart">' +
+      (piazzato(l) && !l.fatto ? '<span class="larghezza-cart">' +
         '<button type="button" class="bottone-cart" onclick="event.stopPropagation(); stringi(\'' + id + '\')"' +
           (mezze === 1 ? ' disabled' : '') + ' title="Una mezza giornata in meno">−</button>' +
         '<span class="mezze-cart">' + mezze + (mezze === 1 ? ' mezza' : ' mezze') + '</span>' +
@@ -2184,7 +2263,7 @@ function disegnaLavagna() {
   const prenotati = inCoda.filter(l => l.origine === 'prenotato dal cantiere' && !l.rimandato).length;
   html += '<section class="coda"><h3 class="titolo-colonna">Da pianificare</h3>';
   if (prenotati) {
-    html += '<div class="rimasti" style="background:var(--green-mist); border-color:var(--green-light); color:var(--green-deep)">' +
+    html += '<div class="rimasti" style="background:var(--foglio); border-color:var(--ocra); color:var(--inchiostro)">' +
       '📨 ' + prenotati + (prenotati === 1 ? ' prenotazione arrivata' : ' prenotazioni arrivate') + ' dal cantiere</div>';
   }
   if (rimasti) {
@@ -2253,8 +2332,9 @@ function disegnaLavagna() {
   html += '<div class="legenda-lavagna">' +
     '<span><i class="campione matita"></i><b>A matita</b> — previsto, il cliente non lo sa</span>' +
     '<span><i class="campione penna"></i><b>Confermato</b> — il cliente sa che arrivate</span>' +
+    '<span><i class="campione fatto"></i><b>Fatto</b> — spuntato, è storia</span>' +
     '<span><i class="campione bloccato"></i><b>Bloccato</b> — manca qualcosa per poterlo fare</span>' +
-    '<span>Un clic sul cartellino conferma · <b>+</b> e <b>−</b> allargano il lavoro di mezza giornata</span>' +
+    '<span>Un clic sul cartellino conferma · la <b>✓</b> segna che è fatto · <b>+</b> e <b>−</b> allargano il lavoro di mezza giornata</span>' +
   '</div>';
 
   c.innerHTML = html;
@@ -2303,7 +2383,21 @@ async function spostaLavoro(id, giorno, mezza) {
 async function cambiaPenna(id) {
   const l = LAVAGNA.lavori.find(x => x.id === id);
   if (!l || !piazzato(l)) return;   // nella coda non esiste né matita né penna
+  if (l.fatto) return;              // è già successo: non c'è più niente da promettere
   l.stato = l.stato === 'matita' ? 'confermato' : 'matita';
+  await salvaLavagna();
+  disegnaLavagna();
+}
+
+// La spunta: fatto, eseguito. Si mette a mano e non arriva dal rapportino, anche
+// se l'informazione lì ci sarebbe: su questa lavagna **niente si muove da solo**,
+// e un cartellino che diventa blu perché è comparso un file in una cartella è
+// esattamente quello che quella regola vieta. Chi pianifica sa di esserci stato
+// prima che il rapportino arrivi, e a volte il rapportino non arriva affatto.
+async function spuntaFatto(id) {
+  const l = LAVAGNA.lavori.find(x => x.id === id);
+  if (!l || !piazzato(l)) return;   // fatto vuol dire in un giorno, non in coda
+  l.fatto = !l.fatto;
   await salvaLavagna();
   disegnaLavagna();
 }
