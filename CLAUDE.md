@@ -354,9 +354,7 @@ ricordare» erano due caselle per dire la stessa cosa, e una delle due restava
 sempre indietro: adesso c'è solo `note`, in tutte e due le app e nel documento
 dell'appuntamento. Le note sono anche l'unica cosa che fa il giro completo, quindi
 quel campo è il posto dove scrivere le operazioni: da lì partono per l'agenda e
-tornano in giardino. `uniscoNote()` resta perché i lavori salvati sulla lavagna
-prima del cambio portano il campo separato, e quel testo l'aveva battuto chi
-pianifica.
+tornano in giardino.
 
 **Quanto è largo un lavoro lo dice chi pianifica**, non la stima ore: `mezze` si
 alza e si abbassa di uno con `+` e `−`. Dedurlo dalle ore legava la lavagna a un

@@ -1431,19 +1431,6 @@ try {
       chiudiModuloLavoro();
       return uno;
     }));
-  // Una lavagna salvata prima porta i lavori col «cosa» a parte. Rileggendola non
-  // si butta via quel testo: era il lavoro scritto a mano da chi pianifica.
-  ok('un lavoro salvato col campo separato se lo ritrova nelle note',
-    await pagU.evaluate(() => {
-      const l = sistemaLavoro({ cliente: 'Vecchio formato', cosa: 'Taglio prato',
-        note: 'cancello sul retro' });
-      const soloCosa = sistemaLavoro({ cliente: 'Solo cosa', cosa: 'Arieggiatura' });
-      // Chi aveva scritto la stessa cosa nelle due caselle non se la ritrova due
-      // volte: era il modo più facile di riempire un cartellino di ripetizioni.
-      const doppio = sistemaLavoro({ cliente: 'Doppio', cosa: 'Potatura', note: 'Potatura' });
-      return l.note === 'Taglio prato\ncancello sul retro' && !('cosa' in l) &&
-        soloCosa.note === 'Arieggiatura' && doppio.note === 'Potatura';
-    }));
   ok('rileggendo la cartella non entra una seconda volta',
     await pagU.evaluate(async id => {
       const quanti = LAVAGNA.lavori.filter(l => l.da === id).length;

@@ -808,17 +808,6 @@ async function caricaLavagna() {
   }
 }
 
-// Due testi che diventano uno, senza righe vuote in mezzo e senza ripetere quello
-// che c'è già scritto.
-function uniscoNote(...pezzi) {
-  const puliti = [];
-  for (const pezzo of pezzi) {
-    const testo = String(pezzo || '').trim();
-    if (testo && !puliti.includes(testo)) puliti.push(testo);
-  }
-  return puliti.join('\n');
-}
-
 function sistemaLavoro(l) {
   return {
     id: l.id || 'l' + Math.random().toString(36).slice(2),
@@ -835,11 +824,7 @@ function sistemaLavoro(l) {
     // caselle da riempire per dire la stessa cosa e una delle due restava
     // sempre indietro. È anche l'unica cosa che fa il giro completo: il cantiere
     // la scrive prenotando e torna in giardino con l'agenda.
-    //
-    // Chi portava un «cosa» a parte — un lavoro salvato prima, o una
-    // prenotazione dal telefono, che quel campo ce l'ha ancora — se lo ritrova
-    // in cima alle note: si converte una volta e amen.
-    note: uniscoNote(l.cosa, l.note),
+    note: l.note || '',
     rimandato: !!l.rimandato,
     stato: l.stato === 'matita' || l.stato === 'confermato' ? l.stato : 'lista',
     // La posizione è una data vera, non un posto nella griglia: un indice dentro la
