@@ -438,6 +438,49 @@ try {
     fermaEvisibile.html.includes('3 tentativi') && fermaEvisibile.html.includes('riprovare'));
   ok('quella consegnata non porta nessun errore',
     !fermaEvisibile.dopo.includes('Non è partita') && fermaEvisibile.dopo.includes('in ufficio'));
+
+  // E il caso peggiore: svuotaCoda() si ferma quando il servizio non risponde,
+  // quindi la prenotazione dietro non viene nemmeno provata e non ha un errore
+  // suo. Senza dirlo direbbe «da consegnare» e tacerebbe — ed è proprio il caso
+  // in cui non è colpa sua.
+  const inFila = await page.evaluate(async () => {
+    const p = DB.prenotazioni[0];
+    DB.coda.push({ docID: 'r-davanti', tipo: 'rapportino',
+      doc: { tipo: 'rapportino', id: 'r-davanti', revisione: 1 },
+      creato: new Date().toISOString(), tentativi: 2, errore: 'Il servizio non risponde' });
+    DB.coda.push({ docID: p.PrenotazioneID, tipo: 'appuntamento',
+      doc: { tipo: 'appuntamento', id: p.PrenotazioneID, revisione: 1 },
+      creato: new Date().toISOString(), tentativi: 0, errore: '' });
+    renderPrenotazioni();
+    const html = document.getElementById('prenotazioni-list').innerHTML;
+    DB.coda = [];
+    renderPrenotazioni();
+    return html;
+  });
+  ok('una prenotazione bloccata dietro un altro documento lo dice',
+    inFila.includes('In fila dietro un altro documento'), inFila.slice(0, 200));
+  ok('e dice quale documento la tiene ferma, e perché',
+    inFila.includes('rapportino') && inFila.includes('Il servizio non risponde'));
+  // Conta solo quello che le sta **davanti**: la coda si svuota in ordine, e un
+  // documento accodato dopo non la trattiene. Dirlo comunque sarebbe dare la
+  // colpa al vicino sbagliato.
+  const erroreDietro = await page.evaluate(async () => {
+    const p = DB.prenotazioni[0];
+    DB.coda.push({ docID: p.PrenotazioneID, tipo: 'appuntamento',
+      doc: { tipo: 'appuntamento', id: p.PrenotazioneID, revisione: 1 },
+      creato: new Date().toISOString(), tentativi: 0, errore: '' });
+    DB.coda.push({ docID: 'r-dietro', tipo: 'rapportino',
+      doc: { tipo: 'rapportino', id: 'r-dietro', revisione: 1 },
+      creato: new Date().toISOString(), tentativi: 2, errore: 'Il servizio non risponde' });
+    renderPrenotazioni();
+    const html = document.getElementById('prenotazioni-list').innerHTML;
+    DB.coda = [];
+    renderPrenotazioni();
+    return html;
+  });
+  ok('ma un documento accodato dopo non le dà la colpa',
+    !erroreDietro.includes('In fila dietro') && erroreDietro.includes('da consegnare'),
+    erroreDietro.slice(0, 200));
   // Da quando il prossimo intervento si prenota, è lì che sta scritto cosa si
   // era detto di fare: aprendo una visita per quel cliente lo si ritrova.
   ok('e riaprendo una visita per quel cliente il promemoria lo ricorda',

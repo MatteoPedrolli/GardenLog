@@ -2618,7 +2618,14 @@ function renderPrenotazioni() {
   if (!elenco.length) { el.innerHTML = ''; return; }
   el.innerHTML = elenco.slice(0, 10).map(p => {
     const c = DB.clienti.find(x => x.ClienteID == p.ClienteID);
-    const voce = (DB.coda || []).find(v => v.docID === p.PrenotazioneID);
+    const coda = DB.coda || [];
+    const posto = coda.findIndex(v => v.docID === p.PrenotazioneID);
+    const voce = posto < 0 ? null : coda[posto];
+    // svuotaCoda() si ferma quando il servizio non risponde: i documenti dietro
+    // non vengono nemmeno provati, quindi non hanno un errore proprio. Senza
+    // dirlo, questa prenotazione direbbe «da consegnare» e tacerebbe — ed è
+    // proprio il caso in cui non è colpa sua.
+    const davanti = posto > 0 ? coda.slice(0, posto).find(v => v.errore) : null;
     return `<div class="card" style="padding:12px">
       <div style="font-weight:600">${perValore(c ? c.Cliente : 'cliente eliminato')}</div>
       <div style="font-size:0.85rem; color:var(--text-mid); white-space:pre-line">${perValore(p.Note)}</div>
@@ -2628,6 +2635,10 @@ function renderPrenotazioni() {
       ${voce && voce.errore ? `<div class="errore-consegna" onclick="svuotaCoda({ avvisa: true })">
         <div style="font-weight:600">⚠️ Non è partita: ${perValore(voce.errore)}</div>
         <div style="opacity:0.85; margin-top:2px">${voce.tentativi || 0} ${(voce.tentativi || 0) === 1 ? 'tentativo' : 'tentativi'} · tocca per riprovare adesso</div>
+      </div>` : ''}
+      ${voce && !voce.errore && davanti ? `<div class="errore-consegna" onclick="svuotaCoda({ avvisa: true })">
+        <div style="font-weight:600">⏳ In fila dietro un altro documento</div>
+        <div style="opacity:0.85; margin-top:2px">Non parte finché non parte ${perValore(comeSiChiama(davanti))}: ${perValore(davanti.errore)}</div>
       </div>` : ''}
     </div>`;
   }).join('');

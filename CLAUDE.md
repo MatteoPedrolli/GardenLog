@@ -255,6 +255,13 @@ in home: chi cerca una prenotazione ferma sta sulla pagina Appuntamenti, e «da
 consegnare» senza un perché non dice cosa fare. Per un po' l'errore è stato solo
 in home, e ha fatto perdere mezza giornata a capire cosa fosse rotto.
 
+**Chi è in fila non ha un errore suo, e va detto anche quello.** Quando il servizio
+non risponde `svuotaCoda()` fa `break`, così i documenti dietro non vengono nemmeno
+provati: il loro `errore` resta vuoto. Mostrare solo l'errore proprio vorrebbe dire
+che la prenotazione bloccata dice «da consegnare» e tace — ed è il caso in cui non è
+colpa sua. Conta solo quello che le sta **davanti**: la coda si svuota in ordine, e
+un documento accodato dopo non la trattiene.
+
 Niente esce dalla coda senza una conferma esplicita. Apps Script risponde 200
 anche quando fallisce, con una pagina HTML al posto del JSON — la stessa
 trappola del vecchio foglio — e un servizio può rispondere JSON valido che non
