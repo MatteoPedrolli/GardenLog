@@ -981,7 +981,7 @@ try {
   const messoAMano = await pagU.evaluate(async () => {
     apriModuloLavoro();
     document.getElementById('n-cliente').value = 'Mario Rossi Junior';
-    document.getElementById('n-cosa').value = 'Potatura siepe di lauro';
+    document.getElementById('n-note').value = 'Potatura siepe di lauro';
     document.getElementById('n-ore').value = '4';
     document.getElementById('n-settimana').value = '2026-09-23';
     await salvaModuloLavoro();
@@ -1207,10 +1207,10 @@ try {
       await spostaLavoro(id, '2026-09-24', 'mattina');
       await cambiaPenna(id);
       apriModuloLavoro(id);
-      document.getElementById('n-cosa').value = 'Potatura, con scala';
+      document.getElementById('n-note').value = 'Potatura, con scala';
       await salvaModuloLavoro();
       return l.giorno === '2026-09-24' && l.mezza === 'mattina' &&
-        l.stato === 'confermato' && l.cosa === 'Potatura, con scala';
+        l.stato === 'confermato' && l.note === 'Potatura, con scala';
     }, idLavoro));
 
   // ── la leggenda sta in fondo, dove non scavalca la lavagna ──
@@ -1395,10 +1395,33 @@ try {
     prenotata && prenotata.settimana === '2027-03-15' && !prenotata.giorno,
     prenotata && prenotata.settimana + ' / ' + prenotata.giorno);
   // Era un difetto vero: le note del cantiere venivano lette e buttate via, e
-  // sono proprio la cosa che deve tornare in giardino.
+  // sono proprio la cosa che deve tornare in giardino. Sulla lavagna «cosa c'è da
+  // fare» e «cosa ricordare» sono un campo solo — due caselle per dire la stessa
+  // cosa ne lasciavano sempre una indietro — e la prenotazione ne porta ancora
+  // due: qui si controlla che non se ne perda nessuno.
   ok('e con le note scritte in giardino, che l\'ufficio non deve perdere',
-    prenotata && prenotata.note === 'chiedere della chiave del cancello',
-    prenotata && prenotata.note);
+    prenotata && prenotata.note === 'Potatura siepe di lauro\nchiedere della chiave del cancello',
+    JSON.stringify(prenotata && prenotata.note));
+  ok('il modulo della lavagna ha un campo solo per quello che c\'è da fare',
+    await pagU.evaluate(() => {
+      apriModuloLavoro();
+      const uno = !document.getElementById('n-cosa') && !!document.getElementById('n-note');
+      chiudiModuloLavoro();
+      return uno;
+    }));
+  // Una lavagna salvata prima porta i lavori col «cosa» a parte. Rileggendola non
+  // si butta via quel testo: era il lavoro scritto a mano da chi pianifica.
+  ok('un lavoro salvato col campo separato se lo ritrova nelle note',
+    await pagU.evaluate(() => {
+      const l = sistemaLavoro({ cliente: 'Vecchio formato', cosa: 'Taglio prato',
+        note: 'cancello sul retro' });
+      const soloCosa = sistemaLavoro({ cliente: 'Solo cosa', cosa: 'Arieggiatura' });
+      // Chi aveva scritto la stessa cosa nelle due caselle non se la ritrova due
+      // volte: era il modo più facile di riempire un cartellino di ripetizioni.
+      const doppio = sistemaLavoro({ cliente: 'Doppio', cosa: 'Potatura', note: 'Potatura' });
+      return l.note === 'Taglio prato\ncancello sul retro' && !('cosa' in l) &&
+        soloCosa.note === 'Arieggiatura' && doppio.note === 'Potatura';
+    }));
   ok('rileggendo la cartella non entra una seconda volta',
     await pagU.evaluate(async id => {
       const quanti = LAVAGNA.lavori.filter(l => l.da === id).length;

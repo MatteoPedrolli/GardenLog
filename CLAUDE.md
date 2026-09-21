@@ -345,6 +345,14 @@ aggiornare a mano è un'agenda che in giardino dice il giorno sbagliato.
 **Il sabato resta a disposizione**: c'è, ma non è una giornata come le altre e il
 piede della colonna lo dice.
 
+**Un cartellino ha un campo di testo, non due.** «Cosa c'è da fare» e «cosa
+ricordare» erano due caselle per dire la stessa cosa, e una delle due restava
+sempre indietro: adesso c'è solo `note`. Il documento dell'appuntamento porta
+ancora i suoi due campi — il telefono non è cambiato — e `uniscoNote()` li fonde
+entrando, come fa con i lavori salvati prima. Le note sono anche l'unica cosa che
+fa il giro completo, quindi quel campo è il posto dove scrivere le operazioni: da
+lì partono per l'agenda e tornano in giardino.
+
 **Quanto è largo un lavoro lo dice chi pianifica**, non la stima ore: `mezze` si
 alza e si abbassa di uno con `+` e `−`. Dedurlo dalle ore legava la lavagna a un
 numero messo a occhio, e chi pianifica sa cose che la stima non sa. Le ore seguono:

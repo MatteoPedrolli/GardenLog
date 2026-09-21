@@ -283,8 +283,9 @@ input.vuoto { background: #fffdf5; border-color: #ecdca8; }
 .cartellino.bloccato { border-left: 3px solid var(--earth); }
 .cliente-cart { font-weight: 600; font-size: 0.86rem; }
 .luogo-cart { font-size: 0.7rem; color: var(--text-light); }
-.cosa-cart { font-size: 0.78rem; color: var(--text-mid); }
-.note-cart { font-size: 0.72rem; color: var(--text-light); font-style: italic; }
+/* Le note dicono che lavoro è, quindi si leggono: white-space le tiene sulle
+   righe in cui sono state scritte invece di impastarle in un blocco solo. */
+.cosa-cart { font-size: 0.78rem; color: var(--text-mid); white-space: pre-line; }
 .riga-cart { display: flex; align-items: center; gap: 5px; flex-wrap: wrap; margin-top: 2px; }
 .ore-cart {
   font-size: 0.72rem; font-weight: 600; color: var(--green-mid);
@@ -667,9 +668,10 @@ async function assorbiAppuntamenti() {
     nuovi.push(sistemaLavoro({
       cliente: doc.cliente.nome || '',
       luogo: doc.cliente.citta || '',
-      cosa: doc.cosa,
       ore: doc.ore,
-      note: doc.note || '',
+      // Il documento dell'appuntamento porta ancora i due campi separati; qui
+      // diventano uno, perché sulla lavagna ce n'è uno.
+      note: uniscoNote(doc.cosa, doc.note),
       settimana: doc.settimana || '',
       origine: 'prenotato dal cantiere',
       requisiti: doc.requisiti,
@@ -808,10 +810,21 @@ async function caricaLavagna() {
   }
 }
 
+// Due testi che diventano uno, senza righe vuote in mezzo e senza ripetere quello
+// che c'è già scritto.
+function uniscoNote(...pezzi) {
+  const puliti = [];
+  for (const pezzo of pezzi) {
+    const testo = String(pezzo || '').trim();
+    if (testo && !puliti.includes(testo)) puliti.push(testo);
+  }
+  return puliti.join('\n');
+}
+
 function sistemaLavoro(l) {
   return {
     id: l.id || 'l' + Math.random().toString(36).slice(2),
-    cliente: l.cliente || '', luogo: l.luogo || '', cosa: l.cosa || '',
+    cliente: l.cliente || '', luogo: l.luogo || '',
     ore: Number(l.ore) || 0,
     // La settimana in cui andrebbe fatto, scritta come il lunedì che la apre.
     // Non un giorno preciso: il giorno lo decide chi pianifica trascinandolo,
@@ -819,11 +832,16 @@ function sistemaLavoro(l) {
     settimana: l.settimana ? lunediDellaSettimana(l.settimana) : '',
     origine: l.origine || '',
     requisiti: Array.isArray(l.requisiti) ? l.requisiti.filter(r => r) : [],
-    // Quello che il cantiere ha scritto pensando alla prossima volta: «il cliente
-    // preferisce il mattino», «chiedere della chiave del cancello». Arriva con la
-    // prenotazione e torna in giardino con l'agenda — è l'unica cosa che fa il
-    // giro completo.
-    note: l.note || '',
+    // Cosa c'è da fare e cosa c'è da ricordare: «potatura siepe di lauro»,
+    // «chiedere della chiave del cancello». Un campo solo, perché erano due
+    // caselle da riempire per dire la stessa cosa e una delle due restava
+    // sempre indietro. È anche l'unica cosa che fa il giro completo: il cantiere
+    // la scrive prenotando e torna in giardino con l'agenda.
+    //
+    // Chi portava un «cosa» a parte — un lavoro salvato prima, o una
+    // prenotazione dal telefono, che quel campo ce l'ha ancora — se lo ritrova
+    // in cima alle note: si converte una volta e amen.
+    note: uniscoNote(l.cosa, l.note),
     rimandato: !!l.rimandato,
     stato: l.stato === 'matita' || l.stato === 'confermato' ? l.stato : 'lista',
     // La posizione è una data vera, non un posto nella griglia: un indice dentro la
@@ -2078,8 +2096,7 @@ function cartellino(l) {
       ' title="' + (piazzato(l) ? 'Un clic per confermare o tornare a matita' : 'Trascinalo in una mezza giornata') + '">' +
     '<div class="cliente-cart">' + perValore(l.cliente || 'senza nome') + '</div>' +
     (l.luogo ? '<div class="luogo-cart">' + perValore(l.luogo) + '</div>' : '') +
-    (l.cosa ? '<div class="cosa-cart">' + perValore(l.cosa) + '</div>' : '') +
-    (l.note ? '<div class="note-cart">' + perValore(l.note) + '</div>' : '') +
+    (l.note ? '<div class="cosa-cart">' + perValore(l.note) + '</div>' : '') +
     '<div class="riga-cart">' +
       (l.ore ? '<span class="ore-cart">~' + formattaQuantita(l.ore) + ' h</span>' : '') +
       (l.rimandato && inLista ? '<span class="rimandato-cart">slittato</span>' : '') +
@@ -2280,7 +2297,7 @@ async function stringi(id) {
 async function togliDallaLavagna(id) {
   const l = LAVAGNA.lavori.find(x => x.id === id);
   if (!l) return;
-  if (!confirm('Togliere «' + (l.cliente || 'senza nome') + ' — ' + (l.cosa || '') + '» dalla lavagna?')) return;
+  if (!confirm('Togliere «' + (l.cliente || 'senza nome') + '» dalla lavagna?')) return;
   LAVAGNA.lavori = LAVAGNA.lavori.filter(x => x.id !== id);
   await salvaLavagna();
   disegnaLavagna();
@@ -2313,7 +2330,6 @@ function apriModuloLavoro(id) {
     '<input type="hidden" id="n-id" value="' + perValore(id || '') + '">' +
     '<input type="text" id="n-cliente" placeholder="Cliente" value="' + v('cliente') + '" style="margin-bottom:6px">' +
     '<input type="text" id="n-luogo" placeholder="Dove" value="' + v('luogo') + '" style="margin-bottom:6px">' +
-    '<input type="text" id="n-cosa" placeholder="Cosa c\'è da fare" value="' + v('cosa') + '" style="margin-bottom:6px">' +
     '<input type="text" id="n-ore" placeholder="Stima ore" value="' +
       perValore(l && l.ore ? formattaQuantita(l.ore) : '') + '" style="margin-bottom:6px">' +
     '<input type="date" id="n-settimana" value="' + v('settimana') + '" style="margin-bottom:6px"' +
@@ -2322,7 +2338,7 @@ function apriModuloLavoro(id) {
       perValore(etichettaSettimana(l ? l.settimana : '')) + '</div>' +
     '<input type="text" id="n-requisito" placeholder="Manca qualcosa? (blocca il lavoro)" value="' +
       perValore(l && l.requisiti.length ? l.requisiti.join(', ') : '') + '" style="margin-bottom:6px">' +
-    '<textarea id="n-note" rows="2" placeholder="Note — tornano in giardino con l\'agenda">' +
+    '<textarea id="n-note" rows="3" placeholder="Cosa c\'è da fare, e cosa ricordare — torna in giardino con l\'agenda">' +
       perValore(l ? l.note : '') + '</textarea>' +
     '<div class="bottoni">' +
       '<button class="principale piccola" onclick="salvaModuloLavoro()">' +
@@ -2352,7 +2368,7 @@ async function salvaModuloLavoro() {
   if (!cliente) { avvisa('Serve almeno il cliente', true); return; }
   const requisiti = valore('n-requisito').split(',').map(r => r.trim()).filter(r => r);
   const campi = {
-    cliente, luogo: valore('n-luogo').trim(), cosa: valore('n-cosa').trim(),
+    cliente, luogo: valore('n-luogo').trim(),
     ore: Number(valore('n-ore').replace(',', '.')) || 0,
     settimana: lunediDellaSettimana(valore('n-settimana')),
     requisiti,

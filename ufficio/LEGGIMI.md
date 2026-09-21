@@ -52,7 +52,8 @@ aggiunge un campo lì lo pubblica là.
 
 Le note sì, e sono il motivo per cui l'agenda esiste: sono la cosa che fa il giro
 completo. Il cantiere le scrive prenotando, l'ufficio se le tiene sul cartellino,
-e tornano in giardino il giorno del lavoro.
+e tornano in giardino il giorno del lavoro. Per questo sulla lavagna il cartellino
+ha **un campo di testo e non due**: le operazioni si scrivono lì, e da lì partono.
 
 Sul telefono l'agenda si scarica quando c'è rete e **resta salvata**: in giardino
 il campo spesso non c'è, ed è lì che serve sapere dove si va domani.
