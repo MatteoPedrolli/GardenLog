@@ -415,6 +415,29 @@ try {
     JSON.stringify(docAppuntamento.requisiti) === '["serve la scala lunga"]');
   ok('la prenotazione è partita dalla stessa coda del rapportino',
     await page.evaluate(() => DB.prenotazioni[0].Consegnata !== ''));
+
+  // Una prenotazione che non parte deve dire perché **lì dove la guardi**. Il
+  // banner della coda sta in home, e chi cerca una prenotazione ferma è qui: «da
+  // consegnare» senza un perché non dice cosa fare.
+  const fermaEvisibile = await page.evaluate(async () => {
+    const p = DB.prenotazioni[0];
+    DB.coda.push({ docID: p.PrenotazioneID, tipo: 'appuntamento',
+      doc: { tipo: 'appuntamento', id: p.PrenotazioneID, revisione: 1 },
+      creato: new Date().toISOString(), tentativi: 3, errore: 'Il servizio ha risposto con un errore, non con una conferma' });
+    renderPrenotazioni();
+    const html = document.getElementById('prenotazioni-list').innerHTML;
+    DB.coda = DB.coda.filter(v => v.docID !== p.PrenotazioneID);
+    renderPrenotazioni();
+    return { html, dopo: document.getElementById('prenotazioni-list').innerHTML };
+  });
+  ok('una prenotazione ferma dice perché non è partita, sulla sua scheda',
+    fermaEvisibile.html.includes('Non è partita') &&
+    fermaEvisibile.html.includes('non con una conferma'),
+    fermaEvisibile.html.slice(0, 200));
+  ok('e dice quanti tentativi ha fatto, con come riprovare',
+    fermaEvisibile.html.includes('3 tentativi') && fermaEvisibile.html.includes('riprovare'));
+  ok('quella consegnata non porta nessun errore',
+    !fermaEvisibile.dopo.includes('Non è partita') && fermaEvisibile.dopo.includes('in ufficio'));
   // Da quando il prossimo intervento si prenota, è lì che sta scritto cosa si
   // era detto di fare: aprendo una visita per quel cliente lo si ritrova.
   ok('e riaprendo una visita per quel cliente il promemoria lo ricorda',

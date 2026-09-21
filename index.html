@@ -126,6 +126,13 @@ html, body {
   padding: 20px 18px 12px;
 }
 .agenda-quando { font-family: var(--font-body); font-size: 0.78rem; font-weight: 400; color: var(--text-light); }
+/* L'errore di consegna sta accanto al documento che non è partito, non solo sul
+   banner in home: chi guarda una prenotazione ferma è su questa pagina, e
+   «da consegnare» senza un perché non dice cosa fare. */
+.errore-consegna {
+  margin-top: 8px; padding: 8px 10px; border-radius: 8px;
+  background: #fdecea; color: #7a271a; font-size: 0.78rem; cursor: pointer;
+}
 
 .card {
   background: var(--white);
@@ -2611,13 +2618,17 @@ function renderPrenotazioni() {
   if (!elenco.length) { el.innerHTML = ''; return; }
   el.innerHTML = elenco.slice(0, 10).map(p => {
     const c = DB.clienti.find(x => x.ClienteID == p.ClienteID);
-    const inCoda = (DB.coda || []).some(v => v.docID === p.PrenotazioneID);
+    const voce = (DB.coda || []).find(v => v.docID === p.PrenotazioneID);
     return `<div class="card" style="padding:12px">
       <div style="font-weight:600">${perValore(c ? c.Cliente : 'cliente eliminato')}</div>
       <div style="font-size:0.85rem; color:var(--text-mid); white-space:pre-line">${perValore(p.Note)}</div>
       <div style="font-size:0.78rem; color:var(--text-light); margin-top:4px">
-        ${p.Ore ? formattaQuantita(p.Ore) + ' h · ' : ''}${p.Settimana ? etichettaSettimana(p.Settimana) + ' · ' : ''}${inCoda ? '📤 da consegnare' : '✅ in ufficio'}
+        ${p.Ore ? formattaQuantita(p.Ore) + ' h · ' : ''}${p.Settimana ? etichettaSettimana(p.Settimana) + ' · ' : ''}${voce ? '📤 da consegnare' : '✅ in ufficio'}
       </div>
+      ${voce && voce.errore ? `<div class="errore-consegna" onclick="svuotaCoda({ avvisa: true })">
+        <div style="font-weight:600">⚠️ Non è partita: ${perValore(voce.errore)}</div>
+        <div style="opacity:0.85; margin-top:2px">${voce.tentativi || 0} ${(voce.tentativi || 0) === 1 ? 'tentativo' : 'tentativi'} · tocca per riprovare adesso</div>
+      </div>` : ''}
     </div>`;
   }).join('');
 }

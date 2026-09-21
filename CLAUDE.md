@@ -250,6 +250,11 @@ non può restare sul telefono per colpa di un altro documento.
 Il banner della coda dice **di che documento** si tratta: chiamare «rapportino»
 una prenotazione ferma manda a cercare nel posto sbagliato.
 
+E l'errore si legge **accanto al documento che non è partito**, non solo sul banner
+in home: chi cerca una prenotazione ferma sta sulla pagina Appuntamenti, e «da
+consegnare» senza un perché non dice cosa fare. Per un po' l'errore è stato solo
+in home, e ha fatto perdere mezza giornata a capire cosa fosse rotto.
+
 Niente esce dalla coda senza una conferma esplicita. Apps Script risponde 200
 anche quando fallisce, con una pagina HTML al posto del JSON — la stessa
 trappola del vecchio foglio — e un servizio può rispondere JSON valido che non
