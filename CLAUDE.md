@@ -1,8 +1,8 @@
 # GiardinoApp — note per chi ci lavora
 
 App per registrare gli interventi di giardinaggio: clienti, visite, operazioni,
-prossimi interventi, report sulla concimazione dei prati. La usa una persona
-sola, quasi sempre dal telefono, spesso in giardino senza campo.
+appuntamenti, e su ogni cliente lo stato di concimazione del prato. La usa una
+persona sola, quasi sempre dal telefono, spesso in giardino senza campo.
 
 ## Com'è fatta
 
@@ -120,6 +120,28 @@ Sta nel DB perché in giardino il campo spesso non c'è, ed è lì che serve; as
 vuol dire «non ancora scaricata», che è un valore buono e non chiede una
 migrazione. Un'agenda che non si scarica **non cancella quella di prima**: vecchia
 di un giorno è un'informazione, il vuoto no.
+
+## Il prato sta sul cliente
+
+C'era una pagina **Report Prati**, con l'elenco dei prati e per ognuno le
+percentuali, le barre e il dettaglio delle concimazioni. Non l'ha mai aperta
+nessuno: la domanda «quanto ho concimato qui» arriva **guardando un cliente**, non
+scorrendo un elenco di prati, e una pagina in più da raggiungere era una pagina
+in meno da usare.
+
+Adesso è un riquadro sulla scheda cliente, accanto a quello della siepe — sono la
+stessa cosa detta per l'altra pianta. Dentro: la fascia, i metri quadri, **due
+barre**, azoto e potassio, con la percentuale e i g/m² fatti sul target, e le
+ultime concimazione, semina e arieggiatura.
+
+**Due barre e non una percentuale sola**: il potassio resta indietro rispetto
+all'azoto, e un numero unico lo nasconderebbe. Il colore — rosso sotto il 40%,
+giallo fino all'80%, verde oltre — è quello che si guarda prima del numero, e le
+soglie stanno in `semaforoDa()`, in un posto solo, o le due barre direbbero due
+cose diverse.
+
+Il dettaglio riga per riga delle concimazioni non è passato: sotto, nello storico
+visite, quelle operazioni ci sono già.
 
 ## Le voci da conteggiare
 
@@ -486,7 +508,7 @@ ha continuato a servire la versione di tre mesi prima.
 - I tipi di operazione di partenza hanno identificativi parlanti e stabili
   (`concimazione`, `potatura-siepi`…) perché il codice li cerca per
   identificativo e mai per nome: chi rinomina un tipo non deve svuotare il
-  report Prati.
+  riquadro del prato sulla scheda cliente.
 - Sulle operazioni il campo è `Quantita` con la sua `Unita`. Si chiamava
   `Dose_kg` e mentiva: i liquidi sono in litri e le piante si contano a numero.
 - `saveVisita()` riparte da `{ ...precedente }`. Il modulo della visita non

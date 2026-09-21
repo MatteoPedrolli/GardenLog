@@ -350,17 +350,25 @@ select.form-control { background-image: url("data:image/svg+xml,%3Csvg xmlns='ht
 .semaforo.giallo { background: #f39c12; box-shadow: 0 0 6px rgba(243,156,18,0.4); }
 .semaforo.rosso { background: #e74c3c; box-shadow: 0 0 6px rgba(231,76,60,0.4); }
 
-.prato-card {
-  background: var(--white); margin: 0 14px 10px;
-  border-radius: var(--radius); padding: 16px;
-  border: 1px solid var(--border); box-shadow: var(--shadow);
+.riquadro-prato {
+  background: var(--green-mist); border-radius: var(--radius);
+  padding: 14px; margin-bottom: 14px; border: 1px solid var(--green-pale);
 }
-.prato-header { display: flex; align-items: center; gap: 10px; margin-bottom: 12px; }
-.prato-name { font-weight: 600; font-size: 0.95rem; flex: 1; }
+.riquadro-prato-testa { display: flex; align-items: center; gap: 10px; margin-bottom: 12px; }
+.riquadro-prato-titolo {
+  font-family: var(--font-display); font-size: 0.95rem; font-weight: 600; color: var(--green-deep);
+}
 .prato-fascia { font-size: 0.72rem; color: var(--text-light); }
+.pillola-prato {
+  font-size: 0.72rem; font-weight: 600; padding: 3px 8px; border-radius: 20px; flex-shrink: 0;
+}
+.pillola-prato.verde { background: #d4edda; color: #155724; }
+.pillola-prato.giallo { background: #fef3cd; color: #856404; }
+.pillola-prato.rosso { background: #fdecea; color: #721c24; }
+.prato-manca { margin-top: 10px; font-size: 0.78rem; color: var(--text-light); }
 .prato-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
 .prato-stat {
-  background: var(--green-mist); border-radius: 10px; padding: 10px;
+  background: var(--white); border-radius: 10px; padding: 10px;
   text-align: center;
 }
 .prato-stat-num { font-size: 1.1rem; font-weight: 700; color: var(--green-deep); }
@@ -610,10 +618,6 @@ select.form-control { background-image: url("data:image/svg+xml,%3Csvg xmlns='ht
             <span class="quick-icon">👤</span>
             <div><div class="quick-label">Nuovo cliente</div><div class="quick-sub">Aggiungi anagrafica</div></div>
           </div>
-          <div class="quick-card" onclick="navTo('prati')">
-            <span class="quick-icon">🌱</span>
-            <div><div class="quick-label">Report prati</div><div class="quick-sub">Stato concimazione</div></div>
-          </div>
           <div class="quick-card" onclick="navTo('prossimi')">
             <span class="quick-icon">📅</span>
             <div><div class="quick-label">Prossimi interventi</div><div class="quick-sub">Dall'ufficio e prenotazioni</div></div>
@@ -714,11 +718,6 @@ select.form-control { background-image: url("data:image/svg+xml,%3Csvg xmlns='ht
       </div>
     </div>
 
-    <!-- PRATI -->
-    <div id="page-prati" class="page">
-      <div class="section-title">Report Prati 🌱</div>
-      <div id="prati-list"></div>
-    </div>
   </div>
 
   <nav id="navbar">
@@ -733,9 +732,6 @@ select.form-control { background-image: url("data:image/svg+xml,%3Csvg xmlns='ht
     </button>
     <button class="nav-item" id="nav-prossimi" onclick="navTo('prossimi')">
       <span class="icon">📅</span><span>Appuntamenti</span>
-    </button>
-    <button class="nav-item" id="nav-prati" onclick="navTo('prati')">
-      <span class="icon">🌱</span><span>Prati</span>
     </button>
   </nav>
 </div>
@@ -1274,7 +1270,6 @@ function renderAll() {
   renderVisite();
   renderPrenotazioni();
   renderAgenda();
-  renderPrati();
 }
 
 // ── INIT ──
@@ -1322,10 +1317,10 @@ function navTo(page) {
   // la barra resta su quella da cui si è arrivati.
   document.getElementById('nav-'+page)?.classList.add('active');
   currentPage = page;
-  const titles = { home:'GiardinoApp', clienti:'Clienti', visite:'Registro Visite', prossimi:'Prossimi Interventi', prati:'Prati', dati:'Dati e backup' };
+  const titles = { home:'GiardinoApp', clienti:'Clienti', visite:'Registro Visite', prossimi:'Prossimi Interventi', dati:'Dati e backup' };
   document.getElementById('topbar-title').textContent = titles[page] || 'GiardinoApp';
   document.getElementById('topbar-action-btn').style.display =
-    ['prati','prossimi','dati'].includes(page) ? 'none' : 'flex';
+    ['prossimi','dati'].includes(page) ? 'none' : 'flex';
   if (page === 'dati') renderDati();
   // Aprendo la pagina si riprova a scaricare l'agenda, ma non a ogni tocco: in
   // ufficio la lavagna cambia qualche volta al giorno, e una richiesta per ogni
@@ -1446,17 +1441,7 @@ function showCliente(id) {
         ${c.Lat && c.Lng ? `<div class="info-item" style="cursor:pointer" onclick="window.open('https://maps.google.com/?q=${c.Lat},${c.Lng}','_blank')"><div class="info-label">Posizione</div><div class="info-value">📍 Maps</div></div>` : '<div class="info-item"><div class="info-label">Posizione</div><div class="info-value">–</div></div>'}
       </div>
 
-      ${prato ? `
-      <div style="background:var(--green-mist); border-radius:var(--radius); padding:12px 14px; margin-bottom:14px; border:1px solid var(--green-pale); display:flex; align-items:center; gap:10px">
-        <div class="semaforo ${prato.targetN > 0 ? prato.sem : ''}" style="width:12px;height:12px;flex-shrink:0"></div>
-        <div style="flex:1; font-size:0.88rem; color:var(--green-deep)">
-          <span style="font-weight:600">${c.FasciaID ? 'Fascia ' + c.FasciaID : 'Nessuna fascia'}</span>
-          <span style="color:var(--text-light)"> · </span>${c.Mq_prato ? c.Mq_prato + ' mq' : 'mq non indicati'}
-          <span style="color:var(--text-light)"> · </span>${prato.targetN > 0
-            ? `<span style="font-weight:600">${Math.round(prato.pctN * 100)}% concimato</span>`
-            : '<span style="color:var(--text-light)">nessun target</span>'}
-        </div>
-      </div>` : ''}
+      ${prato ? riquadroPrato(c, prato, annoCorr) : ''}
 
       ${isSi(c.Ha_siepe) ? `
       <div style="background:#eef7f2; border-radius:var(--radius); padding:14px; margin-bottom:14px; border:1px solid #c8e8d8">
@@ -1561,11 +1546,11 @@ function calcPratoData(c, anno) {
   const kSomm = concimazioni.reduce((s, o) => s + o.kM2, 0);
 
   const pctN = targetN > 0 ? Math.min(nSomm / targetN, 1) : 0;
-  let sem = 'rosso', semLabel = 'Da avviare';
-  if (nSomm > 0 && pctN < 0.4) { sem = 'rosso'; semLabel = 'In corso'; }
-  if (pctN >= 0.4) { sem = 'giallo'; semLabel = 'In corso'; }
-  if (pctN >= 0.8) { sem = 'verde'; semLabel = 'In target'; }
-  if (targetN === 0) { sem = 'rosso'; semLabel = 'Nessun target'; }
+  const pctK = targetK > 0 ? Math.min(kSomm / targetK, 1) : 0;
+  const sem = semaforoDa(pctN);
+  const semK = semaforoDa(pctK);
+  let semLabel = pctN >= 0.8 ? 'In target' : (nSomm > 0 ? 'In corso' : 'Da avviare');
+  if (targetN === 0) semLabel = 'Nessun target';
 
   const lastOpDate = (tipoID) => {
     const ops = opsCliente.filter(o => isSi(o.Flag_prato) && o.TipoID === tipoID);
@@ -1574,115 +1559,65 @@ function calcPratoData(c, anno) {
     return v?.Data ? new Date(v.Data).toLocaleDateString('it-IT', {day:'numeric', month:'short'}) : '–';
   };
 
-  return { targetN, targetK, mq, nSomm, kSomm, pctN, sem, semLabel, concimazioni,
+  return { targetN, targetK, mq, nSomm, kSomm, pctN, pctK, sem, semK, semLabel,
     lastConc: lastOpDate('concimazione'),
     lastSemina: lastOpDate('semina'),
     lastArie: lastOpDate('arieggiatura') };
 }
 
-function togglePratoDettaglio(id) {
-  const el = document.getElementById('prato-dettaglio-' + id);
-  const btn = document.getElementById('prato-dettaglio-btn-' + id);
-  if (el.style.display === 'none') {
-    el.style.display = 'block';
-    btn.textContent = '▲ Chiudi dettaglio';
-  } else {
-    el.style.display = 'none';
-    btn.textContent = '▼ Dettaglio concimazioni';
-  }
+// Rosso finché si è indietro, giallo a metà strada, verde vicino al target. Le
+// soglie stanno qui e non in due posti, o azoto e potassio direbbero due cose.
+function semaforoDa(pct) {
+  if (pct >= 0.8) return 'verde';
+  if (pct >= 0.4) return 'giallo';
+  return 'rosso';
 }
 
-function renderPrati() {
-  const list = document.getElementById('prati-list');
-  if (!list) return;
-  // Fascia 1 in cima, poi fascia 2, in ordine alfabetico dentro ciascuna.
-  // La fascia 3 è "non concimato": in un report che misura la concimazione
-  // non dice niente. Chi non ha una fascia assegnata finisce in fondo invece
-  // di sparire: meglio vederlo e accorgersene che perderlo di vista.
-  const gruppo = c => { const f = parseInt(c.FasciaID); return f === 1 ? 1 : f === 2 ? 2 : 3; };
-  const pratiClienti = DB.clienti
-    .filter(c => isSi(c.Ha_prato) && parseInt(c.FasciaID) !== 3)
-    .sort((a, b) => gruppo(a) - gruppo(b) ||
-                    String(a.Cliente || '').localeCompare(String(b.Cliente || ''), 'it'));
-  if (!pratiClienti.length) { list.innerHTML = '<div class="empty"><div class="empty-icon">🌱</div><div class="empty-text">Nessun cliente con prato</div></div>'; return; }
-
-  const anno = new Date().getFullYear();
-  list.innerHTML = pratiClienti.map(c => {
-    const d = calcPratoData(c, anno);
-    // String(): Sheets restituisce gli ID tutti-cifre come numeri ("01" -> 1),
-    // e su un numero .replace non esiste
-    const safeId = String(c.ClienteID).replace(/[^a-z0-9]/gi, '_');
-
-    const dettaglioRows = d.concimazioni.length ? d.concimazioni.map((o, i) => {
-      const dataStr = o.data ? o.data.toLocaleDateString('it-IT', {day:'numeric', month:'short'}) : '–';
-      const nCum = d.concimazioni.slice(0, i+1).reduce((s,x) => s+x.nM2, 0);
-      const kCum = d.concimazioni.slice(0, i+1).reduce((s,x) => s+x.kM2, 0);
-      return `<div style="display:grid;grid-template-columns:60px 1fr 52px 52px 52px;gap:4px;align-items:center;padding:7px 0;border-bottom:1px solid var(--border);font-size:0.78rem">
-        <span style="color:var(--text-light)">${dataStr}</span>
-        <span style="font-weight:500">${o.concime}</span>
-        <span style="text-align:center;color:var(--text-light)">${o.dose} kg</span>
-        <span style="text-align:center;color:var(--green-deep);font-weight:600">+${o.nM2.toFixed(1)}</span>
-        <span style="text-align:center;color:var(--earth);font-weight:600">${nCum.toFixed(1)}</span>
+// Il riquadro del prato sulla scheda cliente. Era una pagina a parte — il report
+// Prati — e non l'ha mai aperta nessuno: la domanda «quanto ho concimato qui»
+// arriva guardando il cliente, non scorrendo un elenco di prati. Sta accanto al
+// riepilogo della siepe perché sono la stessa cosa detta per l'altra pianta.
+function riquadroPrato(c, prato, anno) {
+  const barra = (titolo, pct, fatto, target, semaforo) => `
+        <div class="prato-bar">
+          <div class="prato-bar-label">
+            <span>${titolo} ${anno}</span>
+            <span>${fatto.toFixed(0)} / ${target} g/m²</span>
+          </div>
+          <div class="bar-track"><div class="bar-fill ${semaforo}" style="width:${Math.round(pct * 100)}%"></div></div>
+        </div>`;
+  return `
+      <div class="riquadro-prato">
+        <div class="riquadro-prato-testa">
+          <div class="semaforo ${prato.targetN > 0 ? prato.sem : ''}"></div>
+          <div style="flex:1">
+            <div class="riquadro-prato-titolo">🌱 Prato</div>
+            <div class="prato-fascia">${c.FasciaID ? 'Fascia ' + c.FasciaID : 'Nessuna fascia'} · ${prato.mq ? prato.mq + ' mq' : 'mq non indicati'}</div>
+          </div>
+          <span class="pillola-prato ${prato.targetN > 0 ? prato.sem : 'rosso'}">${prato.semLabel}</span>
+        </div>
+        ${prato.targetN > 0 ? `
+        <div class="prato-grid">
+          <div class="prato-stat">
+            <div class="prato-stat-num">${Math.round(prato.pctN * 100)}<span style="font-size:0.65rem;font-weight:400">%</span></div>
+            <div class="prato-stat-lbl">Azoto distribuito</div>
+          </div>
+          <div class="prato-stat">
+            <div class="prato-stat-num">${Math.round(prato.pctK * 100)}<span style="font-size:0.65rem;font-weight:400">%</span></div>
+            <div class="prato-stat-lbl">Potassio distribuito</div>
+          </div>
+        </div>
+        ${barra('Azoto', prato.pctN, prato.nSomm, prato.targetN, prato.sem)}
+        ${barra('Potassio', prato.pctK, prato.kSomm, prato.targetK, prato.semK)}
+        <div class="prato-manca">Manca: N ${Math.max(0, prato.targetN - prato.nSomm).toFixed(1)} g/m² · K ${Math.max(0, prato.targetK - prato.kSomm).toFixed(1)} g/m²</div>
+        ` : `
+        <div class="prato-manca">Nessun target: metti i mq e la fascia con ✏️ Modifica, e qui compare quanto è stato distribuito.</div>`}
+        <div class="prato-ops">
+          <div class="prato-op-item"><div class="prato-op-date">${prato.lastConc}</div><div class="prato-op-label">Ult. concimazione</div></div>
+          <div class="prato-op-item"><div class="prato-op-date">${prato.lastSemina}</div><div class="prato-op-label">Ult. semina</div></div>
+          <div class="prato-op-item"><div class="prato-op-date">${prato.lastArie}</div><div class="prato-op-label">Ult. arieggiatura</div></div>
+        </div>
       </div>`;
-    }).join('') + `<div style="display:grid;grid-template-columns:60px 1fr 52px 52px 52px;gap:4px;padding:8px 0 2px;font-size:0.72rem;color:var(--text-light)">
-        <span></span><span></span><span style="text-align:center">Dose</span><span style="text-align:center">N +</span><span style="text-align:center">N cum.</span>
-      </div>`
-    : '<div style="font-size:0.82rem;color:var(--text-light);padding:8px 0">Nessuna concimazione registrata per il '+anno+'</div>';
-
-    return `<div class="prato-card">
-      <div class="prato-header">
-        <div class="semaforo ${d.sem}"></div>
-        <div style="flex:1">
-          <div class="prato-name">${c.Cliente}</div>
-          <div class="prato-fascia">Fascia ${c.FasciaID || '–'} · ${d.mq} mq</div>
-        </div>
-        <div style="text-align:right;flex-shrink:0">
-          <span style="font-size:0.72rem;font-weight:600;padding:3px 8px;border-radius:20px;background:${d.sem==='verde'?'#d4edda':d.sem==='giallo'?'#fef3cd':'#fdecea'};color:${d.sem==='verde'?'#155724':d.sem==='giallo'?'#856404':'#721c24'}">${d.semLabel}</span>
-        </div>
-      </div>
-      ${d.targetN > 0 ? `
-      <div class="prato-grid">
-        <div class="prato-stat">
-          <div class="prato-stat-num">${d.nSomm.toFixed(0)}<span style="font-size:0.65rem;font-weight:400"> g/m²</span></div>
-          <div class="prato-stat-lbl">N somministrato</div>
-        </div>
-        <div class="prato-stat">
-          <div class="prato-stat-num">${d.targetN}<span style="font-size:0.65rem;font-weight:400"> g/m²</span></div>
-          <div class="prato-stat-lbl">Target N/anno</div>
-        </div>
-        <div class="prato-stat">
-          <div class="prato-stat-num">${d.kSomm.toFixed(0)}<span style="font-size:0.65rem;font-weight:400"> g/m²</span></div>
-          <div class="prato-stat-lbl">K somministrato</div>
-        </div>
-        <div class="prato-stat">
-          <div class="prato-stat-num">${d.targetK}<span style="font-size:0.65rem;font-weight:400"> g/m²</span></div>
-          <div class="prato-stat-lbl">Target K/anno</div>
-        </div>
-      </div>
-      <div class="prato-bar">
-        <div class="prato-bar-label"><span>Azoto ${anno}</span><span>${Math.round(d.pctN*100)}% del target</span></div>
-        <div class="bar-track"><div class="bar-fill ${d.sem}" style="width:${Math.round(d.pctN*100)}%"></div></div>
-      </div>
-      <button id="prato-dettaglio-btn-${safeId}" onclick="togglePratoDettaglio('${safeId}')"
-        style="width:100%;margin-top:10px;padding:8px;background:none;border:1px solid var(--border);border-radius:8px;font-size:0.78rem;color:var(--green-mid);cursor:pointer;font-family:var(--font-body)">
-        ▼ Dettaglio concimazioni
-      </button>
-      <div id="prato-dettaglio-${safeId}" style="display:none;margin-top:8px;padding:8px 10px;background:var(--green-mist);border-radius:10px">
-        <div style="font-size:0.72rem;font-weight:700;color:var(--green-deep);margin-bottom:4px;text-transform:uppercase;letter-spacing:0.04em">Concimazioni ${anno}</div>
-        ${dettaglioRows}
-        <div style="margin-top:10px;padding-top:8px;border-top:2px solid var(--green-pale);display:flex;justify-content:space-between;font-size:0.82rem">
-          <span style="font-weight:600;color:var(--green-deep)">Totale N: ${d.nSomm.toFixed(1)} / ${d.targetN} g/m²</span>
-          <span style="font-weight:600;color:var(--earth)">Totale K: ${d.kSomm.toFixed(1)} / ${d.targetK} g/m²</span>
-        </div>
-        <div style="margin-top:6px;font-size:0.78rem;color:var(--text-light)">Manca: N ${Math.max(0, d.targetN - d.nSomm).toFixed(1)} g/m² · K ${Math.max(0, d.targetK - d.kSomm).toFixed(1)} g/m²</div>
-      </div>` : '<div style="font-size:0.8rem;color:var(--text-light);margin-bottom:8px">Nessun target impostato — inserisci mq e fascia nel cliente</div>'}
-      <div class="prato-ops">
-        <div class="prato-op-item"><div class="prato-op-date">${d.lastConc}</div><div class="prato-op-label">Ult. concimazione</div></div>
-        <div class="prato-op-item"><div class="prato-op-date">${d.lastSemina}</div><div class="prato-op-label">Ult. semina</div></div>
-        <div class="prato-op-item"><div class="prato-op-date">${d.lastArie}</div><div class="prato-op-label">Ult. arieggiatura</div></div>
-      </div>
-    </div>`;
-  }).join('');
 }
 
 // ── DRAWER CLIENTE ──

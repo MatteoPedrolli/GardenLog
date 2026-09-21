@@ -542,12 +542,6 @@ try {
   await page.evaluate(() => closeDrawer('overlay-prenotazione'));
   await page.waitForTimeout(150);
 
-  // ── report prati ──
-  await page.click('#nav-prati');
-  const prati = await page.textContent('#prati-list');
-  ok('report prati mostra il cliente', prati.includes('Mario Rossi'));
-  ok('report prati mostra somministrato e target', prati.includes('6') && prati.includes('25'));
-
   // ── backup ──
   const backup = await page.evaluate(() =>
     JSON.stringify({ app: 'GiardinoApp', versione: VERSIONE_DATI, esportato: new Date().toISOString(), db: DB }));
@@ -677,15 +671,53 @@ try {
   ok('target ancora collegato dopo la rinumerazione',
     await page.evaluate(() => DB.clienti.find(c => c.Cliente === 'Mario Rossi').Target_N_g_m2_anno) == 25);
 
-  // ── scheda cliente: riepilogo prato in una riga ──
+  // ── il prato sta sulla scheda del cliente, non in un report a parte ──
+  // Il report Prati c'era e non l'ha mai aperto nessuno: la domanda «quanto ho
+  // concimato qui» arriva guardando il cliente, non scorrendo un elenco di prati.
   await page.click('#nav-clienti');
   await page.click('.client-card');
   await page.waitForTimeout(200);
   const scheda = await page.textContent('#page-clienti');
-  ok('scheda cliente: fascia, superficie e percentuale',
-    scheda.includes('Fascia 7') && scheda.includes('200 mq') && scheda.includes('concimato'));
-  ok('scheda cliente: niente dettaglio di azoto e potassio',
-    !scheda.includes('Target N') && !scheda.includes('g/m²'), scheda.slice(0, 0));
+  ok('la scheda dice fascia e superficie',
+    scheda.includes('Fascia 7') && scheda.includes('200 mq'), scheda.slice(0, 120));
+  ok('e quanto è stato distribuito, azoto e potassio',
+    scheda.includes('Azoto distribuito') && scheda.includes('Potassio distribuito') &&
+    scheda.includes('g/m²'));
+  // Le barre sono la cosa che si guarda: una percentuale sola non dice se il
+  // potassio è rimasto indietro.
+  const barre = await page.evaluate(() =>
+    [...document.querySelectorAll('#page-clienti .riquadro-prato .bar-fill')]
+      .map(b => b.style.width));
+  ok('due barre, una per azoto e una per potassio', barre.length === 2, JSON.stringify(barre));
+  ok('e la loro larghezza è la percentuale vera',
+    await page.evaluate(() => {
+      const c = DB.clienti.find(x => x.Cliente === 'Mario Rossi');
+      const d = calcPratoData(c, new Date().getFullYear());
+      const larghe = [...document.querySelectorAll('#page-clienti .riquadro-prato .bar-fill')]
+        .map(b => parseInt(b.style.width));
+      // I due valori devono essere diversi, o la prova passerebbe anche se una
+      // barra disegnasse la percentuale dell'altra.
+      return larghe[0] === Math.round(d.pctN * 100) && larghe[1] === Math.round(d.pctK * 100) &&
+        d.pctN > 0 && d.pctN !== d.pctK;
+    }));
+  // Il colore è quello che si guarda prima del numero: rosso se si è indietro,
+  // giallo a metà strada, verde vicino al target. Qui l'azoto è al 24% e il
+  // potassio al 40%, quindi le due barre non possono avere lo stesso colore.
+  ok('e il colore dice a che punto è, senza leggere la percentuale',
+    await page.evaluate(() => {
+      const colore = b => ['verde', 'giallo', 'rosso'].find(x => b.classList.contains(x));
+      const barre = [...document.querySelectorAll('#page-clienti .riquadro-prato .bar-fill')];
+      const atteso = p => p >= 0.8 ? 'verde' : p >= 0.4 ? 'giallo' : 'rosso';
+      const d = calcPratoData(DB.clienti.find(x => x.Cliente === 'Mario Rossi'), new Date().getFullYear());
+      return colore(barre[0]) === atteso(d.pctN) && colore(barre[1]) === atteso(d.pctK) &&
+        colore(barre[0]) !== colore(barre[1]);
+    }));
+  ok('con le ultime operazioni sul prato, che sono il perché di quei numeri',
+    scheda.includes('Ult. concimazione') && scheda.includes('Ult. arieggiatura'));
+  ok('la pagina Prati e la sua voce nella barra non ci sono più',
+    await page.evaluate(() => !document.getElementById('page-prati') &&
+      !document.getElementById('nav-prati') &&
+      !document.body.innerHTML.includes("navTo('prati')")));
 
   // ── eliminazione a cascata ──
   await page.click('button.btn-danger:has-text("Elimina")');
@@ -694,7 +726,7 @@ try {
     await page.evaluate(() => DB.visite.length === 0 && DB.operazioni.length === 0));
 
   // ── tasto indietro: chiude un livello per volta, non esce dall'app ──
-  await page.click('#nav-prati');
+  await page.click('#nav-visite');
   await page.goBack();
   await page.waitForTimeout(200);
   ok('indietro da una pagina riporta alla home', await page.isVisible('#page-home'));
