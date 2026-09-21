@@ -617,6 +617,12 @@ async function elencaCartelle(cartella) {
   return nomi.sort();
 }
 
+async function esisteFile(cartella, nome) {
+  if (!cartella) return false;
+  try { await cartella.getFileHandle(nome); return true; }
+  catch (e) { return false; }
+}
+
 async function leggiTesto(cartella, nome) {
   const maniglia = await cartella.getFileHandle(nome);
   const file = await maniglia.getFile();
@@ -1070,6 +1076,48 @@ async function cambiaStato(id, stato) {
   lavoro.stato = stato;
   disegna();
   avvisa(stato === 'fatturato' ? 'Segnato come fatturato' : 'Rimesso fra i lavori da fatturare');
+}
+
+// Togliere un lavoro dall'archivio. Non è una correzione — quella si fa
+// rimandando il rapportino dal cantiere — è per il lavoro che non ci doveva
+// stare: una prova, un doppione nato da un identificativo cambiato a mano.
+//
+// La conferma dice **cosa succede dopo**, e sono due cose diverse. Un lavoro è
+// «in arrivo» perché l'archivio non ne ha copia: se il rapportino è ancora in
+// rapportini/, toglierlo dall'archivio lo rimette fra quelli in arrivo e si può
+// archiviare di nuovo. Se in rapportini/ non c'è più, questo file è l'unica copia
+// rimasta di un lavoro fatto, e non torna.
+async function eliminaArchiviato(id) {
+  const l = ARCHIVIO.find(x => x.id === id);
+  if (!l) { avvisa('Lavoro non trovato: ricontrolla la cartella', true); return; }
+  const chi = (l.cliente && l.cliente.nome) || 'senza nome';
+
+  const arrivi = await sottocartella(CARTELLA, CARTELLA_ARRIVI, false);
+  const torna = l.rapportino && await esisteFile(arrivi, nomeFileRapportino(l.rapportino));
+  const cosaSuccede = torna
+    ? 'Il rapportino è ancora in ' + CARTELLA_ARRIVI + '/, quindi torna fra quelli in arrivo e lo puoi archiviare di nuovo.'
+    : 'In ' + CARTELLA_ARRIVI + '/ non c\'è più: questo file è l\'unica copia che resta di questo lavoro, e non torna.';
+  if (!confirm('Togliere dall\'archivio «' + chi + ' — ' + formattaData(l.data) + '», ' +
+      formattaEuro(totaleConteggio(l.righe).totale) + '?\n\n' + cosaSuccede)) return;
+
+  try {
+    const radice = await sottocartella(CARTELLA, CARTELLA_ARCHIVIO, false);
+    const cartellaAnno = await sottocartella(radice, l.anno, false);
+    if (!cartellaAnno) throw new Error('non trovo la cartella ' + CARTELLA_ARCHIVIO + '/' + l.anno);
+    await cartellaAnno.removeEntry(l.file);
+  } catch (e) {
+    // Come per il salvataggio: se restasse in console, si crederebbe eliminato
+    // un lavoro che invece è ancora lì.
+    avvisa('Non ho potuto eliminare: ' + e.message, true);
+    return;
+  }
+
+  ARCHIVIATO = null;
+  vaiA('archivio');
+  await ricarica();
+  avvisa(torna
+    ? 'Tolto dall\'archivio: ' + chi + ' — è tornato fra quelli in arrivo'
+    : 'Tolto dall\'archivio: ' + chi);
 }
 
 // ── IL LISTINO ──
@@ -1758,6 +1806,7 @@ function disegnaArchiviato() {
       (l.stato === 'fatturato' ? 'da-fatturare\')">Rimetti da fatturare' : 'fatturato\')">Segna fatturato') +
       '</button>' +
     '<button class="secondaria" onclick="vaiA(\'archivio\')">Torna all\'archivio</button>' +
+    '<button class="pericolo" onclick="eliminaArchiviato(\'' + id + '\')">Togli dall\'archivio</button>' +
   '</div>';
 
   c.innerHTML = html;

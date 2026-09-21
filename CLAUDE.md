@@ -407,6 +407,14 @@ domanda che arriva quando qualcuno telefona.
 corretto dal cantiere, e torna fra quelli in arrivo con la sua revisione nuova.
 Una modifica fatta solo in ufficio si perderebbe al primo reinvio.
 
+**Si può togliere, però.** Non per correggere — per il lavoro che non ci doveva
+stare: una prova, un doppione. `eliminaArchiviato()` cancella il file dalla
+cartella, e la conferma dice **quale delle due cose succede dopo**, perché sono
+diverse: se il rapportino è ancora in `rapportini/` il lavoro torna fra quelli in
+arrivo e si riarchivia — è la solita regola, in arrivo perché l'archivio non ne ha
+copia — mentre se non c'è più, quel file era l'unica copia rimasta di lavoro fatto
+e non torna. Una conferma che dicesse sempre la stessa frase servirebbe a niente.
+
 **A sinistra sta il gestionale**: quanti lavori sono da fatturare e quanto fanno,
 quanti sono fatturati, e il totale. Resta lì mentre si scorre l'elenco, perché è
 la domanda che in ufficio ci si fa per prima e un numero in fondo alla pagina non

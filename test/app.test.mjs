@@ -852,6 +852,10 @@ try {
             .concat([...sotto.keys()].map(n => ({ kind: 'directory', name: n })));
           return (async function* () { for (const v of voci) yield v; })();
         },
+        async removeEntry(n) {
+          if (!file.has(n) && !sotto.has(n)) throw new Error('NotFoundError');
+          file.delete(n); sotto.delete(n);
+        },
         async queryPermission() { return 'granted'; },
         async requestPermission() { return 'granted'; },
       };
@@ -1439,6 +1443,67 @@ try {
   ok('chi è tutto fatturato non ha niente da incassare',
     (raccolto.match(/da incassare/g) || []).length === 1);
   await pagU.evaluate(() => cambiaRaccolta('data'));
+
+  // ── togliere un lavoro dall'archivio ──
+  // Non è una correzione — quella si fa rimandando il rapportino dal cantiere —
+  // è per il lavoro che non ci doveva stare. E siccome tocca l'unica copia di
+  // lavoro fatto, la conferma deve dire cosa succede dopo.
+  const domande = await pagU.evaluate(async () => {
+    const chieste = [];
+    const vero = window.confirm;
+    window.confirm = t => { chieste.push(t); return false; };
+    const conArrivo = ARCHIVIO.find(l => l.id !== 'altro-lavoro');
+    const senzaArrivo = ARCHIVIO.find(l => l.id === 'altro-lavoro');
+    await eliminaArchiviato(conArrivo.id);
+    await eliminaArchiviato(senzaArrivo.id);
+    window.confirm = vero;
+    return { chieste, quanti: ARCHIVIO.length, testi: [chieste[0] || '', chieste[1] || ''] };
+  });
+  ok('annullando la conferma non si cancella niente', domande.quanti === 2, String(domande.quanti));
+  // La conferma stessa è il pezzo che conta: senza, un tocco distratto su un
+  // bottone rosso porta via l'unica copia di un lavoro fatto.
+  ok('e la conferma viene chiesta, una per lavoro',
+    domande.chieste.length === 2, String(domande.chieste.length));
+  // Un lavoro è «in arrivo» perché l'archivio non ne ha copia: se il rapportino è
+  // ancora in rapportini/, toglierlo lo rimette in fila. Se non c'è più, quel file
+  // era l'ultima copia. Sono due cose diverse e la conferma non le può confondere.
+  ok('la conferma dice che il lavoro torna fra quelli in arrivo',
+    domande.testi[0].includes('torna fra quelli in arrivo'), domande.testi[0]);
+  ok('e per quello senza rapportino dice che è l\'unica copia',
+    domande.testi[1].includes('unica copia'), domande.testi[1]);
+  ok('e in entrambi i casi dice di chi e di quanto',
+    domande.testi.every(t => t.includes('€')) &&
+    domande.testi[1].includes('Giuseppe Verdi'), domande.testi[1]);
+
+  // Confermando, il file se ne va davvero dalla cartella: non basta sparire da
+  // ARCHIVIO, o al Ricontrolla successivo tornerebbe.
+  const dopoElimina = await pagU.evaluate(async () => {
+    const l = ARCHIVIO.find(x => x.id === 'altro-lavoro');
+    // Se non c'è più, qualcosa l'ha già portato via: la verifica deve fallire e
+    // dirlo, non far morire il giro con un errore che non spiega niente.
+    if (!l) return { restano: ARCHIVIO.length, ancoraSuDisco: null, mancava: true };
+    const nome = l.file, anno = l.anno;
+    await eliminaArchiviato(l.id);
+    const archivio = await window.RADICE.getDirectoryHandle('archivio');
+    const cartellaAnno = await archivio.getDirectoryHandle(anno);
+    return { restano: ARCHIVIO.length, ancoraSuDisco: await esisteFile(cartellaAnno, nome) };
+  });
+  ok('confermando il lavoro esce dall\'archivio',
+    dopoElimina.restano === 1 && !dopoElimina.mancava, JSON.stringify(dopoElimina));
+  ok('e il file non è più nella cartella', dopoElimina.ancoraSuDisco === false);
+
+  // Quello il cui rapportino è ancora in rapportini/ torna fra quelli in arrivo,
+  // ed è esattamente la regola dell'app: in arrivo perché l'archivio non ne ha copia.
+  const tornato = await pagU.evaluate(async () => {
+    const l = ARCHIVIO[0];
+    if (!l) return { inArchivio: 0, inArrivo: false, mancava: true };
+    const id = l.id;
+    await eliminaArchiviato(id);
+    return { inArchivio: ARCHIVIO.length, inArrivo: ARRIVI.some(a => a.doc.id === id) };
+  });
+  ok('e chi ha ancora il rapportino in arrivo torna in fila, invece di sparire',
+    tornato.inArchivio === 0 && tornato.inArrivo === true && !tornato.mancava,
+    JSON.stringify(tornato));
 
   // Un lavoro archiviato da una versione futura può avere campi che questa non
   // sa leggere: fermarsi è meglio che mostrare un totale sbagliato.

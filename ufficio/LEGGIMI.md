@@ -79,6 +79,11 @@ Un lavoro archiviato si porta dentro il rapportino per intero. Fra due anni quel
 file deve raccontare il lavoro da solo, anche se la cartella degli arrivi è stata
 svuotata e il telefono cambiato.
 
+Un lavoro si può anche **togliere** dall'archivio, dalla sua scheda. Non serve a
+correggerlo — per quello si rimanda il rapportino dal cantiere — ma al lavoro che
+non ci doveva stare. La conferma dice cosa succede: se il rapportino è ancora in
+`rapportini/` torna fra quelli in arrivo, altrimenti quel file era l'unica copia.
+
 ## Due pezzi da installare, una volta sola
 
 **1. Lo script che riceve** — `ricevi-rapportini.gs`, da incollare in
