@@ -612,6 +612,13 @@ lavagna vengono prima.
 Le due app usano la stessa palette. I verdi rimasti sul telefono — la pastiglia
 del prato, quella della siepe — non sono cromia: dicono di che pianta si parla.
 
+**Niente corsivo e niente graziati.** I nomi dei clienti erano in Playfair Display,
+un graziato ad alto contrasto, e le note dell'agenda in corsivo: tutti e due si
+leggevano male, e chi usa l'app lo ha chiesto espressamente. I titoli e i nomi usano
+`--font-display`, che è Calibri sul PC dell'ufficio e ricade sul DM Sans del testo
+dove Calibri non c'è. Per mettere in evidenza si usa il peso o il colore, non il
+corsivo.
+
 ## I preventivi
 
 Non sono ancora costruiti. Quello che si è capito sta in `ufficio/PREVENTIVI.md`:

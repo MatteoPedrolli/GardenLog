@@ -13,7 +13,7 @@
 <link rel="icon" type="image/png" href="icon-192.png">
 <link rel="apple-touch-icon" href="apple-touch-icon.png">
 <link rel="preconnect" href="https://fonts.googleapis.com">
-<link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@400;600;700&family=DM+Sans:wght@300;400;500;600&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@300;400;500;600&display=swap" rel="stylesheet">
 <style>
 :root {
   /* ── CARTA E INCHIOSTRO ──
@@ -40,7 +40,9 @@
   --radius-sm: 10px;
   --shadow: 0 4px 24px rgba(36,33,28,0.10);
   --shadow-lg: 0 8px 40px rgba(36,33,28,0.16);
-  --font-display: 'Playfair Display', serif;
+  /* Calibri sul PC dell'ufficio; dove non c'è (il telefono) resta il DM Sans del
+     testo. Era un graziato ad alto contrasto, e sui nomi dei clienti si leggeva male. */
+  --font-display: Calibri, Carlito, 'DM Sans', sans-serif;
   --font-body: 'DM Sans', sans-serif;
   --nav-h: 64px;
   --top-h: 60px;
@@ -2617,7 +2619,7 @@ function renderAgenda() {
   el.innerHTML = agenda.appuntamenti.map(a => `<div class="card" style="padding:12px">
     <div style="font-size:0.78rem; color:var(--primary); font-weight:600">${perValore(etichettaMezzaGiornata(a.giorno, a.mezza))}</div>
     <div style="font-weight:600">${perValore(a.cliente || 'senza cliente')}</div>
-    ${a.note ? `<div style="font-size:0.82rem; color:var(--text-mid); margin-top:4px; font-style:italic">${perValore(a.note)}</div>` : ''}
+    ${a.note ? `<div style="font-size:0.82rem; color:var(--text-mid); margin-top:4px">${perValore(a.note)}</div>` : ''}
   </div>`).join('');
 }
 

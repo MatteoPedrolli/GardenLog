@@ -7,7 +7,7 @@
 <title>GiardinoApp · Ufficio</title>
 <link rel="icon" type="image/png" href="../icon-192.png">
 <link rel="preconnect" href="https://fonts.googleapis.com">
-<link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@400;600;700&family=DM+Sans:wght@300;400;500;600&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@300;400;500;600&display=swap" rel="stylesheet">
 <style>
 :root {
   /* ── CARTA E INCHIOSTRO ──
@@ -33,7 +33,9 @@
   --radius: 14px;
   --radius-sm: 9px;
   --shadow: 0 2px 14px rgba(36,33,28,0.09);
-  --font-display: 'Playfair Display', serif;
+  /* Calibri sul PC dell'ufficio; dove non c'è (il telefono) resta il DM Sans del
+     testo. Era un graziato ad alto contrasto, e sui nomi dei clienti si leggeva male. */
+  --font-display: Calibri, Carlito, 'DM Sans', sans-serif;
   --font-body: 'DM Sans', sans-serif;
   --barra-l: 240px;
 }
@@ -449,7 +451,7 @@ input.vuoto { background: #fffdf5; border-color: #ecdca8; }
 }
 #foglio td { padding: 7px 8px 7px 0; border-bottom: 1px solid #ccc; }
 #foglio td.num, #foglio th.num { text-align: right; padding-right: 0; }
-#foglio .da-definire { color: #555; font-style: italic; }
+#foglio .da-definire { color: #555; }
 #foglio .riga-totale td {
   border-bottom: none; border-top: 2px solid #000; padding-top: 12px;
   font-weight: 600; font-size: 1.05rem;
