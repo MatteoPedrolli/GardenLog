@@ -567,6 +567,15 @@ lavagna vengono prima.
 Le due app usano la stessa palette. I verdi rimasti sul telefono — la pastiglia
 del prato, quella della siepe — non sono cromia: dicono di che pianta si parla.
 
+## I preventivi
+
+Non sono ancora costruiti. Quello che si è capito sta in `ufficio/PREVENTIVI.md`:
+i quattro tipi di preventivo e quale ha davvero bisogno di un disegno, perché il
+CAD non si rifà, dove sta il lavoro vero (il passaggio dai numeri al preventivo,
+non la misurazione), e cosa va chiesto alla segretaria prima che vada in pensione.
+
+Chi ci mette mano legga prima quello, o rifarà un ragionamento già fatto.
+
 ## Cose da sapere prima di metterci mano
 
 - L'interfaccia usa `onclick="funzione()"`, quindi le funzioni devono restare
