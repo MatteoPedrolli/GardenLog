@@ -62,6 +62,12 @@ try {
   await page.click('#nav-dati');
   await page.waitForTimeout(200);
   ok('pagina Dati raggiungibile', await page.isVisible('#page-dati'));
+  ok('con il suo titoletto piccolo in cima', (await page.textContent('#titoletto')) === 'Impostazioni');
+  // Il bottone dell'agenda era largo il 100% più i margini, e usciva dallo schermo.
+  ok('nella pagina Appuntamenti niente esce dal bordo destro',
+    await page.evaluate(() => { navTo('prossimi'); const w = document.documentElement.clientWidth;
+      const fuori = [...document.querySelectorAll('#page-prossimi *')].some(e => e.getBoundingClientRect().right > w + 1);
+      navTo('dati'); return !fuori; }));
   ok('dalla sua voce nella barra in basso, che resta accesa',
     await page.evaluate(() => document.getElementById('nav-dati').classList.contains('active')));
   await page.click('#archivi-list .card:has(.card-title:text-is("Concimi")) button.btn');

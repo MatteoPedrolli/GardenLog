@@ -145,7 +145,12 @@ stessa cosa. Le **impostazioni** (la pagina Dati e backup) sono l'ultima voce de
 barra in basso, con le altre. Le voci sono in minuscolo: in maiuscolo cinque non ci
 stavano.
 
-Al posto della barra resta `#barra-stato`, una fascia scura alta quanto la barra di
+Resta un **titoletto** piccolo, `#titoletto`, sulla stessa fascia scura: senza, si
+perdeva il segno di dove si è. Dice la pagina in una parola ed è alto la metà della
+barra di prima; sulla home non c'è, perché il riquadro con la data fa già da
+testata.
+
+Sopra, resta `#barra-stato`, una fascia scura alta quanto la barra di
 stato dell'iPhone: con `black-translucent` l'orologio è bianco, e sullo sfondo
 chiaro sparirebbe. Per saperne l'altezza serve `viewport-fit=cover`, che però porta
 la pagina fino in fondo allo schermo: per questo barra in basso, pannelli, avvisi

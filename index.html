@@ -71,6 +71,14 @@ html, body {
   background: var(--inchiostro);
   flex-shrink: 0;
 }
+/* Il nome della pagina, piccolo, sulla stessa fascia scura dell'orologio: senza
+   si perdeva il segno di dove si è, con la barra di prima si perdeva spazio.
+   Sulla home non c'è: il riquadro scuro con la data fa già da testata. */
+#titoletto {
+  background: var(--inchiostro); color: rgba(255,255,255,0.85);
+  font-size: 0.78rem; font-weight: 600; letter-spacing: 0.08em; text-transform: uppercase;
+  padding: 6px 18px 7px; flex-shrink: 0;
+}
 
 #content {
   flex: 1;
@@ -589,6 +597,7 @@ select.form-control { background-image: url("data:image/svg+xml,%3Csvg xmlns='ht
 <body>
 <div id="app">
   <div id="barra-stato"></div>
+  <div id="titoletto" style="display:none"></div>
 
   <div id="content">
     <!-- HOME -->
@@ -643,7 +652,7 @@ select.form-control { background-image: url("data:image/svg+xml,%3Csvg xmlns='ht
     <div id="page-prossimi" class="page">
       <div class="section-title">In programma <span id="agenda-quando" class="agenda-quando"></span></div>
       <div id="agenda-list"></div>
-      <button class="btn btn-secondary" style="margin:0 18px" onclick="scaricaAgenda({ avvisa: true })">🔄 Aggiorna dall'ufficio</button>
+      <button class="btn btn-secondary" style="margin:0 14px; width:calc(100% - 28px)" onclick="scaricaAgenda({ avvisa: true })">🔄 Aggiorna dall'ufficio</button>
 
       <div class="section-title">Prenota un appuntamento</div>
       <div class="card" style="padding:14px">
@@ -1314,6 +1323,10 @@ function navTo(page) {
   document.getElementById('page-'+page).classList.add('active');
   document.getElementById('nav-'+page)?.classList.add('active');
   currentPage = page;
+  const titoli = { clienti: 'Clienti', visite: 'Registro', prossimi: 'Appuntamenti', dati: 'Impostazioni' };
+  const titoletto = document.getElementById('titoletto');
+  titoletto.textContent = titoli[page] || '';
+  titoletto.style.display = titoli[page] ? '' : 'none';
   if (page === 'dati') renderDati();
   // Aprendo la pagina si riprova a scaricare l'agenda, ma non a ogni tocco: in
   // ufficio la lavagna cambia qualche volta al giorno, e una richiesta per ogni
