@@ -64,16 +64,11 @@ body {
   display: flex; flex-direction: column;
   position: sticky; top: 0; height: 100dvh;
 }
-#barra h1 {
-  font-family: var(--font-display);
-  font-size: 1.15rem; font-weight: 600;
-  padding: 22px 20px 6px;
-  letter-spacing: 0.02em;
-}
-#barra .sotto {
-  font-size: 0.72rem; color: rgba(255,255,255,0.55);
-  padding: 0 20px 20px; letter-spacing: 0.06em; text-transform: uppercase;
-}
+/* Niente nome dell'app in cima alla barra, e niente titolo in testa alle pagine
+   che ripeta la voce evidenziata qui: dicevano due volte la stessa cosa e
+   rubavano spazio alla schermata. Il titolo resta dove dice qualcosa che la
+   barra non sa, come il nome del cliente di un lavoro. */
+#barra { padding-top: 14px; }
 .voce-barra {
   background: none; border: none; color: rgba(255,255,255,0.75);
   font-family: var(--font-body); font-size: 0.92rem; text-align: left;
@@ -94,7 +89,7 @@ body {
   word-break: break-word;
 }
 
-#contenuto { flex: 1; padding: 28px 34px 60px; max-width: 1100px; }
+#contenuto { flex: 1; padding: 18px 34px 60px; max-width: 1100px; }
 
 h2.titolo-pagina {
   font-family: var(--font-display); font-size: 1.6rem; font-weight: 600;
@@ -471,8 +466,6 @@ input.vuoto { background: #fffdf5; border-color: #ecdca8; }
 
 <div id="app">
   <nav id="barra">
-    <h1>GiardinoApp</h1>
-    <div class="sotto">Ufficio</div>
     <button class="voce-barra attiva" id="v-arrivi" onclick="vaiA('arrivi')">
       <span>📥</span> In arrivo <span class="pallino" id="pallino-arrivi">0</span>
     </button>
@@ -1531,8 +1524,7 @@ function disegnaArrivi() {
   const c = document.getElementById('pagina-arrivi');
   if (!CARTELLA) { c.innerHTML = schermataBenvenuto(); return; }
 
-  let html = '<h2 class="titolo-pagina">In arrivo</h2>';
-  html += '<p class="sottotitolo">Rapportini depositati dal telefono e non ancora archiviati</p>';
+  let html = '<p class="sottotitolo">Rapportini depositati dal telefono e non ancora archiviati</p>';
 
   if (ILLEGGIBILI.length) {
     html += '<div class="allarme"><strong>' + ILLEGGIBILI.length + ' file non leggibili.</strong><br>' +
@@ -1761,8 +1753,7 @@ function disegnaArchivio() {
   const c = document.getElementById('pagina-archivio');
   if (!CARTELLA) { c.innerHTML = schermataBenvenuto(); return; }
 
-  let html = '<h2 class="titolo-pagina">Archivio</h2>';
-  html += '<p class="sottotitolo">' + ARCHIVIO.length +
+  let html = '<p class="sottotitolo">' + ARCHIVIO.length +
     (ARCHIVIO.length === 1 ? ' lavoro archiviato' : ' lavori archiviati') + '</p>';
 
   html += '<div class="tavolo">';
@@ -2069,8 +2060,7 @@ function disegnaClienti() {
   const c = document.getElementById('pagina-clienti');
   if (!CARTELLA) { c.innerHTML = schermataBenvenuto(); return; }
 
-  let html = '<h2 class="titolo-pagina">Clienti</h2>';
-  html += '<p class="sottotitolo">' + CLIENTI.length +
+  let html = '<p class="sottotitolo">' + CLIENTI.length +
     (CLIENTI.length === 1 ? ' cliente' : ' clienti') + ' · telefono e mail stanno qui, il cantiere non li ha</p>';
 
   html += '<div id="clienti-da-salvare" class="avvertenza" style="display:' +
@@ -2418,7 +2408,6 @@ function disegnaLavagna() {
   const ultimo = giorni[5].toLocaleDateString('it-IT', { day: 'numeric', month: 'long', year: 'numeric' });
 
   let html = '<div class="testata-lavagna">' +
-    '<div><h2 class="titolo-pagina" style="margin:0">Lavagna</h2></div>' +
     '<button class="freccia-sett" onclick="cambiaSettimana(-1)" title="Settimana precedente">←</button>' +
     '<div><div class="settimana-num">Settimana ' + numeroSettimana(SETTIMANA) + '</div>' +
       '<div class="settimana-date">' + primo + ' – ' + ultimo + '</div></div>' +
@@ -2715,8 +2704,7 @@ function disegnaListino() {
   const c = document.getElementById('pagina-listino');
   if (!CARTELLA) { c.innerHTML = schermataBenvenuto(); return; }
 
-  let html = '<h2 class="titolo-pagina">Listino</h2>';
-  html += '<p class="sottotitolo">I prezzi stanno qui, non sul telefono: si correggono in un posto solo</p>';
+  let html = '<p class="sottotitolo">I prezzi stanno qui, non sul telefono: si correggono in un posto solo</p>';
 
   html += '<div id="listino-da-salvare" class="avvertenza" style="display:' +
     (LISTINO_DA_SALVARE ? 'block' : 'none') + '">' +
@@ -2928,8 +2916,7 @@ function disegnaImpostazioni() {
   const c = document.getElementById('pagina-impostazioni');
   if (!CARTELLA) { c.innerHTML = schermataBenvenuto(); return; }
 
-  let html = '<h2 class="titolo-pagina">Impostazioni</h2>';
-  html += '<p class="sottotitolo">Quello che finisce in testa al foglio che consegni al cliente</p>';
+  let html = '<p class="sottotitolo">Quello che finisce in testa al foglio che consegni al cliente</p>';
 
   html += '<div id="impostazioni-da-salvare" class="avvertenza" style="display:' +
     (IMPOSTAZIONI_DA_SALVARE ? 'block' : 'none') + '">' +

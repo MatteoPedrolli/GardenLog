@@ -316,6 +316,12 @@ l'archivio nel browser perde la sola rete di sicurezza che c'è.
   GiardinoApp/listino.json           ← i prezzi, solo dell'ufficio
 ```
 
+**Le pagine non hanno un titolo che ripeta la barra.** Il nome dell'app in cima
+alla barra laterale e «Clienti», «Archivio», «Lavagna» in testa alle pagine dicevano
+la stessa cosa della voce evidenziata, e rubavano spazio alla schermata. Un titolo
+resta solo dove dice qualcosa che la barra non sa: il nome del cliente di un lavoro
+aperto, o la schermata per collegare la cartella.
+
 **Tutto il contatto con l'API delle cartelle sta in un punto solo.** `usaCartella()`
 prende una maniglia e il resto dell'app non sa da dove arrivi: è il motivo per cui
 si può provare senza aprire una finestra di sistema, che un test non saprebbe
