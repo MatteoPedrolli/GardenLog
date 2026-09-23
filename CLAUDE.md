@@ -136,6 +136,23 @@ vuol dire «non ancora scaricata», che è un valore buono e non chiede una
 migrazione. Un'agenda che non si scarica **non cancella quella di prima**: vecchia
 di un giorno è un'informazione, il vuoto no.
 
+## Sul telefono lo schermo è poco
+
+**Non c'è una barra in alto.** Ripeteva il nome della pagina che la barra in basso
+già evidenzia, e il suo ＋ faceva quello che fanno le schede «Nuova visita» e
+«Nuovo cliente» della home: era spazio tolto alla schermata per dire due volte la
+stessa cosa. Le **impostazioni** (la pagina Dati e backup) sono l'ultima voce della
+barra in basso, con le altre. Le voci sono in minuscolo: in maiuscolo cinque non ci
+stavano.
+
+Al posto della barra resta `#barra-stato`, una fascia scura alta quanto la barra di
+stato dell'iPhone: con `black-translucent` l'orologio è bianco, e sullo sfondo
+chiaro sparirebbe. Per saperne l'altezza serve `viewport-fit=cover`, che però porta
+la pagina fino in fondo allo schermo: per questo barra in basso, pannelli, avvisi
+e barra dell'aggiornamento sommano `env(safe-area-inset-bottom)`. Chi aggiunge
+qualcosa fissato in basso deve fare lo stesso, o finisce sotto la linea per tornare
+alla home.
+
 ## Il prato sta sul cliente
 
 C'era una pagina **Report Prati**, con l'elenco dei prati e per ognuno le

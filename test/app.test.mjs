@@ -56,9 +56,14 @@ try {
   ok('contatore in home aggiornato', (await page.textContent('#stat-clienti')) === '1');
 
   // ── archivio concimi ──
-  await page.click('.topbar-action');
+  // Niente barra in alto: ripeteva il nome della pagina e il ＋ faceva quello che
+  // fanno le schede della home. Le impostazioni stanno in fondo, con le altre.
+  ok('in alto non c\'è più la barra col titolo', !(await page.$('#topbar')));
+  await page.click('#nav-dati');
   await page.waitForTimeout(200);
   ok('pagina Dati raggiungibile', await page.isVisible('#page-dati'));
+  ok('dalla sua voce nella barra in basso, che resta accesa',
+    await page.evaluate(() => document.getElementById('nav-dati').classList.contains('active')));
   await page.click('#archivi-list .card:has(.card-title:text-is("Concimi")) button.btn');
   await page.fill('#f-arch-Concime', 'Nitrophoska');
   await page.fill('#f-arch-N_percento', '12');
@@ -68,8 +73,8 @@ try {
   ok('concime aggiunto in archivio', await page.evaluate(() => DB.concimi.length) === 1);
 
   // ── visita: fasce orarie e checklist ──
-  await page.click('#nav-visite');
-  await page.click('#topbar-action-btn');
+  await page.click('#nav-home');
+  await page.click('.quick-card:has-text("Nuova visita")');
   await page.fill('#f-visita-cliente-search', 'Mario');
   await page.waitForTimeout(200);
   await page.click('#visita-cliente-suggestions .suggestion-item');
@@ -646,7 +651,7 @@ try {
     JSON.stringify({ app: 'GiardinoApp', versione: VERSIONE_DATI, esportato: new Date().toISOString(), db: DB }));
   await page.evaluate(() => { DB.clienti = []; DB.visite = []; DB.operazioni = []; return salvaDB(); });
   ok('dati azzerati per la prova', await page.evaluate(() => DB.clienti.length) === 0);
-  await page.click('.topbar-action');
+  await page.click('#nav-dati');
   await page.setInputFiles('#file-backup', { name: 'backup.json', mimeType: 'application/json', buffer: Buffer.from(backup) });
   await page.waitForTimeout(400);
   ok('backup reimportato per intero',
@@ -733,13 +738,13 @@ try {
   ok('CSV con la virgola come decimale', /;6,00;/.test(csv), csv.split('\n')[1]);
 
   // ── apostrofo nel cognome: "Dall'Oglio" non è un caso di scuola ──
-  await page.click('#nav-clienti');
-  await page.click('#topbar-action-btn');
+  await page.click('#nav-home');
+  await page.click('.quick-card:has-text("Nuovo cliente")');
   await page.fill('#f-cliente-nome', "Luca Dall'Oglio");
   await page.click('#btn-salva-cliente');
   await page.waitForTimeout(300);
-  await page.click('#nav-visite');
-  await page.click('#topbar-action-btn');
+  await page.click('#nav-home');
+  await page.click('.quick-card:has-text("Nuova visita")');
   await page.fill('#f-visita-cliente-search', 'Dall');
   await page.waitForTimeout(200);
   await page.click('#visita-cliente-suggestions .suggestion-item');
@@ -759,7 +764,7 @@ try {
   await page.evaluate(() => closeDrawer('overlay-visita'));
 
   // ── rinumerare una fascia si porta dietro i clienti ──
-  await page.click('.topbar-action');
+  await page.click('#nav-dati');
   await page.waitForTimeout(200);
   await page.evaluate(() => openVoceArchivio('fasce', '1'));
   await page.fill('#f-arch-FasciaID', '7');
@@ -831,8 +836,8 @@ try {
   ok('indietro da una pagina riporta alla home', await page.isVisible('#page-home'));
   ok('indietro non ha fatto uscire dall\'app', await page.evaluate(() => typeof DB === 'object'));
 
-  await page.click('#nav-clienti');
-  await page.click('#topbar-action-btn');
+  await page.click('#nav-home');
+  await page.click('.quick-card:has-text("Nuovo cliente")');
   await page.waitForTimeout(200);
   ok('pannello aperto', await page.evaluate(() => !!document.querySelector('.overlay.open')));
   await page.goBack();
