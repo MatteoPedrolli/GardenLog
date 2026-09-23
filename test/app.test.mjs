@@ -379,8 +379,18 @@ try {
   ok('porta la settimana, scritta come il lunedì che la apre',
     docAppuntamento.settimana === '2027-03-15', docAppuntamento.settimana);
   ok('e si legge sempre nello stesso modo',
-    await page.evaluate(() => etichettaSettimana('2027-03-15')) === 'dal 15/03 · settimana 12',
+    await page.evaluate(() => etichettaSettimana('2027-03-15')) ===
+      (new Date().getFullYear() === 2027 ? 'dal 15/03 · settimana 12' : 'dal 15/03/2027 · settimana 12'),
     await page.evaluate(() => etichettaSettimana('2027-03-15')));
+  // Un 2029 battuto al posto di 2026 si leggeva identico a quello giusto, e il
+  // lavoro spariva fra quelli «per più avanti» senza che niente lo dicesse.
+  ok('l\'anno compare quando non è quello in corso, e solo allora',
+    await page.evaluate(() => {
+      const quest = lunediDellaSettimana(new Date(new Date().getFullYear(), 5, 15));
+      const altro = lunediDellaSettimana(new Date(new Date().getFullYear() + 3, 5, 15));
+      return !/\/\d{4}/.test(etichettaSettimana(quest)) &&
+        etichettaSettimana(altro).includes('/' + (new Date().getFullYear() + 3));
+    }));
   ok('la schermata mostra la settimana scelta, non la data battuta',
     (await page.textContent('#prenotazioni-list')).includes('settimana 12'));
 
@@ -1644,6 +1654,38 @@ try {
   ok('a sinistra c\'è il gestionale con i due stati',
     archivio.includes('Da fatturare') && archivio.includes('Fatturato') && archivio.includes('Gestionale'));
   ok('e con quanto c\'è ancora da incassare', archivio.includes('stato-somma'));
+
+  // ── dalla scheda cliente ai suoi conti ──
+  // Chiusa, una scheda è solo il nome: con tutti i campi aperti l'elenco era un
+  // muro di caselle.
+  const schede = await pagU.evaluate(() => {
+    CLIENTI_APERTI = new Set();
+    if (!CLIENTI.some(c => c.id === 'cliente-verdi')) CLIENTI.push(sistemaCliente({ id: 'cliente-verdi', nome: 'Giuseppe Verdi' }));
+    // Un omonimo parziale: «Verdi» non deve portarsi dietro i conti di «Giuseppe Verdi».
+    CLIENTI.push(sistemaCliente({ id: 'cliente-verdini', nome: 'Giuseppe Verdini' }));
+    vaiA('clienti');
+    const el = document.getElementById('elenco-clienti');
+    const chiuse = el.querySelectorAll('input').length === 0 && el.querySelectorAll('.testa-cliente').length === CLIENTI.length;
+    apriChiudiCliente('cliente-verdi');
+    const aperta = el.querySelectorAll('input').length > 0 && el.innerHTML.includes('Vedi conti (1)');
+    const verdini = contiDelCliente(CLIENTI.find(c => c.id === 'cliente-verdini')).length;
+    vediConti('cliente-verdi');
+    const pag = document.getElementById('pagina-archivio');
+    const r = { chiuse, aperta, verdini, pagina: PAGINA,
+      nomi: [...pag.querySelectorAll('#elenco-archivio .nome-cliente')].map(e => e.textContent),
+      detto: pag.innerHTML.includes('Solo i conti di') };
+    tuttiIClienti();
+    r.tutti = document.querySelectorAll('#pagina-archivio #elenco-archivio .scheda').length;
+    CLIENTI = CLIENTI.filter(c => c.id !== 'cliente-verdini');
+    return r;
+  });
+  ok('in Clienti le schede chiuse mostrano solo il nome', schede.chiuse, JSON.stringify(schede));
+  ok('e un clic le apre con i campi e «Vedi conti»', schede.aperta, JSON.stringify(schede));
+  ok('«Vedi conti» porta in archivio con i soli conti di quel cliente',
+    schede.pagina === 'archivio' && schede.nomi.length === 1 && schede.nomi[0] === 'Giuseppe Verdi', JSON.stringify(schede));
+  ok('e l\'archivio dice che sta mostrando solo quelli', schede.detto);
+  ok('un nome che ne contiene un altro non si porta dietro i suoi conti', schede.verdini === 0);
+  ok('e togliendo il filtro tornano tutti', schede.tutti === 2, JSON.stringify(schede));
 
   const dettaglio = await pagU.evaluate(() => {
     apriArchiviato(ARCHIVIO.find(l => l.id !== 'altro-lavoro').id);

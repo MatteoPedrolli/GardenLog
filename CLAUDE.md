@@ -403,6 +403,11 @@ calendario lo sanno usare tutti i telefoni, mentre `<input type="week">` su iOS
 diventa una casella di testo. Sotto al campo compare la settimana che ne esce, o
 si finisce per credere di aver fissato una data.
 
+**L'anno si scrive quando non è quello in corso**: «dal 24/09/2029 · settimana 39».
+È successo davvero, un 2029 battuto al posto di 2026: l'etichetta era identica a
+quella giusta e il lavoro spariva fra quelli per più avanti senza che niente lo
+dicesse.
+
 **Quello che è per più avanti non sta in mezzo ai piedi.** La colonna mostra i
 lavori della settimana guardata e di quelle già passate; gli altri restano da
 parte, contati, con un bottone per guardarli — nascondere senza dire quanto è il
@@ -554,6 +559,16 @@ la regola di sempre — un file, un solo autore — anche quando i dati viaggian
 
 Chi compare sui rapportini e non in anagrafica si aggiunge con un bottone: il
 cantiere l'ha già scritto una volta, e farlo ribattere sarebbe lavoro inventato.
+
+**Una scheda cliente chiusa è solo il nome**, e si apre con un clic: con tutti i
+campi aperti l'elenco era un muro di caselle, e chi cerca un cliente scorre i nomi.
+Aperta, porta **«Vedi conti»**, che va in archivio con i soli lavori di quel
+cliente — il gestionale a sinistra compreso, perché quanto gli si deve è la domanda
+per cui lo si apre. Il filtro resta scritto in cima con una ✕: un archivio che
+mostra una parte senza dirlo fa credere che il resto non ci sia. I conti si
+trovano per `id` **o per nome intero**: un cliente aggiunto a mano in ufficio ha un
+id che i rapportini non conoscono, e il nome a pezzi porterebbe le fatture di
+«Rossini» dentro quelle di «Rossi».
 
 **I prodotti seguono la stessa regola.** Concimi, sementi e fitofarmaci vivono sul
 telefono — in giardino senza rete devi poter scegliere un concime, e N% e K%

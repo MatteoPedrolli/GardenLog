@@ -136,6 +136,7 @@ button.secondaria { background: var(--white); color: var(--text-mid); border-col
 button.secondaria:hover { border-color: var(--ocra); color: var(--inchiostro-tenue); }
 button.pericolo { background: var(--white); color: var(--red); border-color: #f2d4d0; }
 button.piccola { padding: 6px 12px; font-size: 0.82rem; }
+button.secondaria[disabled] { opacity: 0.55; cursor: default; border-color: var(--border); color: var(--text-light); }
 .bottoni { display: flex; gap: 10px; flex-wrap: wrap; margin-top: 18px; }
 
 table.elenco { width: 100%; border-collapse: collapse; }
@@ -149,10 +150,21 @@ table.elenco td.num, table.elenco th.num { text-align: right; padding-right: 0; 
 /* Nella scheda cliente le due colonne vanno larghe uguali: lasciate libere, le
    celle si dimensionano sul contenuto e il telefono esce stretto come il numero. */
 table.scheda-cliente { table-layout: fixed; }
+.scheda-chiusa { padding: 12px 20px; margin-bottom: 8px; }
+.testa-cliente {
+  display: flex; align-items: baseline; gap: 10px; width: 100%; padding: 0;
+  background: none; border: none; cursor: pointer; text-align: left; color: var(--text);
+}
+.testa-cliente:hover .nome-cliente { color: var(--inchiostro-tenue); }
+.freccia-cliente { margin-left: auto; color: var(--text-light); }
+.solo-cliente {
+  display: flex; align-items: center; gap: 10px; margin-bottom: 12px; padding: 9px 12px;
+  border-radius: var(--radius-sm); background: var(--foglio); border: 1px solid var(--ocra); font-size: 0.88rem;
+}
 table.scheda-cliente td { width: 50%; padding-right: 10px; }
 table.scheda-cliente td:last-child { padding-right: 0; }
 
-input[type=text], input[type=number], input[type=search], textarea, select {
+input[type=text], input[type=number], input[type=search], input[type=tel], input[type=email], textarea, select {
   font-family: var(--font-body); font-size: 0.92rem; color: var(--text);
   border: 1px solid var(--border); border-radius: var(--radius-sm);
   padding: 8px 10px; background: var(--white); width: 100%;
@@ -466,7 +478,7 @@ input.vuoto { background: #fffdf5; border-color: #ecdca8; }
       <span>📋</span> Lavagna <span class="pallino" id="pallino-lavagna">0</span>
     </button>
     <button class="voce-barra" id="v-clienti" onclick="vaiA('clienti')"><span>👥</span> Clienti</button>
-    <button class="voce-barra" id="v-archivio" onclick="vaiA('archivio')"><span>🗂️</span> Archivio</button>
+    <button class="voce-barra" id="v-archivio" onclick="CLIENTE_ARCHIVIO = null; vaiA('archivio')"><span>🗂️</span> Archivio</button>
     <button class="voce-barra" id="v-listino" onclick="vaiA('listino')"><span>🏷️</span> Listino</button>
     <button class="voce-barra" id="v-impostazioni" onclick="vaiA('impostazioni')"><span>⚙️</span> Impostazioni</button>
     <div id="stato-cartella">Nessuna cartella collegata</div>
@@ -873,6 +885,11 @@ function modificaCliente(id, campo, valore) {
   if (!c) return;
   c[campo] = valore;
   CLIENTI_DA_SALVARE = true;
+  // Il nome sta anche in testa alla scheda: si aggiorna lì, senza ridisegnare
+  // l'elenco sotto le dita.
+  if (campo === 'nome') document.querySelectorAll('[data-nome-di]').forEach(el => {
+    if (el.dataset.nomeDi === id) el.textContent = valore || 'senza nome';
+  });
   const cartello = document.getElementById('clienti-da-salvare');
   if (cartello) cartello.style.display = 'block';
 }
@@ -1733,6 +1750,7 @@ function tornaAgliArrivi() {
 // ── ARCHIVIO ──
 
 let FILTRO_ARCHIVIO = '';
+let CLIENTE_ARCHIVIO = null;   // { id, nome } quando si arriva da «Vedi conti»
 let STATO_ARCHIVIO = 'tutti';
 let RACCOLTA_ARCHIVIO = 'data';
 let ARCHIVIATO = null;
@@ -1750,10 +1768,13 @@ function disegnaArchivio() {
   // ── a sinistra il gestionale: cosa è ancora da incassare ──
   // Sta lì e resta lì mentre si scorre l'elenco: è la domanda che in ufficio ci
   // si fa per prima, e un numero in fondo alla pagina non risponde a nessuno.
+  // Arrivando da «Vedi conti» anche il gestionale parla di quel cliente: quanto
+  // gli si deve è la domanda per cui si è aperto il suo archivio.
+  const base = CLIENTE_ARCHIVIO ? contiDelCliente(CLIENTE_ARCHIVIO) : ARCHIVIO;
   const conti = {
-    'da-fatturare': ARCHIVIO.filter(l => l.stato === 'da-fatturare'),
-    fatturato: ARCHIVIO.filter(l => l.stato === 'fatturato'),
-    tutti: ARCHIVIO,
+    'da-fatturare': base.filter(l => l.stato === 'da-fatturare'),
+    fatturato: base.filter(l => l.stato === 'fatturato'),
+    tutti: base,
   };
   const somma = elenco => elenco.reduce((s, l) => s + (Number(l.totale) || 0), 0);
   const voce = (chiave, etichetta) => {
@@ -1783,14 +1804,19 @@ function disegnaArchivio() {
       perValore(FILTRO_ARCHIVIO) + '" oninput="filtraArchivio(this.value)"></div>' +
   '</section>';
 
-  html += '<section style="flex:1; min-width:0" id="elenco-archivio">' + righeArchivio() + '</section>';
+  html += '<section style="flex:1; min-width:0">' +
+    (CLIENTE_ARCHIVIO ? '<div class="solo-cliente">Solo i conti di <b>' + perValore(CLIENTE_ARCHIVIO.nome) +
+      '</b><button class="bottone-cart" style="margin-left:auto" onclick="tuttiIClienti()">✕ Tutti i clienti</button></div>' : '') +
+    '<div id="elenco-archivio">' + righeArchivio() + '</div></section>';
   html += '</div>';
   c.innerHTML = html;
 }
 
 function lavoriArchivio() {
   const filtro = FILTRO_ARCHIVIO.trim().toLowerCase();
+  const delCliente = CLIENTE_ARCHIVIO ? new Set(contiDelCliente(CLIENTE_ARCHIVIO)) : null;
   return ARCHIVIO
+    .filter(l => !delCliente || delCliente.has(l))
     .filter(l => STATO_ARCHIVIO === 'tutti' || l.stato === STATO_ARCHIVIO)
     .filter(l => !filtro || String((l.cliente && l.cliente.nome) || '').toLowerCase().includes(filtro))
     .sort((a, b) => String(b.data).localeCompare(String(a.data)));
@@ -1800,7 +1826,7 @@ function righeArchivio() {
   const lavori = lavoriArchivio();
   if (!lavori.length) {
     return '<div class="scheda"><div class="vuoto-elenco">' +
-      (FILTRO_ARCHIVIO.trim() || STATO_ARCHIVIO !== 'tutti'
+      (FILTRO_ARCHIVIO.trim() || STATO_ARCHIVIO !== 'tutti' || CLIENTE_ARCHIVIO
         ? 'Nessun lavoro con questi filtri.' : 'Niente in archivio.') + '</div></div>';
   }
   if (RACCOLTA_ARCHIVIO !== 'cliente') return lavori.map(schedaArchivio).join('');
@@ -2035,6 +2061,7 @@ function apriPosta(url) {
 // ── PAGINA CLIENTI ──
 
 let FILTRO_CLIENTI = '';
+let CLIENTI_APERTI = new Set();
 
 function disegnaClienti() {
   const c = document.getElementById('pagina-clienti');
@@ -2079,19 +2106,69 @@ function righeClienti() {
               : 'Anagrafica vuota. Importala dal telefono, o prendi i clienti dai rapportini arrivati.') +
       '</div></div>';
   }
+  // Chiusa, una scheda è solo il nome: con tutti i campi aperti l'elenco era un
+  // muro di caselle, e chi cerca un cliente scorre i nomi, non gli indirizzi.
   return elenco.map(c => {
     const id = perOnclick(c.id);
+    const aperta = CLIENTI_APERTI.has(c.id);
+    const testa = '<button type="button" class="testa-cliente" onclick="apriChiudiCliente(\'' + id + '\')"' +
+      ' aria-expanded="' + aperta + '">' +
+      '<span class="nome-cliente" data-nome-di="' + perValore(c.id) + '">' + perValore(c.nome || 'senza nome') + '</span>' +
+      '<span class="freccia-cliente">' + (aperta ? '▾' : '▸') + '</span></button>';
+    if (!aperta) return '<div class="scheda scheda-chiusa">' + testa + '</div>';
     const campo = (nome, etichetta, tipo) =>
       '<td><input type="' + (tipo || 'text') + '" placeholder="' + etichetta + '" value="' +
         perValore(c[nome]) + '" oninput="modificaCliente(\'' + id + '\', \'' + nome + '\', this.value)"></td>';
-    return '<div class="scheda"><table class="elenco scheda-cliente"><tbody>' +
+    const conti = contiDelCliente(c).length;
+    return '<div class="scheda">' + testa +
+      '<table class="elenco scheda-cliente" style="margin-top:10px"><tbody>' +
       '<tr>' + campo('nome', 'Nome') + campo('telefono', 'Telefono', 'tel') + '</tr>' +
       '<tr>' + campo('indirizzo', 'Indirizzo') + campo('citta', 'Città') + '</tr>' +
       '<tr>' + campo('email', 'Email', 'email') + campo('note', 'Note') + '</tr>' +
       '</tbody></table>' +
-      '<div class="bottoni"><button class="pericolo piccola" onclick="eliminaCliente(\'' + id + '\')">Elimina</button></div>' +
+      '<div class="bottoni">' +
+        '<button class="secondaria piccola" onclick="vediConti(\'' + id + '\')"' + (conti ? '' : ' disabled') + '>' +
+          (conti ? 'Vedi conti (' + conti + ')' : 'Nessun conto in archivio') + '</button>' +
+        '<button class="pericolo piccola" onclick="eliminaCliente(\'' + id + '\')">Elimina</button>' +
+      '</div>' +
     '</div>';
   }).join('');
+}
+
+function apriChiudiCliente(id) {
+  if (CLIENTI_APERTI.has(id)) CLIENTI_APERTI.delete(id); else CLIENTI_APERTI.add(id);
+  const el = document.getElementById('elenco-clienti');
+  if (el) el.innerHTML = righeClienti();
+}
+
+// I lavori in archivio di questo cliente. Per identificativo, ma anche per nome:
+// un cliente aggiunto a mano in ufficio ha un id suo, che i rapportini del
+// cantiere non conoscono, e senza il nome i suoi conti non si troverebbero.
+// Il nome si confronta intero e non a pezzi, o «Rossi» si porterebbe dietro le
+// fatture di «Rossini».
+function contiDelCliente(c) {
+  const nome = String(c.nome || '').trim().toLowerCase();
+  return ARCHIVIO.filter(l => {
+    const cl = l.cliente || {};
+    return (c.id && cl.id === c.id) || (nome && String(cl.nome || '').trim().toLowerCase() === nome);
+  });
+}
+
+// Porta all'archivio con i soli conti di quel cliente. Il filtro resta scritto,
+// col suo nome e una ✕, e si toglie da lì: un archivio che mostra solo una parte
+// senza dirlo farebbe credere che il resto non ci sia.
+function vediConti(id) {
+  const c = CLIENTI.find(x => x.id === id);
+  if (!c) return;
+  CLIENTE_ARCHIVIO = { id: c.id, nome: c.nome || 'senza nome' };
+  FILTRO_ARCHIVIO = '';
+  STATO_ARCHIVIO = 'tutti';
+  vaiA('archivio');
+}
+
+function tuttiIClienti() {
+  CLIENTE_ARCHIVIO = null;
+  disegnaArchivio();
 }
 
 // Come nell'archivio: ridisegnare tutto a ogni tasto farebbe perdere il fuoco.
@@ -2102,7 +2179,9 @@ function filtraClienti(valore) {
 }
 
 function aggiungiCliente() {
-  CLIENTI.push(sistemaCliente({ nome: '' }));
+  const nuovo = sistemaCliente({ nome: '' });
+  CLIENTI.push(nuovo);
+  CLIENTI_APERTI.add(nuovo.id);   // un cliente nuovo si apre: c'è da scriverlo
   CLIENTI_DA_SALVARE = true;
   disegnaClienti();
 }

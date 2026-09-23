@@ -205,13 +205,17 @@ function numeroSettimana(data) {
 }
 
 // Come si scrive una settimana, ovunque compaia: «dal 22/06 · settimana 26».
+// L'anno compare solo quando non è quello in corso: un 2029 battuto al posto di
+// 2026 si leggeva «dal 24/09 · settimana 39», identico a quello giusto, e il
+// lavoro spariva fra quelli «per più avanti» senza che niente lo dicesse.
 function etichettaSettimana(lunedi) {
   if (!lunedi) return '';
   const d = new Date(lunedi + 'T12:00:00');
   if (isNaN(d)) return '';
   const giorno = String(d.getDate()).padStart(2, '0');
   const mese = String(d.getMonth() + 1).padStart(2, '0');
-  return `dal ${giorno}/${mese} · settimana ${numeroSettimana(d)}`;
+  const anno = d.getFullYear() === new Date().getFullYear() ? '' : '/' + d.getFullYear();
+  return `dal ${giorno}/${mese}${anno} · settimana ${numeroSettimana(d)}`;
 }
 
 function costruisciAppuntamento({ prenotazione, cliente }) {
