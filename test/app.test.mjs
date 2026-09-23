@@ -1229,6 +1229,14 @@ try {
     return LAVAGNA.lavori.length;
   });
   ok('un lavoro aggiunto a mano entra in coda', messoAMano === 1);
+  // Guardando la coda la domanda è anche «da quanto aspetta».
+  ok('col giorno in cui è stato inserito',
+    await pagU.evaluate(() => LAVAGNA.lavori[0].inserito === isoData(new Date())),
+    await pagU.evaluate(() => LAVAGNA.lavori[0].inserito));
+  ok('e il cartellino lo dice',
+    await pagU.evaluate(() => { disegnaLavagna(); const oggi = new Date();
+      return document.querySelector('#pagina-lavagna .coda').textContent.includes('aggiunto in ufficio il ' +
+        String(oggi.getDate()).padStart(2, '0') + '/' + String(oggi.getMonth() + 1).padStart(2, '0')); }));
   // Si sceglie un giorno e conta la sua settimana: il mercoledì 23 sta nella
   // settimana che apre lunedì 21.
   ok('col giorno scelto agganciato alla sua settimana',
@@ -1507,6 +1515,8 @@ try {
 
   ok('un lavoro aggiunto a mano si rilegge dal file',
     await pagU.evaluate(async () => { await ricarica(); return LAVAGNA.lavori.length; }) === 4);
+  ok('con la sua data di inserimento, che non va persa salvando',
+    await pagU.evaluate(() => LAVAGNA.lavori.find(l => l.origine === 'aggiunto in ufficio').inserito === isoData(new Date())));
 
   // ── correggere un lavoro senza cancellarlo e riscriverlo ──
   ok('il modulo si riapre già compilato', await pagU.evaluate(() => {
@@ -1807,6 +1817,21 @@ try {
       chiudiModuloLavoro();
       return uno;
     }));
+  ok('col giorno in cui è stata fatta in giardino',
+    prenotata && prenotata.inserito === await pagU.evaluate(d => isoData(new Date(d.creato)), docAppuntamento),
+    JSON.stringify(prenotata && prenotata.inserito));
+  // Le prenotazioni entrate prima che la lavagna segnasse la data: il documento
+  // ce l'ha ancora, e rileggendo la cartella la si recupera.
+  ok('una prenotazione entrata senza data la recupera dal suo documento',
+    await pagU.evaluate(async id => {
+      LAVAGNA.lavori.find(l => l.da === id).inserito = '';
+      await salvaLavagna();
+      await ricarica();
+      return !!LAVAGNA.lavori.find(l => l.da === id).inserito;
+    }, docAppuntamento.id));
+  ok('e la data resta anche rileggendo la lavagna dal file',
+    await pagU.evaluate(async id => { await ricarica(); return !!LAVAGNA.lavori.find(l => l.da === id).inserito; },
+      docAppuntamento.id));
   ok('rileggendo la cartella non entra una seconda volta',
     await pagU.evaluate(async id => {
       const quanti = LAVAGNA.lavori.filter(l => l.da === id).length;

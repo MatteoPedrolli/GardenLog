@@ -459,6 +459,13 @@ I lavori arrivano da due parti:
   chiedere all'ufficio di ricopiarle vorrebbe dire perderne una ogni tanto;
 - a mano, per le telefonate e per quello che decide l'ufficio.
 
+Ogni lavoro porta **il giorno in cui è entrato** (`inserito`), e il cartellino in
+coda lo dice accanto all'origine: guardando la coda la domanda è anche «da quanto
+aspetta». Il campo è arrivato dopo, senza alzare versioni: un lavoro che non ce
+l'ha vale ancora. Le prenotazioni la recuperano da `creato` sul loro documento in
+`appuntamenti/`, a ogni rilettura; i lavori messi a mano prima restano senza, perché
+la data non è mai stata scritta da nessuna parte e inventarla sarebbe peggio.
+
 Tutto quello che è già stato guardato finisce in `visti`, così quello che l'ufficio
 ha scartato non ricompare al giro dopo. Sul telefono il mese del prossimo intervento
 è il valore di una select (`"03"`, non `"marzo"`): passa da `nomeMese()` prima di

@@ -720,6 +720,11 @@ async function ricarica() {
   await assorbiAppuntamenti();
 }
 
+function dataDelDocumento(doc) {
+  const d = new Date(doc.creato || '');
+  return isNaN(d) ? '' : isoData(d);
+}
+
 // Le prenotazioni fatte dal cantiere entrano sulla lavagna da sole: chi prenota è
 // col cliente davanti, e chiedere all'ufficio di ricopiarle a mano vorrebbe dire
 // perderne una ogni tanto. Ognuna si guarda una volta sola — finita in «visti»,
@@ -728,6 +733,7 @@ async function assorbiAppuntamenti() {
   const cartella = await sottocartella(CARTELLA, CARTELLA_APPUNTAMENTI, false);
   if (!cartella) return;
   const nuovi = [];
+  let recuperati = 0;
   for (const nome of await elencaFile(cartella)) {
     let doc;
     try {
@@ -736,7 +742,14 @@ async function assorbiAppuntamenti() {
       ILLEGGIBILI.push({ nome: CARTELLA_APPUNTAMENTI + '/' + nome, motivo: e.message });
       continue;
     }
-    if (LAVAGNA.visti.includes(doc.id)) continue;
+    const inserito = dataDelDocumento(doc);
+    if (LAVAGNA.visti.includes(doc.id)) {
+      // Le prenotazioni entrate prima che la lavagna segnasse la data: il loro
+      // documento ce l'ha ancora, ed è l'unico posto dove recuperarla.
+      const giaDentro = LAVAGNA.lavori.find(l => l.da === doc.id && !l.inserito);
+      if (giaDentro && inserito) { giaDentro.inserito = inserito; recuperati++; }
+      continue;
+    }
     LAVAGNA.visti.push(doc.id);
     nuovi.push(sistemaLavoro({
       cliente: doc.cliente.nome || '',
@@ -748,9 +761,10 @@ async function assorbiAppuntamenti() {
       requisiti: doc.requisiti,
       stato: 'lista',
       da: doc.id,
+      inserito,
     }));
   }
-  if (!nuovi.length) return;
+  if (!nuovi.length && !recuperati) return;
   LAVAGNA.lavori = LAVAGNA.lavori.concat(nuovi);
   await salvaLavagna();
 }
@@ -922,6 +936,11 @@ function sistemaLavoro(l) {
     // prima portavano un interruttore: si convertono una volta e amen.
     mezze: Math.max(1, Number(l.mezze) || (l.piuGiorni ? Math.ceil((Number(l.ore) || 0) / ORE_MEZZA) : 1)),
     da: l.da || '',
+    // Il giorno in cui è entrato sulla lavagna. Guardando la coda la domanda è
+    // anche «da quanto aspetta», e senza la data un lavoro di maggio e uno di ieri
+    // sembravano uguali. È arrivato dopo: i lavori messi a mano prima non ce
+    // l'hanno e restano senza, perché non è scritta da nessuna parte.
+    inserito: /^\d{4}-\d{2}-\d{2}$/.test(l.inserito || '') ? l.inserito : '',
   };
 }
 
@@ -2291,7 +2310,10 @@ function cartellino(l) {
         '<button type="button" class="bottone-cart" onclick="event.stopPropagation(); allarga(\'' + id + '\')"' +
           ' title="Allarga alla mezza giornata successiva">+</button>' +
         '</span>' : '') +
-      (inLista && l.origine ? '<span class="origine-cart">' + perValore(l.origine) + '</span>' : '') +
+      (inLista && l.origine ? '<span class="origine-cart">' + perValore(l.origine) +
+        (l.inserito ? ' il ' + perValore(l.inserito.slice(8, 10) + '/' + l.inserito.slice(5, 7)) : '') + '</span>'
+        : inLista && l.inserito ? '<span class="origine-cart">inserito il ' +
+          perValore(l.inserito.slice(8, 10) + '/' + l.inserito.slice(5, 7)) + '</span>' : '') +
       (inLista ? '<button type="button" class="bottone-cart" style="margin-left:auto"' +
         ' onclick="event.stopPropagation(); apriModuloLavoro(\'' + id + '\')" title="Modifica">✎</button>' +
         '<button type="button" class="bottone-cart"' +
@@ -2597,7 +2619,8 @@ async function salvaModuloLavoro() {
     // settimana né se è confermato, e ricostruirlo da zero lo staccherebbe.
     Object.assign(esistente, campi);
   } else {
-    LAVAGNA.lavori.push(sistemaLavoro({ ...campi, origine: 'aggiunto in ufficio', stato: 'lista' }));
+    LAVAGNA.lavori.push(sistemaLavoro({ ...campi, origine: 'aggiunto in ufficio', stato: 'lista',
+      inserito: isoData(new Date()) }));
   }
   if (!(await salvaLavagna())) return;
   chiudiModuloLavoro();
