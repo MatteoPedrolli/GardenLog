@@ -1309,8 +1309,10 @@ try {
   // ── le colonne non si pestano i piedi ──
   // La colonna del giorno si dimensionava sul contenuto e sbordava su quella
   // dopo: le ore della mattina finivano sopra il «MATTINA» del giorno accanto.
-  // Si vedeva solo a occhio, quindi qui si misura.
-  await pagU.setViewportSize({ width: 1280, height: 800 });
+  // Si vedeva solo a occhio, quindi qui si misura. Da quando la coda sta sotto,
+  // a 1280 i giorni hanno tutta la larghezza e non sono più stretti: la prova si
+  // fa su una finestra più piccola, o non proverebbe niente.
+  await pagU.setViewportSize({ width: 1050, height: 800 });
   const sbordo = await pagU.evaluate(() => {
     // Un cartellino con dentro del testo vero, in una colonna stretta: su una
     // lavagna quasi vuota lo sbordo non si manifesta e la prova non prova niente.
@@ -1467,8 +1469,11 @@ try {
     disegnaLavagna();
   });
 
-  // ── l'ordine della coda: bloccati in fondo, slittati in cima ──
+  // ── l'ordine della coda: chi scade prima, e i bloccati in fondo ──
+  // Uno slittato non passa più davanti per il fatto di essere slittato: la griglia
+  // si legge come una priorità, e lui ce l'ha come tutti, dalla sua settimana.
   const ordine = await pagU.evaluate(async () => {
+    LAVAGNA.lavori.find(l => l.cliente.startsWith('Mario Rossi')).settimana = '2026-09-28';
     LAVAGNA.lavori.push(sistemaLavoro({ cliente: 'Scade prima', settimana: '2026-09-21', stato: 'lista' }));
     LAVAGNA.lavori.push(sistemaLavoro({ cliente: 'Scade dopo', settimana: '2026-09-22', stato: 'lista' }));
     LAVAGNA.lavori.push(sistemaLavoro({ cliente: 'Bloccato', settimana: '2026-09-21',
@@ -1477,8 +1482,26 @@ try {
     disegnaLavagna();
     return LAVAGNA.lavori.filter(l => !piazzato(l)).sort(ordinaCoda).map(l => l.cliente);
   });
-  ok('chi è slittato sta in cima', ordine[0].startsWith('Mario Rossi'), JSON.stringify(ordine));
-  ok('poi chi scade prima', ordine[1] === 'Scade prima' && ordine[2] === 'Scade dopo', JSON.stringify(ordine));
+  ok('chi scade prima sta in cima', ordine[0] === 'Scade prima' && ordine[1] === 'Scade dopo', JSON.stringify(ordine));
+  ok('e lo slittato non passa davanti a chi scade prima di lui',
+    ordine[2].startsWith('Mario Rossi'), JSON.stringify(ordine));
+  // Sotto la settimana, da sinistra a destra: i bloccati nella colonna loro.
+  const colonne = await pagU.evaluate(() => {
+    MOSTRA_FUTURI = true; disegnaLavagna();
+    const nomi = sel => [...document.querySelectorAll('#pagina-lavagna ' + sel + ' .cliente-cart')].map(e => e.textContent);
+    const griglia = document.querySelector('#pagina-lavagna .coda-lista.pronti');
+    const r = { pronti: nomi('.coda-lista.pronti'), fermi: nomi('.coda-lista.fermi'),
+      colonne: getComputedStyle(griglia).gridTemplateColumns.split(' ').length,
+      sotto: griglia.getBoundingClientRect().top > document.querySelector('#pagina-lavagna .giorni').getBoundingClientRect().bottom };
+    MOSTRA_FUTURI = false; disegnaLavagna();
+    return r;
+  });
+  ok('la coda sta sotto la settimana', colonne.sotto);
+  ok('i lavori da pianificare si riempiono su tre colonne', colonne.colonne === 3, String(colonne.colonne));
+  ok('nell\'ordine di priorità', JSON.stringify(colonne.pronti) === JSON.stringify(ordine.filter(n => n !== 'Bloccato')),
+    JSON.stringify(colonne.pronti));
+  ok('e i bloccati stanno nella colonna loro, non in mezzo',
+    JSON.stringify(colonne.fermi) === '["Bloccato"]' && !colonne.pronti.includes('Bloccato'), JSON.stringify(colonne));
   ok('e quello che non si può fare sta in fondo, anche se scade domani',
     ordine[ordine.length - 1] === 'Bloccato', JSON.stringify(ordine));
 

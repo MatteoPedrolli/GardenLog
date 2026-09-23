@@ -349,8 +349,8 @@ essere fatturato, e non può stare nascosto in una console.
 
 ## La lavagna non è un calendario
 
-Vive solo in ufficio, sul PC. A sinistra quello che c'è da fare e non ha ancora
-una data, a destra la settimana spezzata in mezze giornate. È la lavagna che si
+Vive solo in ufficio, sul PC. In alto la settimana spezzata in mezze giornate,
+sotto quello che c'è da fare e non ha ancora una data. È la lavagna che si
 teneva a matita, non un'agenda: **niente si muove da solo**, nemmeno passando di
 settimana.
 
@@ -412,10 +412,18 @@ mostrata e non l'oggi, così spostandosi avanti con le frecce i lavori di quella
 settimana compaiono da soli — e il pallino nella barra conta quello che la
 colonna mostra, o uno dei due mente.
 
-**Tre regole per la coda**, in quest'ordine: quello che non si può fare (ha un
-requisito aperto) va in fondo, quello che è già slittato va in cima, e per il resto
-conta chi scade prima. Dentro i giorni non si ordina niente: lì l'ordine lo dà chi
-pianifica.
+**La coda sta sotto la settimana, non accanto.** Era una colonna a sinistra, e i
+sei giorni si dividevano quello che restava: stretti, sbordavano. Sotto, i giorni
+hanno tutta la larghezza e la coda si legge come una pagina: tre colonne riempite
+da sinistra a destra, riga dopo riga, **in ordine di priorità** — chi scade prima,
+poi chi non ha settimana. Uno slittato non passa davanti per il fatto di essere
+slittato: lo dicono l'avviso e l'etichetta, ma salire in cima falsava la priorità.
+
+**I bloccati hanno la quarta colonna**, a destra: hanno un requisito aperto e non
+si possono ancora fare. Un lavoro si rimette in coda lasciandolo su una qualsiasi
+delle due: dove finisce lo decide il requisito, non il punto dove lo lasci.
+
+Dentro i giorni non si ordina niente: lì l'ordine lo dà chi pianifica.
 
 **Una mezza giornata sono otto ore di manodopera** — quattro d'orologio in due.
 Servono a sapere quante mezze giornate occupa un lavoro lungo, non a dichiarare

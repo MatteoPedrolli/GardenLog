@@ -222,6 +222,19 @@ input.vuoto { background: #fffdf5; border-color: #ecdca8; }
 .tavolo { display: flex; gap: 14px; align-items: flex-start; }
 
 .coda { width: 290px; flex-shrink: 0; }
+.tavolo-lavagna { flex-direction: column; align-items: stretch; }
+.tavolo-lavagna .giorni { width: 100%; }
+.coda-sotto { width: auto; margin-top: 18px; }
+.griglia-coda { display: grid; grid-template-columns: minmax(0, 3fr) minmax(0, 1fr); gap: 10px; align-items: start; }
+/* Da sinistra a destra, poi a capo: la griglia si legge come una pagina, ed è
+   l'ordine di priorità. Tre colonne perché la quarta è dei bloccati. */
+.coda-lista.pronti { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); align-items: start; }
+.coda-lista.pronti > .vuoto-mezza { grid-column: 1 / -1; }
+.coda-lista.fermi { min-height: 160px; }
+.coda-sotto #nuovo-lavoro { max-width: 480px; }
+@media (max-width: 900px) {
+  .coda-lista.pronti { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
 .titolo-colonna {
   font-size: 0.72rem; font-weight: 600; text-transform: uppercase;
   letter-spacing: 0.06em; color: var(--text-light); margin: 0 0 8px;
@@ -2214,12 +2227,14 @@ function oreNellaMezza(l, giorno, mezza) {
   return Number(((Number(l.ore) || 0) / c.length).toFixed(2));
 }
 
-// Tre regole per la coda: quello che non si può fare va in fondo, quello che è già
-// slittato va in cima, e per il resto conta chi scade prima. Dentro i giorni non
-// si ordina niente: lì l'ordine è quello che gli dà chi pianifica.
+// L'ordine della coda è uno solo: chi scade prima. Uno slittato non passa più
+// davanti per il fatto di essere slittato — lo dice l'avviso in cima e l'etichetta
+// sul cartellino, ma la griglia si legge da sinistra a destra come una priorità, e
+// un lavoro che sale perché è tornato indietro la falsava. Quello che non si può
+// fare sta in fondo, ed è la colonna dei bloccati. Dentro i giorni non si ordina
+// niente: lì l'ordine è quello che gli dà chi pianifica.
 function ordinaCoda(a, b) {
   if (bloccato(a) !== bloccato(b)) return bloccato(a) ? 1 : -1;
-  if (a.rimandato !== b.rimandato) return a.rimandato ? -1 : 1;
   if (!a.settimana !== !b.settimana) return a.settimana ? -1 : 1;
   return String(a.settimana).localeCompare(String(b.settimana));
 }
@@ -2308,45 +2323,63 @@ function disegnaLavagna() {
     '<button class="secondaria piccola" onclick="questaSettimana()">Oggi</button>' +
   '</div>';
 
-  html += '<div class="tavolo">';
+  html += '<div class="tavolo tavolo-lavagna">';
 
-  // ── la colonna di sinistra: quello che c'è da fare e non ha una data ──
+  // ── sotto la settimana: quello che c'è da fare e non ha una data ──
+  // Stava in una colonna a sinistra, e i sei giorni si dividevano quello che
+  // restava: stretti, sbordavano. Sotto, la settimana ha tutta la larghezza e la
+  // coda si legge come una pagina: da sinistra a destra, riga dopo riga, per
+  // priorità. I bloccati hanno la loro colonna in fondo a destra: non si possono
+  // ancora fare, e in mezzo agli altri facevano da rumore.
+  let coda = '';
   const settimanaMostrata = isoData(SETTIMANA);
   const tuttaLaCoda = LAVAGNA.lavori.filter(l => !piazzato(l)).sort(ordinaCoda);
   const piuAvanti = tuttaLaCoda.filter(l => perPiuAvanti(l, settimanaMostrata));
   const inCoda = MOSTRA_FUTURI ? tuttaLaCoda : tuttaLaCoda.filter(l => !perPiuAvanti(l, settimanaMostrata));
   const rimasti = inCoda.filter(l => l.rimandato).length;
   const prenotati = inCoda.filter(l => l.origine === 'prenotato dal cantiere' && !l.rimandato).length;
-  html += '<section class="coda"><h3 class="titolo-colonna">Da pianificare</h3>';
+  coda += '<section class="coda coda-sotto">';
   if (prenotati) {
-    html += '<div class="rimasti" style="background:var(--foglio); border-color:var(--ocra); color:var(--inchiostro)">' +
+    coda += '<div class="rimasti" style="background:var(--foglio); border-color:var(--ocra); color:var(--inchiostro)">' +
       '📨 ' + prenotati + (prenotati === 1 ? ' prenotazione arrivata' : ' prenotazioni arrivate') + ' dal cantiere</div>';
   }
   if (rimasti) {
-    html += '<div class="rimasti">⚠ ' + rimasti +
+    coda += '<div class="rimasti">⚠ ' + rimasti +
       (rimasti === 1 ? ' lavoro è slittato' : ' lavori sono slittati') +
       ' e aspettano<button class="bottone-cart" style="margin-left:auto" onclick="hoVisto()">Ho visto</button></div>';
   }
-  html += '<div class="coda-lista" ondragover="sopraZona(event, this)" ondragleave="fuoriZona(this)"' +
-    ' ondrop="rilascia(event, this, \'\', \'\')">' +
-    (inCoda.length ? inCoda.map(cartellino).join('')
-      : '<div class="vuoto-mezza">Niente in attesa.<br>Quello che arriva dai rapportini compare qui.</div>') +
-    '</div>';
+  // Tutte e due le liste riportano in coda: in quale delle due finisca un lavoro lo
+  // decide il lavoro, non il punto dove lo lasci. Bloccato vuol dire che ha un
+  // requisito scritto, e lasciarlo cadere a destra non lo scrive.
+  const zonaCoda = cls => '<div class="coda-lista ' + cls + '" ondragover="sopraZona(event, this)"' +
+    ' ondragleave="fuoriZona(this)" ondrop="rilascia(event, this, \'\', \'\')">';
+  const pronti = inCoda.filter(l => !bloccato(l));
+  const fermi = inCoda.filter(bloccato);
+  coda += '<div class="griglia-coda"><div><h3 class="titolo-colonna">Da pianificare</h3>' +
+    zonaCoda('pronti') +
+      (pronti.length ? pronti.map(cartellino).join('')
+        : '<div class="vuoto-mezza">Niente in attesa.<br>Quello che arriva dai rapportini compare qui.</div>') +
+    '</div></div>' +
+    '<div><h3 class="titolo-colonna">Bloccati</h3>' +
+    zonaCoda('fermi') +
+      (fermi.length ? fermi.map(cartellino).join('')
+        : '<div class="vuoto-mezza">Niente di bloccato.</div>') +
+    '</div></div></div>';
   // Nascondere qualcosa senza dire quanto e senza un modo per guardarlo è il
   // tipo di aiuto che fa perdere un lavoro: il conto sta lì, e si apre.
   if (piuAvanti.length || MOSTRA_FUTURI) {
-    html += '<div class="piu-avanti">' +
+    coda += '<div class="piu-avanti">' +
       (piuAvanti.length
         ? piuAvanti.length + (piuAvanti.length === 1 ? ' lavoro è per una settimana dopo' : ' lavori sono per le settimane dopo')
         : 'Niente per le settimane dopo') +
       '<button class="bottone-cart" style="margin-left:auto" onclick="mostraFuturi()">' +
       (MOSTRA_FUTURI ? 'Nascondi' : 'Mostra') + '</button></div>';
   }
-  html += '<div class="bottoni">' +
+  coda += '<div class="bottoni">' +
     '<button class="secondaria piccola" onclick="apriModuloLavoro()">+ Aggiungi</button>' +
   '</div>';
-  html += '<div id="nuovo-lavoro"></div>';
-  html += '</section>';
+  coda += '<div id="nuovo-lavoro"></div>';
+  coda += '</section>';
 
   // ── la settimana ──
   html += '<section class="giorni">';
@@ -2381,7 +2414,7 @@ function disegnaLavagna() {
         '<b>' + formattaQuantita(oreGiorno) + ' h</b></div>' +
     '</div>';
   });
-  html += '</section></div>';
+  html += '</section>' + coda + '</div>';
 
   // In fondo: serve quando non ti ricordi cosa vuol dire un tratteggio, e chi non
   // se lo sta chiedendo non deve scavalcarla per arrivare alla lavagna.
