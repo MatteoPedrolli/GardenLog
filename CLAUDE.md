@@ -46,6 +46,13 @@ npm test     # il giro di prova, serve playwright (npm i)
 npm start    # server locale: i service worker non vanno su file://
 ```
 
+Quando cambiano `index.html` o `ufficio/index.html` si alza il numero di `CACHE`
+in `sw.js`, o il telefono continua a servire la copia vecchia.
+
+Le correzioni del beta testing sono **piccole** e vanno su `main`: i lavori grossi
+(i preventivi) vanno avanti su un ramo loro, e un rifacimento fatto qui ci si
+scontrerebbe. Prima di ogni modifica `git fetch origin main`.
+
 I test vanno lanciati prima di ogni commit. Coprono le cose che rompendosi non
 si fanno notare: il calcolo di azoto e potassio, la persistenza dopo la
 ricarica, il backup, le eliminazioni a cascata, l'apertura offline. Se una
@@ -53,9 +60,16 @@ funzionalità nuova tocca i dati, merita una verifica lì dentro.
 
 ## Modalità costruzione
 
-Il sistema **non è ancora in servizio in azienda**, e finché non lo è vale questa
-regola: **non si scrivono migrazioni**. Lo schema cambia quando serve, si alza
-`VERSIONE_DATI`, e i dati di una versione diversa non vengono convertiti.
+**Dal 23/09/2026 la suite è in servizio in azienda**: rapportini veri, fatture
+vere. La regola di questa sezione resta — **non si scrivono migrazioni**, lo schema
+cambia quando serve, si alza `VERSIONE_DATI` e i dati di una versione diversa non
+vengono convertiti — ma non si alza più `VERSIONE_DATI` da soli.
+
+**Prima di alzarla si chiede, dicendo cosa costa**: quali dati di chi lavora
+finiscono in `CHIAVE_DA_PARTE` al primo avvio, e quali backup e documenti in giro
+(rapportini in coda, appuntamenti, agenda) non si riaprono più. Con dati veri sul
+telefono e in ufficio, un cambio di schema non è più un dettaglio di chi scrive il
+codice: è una decisione di chi li usa.
 
 Mantenere nove passaggi di conversione per dati che nessuno userà più costava più
 di quanto valessero, e ogni passaggio era una cosa in più che poteva rompersi
@@ -70,10 +84,11 @@ file. Sono l'unica copia rimasta: si cancellano solo con una conferma. Un backup
 di un'altra versione, allo stesso modo, viene rifiutato invece che importato a
 metà — il file resta lì, da riaprire quando servirà.
 
-**Il giorno in cui l'azienda ci lavora davvero questa regola si rovescia.** Da lì
-in poi ogni cambio di schema vuole la sua migrazione, o si perdono dati veri. Chi
-fa quel passaggio alza `VERSIONE_DATI` un'ultima volta, rimette l'imbuto e
-riscrive questa sezione.
+**Il rovesciamento è un passaggio da fare apposta, non una data.** Essere in
+servizio non lo fa scattare da solo: finché siamo in beta testing la regola resta
+questa. Il giorno in cui si decide, da lì in poi ogni cambio di schema vuole la
+sua migrazione, o si perdono dati veri. Chi fa quel passaggio alza `VERSIONE_DATI`
+un'ultima volta, rimette l'imbuto e riscrive questa sezione.
 
 ## La schermata visita è un rapporto, non un registro
 
