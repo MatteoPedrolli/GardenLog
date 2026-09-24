@@ -154,6 +154,14 @@ table.scheda-cliente { table-layout: fixed; }
 }
 .testa-cliente:hover .nome-cliente { color: var(--inchiostro-tenue); }
 .freccia-cliente { margin-left: auto; color: var(--text-light); }
+.barra-scelti {
+  position: sticky; top: 0; z-index: 5;
+  display: flex; align-items: center; gap: 12px; flex-wrap: wrap; margin-bottom: 12px; padding: 10px 14px;
+  border-radius: var(--radius-sm); background: var(--white); border: 1px solid var(--ocra);
+  box-shadow: var(--shadow); font-size: 0.9rem;
+}
+.scheda.scelta { border-color: var(--ocra); background: var(--foglio); }
+input.scegli { width: 18px; height: 18px; margin: 0; cursor: pointer; align-self: center; accent-color: var(--inchiostro-tenue); }
 .solo-cliente {
   display: flex; align-items: center; gap: 10px; margin-bottom: 12px; padding: 9px 12px;
   border-radius: var(--radius-sm); background: var(--foglio); border: 1px solid var(--ocra); font-size: 0.88rem;
@@ -447,6 +455,8 @@ input.vuoto { background: #fffdf5; border-color: #ecdca8; }
 #foglio td { padding: 7px 8px 7px 0; border-bottom: 1px solid #ccc; }
 #foglio td.num, #foglio th.num { text-align: right; padding-right: 0; }
 #foglio .da-definire { color: #555; }
+#foglio .riga-blocco td { padding-top: 16px; font-weight: 700; border-bottom: 1px solid #000; }
+#foglio .riga-subtotale td { color: #333; border-bottom: none; }
 #foglio .riga-totale td {
   border-bottom: none; border-top: 2px solid #000; padding-top: 12px;
   font-weight: 600; font-size: 1.05rem;
@@ -1344,8 +1354,15 @@ function segnalaListinoDaSalvare() {
 // importo su un foglio che esce senza dire se l'IVA c'è dentro è un'ambiguità
 // che qualcuno paga.
 
-function costruisciFoglio({ cliente, data, righe }) {
-  const { totale, escluse } = totaleConteggio(righe);
+// Un foglio può portare più lavori dello stesso cliente: due giornate, due
+// rapportini, un conto solo. Ogni lavoro resta un blocco con la sua data e il suo
+// subtotale — il cliente deve poter vedere cosa è stato fatto quando — e il totale
+// in fondo li somma. Con un lavoro solo il foglio è quello di sempre.
+function costruisciFoglio({ cliente, data, righe, lavori }) {
+  const blocchi = lavori || [{ data, righe }];
+  const piu = blocchi.length > 1;
+  const tutte = blocchi.flatMap(b => b.righe || []);
+  const { totale, escluse } = totaleConteggio(tutte);
   const sede = [IMPOSTAZIONI.indirizzo, IMPOSTAZIONI.citta].filter(x => x).join(' · ');
   const contatti = [
     IMPOSTAZIONI.piva ? 'P.IVA ' + IMPOSTAZIONI.piva : '',
@@ -1366,13 +1383,15 @@ function costruisciFoglio({ cliente, data, righe }) {
       ((cliente && cliente.indirizzo) ? '<br>' + perValore(cliente.indirizzo) : '') +
       ((cliente && cliente.citta) ? '<br>' + perValore(cliente.citta) : '') +
     '</div>' +
-    '<div style="text-align:right"><div class="etichetta-campo">Data del lavoro</div>' +
-      '<strong>' + formattaData(data) + '</strong></div>' +
+    '<div style="text-align:right"><div class="etichetta-campo">' + (piu ? 'Date dei lavori' : 'Data del lavoro') + '</div>' +
+      '<strong>' + blocchi.map(b => formattaData(b.data)).join('<br>') + '</strong></div>' +
   '</div>';
 
   html += '<table><thead><tr><th>Voce</th><th class="num">Quantità</th>' +
     '<th>Unità</th><th class="num">Prezzo</th><th class="num">Importo</th></tr></thead><tbody>';
-  (righe || []).forEach(r => {
+  blocchi.forEach(b => {
+  if (piu) html += '<tr class="riga-blocco"><td colspan="5">Lavoro del ' + formattaData(b.data) + '</td></tr>';
+  (b.righe || []).forEach(r => {
     const imp = importoRiga(r);
     html += '<tr>' +
       '<td>' + perValore(r.voce) + '</td>' +
@@ -1383,6 +1402,9 @@ function costruisciFoglio({ cliente, data, righe }) {
       // si valuta, come fa il testo della mail sul telefono.
       '<td class="num">' + (imp == null ? '<span class="da-definire">da definire</span>' : formattaEuro(imp)) + '</td>' +
     '</tr>';
+  });
+  if (piu) html += '<tr class="riga-subtotale"><td colspan="4">Subtotale</td>' +
+    '<td class="num">' + formattaEuro(totaleConteggio(b.righe).totale) + '</td></tr>';
   });
   html += '<tr class="riga-totale"><td colspan="4">Totale (IVA inclusa)</td>' +
     '<td class="num">' + formattaEuro(totale) + '</td></tr>';
@@ -1400,8 +1422,14 @@ function costruisciFoglio({ cliente, data, righe }) {
 }
 
 function stampaConto(origine, id) {
-  let cliente, data, righe;
-  if (origine === 'lavoro') {
+  let cliente, data, righe, lavori;
+  if (origine === 'insieme') {
+    const scelti = lavoriScelti();
+    if (scelti.length < 2) return;
+    cliente = scelti[0].cliente || {};
+    data = scelti[0].data;
+    lavori = scelti.map(l => ({ data: l.data, righe: l.righe }));
+  } else if (origine === 'lavoro') {
     if (!LAVORO) return;
     cliente = LAVORO.doc.cliente; data = LAVORO.doc.data; righe = LAVORO.righe;
   } else {
@@ -1416,7 +1444,7 @@ function stampaConto(origine, id) {
     if (!confirm('Manca l\'intestazione con i dati dell\'azienda: si compila in Impostazioni.\n\nStampare comunque?')) return;
   }
 
-  document.getElementById('foglio').innerHTML = costruisciFoglio({ cliente, data, righe });
+  document.getElementById('foglio').innerHTML = costruisciFoglio({ cliente, data, righe, lavori });
 
   // Chrome propone il titolo della pagina come nome del file quando si salva in
   // PDF, e lo legge a stampa avviata: rimetterlo a posto subito darebbe un PDF
@@ -1744,7 +1772,61 @@ function tornaAgliArrivi() {
 // ── ARCHIVIO ──
 
 let FILTRO_ARCHIVIO = '';
-let CLIENTE_ARCHIVIO = null;   // { id, nome } quando si arriva da «Vedi conti»
+let CLIENTE_ARCHIVIO = null;
+// I lavori spuntati per un conto unico. Solo dello stesso cliente: unire due
+// clienti vorrebbe dire mandare a uno il conto dell'altro.
+let SCELTI_ARCHIVIO = new Set();
+
+const stessoNome = (a, b) => !!String(a || '').trim() &&
+  String(a || '').trim().toLowerCase() === String(b || '').trim().toLowerCase();
+const stessoCliente = (a, b) => (a && b && a.id && a.id === b.id) || stessoNome(a && a.nome, b && b.nome);
+
+function lavoriScelti() {
+  return ARCHIVIO.filter(l => SCELTI_ARCHIVIO.has(l.id))
+    .sort((a, b) => String(a.data).localeCompare(String(b.data)));
+}
+
+function scegliLavoro(id, acceso) {
+  const l = ARCHIVIO.find(x => x.id === id);
+  if (!l) return;
+  if (acceso) {
+    const altro = lavoriScelti()[0];
+    if (altro && !stessoCliente(altro.cliente, l.cliente)) {
+      avvisa('Un conto unico è per un cliente solo: hai già scelto un lavoro di ' +
+        ((altro.cliente && altro.cliente.nome) || 'un altro cliente'), true);
+    } else {
+      SCELTI_ARCHIVIO.add(id);
+    }
+  } else {
+    SCELTI_ARCHIVIO.delete(id);
+  }
+  const el = document.getElementById('elenco-archivio');
+  if (el) el.innerHTML = righeArchivio();
+}
+
+function annullaScelta() {
+  SCELTI_ARCHIVIO.clear();
+  const el = document.getElementById('elenco-archivio');
+  if (el) el.innerHTML = righeArchivio();
+}
+
+function barraScelti() {
+  const scelti = lavoriScelti();
+  if (!scelti.length) return '';
+  const { totale } = totaleConteggio(scelti.flatMap(l => l.righe || []));
+  const nome = (scelti[0].cliente && scelti[0].cliente.nome) || 'senza nome';
+  const due = scelti.length > 1;
+  return '<div class="barra-scelti">' +
+    '<span><b>' + scelti.length + (due ? ' lavori' : ' lavoro') + '</b> di ' + perValore(nome) +
+      ' · ' + formattaEuro(totale) + '</span>' +
+    (due ? '' : '<span class="meta">spuntane un altro dello stesso cliente per un conto unico</span>') +
+    '<span style="margin-left:auto; display:flex; gap:8px; flex-wrap:wrap">' +
+      '<button class="principale piccola" onclick="stampaConto(\'insieme\')"' + (due ? '' : ' disabled') + '>Stampa insieme</button>' +
+      '<button class="secondaria piccola" onclick="inviaInsieme()"' + (due ? '' : ' disabled') + '>Manda insieme</button>' +
+      '<button class="secondaria piccola" onclick="fatturaInsieme()">Segna fatturat' + (due ? 'i' : 'o') + '</button>' +
+      '<button class="secondaria piccola" onclick="annullaScelta()">Annulla</button>' +
+    '</span></div>';
+}   // { id, nome } quando si arriva da «Vedi conti»
 let STATO_ARCHIVIO = 'tutti';
 let RACCOLTA_ARCHIVIO = 'data';
 let ARCHIVIATO = null;
@@ -1816,6 +1898,10 @@ function lavoriArchivio() {
 }
 
 function righeArchivio() {
+  return barraScelti() + righeArchivioSole();
+}
+
+function righeArchivioSole() {
   const lavori = lavoriArchivio();
   if (!lavori.length) {
     return '<div class="scheda"><div class="vuoto-elenco">' +
@@ -1851,8 +1937,12 @@ function righeArchivio() {
 function schedaArchivio(l) {
   const id = perOnclick(l.id);
   const nome = (l.cliente && l.cliente.nome) || 'senza nome';
-  return '<div class="scheda cliccabile" onclick="apriArchiviato(\'' + id + '\')">' +
+  const scelto = SCELTI_ARCHIVIO.has(l.id);
+  return '<div class="scheda cliccabile' + (scelto ? ' scelta' : '') + '" onclick="apriArchiviato(\'' + id + '\')">' +
     '<div class="riga-scheda">' +
+      // La casella non apre il lavoro: il clic resta suo.
+      '<input type="checkbox" class="scegli" title="Per un conto unico con altri lavori dello stesso cliente"' +
+        (scelto ? ' checked' : '') + ' onclick="event.stopPropagation(); scegliLavoro(\'' + id + '\', this.checked)">' +
       '<span class="nome-cliente">' + perValore(nome) + '</span>' +
       '<span class="etichetta ' + (l.stato === 'fatturato' ? 'fatturato">fatturato' : 'da-fatturare">da fatturare') + '</span>' +
       (l.inPosta ? '<span class="meta">✉️ in posta</span>' : '') +
@@ -1978,14 +2068,21 @@ function disegnaArchiviato() {
 
 // Niente colonne allineate con gli spazi: le app di posta usano caratteri a
 // larghezza variabile e arrivano storte. Una voce per riga.
-function testoConto(l) {
-  const { totale, escluse } = totaleConteggio(l.righe);
+function testoConto(l) { return testoConti([l]); }
+
+// Come il foglio: più lavori dello stesso cliente in un messaggio solo, ognuno
+// con la sua data e il suo subtotale, e il totale in fondo.
+function testoConti(lavori) {
+  const piu = lavori.length > 1;
+  const { totale, escluse } = totaleConteggio(lavori.flatMap(l => l.righe || []));
   const righe = [];
   righe.push('CONTO DEI LAVORI');
-  righe.push((l.cliente && l.cliente.nome) || '');
-  if (l.data) righe.push(formattaData(l.data));
+  righe.push((lavori[0].cliente && lavori[0].cliente.nome) || '');
+  if (!piu && lavori[0].data) righe.push(formattaData(lavori[0].data));
+  lavori.forEach(l => {
   righe.push('');
-  l.righe.forEach(r => {
+  if (piu) righe.push('Lavoro del ' + formattaData(l.data));
+  (l.righe || []).forEach(r => {
     const imp = importoRiga(r);
     const quantita = formattaQuantita(r.quantita);
     const misurabile = quantita && (r.unita || parseFloat(r.quantita) !== 1);
@@ -1998,6 +2095,8 @@ function testoConto(l) {
       righe.push('  ' + r.voce + ' — ' +
         (conUnita ? conUnita + ' × ' + formattaEuro(r.prezzo) + ' = ' : '') + formattaEuro(imp));
     }
+  });
+  if (piu) righe.push('  Subtotale: ' + formattaEuro(totaleConteggio(l.righe).totale));
   });
   righe.push('');
   righe.push('  TOTALE (IVA inclusa): ' + formattaEuro(totale));
@@ -2043,6 +2142,62 @@ async function inviaConto(id) {
     '?subject=' + encodeURIComponent(oggetto) +
     '&body=' + encodeURIComponent(testoConto(l)));
   disegna();
+}
+
+// Riscrive il file d'archivio di un lavoro con qualche campo cambiato. Dice se ci
+// è riuscito: chi chiama deve fermarsi e dirlo, non andare avanti come se niente.
+async function aggiornaArchiviato(l, campi) {
+  const aggiornato = { ...l, ...campi };
+  delete aggiornato.anno;
+  delete aggiornato.file;
+  try {
+    const radice = await sottocartella(CARTELLA, CARTELLA_ARCHIVIO, true);
+    const cartellaAnno = await sottocartella(radice, l.anno, true);
+    await scriviTesto(cartellaAnno, l.file, JSON.stringify(aggiornato, null, 2));
+  } catch (e) {
+    return e;
+  }
+  Object.assign(l, campi);
+  return null;
+}
+
+// Più lavori dello stesso cliente in una mail sola. Si segnano tutti in posta
+// prima di aprirla, per la stessa ragione del conto singolo; se uno non si riesce
+// a segnare ci si ferma, e la posta non si apre: una mail partita per due lavori
+// di cui l'archivio ne ricorda uno è il doppione del mese dopo.
+async function inviaInsieme() {
+  const scelti = lavoriScelti();
+  if (scelti.length < 2) return;
+  const cl = scelti[0].cliente || {};
+  const cliente = CLIENTI.find(c => c.id === cl.id) ||
+    CLIENTI.find(c => stessoNome(c.nome, cl.nome));
+  const indirizzo = (cliente && cliente.email) || '';
+  if (!indirizzo) {
+    avvisa('Manca l\'email di ' + (cl.nome || 'questo cliente') +
+      ': mettila in Clienti, o scrivila a mano nella posta', true);
+  }
+  const quando = new Date().toISOString();
+  for (const l of scelti) {
+    const errore = await aggiornaArchiviato(l, { inPosta: quando });
+    if (errore) { avvisa('Non ho potuto segnare l\'invio: ' + errore.message, true); disegna(); return; }
+  }
+  const oggetto = 'Conto dei lavori del ' + scelti.map(l => formattaData(l.data)).join(', ');
+  apriPosta('mailto:' + encodeURIComponent(indirizzo) +
+    '?subject=' + encodeURIComponent(oggetto) +
+    '&body=' + encodeURIComponent(testoConti(scelti)));
+  SCELTI_ARCHIVIO.clear();
+  disegna();
+}
+
+async function fatturaInsieme() {
+  const scelti = lavoriScelti();
+  for (const l of scelti) {
+    const errore = await aggiornaArchiviato(l, { stato: 'fatturato' });
+    if (errore) { avvisa('Non ho potuto salvare: ' + errore.message, true); disegna(); return; }
+  }
+  SCELTI_ARCHIVIO.clear();
+  disegna();
+  avvisa(scelti.length === 1 ? 'Segnato come fatturato' : scelti.length + ' lavori segnati come fatturati');
 }
 
 // L'unico punto che porta fuori dall'app. Sta da solo per lo stesso motivo per

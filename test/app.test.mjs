@@ -1766,6 +1766,60 @@ try {
     (raccolto.match(/da incassare/g) || []).length === 1);
   await pagU.evaluate(() => cambiaRaccolta('data'));
 
+  // ── due lavori dello stesso cliente in un conto unico ──
+  // Due giornate, due rapportini, un foglio solo: un blocco per lavoro con la sua
+  // data e il suo subtotale, il totale in fondo. E mai due clienti insieme.
+  const insieme = await pagU.evaluate(async a => {
+    const archivio = await window.RADICE.getDirectoryHandle('archivio', { create: true });
+    const anno = await archivio.getDirectoryHandle(a, { create: true });
+    await scriviTesto(anno, '2026-05-11-verdi-secondo.json', JSON.stringify({
+      tipo: 'lavoro-archiviato', versione: 1, id: 'secondo-verdi', revisione: 1,
+      cliente: { id: 'cliente-verdi', nome: 'Giuseppe Verdi', citta: 'Lavis' },
+      data: '2026-05-11',
+      righe: [{ chiave: 'manodopera', voce: 'Manodopera', quantita: 2, unita: 'h', prezzo: 35 },
+              { voce: 'Smaltimento verde', quantita: 1, unita: '', prezzo: '' }],
+      totale: 70, righeSenzaPrezzo: 1, stato: 'da-fatturare', rapportino: null,
+    }));
+    await ricarica();
+    vaiA('archivio');
+    const r = {};
+    const altroCliente = ARCHIVIO.find(l => l.id !== 'altro-lavoro' && l.id !== 'secondo-verdi');
+    scegliLavoro('altro-lavoro', true);
+    scegliLavoro(altroCliente.id, true);
+    r.rifiutaAltroCliente = SCELTI_ARCHIVIO.size === 1 && document.getElementById('avviso').classList.contains('brutto');
+    scegliLavoro('secondo-verdi', true);
+    r.scelti = [...SCELTI_ARCHIVIO].sort().join(',');
+    r.barra = document.getElementById('elenco-archivio').innerHTML.includes('Stampa insieme');
+    stampaConto('insieme');
+    const foglio = document.getElementById('foglio');
+    r.foglio = { blocchi: foglio.querySelectorAll('.riga-blocco').length,
+      sub: foglio.querySelectorAll('.riga-subtotale').length,
+      totale: foglio.querySelector('.riga-totale').textContent,
+      date: foglio.textContent.includes('04/05/2026') && foglio.textContent.includes('11/05/2026'),
+      parziale: foglio.textContent.includes('non è compresa') };
+    window.apriPosta = url => { window.__posta = url; };
+    window.__posta = '';
+    await inviaInsieme();
+    r.posta = decodeURIComponent(window.__posta);
+    r.inPosta = ARCHIVIO.filter(l => l.id === 'altro-lavoro' || l.id === 'secondo-verdi').every(l => !!l.inPosta);
+    r.dopo = SCELTI_ARCHIVIO.size;
+    // e il file d'archivio lo ricorda, non solo lo schermo
+    r.suFile = JSON.parse(await leggiTesto(anno, '2026-05-11-verdi-secondo.json')).inPosta ? true : false;
+    await anno.removeEntry('2026-05-11-verdi-secondo.json');
+    await ricarica();
+    return r;
+  }, annoLavoro);
+  ok('un conto unico non mette insieme due clienti, e lo dice', insieme.rifiutaAltroCliente, JSON.stringify(insieme));
+  ok('due lavori dello stesso cliente si spuntano insieme', insieme.scelti === 'altro-lavoro,secondo-verdi' && insieme.barra, insieme.scelti);
+  ok('il foglio unico ha un blocco e un subtotale per lavoro',
+    insieme.foglio.blocchi === 2 && insieme.foglio.sub === 2 && insieme.foglio.date, JSON.stringify(insieme.foglio));
+  ok('e il totale li somma', insieme.foglio.totale.includes('245,00'), insieme.foglio.totale);
+  ok('dicendo che una voce da definire resta fuori', insieme.foglio.parziale);
+  ok('«Manda insieme» apre una mail sola con i due lavori e il totale',
+    insieme.posta.includes('Lavoro del 04/05/2026') && insieme.posta.includes('Lavoro del 11/05/2026') &&
+    insieme.posta.includes('TOTALE (IVA inclusa): 245,00'), insieme.posta.slice(0, 400));
+  ok('e li segna in posta tutti e due, anche sul file', insieme.inPosta && insieme.suFile && insieme.dopo === 0);
+
   // ── togliere un lavoro dall'archivio ──
   // Non è una correzione — quella si fa rimandando il rapportino dal cantiere —
   // è per il lavoro che non ci doveva stare. E siccome tocca l'unica copia di

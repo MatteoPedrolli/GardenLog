@@ -537,6 +537,17 @@ prima di aprirla, o una mail mandata resterebbe senza traccia in archivio. Senza
 email il conto si manda lo stesso, con il destinatario da scrivere a mano, ma
 l'app lo dice.
 
+**Più lavori, un conto solo.** Due giornate dallo stesso cliente sono due
+rapportini e due file in archivio, e restano tali; si spuntano, e «Stampa insieme»
+e «Manda insieme» fanno un foglio o una mail soli. Dentro, **un blocco per lavoro**
+con la sua data e il suo subtotale, e il totale in fondo: il cliente deve poter
+vedere cosa è stato fatto quando, e sommare le voci uguali lo nasconderebbe. Si
+uniscono **solo lavori dello stesso cliente** (stesso `id` o stesso nome intero):
+unire due clienti vorrebbe dire mandare a uno il conto dell'altro. Mandando insieme
+si segnano *in posta* tutti prima di aprire la posta, e se uno non si riesce a
+segnare la posta non si apre: una mail per due lavori di cui l'archivio ne ricorda
+uno è il doppione del mese dopo.
+
 Nel testo della mail niente colonne allineate con gli spazi: le app di posta usano
 caratteri a larghezza variabile e arrivano storte. Una voce per riga.
 
