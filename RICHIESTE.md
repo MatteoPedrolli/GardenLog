@@ -73,16 +73,13 @@ Cosa tocca:
 - un campo in più nel file d'archivio (il gruppo con dentro le sue righe), che
   un archivio di prima non ha e resta valido: non serve cambiare versione.
 
-Da decidere quando si fa:
+Deciso il 24/09/2026:
 
-- **cosa succede se il cantiere rimanda il rapportino corretto.** Oggi le righe
-  automatiche si riallineano da sole alla visita tramite `chiave`. Se una di
-  quelle sta dentro un gruppo, la sua quantità cambia ma il prezzo del gruppo era
-  stato scelto a mano: o il gruppo resta com'era e si segnala che sotto è cambiato
-  qualcosa, o il prezzo suggerito si ricalcola. La prima strada è più prudente,
-  perché un prezzo scritto a mano oggi non viene mai sovrascritto;
-- se il gruppo si fattura **a corpo** (quantità 1, prezzo del gruppo) o porta una
-  quantità sua. A corpo sembra il caso normale.
+- **il gruppo si fattura a corpo**: quantità 1, e il prezzo è quello del gruppo;
+- **il prezzo del gruppo non si sovrascrive.** Se il cantiere rimanda il
+  rapportino corretto e una riga dentro il gruppo cambia quantità, il gruppo resta
+  com'era e la schermata dice che sotto è cambiato qualcosa, con la somma nuova
+  accanto: decide chi fattura. È la stessa regola dei prezzi scritti a mano.
 
 ## Una riga di testo sulle fasce: resta aperto
 
