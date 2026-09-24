@@ -120,31 +120,37 @@ try {
   // ── le voci da conteggiare si compilano mentre registri ──
   // Senza prezzi: il listino sta in ufficio. Il cantiere dice cosa è stato fatto
   // e quanto, che è la cosa che solo lui sa.
-  ok('tre righe automatiche: manodopera, trasferimento, concime',
-    await page.locator('#conto-righe .conto-riga').count() === 3);
-  ok('manodopera precompilata con le ore calcolate',
-    await page.locator('#conto-righe .conto-riga').first().locator('input').first().inputValue() === '8');
+  // Le righe che nascono da ore e operazioni non si ripetono una per una: stanno
+  // nel riepilogo chiuso, e partono lo stesso col rapportino.
+  const voceRiepilogo = i => page.locator('#conto-riepilogo .riepilogo-voce').nth(i);
+  ok('tre righe automatiche nel riepilogo: manodopera, trasferimento, concime',
+    await page.locator('#conto-riepilogo .riepilogo-voce').count() === 3);
+  ok('che non si ripetono come righe da compilare',
+    await page.locator('#conto-righe .conto-riga').count() === 0);
+  ok('e il riepilogo parte chiuso', !(await page.locator('#conto-riepilogo details').evaluate(d => d.open)));
+  ok('manodopera con le ore calcolate', (await voceRiepilogo(0).textContent()).includes('8 h'),
+    await voceRiepilogo(0).textContent());
   ok('il trasferimento c\'è sempre, senza aggiungerlo',
-    (await page.textContent('#conto-righe')).includes('Trasferimento'));
+    (await page.textContent('#conto-riepilogo')).includes('Trasferimento'));
   ok('l\'operazione libera non fa riga di conto',
-    !(await page.textContent('#conto-righe')).includes('Riparazione irrigazione'));
-  ok('ogni riga ha un campo solo, la quantità: nessun prezzo sul telefono',
-    await page.locator('#conto-righe .conto-riga').first().locator('input').count() === 1);
+    !(await page.textContent('#conto-riepilogo')).includes('Riparazione irrigazione'));
   ok('e in fondo non c\'è nessun totale da leggere',
     await page.locator('#conto-totale').count() === 0);
 
-  const riga = i => page.locator('#conto-righe .conto-riga').nth(i);
 
   await page.fill('#f-conto-libera', 'Noleggio rullo');
   await page.press('#f-conto-libera', 'Enter');
   await page.waitForTimeout(150);
-  ok('riga aggiunta a mano', await page.locator('#conto-righe .conto-riga').count() === 4);
+  ok('riga aggiunta a mano', await page.locator('#conto-righe .conto-riga').count() === 1);
+  ok('ogni riga ha un campo solo, la quantità: nessun prezzo sul telefono',
+    await page.locator('#conto-righe .conto-riga').first().locator('input').count() === 1);
+  ok('e nel riepilogo compare anche lei', await page.locator('#conto-riepilogo .riepilogo-voce').count() === 4);
 
   // il conto segue le ore mentre le correggi, senza uscire dalla schermata
   await page.locator('#fasce-list .fascia').first().locator('input[type=number]').fill('3');
   await page.waitForTimeout(200);
   ok('cambiando le persone la manodopera si aggiorna da sola',
-    await riga(0).locator('input').first().inputValue() === '12');
+    (await voceRiepilogo(0).textContent()).includes('12 h'), await voceRiepilogo(0).textContent());
   ok('e la riga aggiunta a mano resta dov\'è',
     (await page.textContent('#conto-righe')).includes('Noleggio rullo'));
   await page.locator('#fasce-list .fascia').first().locator('input[type=number]').fill('2');
@@ -620,9 +626,10 @@ try {
   await page.click('.visit-card button:has-text("Apri")');
   await page.waitForTimeout(300);
   ok('riaprendo, il conto è quello di prima',
-    await page.locator('#conto-righe .conto-riga').count() === 4);
+    await page.locator('#conto-riepilogo .riepilogo-voce').count() === 4 &&
+    await page.locator('#conto-righe .conto-riga').count() === 1);
   ok('le quantità sono quelle di prima',
-    await page.locator('#conto-righe .conto-riga').first().locator('input').first().inputValue() === '8');
+    (await page.locator('#conto-riepilogo .riepilogo-voce').first().textContent()).includes('8 h'));
   ok('la riga aggiunta a mano non sparisce',
     (await page.textContent('#conto-righe')).includes('Noleggio rullo'));
 
