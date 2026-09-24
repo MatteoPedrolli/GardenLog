@@ -441,7 +441,10 @@ select.form-control { background-image: url("data:image/svg+xml,%3Csvg xmlns='ht
   margin: 22px 0 10px; padding-bottom: 6px;
   border-bottom: 2px solid var(--velo);
 }
-.fascia { display: flex; align-items: center; gap: 6px; margin-bottom: 8px; }
+.fascia-blocco { margin-bottom: 10px; }
+.fascia { display: flex; align-items: center; gap: 6px; margin-bottom: 4px; }
+.fascia-cosa { width: 100%; padding: 8px 10px; font-size: 0.85rem; border: 1px solid var(--border);
+  border-radius: var(--radius-sm); font-family: var(--font-body); background: var(--white); }
 .fascia input[type=time] { flex: 1; min-width: 0; padding: 9px 8px; font-size: 0.85rem; }
 .fascia input[type=number] { width: 54px; padding: 9px 4px; text-align: center; font-size: 0.85rem; }
 .fascia .freccia { color: var(--text-light); font-size: 0.8rem; }
@@ -1867,7 +1870,7 @@ function renderFasce() {
   if (!lista) return;
   lista.innerHTML = pendingFasce.map((f, i) => {
     const errata = f.Inizio && f.Fine && oreFascia(f) === 0;
-    return `<div class="fascia ${f.proposta ? 'proposta' : ''} ${errata ? 'errata' : ''}">
+    return `<div class="fascia-blocco"><div class="fascia ${f.proposta ? 'proposta' : ''} ${errata ? 'errata' : ''}">
       <input type="time" value="${perValore(f.Inizio)}" oninput="modificaFascia(${i}, 'Inizio', this.value)">
       <span class="freccia">→</span>
       <input type="time" value="${perValore(f.Fine)}" oninput="modificaFascia(${i}, 'Fine', this.value)">
@@ -1875,7 +1878,9 @@ function renderFasce() {
       <span class="pers">pers.</span>
       ${f.proposta ? `<button type="button" class="via" onclick="confermaFascia(${i})" title="Conferma">✓</button>` : ''}
       <button type="button" class="via" onclick="togliFascia(${i})" title="Togli">✕</button>
-    </div>`;
+    </div>
+    <input type="text" class="fascia-cosa" placeholder="Cosa si è fatto in queste ore" value="${perValore(f.Cosa || '')}"
+           oninput="scriviCosaFascia(${i}, this.value)"></div>`;
   }).join('');
 
   aggiornaTotaleOre();
@@ -1917,6 +1922,15 @@ function modificaFascia(i, campo, valore) {
   }
   aggiornaTotaleOre();
   aggiornaConto();
+}
+
+// Cosa si è fatto in quelle ore: resta in ufficio, come le fasce, e al cliente
+// non arriva. Scriverla non conferma l'orario — una fascia proposta resta da
+// guardare anche se ci hai scritto sotto «potatura» — e non ridisegna niente,
+// o il campo sparirebbe da sotto le dita a metà parola.
+function scriviCosaFascia(i, valore) {
+  if (!pendingFasce[i]) return;
+  pendingFasce[i].Cosa = valore;
 }
 
 function confermaFascia(i) {
@@ -2227,7 +2241,8 @@ async function saveVisita({ invia = false } = {}) {
   aggiungiOperazioneLibera();   // quello che è rimasto scritto nella casella non si perde
 
   const visitaID = editVisitaID || generateID();
-  const fasce = pendingFasce.map(({ Inizio, Fine, Persone }) => ({ Inizio, Fine, Persone: Number(Persone) || 1 }));
+  const fasce = pendingFasce.map(({ Inizio, Fine, Persone, Cosa }) =>
+    ({ Inizio, Fine, Persone: Number(Persone) || 1, Cosa: String(Cosa || '').trim() }));
   const precedente = DB.visite.find(v => v.VisitaID == visitaID);
   const visita = {
     // Si riparte da quello che la visita aveva: ricostruirla da zero

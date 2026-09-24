@@ -5,27 +5,6 @@ avanti. Ogni voce dice cosa si è chiesto, cosa tocca e cosa resta da decidere,
 così chi la prende in mano non deve ricostruire la conversazione. Quando una
 voce si fa, si toglie da qui e quello che vale anche dopo va nel CLAUDE.md.
 
-## Una riga di testo su ogni fascia oraria
-
-*Chiesto il 24/09/2026.* Nel rapportino, accanto a orario e persone, una riga
-che dica cosa è stato fatto in quelle ore («potatura siepe lato strada»).
-
-Cosa tocca:
-
-- sul telefono un campo in più sulla fascia (`Cosa`). È un campo che si
-  aggiunge: le visite di prima non ce l'hanno e restano valide, **non serve
-  alzare `VERSIONE_DATI`**. Va compilato con `oninput` e senza ridisegnare
-  l'elenco delle fasce mentre si scrive;
-- nel rapportino `ore.fasce[].cosa`, sempre in più: un ufficio fermo alla
-  versione di prima lo ignora e non rifiuta il documento, quindi nemmeno
-  `VERSIONE_RAPPORTINO` deve salire;
-- in ufficio si legge nella schermata del lavoro e in archivio, accanto alle ore.
-
-Da decidere: **se va anche sul foglio del cliente.** Oggi ore e fasce restano in
-ufficio («al cliente va solo il conto»), e questa riga è proprio il genere di
-cosa che un cliente leggerebbe volentieri. Se sì, è un cambio a quella regola e
-va scritto.
-
 ## Piantumazione: più piante diverse, ognuna con nome, numero e prezzo
 
 *Chiesto il 24/09/2026.* Oggi piantumazione è un'operazione con una sola
@@ -80,8 +59,3 @@ Deciso il 24/09/2026:
   rapportino corretto e una riga dentro il gruppo cambia quantità, il gruppo resta
   com'era e la schermata dice che sotto è cambiato qualcosa, con la somma nuova
   accanto: decide chi fattura. È la stessa regola dei prezzi scritti a mano.
-
-## Una riga di testo sulle fasce: resta aperto
-
-Resta da decidere se la riga delle fasce va anche sul foglio del cliente (vedi
-sopra).

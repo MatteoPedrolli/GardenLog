@@ -103,6 +103,12 @@ persone; il totale lo fa `oreTotali()`. Una fascia che l'app propone resta
 rifiuta di salvare se ne resta una: le ore finiscono in fattura, e un orario
 precompilato che nessuno ha guardato è un errore che paga il cliente.
 
+Sotto ogni fascia c'è **una riga di testo, `Cosa`**: cosa si è fatto in quelle ore.
+Viaggia nel rapportino (`ore.fasce[].cosa`) e in ufficio si legge sotto la sua
+fascia, nel lavoro in arrivo e in archivio; **al cliente non arriva**, come le
+fasce. Scriverla non conferma l'orario di una fascia proposta: sono due cose
+diverse, e un «potatura» scritto sotto un orario mai guardato non lo rende giusto.
+
 **Le operazioni si spuntano.** L'elenco viene da `DB.tipiOperazione`, ordinato
 per quanto si usano da quel cliente. Spuntando si apre solo il dettaglio che
 quel tipo richiede (`dettaglio`: niente, concime, semente, fitofarmaco,

@@ -22,6 +22,9 @@ function costruisciRapportino({ visita, cliente, operazioni, tipi, voci, concimi
   const fasce = (visita.Fasce || []).map(f => ({
     inizio: f.Inizio, fine: f.Fine,
     persone: Number(f.Persone) || 1,
+    // Cosa si è fatto in quelle ore. È un campo in più: un ufficio fermo alla
+    // versione di prima lo ignora, e il documento resta della stessa versione.
+    cosa: String(f.Cosa || '').trim(),
     ore: Number((((minutiRapportino(f.Fine) - minutiRapportino(f.Inizio)) / 60) * (Number(f.Persone) || 1)).toFixed(2)),
   }));
 

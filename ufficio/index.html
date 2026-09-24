@@ -107,6 +107,10 @@ p.sottotitolo { color: var(--text-light); font-size: 0.88rem; margin-bottom: 22p
   box-shadow: var(--shadow);
 }
 .scheda.cliccabile { cursor: pointer; transition: all 0.15s; }
+/* La riga di cosa si è fatto sta sotto la sua fascia, attaccata: senza bordo in
+   mezzo, o sembrerebbe una fascia a sé. */
+table.elenco tr:has(+ tr.cosa-fascia) td { border-bottom: none; padding-bottom: 2px; }
+tr.cosa-fascia td { color: var(--text-mid); font-size: 0.86rem; padding-top: 0; }
 .scheda.cliccabile:hover { border-color: var(--ocra); transform: translateY(-1px); }
 
 .riga-scheda { display: flex; align-items: baseline; gap: 12px; flex-wrap: wrap; }
@@ -1656,7 +1660,8 @@ function disegnaLavoro() {
     d.ore.fasce.forEach(f => {
       html += '<tr><td>' + perValore(f.inizio) + ' – ' + perValore(f.fine) + '</td>' +
         '<td>' + f.persone + (f.persone === 1 ? ' persona' : ' persone') + '</td>' +
-        '<td class="num">' + formattaOre(f.ore) + '</td></tr>';
+        '<td class="num">' + formattaOre(f.ore) + '</td></tr>' +
+        (f.cosa ? '<tr class="cosa-fascia"><td colspan="3">' + perValore(f.cosa) + '</td></tr>' : '');
     });
     html += '</tbody></table>';
   }
@@ -2027,7 +2032,8 @@ function disegnaArchiviato() {
       r.ore.fasce.forEach(f => {
         html += '<tr><td>' + perValore(f.inizio) + ' – ' + perValore(f.fine) + '</td>' +
           '<td>' + f.persone + (f.persone === 1 ? ' persona' : ' persone') + '</td>' +
-          '<td class="num">' + formattaOre(f.ore) + '</td></tr>';
+          '<td class="num">' + formattaOre(f.ore) + '</td></tr>' +
+        (f.cosa ? '<tr class="cosa-fascia"><td colspan="3">' + perValore(f.cosa) + '</td></tr>' : '');
       });
       html += '</tbody></table>';
     }

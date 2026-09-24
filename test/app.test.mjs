@@ -149,12 +149,16 @@ try {
     (await page.textContent('#conto-righe')).includes('Noleggio rullo'));
   await page.locator('#fasce-list .fascia').first().locator('input[type=number]').fill('2');
   await page.waitForTimeout(200);
+  // Cosa si è fatto in quelle ore: una riga sotto la fascia, che resta in ufficio.
+  await page.locator('#fasce-list .fascia-cosa').first().fill('Potatura siepe lato strada');
 
   await page.click('#btn-salva-visita');
   await page.waitForTimeout(300);
   ok('visita salvata', await page.evaluate(() => DB.visite.length) === 1);
   ok('ore e fasce registrate',
     await page.evaluate(() => DB.visite[0].Ore_Visita === 8 && DB.visite[0].Fasce.length === 1));
+  ok('con scritto cosa si è fatto in quelle ore',
+    await page.evaluate(() => DB.visite[0].Fasce[0].Cosa) === 'Potatura siepe lato strada');
   ok('operazione agganciata al suo tipo',
     await page.evaluate(() => DB.operazioni.find(o => o.TipoID === 'concimazione') != null));
   ok('operazione libera salvata senza tipo',
@@ -545,6 +549,7 @@ try {
     catch (e) { return e.message.includes('versione'); }
   }));
   ok('il documento porta le ore calcolate', doc.ore.totale === 8 && doc.ore.fasce.length === 1);
+  ok('e cosa si è fatto in ogni fascia', doc.ore.fasce[0].cosa === 'Potatura siepe lato strada');
   ok('il nome del prodotto viaggia col documento, non solo il codice',
     doc.operazioni.some(o => o.prodotto === 'Nitrophoska'),
     JSON.stringify(doc.operazioni.map(o => o.prodotto)));
@@ -1004,6 +1009,8 @@ try {
   ok('il listino dell\'ufficio vince sul prezzo proposto dal cantiere', prezzoApplicato === 35);
   ok('la schermata del lavoro mostra le ore del cantiere',
     (await pagU.textContent('#pagina-lavoro')).includes('8,00 h'));
+  ok('e sotto la fascia cosa si è fatto in quelle ore',
+    (await pagU.textContent('#pagina-lavoro')).includes('Potatura siepe lato strada'));
 
   const conto = await pagU.evaluate(() => totaleConteggio(LAVORO.righe));
   ok('il totale somma le righe complete', conto.totale > 0, JSON.stringify(conto));
@@ -1216,6 +1223,7 @@ try {
     foglio.html.includes('da definire'));
   // Ore e operazioni restano in ufficio: al cliente va il conto.
   ok('il foglio non porta le operazioni agronomiche', !foglio.html.includes('Nitrophoska'));
+  ok('né quello che si è scritto sulle fasce, che resta in ufficio', !foglio.html.includes('Potatura siepe lato strada'));
   ok('il nome che Chrome proporrà per il PDF parla di conto e cliente',
     /^Conto \d{4}-\d{2}-\d{2} Mario Rossi/.test(foglio.titolo), foglio.titolo);
   ok('il foglio non si vede a schermo: esiste solo per la stampa',
