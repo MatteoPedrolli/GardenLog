@@ -148,6 +148,9 @@ table.elenco th {
 table.elenco td { padding: 9px 8px 9px 0; border-bottom: 1px solid var(--border); vertical-align: middle; }
 table.elenco tr:last-child td { border-bottom: none; }
 table.elenco td.num, table.elenco th.num { text-align: right; padding-right: 0; }
+/* Dopo una colonna di numeri allineati a destra l'unità ci finiva attaccata:
+   «1a corpo», e nelle intestazioni «QUANTITÀUNITÀ». */
+table.elenco td.num + td:not(.num), table.elenco th.num + th:not(.num) { padding-left: 8px; }
 /* Nella scheda cliente le due colonne vanno larghe uguali: lasciate libere, le
    celle si dimensionano sul contenuto e il telefono esce stretto come il numero. */
 table.scheda-cliente { table-layout: fixed; }
@@ -158,6 +161,8 @@ table.scheda-cliente { table-layout: fixed; }
 }
 .testa-cliente:hover .nome-cliente { color: var(--inchiostro-tenue); }
 .freccia-cliente { margin-left: auto; color: var(--text-light); }
+tr.riga-gruppo td { border-bottom: none; font-weight: 600; }
+tr.dentro-gruppo td { font-size: 0.82rem; color: var(--text-light); padding-top: 0; }
 .barra-scelti {
   position: sticky; top: 0; z-index: 5;
   display: flex; align-items: center; gap: 12px; flex-wrap: wrap; margin-bottom: 12px; padding: 10px 14px;
@@ -1114,7 +1119,12 @@ function operazioneDellaRiga(doc, riga) {
 }
 
 function costruisciConteggio(doc, precedenti) {
-  const vecchie = Array.isArray(precedenti) ? precedenti : [];
+  const precedentiTutte = Array.isArray(precedenti) ? precedenti : [];
+  const gruppi = precedentiTutte.filter(x => x.gruppo);
+  // Le righe dentro un gruppo si riallineano come le altre — la quantità segue il
+  // rapportino — ma restano dentro il loro gruppo.
+  const vecchie = precedentiTutte.filter(x => !x.gruppo)
+    .concat(gruppi.flatMap(g => g.componenti || []));
   const righe = (doc.righe || []).map(r => {
     const vecchia = vecchie.find(x => x.chiave && x.chiave === r.chiave);
     const inListino = voceInListino(r.voceID);
@@ -1170,10 +1180,77 @@ function costruisciConteggio(doc, precedenti) {
       daCantiere,
     };
   });
+  // Il gruppo tiene il suo nome e il suo prezzo: il prezzo l'ha deciso chi
+  // fattura, e come ogni prezzo scritto a mano non si sovrascrive. Se sotto è
+  // cambiato qualcosa lo dice la schermata, con la somma nuova accanto.
+  const nelGruppo = new Map();
+  gruppi.forEach(g => (g.componenti || []).forEach(c => { if (c.chiave) nelGruppo.set(c.chiave, g); }));
+  const libere = righe.filter(r => !nelGruppo.has(r.chiave));
+  const rifatti = gruppi.map(g => ({
+    ...g,
+    componenti: righe.filter(r => nelGruppo.get(r.chiave) === g)
+      .concat((g.componenti || []).filter(c => !c.chiave).map(c => ({ ...c }))),
+  })).filter(g => g.componenti.length);
   // Le righe aggiunte in ufficio non hanno chiave e non nascono da niente:
   // restano dove sono, come sul telefono.
-  vecchie.filter(r => !r.chiave).forEach(r => righe.push({ ...r }));
-  return righe;
+  const manuali = precedentiTutte.filter(r => !r.gruppo && !r.chiave).map(r => ({ ...r }));
+  return libere.concat(rifatti, manuali);
+}
+
+// ── ACCORPARE ──
+// Una siepe nuova porta ore, piante, pali, telo e pacciamatura, ognuno con la
+// sua riga. A volte al cliente deve arrivare una voce sola: si spuntano, si
+// uniscono, si dà un nome al gruppo. Si fattura **a corpo** — quantità 1, il
+// prezzo è del gruppo — e come prezzo si propone la somma, che resta da decidere.
+// Le righe unite non si buttano: stanno dentro il gruppo, così in ufficio si vede
+// ancora di cosa è fatto e si può sciogliere. Al cliente arriva solo il gruppo.
+const sommaDi = righe => totaleConteggio(righe).totale;
+
+function sceltaRiga(i, acceso) {
+  if (!LAVORO) return;
+  if (!LAVORO.scelte) LAVORO.scelte = new Set();
+  if (acceso) LAVORO.scelte.add(i); else LAVORO.scelte.delete(i);
+  const b = document.getElementById('bottone-unisci');
+  if (b) {
+    const n = LAVORO.scelte.size;
+    b.disabled = n < 2;
+    b.textContent = n < 2 ? 'Unisci le voci spuntate' : 'Unisci ' + n + ' voci';
+  }
+}
+
+function unisciRighe() {
+  if (!LAVORO || !LAVORO.scelte || LAVORO.scelte.size < 2) return;
+  const indici = [...LAVORO.scelte].sort((a, b) => a - b);
+  const dentro = indici.map(i => LAVORO.righe[i]).filter(r => r && !r.gruppo);
+  if (dentro.length < 2) return;
+  const somma = sommaDi(dentro);
+  const gruppo = { gruppo: true, chiave: '', voceID: '', voce: 'Voci unite', quantita: 1, unita: '',
+    prezzo: somma, manuale: true, sommaVista: somma, componenti: dentro };
+  const primo = indici[0];
+  LAVORO.righe = LAVORO.righe.filter(r => !dentro.includes(r));
+  LAVORO.righe.splice(Math.min(primo, LAVORO.righe.length), 0, gruppo);
+  LAVORO.scelte = new Set();
+  disegnaLavoro();
+  // Il nome da dare è la prima cosa da fare: il campo è già lì, pronto.
+  const campo = document.getElementById('nome-gruppo-' + LAVORO.righe.indexOf(gruppo));
+  if (campo) { campo.focus(); campo.select(); }
+}
+
+function sciogliGruppo(i) {
+  const g = LAVORO && LAVORO.righe[i];
+  if (!g || !g.gruppo) return;
+  LAVORO.righe.splice(i, 1, ...g.componenti);
+  disegnaLavoro();
+}
+
+// La somma è cambiata sotto il gruppo (il cantiere ha rimandato il rapportino):
+// si accetta quella nuova solo con un tocco, mai da sé.
+function usaSommaGruppo(i) {
+  const g = LAVORO && LAVORO.righe[i];
+  if (!g || !g.gruppo) return;
+  g.prezzo = sommaDi(g.componenti);
+  g.sommaVista = g.prezzo;
+  disegnaLavoro();
 }
 
 // Come si legge una riga **in ufficio**: la voce più il prodotto, quando c'è.
@@ -1716,11 +1793,15 @@ function disegnaLavoro() {
   }
 
   html += '<div class="scheda"><div class="titolo-sezione">Conto</div>';
-  html += '<table class="elenco"><thead><tr><th>Voce</th><th class="num">Quantità</th>' +
+  html += '<table class="elenco"><thead><tr><th></th><th>Voce</th><th class="num">Quantità</th>' +
     '<th>Unità</th><th class="num">Prezzo</th><th class="num">Importo</th><th></th></tr></thead><tbody>';
+  LAVORO.scelte = new Set();
   LAVORO.righe.forEach((r, i) => {
     const imp = importoRiga(r);
+    if (r.gruppo) { html += rigaGruppo(r, i, imp); return; }
     html += '<tr>' +
+      '<td><input type="checkbox" class="scegli" title="Spunta per unirla ad altre in una voce sola"' +
+        ' onclick="sceltaRiga(' + i + ', this.checked)"></td>' +
       '<td>' + (r.chiave ? perValore(voceConProdotto(r)) :
         '<input type="text" value="' + perValore(r.voce) + '" oninput="modificaRiga(' + i + ', \'voce\', this.value)">') + '</td>' +
       '<td class="num"><input type="text" class="quantita" value="' + perValore(formattaQuantita(r.quantita)) +
@@ -1735,7 +1816,8 @@ function disegnaLavoro() {
     '</tr>';
   });
   html += '</tbody></table>';
-  html += '<div class="bottoni"><button class="secondaria piccola" onclick="aggiungiRiga()">+ Aggiungi una riga</button></div>';
+  html += '<div class="bottoni"><button class="secondaria piccola" onclick="aggiungiRiga()">+ Aggiungi una riga</button>' +
+    '<button class="secondaria piccola" id="bottone-unisci" onclick="unisciRighe()" disabled>Unisci le voci spuntate</button></div>';
   html += '<div id="riepilogo">' + riepilogoConto() + '</div>';
   html += '</div>';
 
@@ -1747,6 +1829,28 @@ function disegnaLavoro() {
   '</div>';
 
   c.innerHTML = html;
+}
+
+function rigaGruppo(g, i, imp) {
+  const somma = sommaDi(g.componenti);
+  const cambiata = Math.abs(somma - (Number(g.sommaVista) || 0)) > 0.005;
+  return '<tr class="riga-gruppo"><td></td>' +
+      '<td><input type="text" id="nome-gruppo-' + i + '" value="' + perValore(g.voce) + '"' +
+        ' oninput="modificaRiga(' + i + ', \'voce\', this.value)" title="Il nome che legge il cliente"></td>' +
+      '<td class="num">1</td><td class="meta">a corpo</td>' +
+      '<td class="num"><input type="text" class="prezzo" value="' + perValore(formattaQuantita(g.prezzo)) + '"' +
+        ' oninput="modificaRiga(' + i + ', \'prezzo\', this.value)"></td>' +
+      '<td class="num" id="importo-' + i + '">' + (imp == null ? '—' : formattaEuro(imp)) + '</td>' +
+      '<td class="num"><button class="secondaria piccola" onclick="sciogliGruppo(' + i + ')" title="Rimette le voci com\'erano">Sciogli</button></td>' +
+    '</tr>' +
+    '<tr class="dentro-gruppo"><td></td><td colspan="6">' +
+      'Dentro: ' + g.componenti.map(c => perValore(voceConProdotto(c)) +
+        (c.quantita !== '' && c.quantita != null ? ' ' + perValore(formattaQuantita(c.quantita)) + (c.unita ? ' ' + perValore(c.unita) : '') : '')).join(' · ') +
+      ' — somma ' + formattaEuro(somma) +
+      (cambiata ? '<div class="avvertenza" style="margin:6px 0 0">Le voci dentro sono cambiate: la somma ora è ' +
+        formattaEuro(somma) + ', il prezzo del gruppo è rimasto ' + formattaEuro(g.prezzo) + '. ' +
+        '<button class="secondaria piccola" onclick="usaSommaGruppo(' + i + ')">Usa la somma</button></div>' : '') +
+    '</td></tr>';
 }
 
 function riepilogoConto() {
@@ -2031,7 +2135,9 @@ function disegnaArchiviato() {
     '<th>Unità</th><th class="num">Prezzo</th><th class="num">Importo</th></tr></thead><tbody>';
   l.righe.forEach(riga => {
     const imp = importoRiga(riga);
-    html += '<tr><td>' + perValore(voceConProdotto(riga)) + '</td>' +
+    html += '<tr><td>' + perValore(voceConProdotto(riga)) +
+      (riga.gruppo ? '<div class="meta">dentro: ' + (riga.componenti || []).map(c => perValore(voceConProdotto(c))).join(' · ') + '</div>' : '') +
+      '</td>' +
       '<td class="num">' + perValore(formattaQuantita(riga.quantita)) + '</td>' +
       '<td class="meta">' + perValore(riga.unita) + '</td>' +
       '<td class="num">' + (riga.prezzo === '' || riga.prezzo == null ? '' : formattaEuro(riga.prezzo)) + '</td>' +

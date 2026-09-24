@@ -1833,6 +1833,55 @@ try {
   ok('sul foglio del cliente le piante escono col loro nome',
     pianteU.foglio.includes('Lauro') && pianteU.foglio.includes('Acero'));
 
+  // ── più voci del conto unite in una, a corpo ──
+  // Una siepe nuova: piante, pali, telo… e al cliente una voce sola. Il prezzo
+  // proposto è la somma, e una volta deciso non si sovrascrive.
+  const gruppo = await pagU.evaluate(d => {
+    const prima = PAGINA;
+    LAVORO = { doc: d, righe: costruisciConteggio(d, null), stato: 'da-fatturare', corretto: false };
+    vaiA('lavoro');
+    const r = {};
+    const indici = LAVORO.righe.map((x, i) => x.voceID === 'piante' ? i : -1).filter(i => i >= 0);
+    indici.forEach(i => sceltaRiga(i, true));
+    unisciRighe();
+    const g = LAVORO.righe.find(x => x.gruppo);
+    r.dentro = g ? g.componenti.length : 0;
+    r.prezzo = g && g.prezzo;
+    r.aCorpo = g && g.quantita === 1;
+    const i = LAVORO.righe.indexOf(g);
+    modificaRiga(i, 'voce', 'Fornitura piante siepe');
+    r.foglio = costruisciFoglio({ cliente: d.cliente, data: d.data, righe: LAVORO.righe });
+    r.totale = totaleConteggio(LAVORO.righe).totale;
+    r.altri = totaleConteggio(LAVORO.righe.filter(x => !x.gruppo)).totale;
+    // il cantiere rimanda il rapportino: due lauri in più
+    const corretto = JSON.parse(JSON.stringify(d));
+    corretto.righe.find(x => x.voce.includes('Lauro')).quantita = 14;
+    LAVORO.righe = costruisciConteggio(corretto, LAVORO.righe);
+    LAVORO.doc = corretto;
+    const g2 = LAVORO.righe.find(x => x.gruppo);
+    r.dopo = { prezzo: g2.prezzo, nome: g2.voce, lauri: g2.componenti.find(c => c.voce.includes('Lauro')).quantita };
+    disegnaLavoro();
+    r.avviso = document.getElementById('pagina-lavoro').textContent.includes('Le voci dentro sono cambiate');
+    usaSommaGruppo(LAVORO.righe.indexOf(g2));
+    r.conSomma = LAVORO.righe.find(x => x.gruppo).prezzo;
+    sciogliGruppo(LAVORO.righe.findIndex(x => x.gruppo));
+    r.sciolto = !LAVORO.righe.some(x => x.gruppo) && LAVORO.righe.filter(x => x.voceID === 'piante').length === 2;
+    LAVORO = null; vaiA(prima);
+    return r;
+  }, piante.doc);
+  ok('due voci spuntate si uniscono in un gruppo che le tiene dentro', gruppo.dentro === 2, JSON.stringify(gruppo));
+  ok('a corpo, col prezzo proposto uguale alla somma', gruppo.aCorpo && gruppo.prezzo === 288, String(gruppo.prezzo));
+  ok('al cliente arriva il gruppo col suo nome, non le voci dentro',
+    gruppo.foglio.includes('Fornitura piante siepe') && !gruppo.foglio.includes('Lauro'));
+  ok('e il totale conta il gruppo una volta sola, non anche le voci dentro',
+    Math.abs(gruppo.totale - (288 + gruppo.altri)) < 0.005 && !gruppo.foglio.includes('Acero'), JSON.stringify([gruppo.totale, gruppo.altri]));
+  ok('se il cantiere rimanda il rapportino il gruppo tiene nome e prezzo',
+    gruppo.dopo.prezzo === 288 && gruppo.dopo.nome === 'Fornitura piante siepe', JSON.stringify(gruppo.dopo));
+  ok('mentre le voci dentro seguono il rapportino', gruppo.dopo.lauri === 14, JSON.stringify(gruppo.dopo));
+  ok('e la schermata dice che sotto è cambiato qualcosa', gruppo.avviso);
+  ok('la somma nuova si prende solo con un tocco', gruppo.conSomma === 317, String(gruppo.conSomma));
+  ok('e un gruppo si scioglie rimettendo le voci com\'erano', gruppo.sciolto);
+
   // ── due lavori dello stesso cliente in un conto unico ──
   // Due giornate, due rapportini, un foglio solo: un blocco per lavoro con la sua
   // data e il suo subtotale, il totale in fondo. E mai due clienti insieme.

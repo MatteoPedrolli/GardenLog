@@ -386,6 +386,21 @@ in archivio due volte — pronto per essere fatturato due volte. Per questo
 niente prezzi. Un prezzo scritto a mano non viene mai risovrascritto dal listino:
 sopravvive anche a una correzione rimandata dal cantiere.
 
+**Più voci si possono unire in una, a corpo.** Una siepe nuova porta ore, piante,
+pali, telo e pacciamatura, ognuno con la sua riga; a volte al cliente deve arrivare
+una voce sola. Nella schermata del lavoro si spuntano le righe e «Unisci» fa un
+**gruppo**: un nome da dare, quantità 1, e come prezzo proposto la somma delle
+righe, che resta modificabile. Le righe non si buttano: stanno in `componenti`,
+così in ufficio si vede di cosa è fatto il gruppo e si può **sciogliere**. Al
+cliente, foglio e mail, arriva solo il gruppo.
+
+**Il prezzo del gruppo non si sovrascrive**, come ogni prezzo deciso in ufficio. Se
+il cantiere rimanda il rapportino corretto, le righe dentro seguono il rapportino
+come tutte le altre (`costruisciConteggio()` le cerca anche lì) ma restano nel
+gruppo, e il gruppo tiene nome e prezzo. Se la somma sotto è cambiata rispetto a
+quella accettata (`sommaVista`) la schermata lo dice, con la somma nuova e un
+bottone per prenderla: la si accetta con un tocco, mai da sola.
+
 **Il listino si modifica a video e si scrive su file col bottone.** Finché resta da
 salvare, `LISTINO_DA_SALVARE` impedisce a una rilettura della cartella di
 sovrascriverlo: un prezzo appena battuto che sparisce a un Ricontrolla è lavoro
