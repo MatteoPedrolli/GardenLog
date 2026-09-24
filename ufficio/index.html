@@ -1107,6 +1107,12 @@ function prodottoDellaRiga(doc, riga) {
   return op && op.prodottoID ? { id: op.prodottoID, nome: op.prodotto || '' } : null;
 }
 
+// L'operazione da cui nasce una riga, quando c'è.
+function operazioneDellaRiga(doc, riga) {
+  if (!riga.chiave || riga.chiave === 'manodopera') return null;
+  return (doc.operazioni || []).find(o => o.id && o.id === riga.chiave) || null;
+}
+
 function costruisciConteggio(doc, precedenti) {
   const vecchie = Array.isArray(precedenti) ? precedenti : [];
   const righe = (doc.righe || []).map(r => {
@@ -1117,13 +1123,25 @@ function costruisciConteggio(doc, precedenti) {
     // quando un prodotto nuovo non ha ancora il suo prezzo.
     const daProdotto = prodottoDellaRiga(doc, r);
     const inProdotti = daProdotto ? prodottoInListino(daProdotto.id) : null;
+    const op = operazioneDellaRiga(doc, r);
+    const pianta = !!op && op.tipoID === 'piantumazione';
+    // Il prezzo delle piante arriva dal cantiere, che lo legge sull'etichetta del
+    // vaso: conta come un prezzo scritto a mano, e il listino non lo tocca.
+    const dalCantiere = r.prezzo == null || r.prezzo === '' || isNaN(Number(r.prezzo)) ? null : Number(r.prezzo);
     let prezzo = '';
     let manuale = false;
-    if (vecchia && vecchia.manuale) {
+    let daCantiere = false;
+    if (vecchia && vecchia.manuale && !(vecchia.daCantiere && dalCantiere != null)) {
       // Un prezzo scritto a mano non viene mai risovrascritto dal listino:
-      // chi l'ha messo sapeva qualcosa che il listino non sa.
+      // chi l'ha messo sapeva qualcosa che il listino non sa. Uno venuto dal
+      // cantiere invece segue il cantiere, se lo corregge rimandando il rapportino.
       prezzo = vecchia.prezzo;
       manuale = true;
+      daCantiere = !!vecchia.daCantiere;
+    } else if (dalCantiere != null) {
+      prezzo = dalCantiere;
+      manuale = true;
+      daCantiere = true;
     } else if (inProdotti && inProdotti.prezzo !== '' && inProdotti.prezzo != null) {
       prezzo = Number(inProdotti.prezzo);
     } else if (inListino && inListino.prezzo !== '' && inListino.prezzo != null) {
@@ -1138,13 +1156,18 @@ function costruisciConteggio(doc, precedenti) {
       // voce, e il nome commerciale — diserbi compresi — resta in ufficio. È la
       // stessa divisione di ore e operazioni: l'ufficio vede tutto, al cliente
       // va il conto.
-      voce: (inListino && inListino.voce) || r.voce || '',
+      // Le piante invece escono col loro nome, «Piante – Lauro»: il cliente vuole
+      // sapere cosa ha nel giardino, e non c'è un nome commerciale da tenere in casa.
+      voce: pianta && op.descrizione
+        ? ((inListino && inListino.voce) || 'Piante') + ' – ' + op.descrizione
+        : (inListino && inListino.voce) || r.voce || '',
       prodottoID: daProdotto ? daProdotto.id : '',
       prodotto: daProdotto ? daProdotto.nome : '',
       quantita: aCorpo ? 1 : (r.quantita == null ? '' : Number(r.quantita)),
       unita: aCorpo ? '' : ((inListino && inListino.unita) || r.unita || ''),
       prezzo,
       manuale,
+      daCantiere,
     };
   });
   // Le righe aggiunte in ufficio non hanno chiave e non nascono da niente:
@@ -1746,7 +1769,7 @@ function modificaRiga(indice, campo, valore) {
   if (campo === 'quantita' || campo === 'prezzo') {
     r[campo] = valore.trim() === '' ? '' : valore.replace(',', '.');
     // Da qui in poi quel prezzo è dell'ufficio, e il listino non lo tocca più.
-    if (campo === 'prezzo') r.manuale = true;
+    if (campo === 'prezzo') { r.manuale = true; r.daCantiere = false; }
   } else {
     r[campo] = valore;
   }

@@ -200,6 +200,19 @@ fatto e *quanto* — la cosa che solo lui sa — e quanto vale lo decide chi
 fattura. Chi rimette un campo prezzo qui rimette anche il problema di tenerli
 allineati.
 
+**L'unica eccezione sono le piante**, e è voluta: il prezzo sta sull'etichetta
+del vaso, e in ufficio per saperlo bisognerebbe alzarsi e andare in vivaio. La
+piantumazione chiede quindi pianta, numero e prezzo a pezzo, e ne accetta più
+d'una (12 lauri, 3 aceri): ogni pianta è **un'operazione sua dello stesso tipo**,
+con la sua riga nel conto, così lo schema delle operazioni resta quello di sempre.
+Il tipo si riconosce dall'identificativo `piantumazione` (`ePiantumazione()`), non
+da un campo nuovo sul tipo: i tipi stanno già nei DB di chi lavora. Il prezzo
+viaggia nel rapportino preso **dall'operazione**, non dalla riga del conto, perché
+i conti delle visite di prima portano ancora i loro prezzi storici e quelli non
+devono partire come un listino. In ufficio conta come un prezzo scritto a mano: il
+listino non lo tocca; se il cantiere lo corregge rimandando il rapportino, segue
+il cantiere, finché l'ufficio non lo cambia a mano (`daCantiere`).
+
 L'elenco **nasce già compilato**: la manodopera dalle fasce orarie, i materiali
 dalle operazioni che hanno una voce collegata. Chi lo apre corregge, non scrive
 da zero.
@@ -238,6 +251,10 @@ restano sull'operazione, dove servono al registro dei trattamenti.
 `voceConProdotto()`. È la stessa divisione di ore e operazioni — l'ufficio vede
 tutto, al cliente va il conto — e tiene i nomi commerciali dei diserbi fuori da un
 documento che esce.
+
+**Le piante invece escono col loro nome**, «Piante – Lauro»: il cliente vuole
+sapere cosa ha in giardino, e non c'è un nome commerciale da tenere in casa. È una
+differenza voluta fra piante e fitofarmaci, non una svista da uniformare.
 
 I `Conto` delle visite già registrate **conservano i loro `Prezzo`**: sono il
 registro di quello che è stato fatturato prima che il listino passasse in

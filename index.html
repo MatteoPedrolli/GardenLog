@@ -478,6 +478,7 @@ select.form-control { background-image: url("data:image/svg+xml,%3Csvg xmlns='ht
 .op-dett input[type=number] { width: 76px; padding: 9px 6px; text-align: right; font-size: 0.85rem; }
 .op-dett input[type=text] { flex: 1; min-width: 0; padding: 9px 8px; font-size: 0.85rem; }
 .op-dett .unita { font-size: 0.78rem; color: var(--text-light); min-width: 36px; }
+.op-pianta input[type=number] { width: 64px; }
 .link-altre {
   background: none; border: none; cursor: pointer; padding: 10px 2px;
   font-family: var(--font-body); font-size: 0.82rem; color: var(--inchiostro-tenue); font-weight: 500;
@@ -1970,13 +1971,22 @@ function tipiOrdinati(clienteID) {
     (Number(a.Ordine) || 99) - (Number(b.Ordine) || 99));
 }
 
+// La piantumazione si riconosce dall'identificativo, che è stabile, e non da un
+// campo del tipo: i tipi stanno già nel DB di chi lavora, e cambiarne uno
+// vorrebbe dire una migrazione. Sono piante diverse nello stesso lavoro — 12
+// lauri, 3 aceri — e ognuna è un'operazione sua, con nome, numero e prezzo.
+const ePiantumazione = tipo => tipo && tipo.TipoID === 'piantumazione';
+
 function rigaOperazione(tipo) {
   const ops = opDelTipo(tipo.TipoID);
+  const altra = ePiantumazione(tipo) && ops.length
+    ? `<div class="op-dett"><button type="button" class="btn btn-secondary btn-sm" onclick="aggiungiPianta()">+ Un'altra pianta</button></div>`
+    : '';
   const riga = `<div class="op-riga ${ops.length ? 'on' : ''}" onclick="spuntaOperazione('${perOnclick(tipo.TipoID)}')">
       <span class="op-box">${ops.length ? '✓' : ''}</span>
       <span style="flex:1">${perValore(tipo.Nome)}</span>
     </div>`;
-  return riga + ops.map(o => dettaglioOperazione(tipo, o)).join('');
+  return riga + ops.map(o => dettaglioOperazione(tipo, o)).join('') + altra;
 }
 
 // Spuntare apre solo i campi che quell'operazione richiede davvero: un taglio
@@ -1990,6 +2000,18 @@ function dettaglioOperazione(tipo, op) {
   };
   const e = elenchi[tipo.dettaglio];
   const campi = [];
+  if (ePiantumazione(tipo)) {
+    // Il prezzo delle piante si scrive qui, ed è l'unico: sta sull'etichetta del
+    // vaso, e in ufficio per saperlo bisognerebbe andare in vivaio. Tutto il resto
+    // del listino resta dell'ufficio.
+    const piu = opDelTipo(tipo.TipoID).length > 1;
+    return `<div class="op-dett op-pianta">
+      <input type="text" placeholder="Pianta" value="${perValore(op.Descrizione)}" oninput="modificaOperazione(${i}, 'Descrizione', this.value)">
+      <input type="number" step="1" min="0" placeholder="n" value="${perValore(op.Quantita)}" oninput="modificaOperazione(${i}, 'Quantita', this.value)" aria-label="quante">
+      <input type="number" step="any" min="0" placeholder="€ cad." value="${perValore(op.Prezzo)}" oninput="modificaOperazione(${i}, 'Prezzo', this.value)" aria-label="prezzo di una">
+      ${piu ? `<button type="button" class="via" onclick="togliOperazione(${i})" title="Togli questa pianta">✕</button>` : ''}
+    </div>`;
+  }
   if (e) {
     const opzioni = DB[e.coll].map(p =>
       `<option value="${perValore(p[e.id])}" ${op[e.id] == p[e.id] ? 'selected' : ''}>${perValore(p[e.nome])}</option>`).join('');
@@ -2028,25 +2050,38 @@ function toggleAltreOperazioni() {
   renderOperazioni();
 }
 
+function nuovaOperazione(tipo) {
+  return {
+    OperazioneID: generateID(),
+    TipoID: tipo.TipoID,
+    Tipo_operazione: tipo.Nome,
+    Descrizione: '',
+    // Prato e siepe erano due interruttori da ricordarsi di accendere, e
+    // scordarli faceva sparire l'operazione dal report Prati. Ora lo sa il tipo.
+    Flag_prato: isSi(tipo.Prato) ? 'Sì' : '',
+    Flag_siepe: isSi(tipo.Siepe) ? 'Sì' : '',
+    ConcimeID: '', SementeID: '', FitofarmacaID: '',
+    Quantita: '', Unita: tipo.Unita || '',
+    Prezzo: '',
+  };
+}
+
 function spuntaOperazione(tipoID) {
   const tipo = tipoDi(tipoID);
   if (!tipo) return;
   if (opDelTipo(tipoID).length) {
     pendingOperazioni = pendingOperazioni.filter(o => o.TipoID !== tipoID);
   } else {
-    pendingOperazioni.push({
-      OperazioneID: generateID(),
-      TipoID: tipo.TipoID,
-      Tipo_operazione: tipo.Nome,
-      Descrizione: '',
-      // Prato e siepe erano due interruttori da ricordarsi di accendere, e
-      // scordarli faceva sparire l'operazione dal report Prati. Ora lo sa il tipo.
-      Flag_prato: isSi(tipo.Prato) ? 'Sì' : '',
-      Flag_siepe: isSi(tipo.Siepe) ? 'Sì' : '',
-      ConcimeID: '', SementeID: '', FitofarmacaID: '',
-      Quantita: '', Unita: tipo.Unita || '',
-    });
+    pendingOperazioni.push(nuovaOperazione(tipo));
   }
+  renderOperazioni();
+  aggiornaConto();
+}
+
+function aggiungiPianta() {
+  const tipo = tipoDi('piantumazione');
+  if (!tipo) return;
+  pendingOperazioni.push(nuovaOperazione(tipo));
   renderOperazioni();
   aggiornaConto();
 }
@@ -2353,10 +2388,15 @@ function righeAutomatiche(fasce, operazioni) {
     const aCorpo = isSi(voce?.ACorpo);
     const quantita = aCorpo ? 1 : parseFloat(o.Quantita);
     if (!quantita) return;                  // senza quantità non c'è niente da conteggiare
-    righe.push({ Chiave: o.OperazioneID, VoceID: tipo.VoceID,
+    const riga = { Chiave: o.OperazioneID, VoceID: tipo.VoceID,
       Voce: (voce?.Nome || tipo.Nome) + (o.Descrizione ? ' – ' + o.Descrizione : ''),
       Unita: aCorpo ? '' : (o.Unita || voce?.Unita || ''),
-      Quantita: quantita });
+      Quantita: quantita };
+    // Solo le piante portano un prezzo dal cantiere: vedi dettaglioOperazione.
+    if (ePiantumazione(tipo) && o.Prezzo !== '' && o.Prezzo != null && !isNaN(parseFloat(o.Prezzo))) {
+      riga.Prezzo = parseFloat(o.Prezzo);
+    }
+    righe.push(riga);
   });
   return righe;
 }
@@ -2391,7 +2431,7 @@ function renderContoRighe() {
           <div class="conto-numeri">
             <input type="number" step="any" min="0" value="${perValore(r.Quantita)}"
                    oninput="modificaRigaConto(${i}, 'Quantita', this.value)" aria-label="quantità">
-            <span class="unita">${perValore(r.Unita)}</span>
+            <span class="unita">${perValore(r.Unita)}${r.Prezzo != null ? ' · ' + perValore(String(r.Prezzo).replace('.', ',')) + ' € cad.' : ''}</span>
           </div>
         </div>`;
       }).join('')

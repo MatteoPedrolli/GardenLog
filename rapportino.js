@@ -19,6 +19,12 @@ function costruisciRapportino({ visita, cliente, operazioni, tipi, voci, concimi
     if (o.FitofarmacaID) return (fitofarmaci || []).find(x => x.FitofarmacaID == o.FitofarmacaID)?.Nome_commerciale || '';
     return '';
   };
+  // Il prezzo che arriva dal cantiere è solo quello delle piante: sta
+  // sull'etichetta del vaso. Si prende dall'operazione e non dalla riga del conto,
+  // perché i conti delle visite di prima portano ancora i loro prezzi storici, e
+  // quelli non devono viaggiare come se fossero un listino.
+  const prezzoPianta = o => o && o.TipoID === 'piantumazione' && o.Prezzo !== '' && o.Prezzo != null &&
+    !isNaN(parseFloat(o.Prezzo)) ? parseFloat(o.Prezzo) : null;
   const fasce = (visita.Fasce || []).map(f => ({
     inizio: f.Inizio, fine: f.Fine,
     persone: Number(f.Persone) || 1,
@@ -64,6 +70,7 @@ function costruisciRapportino({ visita, cliente, operazioni, tipi, voci, concimi
         descrizione: o.Descrizione || '',
         quantita: o.Quantita === '' || o.Quantita == null ? null : Number(o.Quantita),
         unita: o.Unita || '',
+        prezzo: prezzoPianta(o),
         prodotto: nomeProdotto(o),
         prato: !!o.Flag_prato && String(o.Flag_prato).trim() !== '',
         siepe: !!o.Flag_siepe && String(o.Flag_siepe).trim() !== '',
@@ -78,6 +85,7 @@ function costruisciRapportino({ visita, cliente, operazioni, tipi, voci, concimi
       voce: r.Voce || '',
       quantita: r.Quantita === '' || r.Quantita == null ? null : Number(r.Quantita),
       unita: r.Unita || '',
+      prezzo: prezzoPianta((operazioni || []).find(o => o.OperazioneID && o.OperazioneID === r.Chiave)),
     })),
     // Niente «prossimo intervento»: quello che c'è da fare la prossima volta è
     // una prenotazione, e viaggia col suo documento. Scriverlo anche qui voleva

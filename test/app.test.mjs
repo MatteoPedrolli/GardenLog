@@ -774,6 +774,43 @@ try {
     JSON.stringify(anagraficaDalTelefono.clienti.map(c => c.nome)));
   await page.evaluate(() => closeDrawer('overlay-visita'));
 
+  // ── piantumazione: più piante diverse, ognuna col suo nome, numero e prezzo ──
+  // In un lavoro se ne mettono di più tipi, e il prezzo sta sull'etichetta del
+  // vaso: è l'unico prezzo che si scrive sul telefono.
+  const piante = await page.evaluate(() => {
+    openNuovaVisita();
+    spuntaOperazione('piantumazione');
+    const scrivi = (n, campo, v) => {
+      const ops = pendingOperazioni.filter(o => o.TipoID === 'piantumazione');
+      modificaOperazione(pendingOperazioni.indexOf(ops[n]), campo, v);
+    };
+    scrivi(0, 'Descrizione', 'Lauro'); scrivi(0, 'Quantita', '12'); scrivi(0, 'Prezzo', '14.5');
+    aggiungiPianta();
+    scrivi(1, 'Descrizione', 'Acero'); scrivi(1, 'Quantita', '3'); scrivi(1, 'Prezzo', '38');
+    const campi = document.querySelectorAll('.op-pianta').length;
+    const righe = contoCorrente.filter(r => r.VoceID === 'piante').map(r => ({ voce: r.Voce, q: r.Quantita, p: r.Prezzo }));
+    const ops = pendingOperazioni.filter(o => o.TipoID === 'piantumazione');
+    const visita = { VisitaID: 'v-piante', Data: '2026-09-24', ClienteID: DB.clienti[0].ClienteID, Fasce: [],
+      Conto: contoCorrente.map(r => ({ ...r })) };
+    // un conto di una visita di prima, col suo prezzo storico, non deve viaggiare
+    visita.Conto.push({ VoceID: 'noleggio', Voce: 'Noleggio rullo', Quantita: 1, Prezzo: 40 });
+    const doc = costruisciRapportino({ visita, cliente: DB.clienti[0],
+      operazioni: ops.map(o => ({ ...o, VisitaID: 'v-piante' })),
+      tipi: DB.tipiOperazione, voci: DB.voci, concimi: DB.concimi, sementi: DB.sementi, fitofarmaci: DB.fitofarmaci });
+    closeDrawer('overlay-visita');
+    return { campi, righe, doc };
+  });
+  ok('la piantumazione chiede pianta, numero e prezzo, e ne accetta più d\'una',
+    piante.campi === 2, String(piante.campi));
+  ok('ogni pianta ha la sua riga nel conto, col suo nome',
+    piante.righe.length === 2 && piante.righe[0].voce.includes('Lauro') && piante.righe[1].voce.includes('Acero'),
+    JSON.stringify(piante.righe));
+  ok('il rapportino porta il prezzo delle piante',
+    piante.doc.righe.filter(r => r.prezzo != null).map(r => r.prezzo).join(',') === '14.5,38',
+    JSON.stringify(piante.doc.righe));
+  ok('e nessun altro prezzo, nemmeno quelli rimasti sui conti di prima',
+    piante.doc.righe.find(r => r.voce === 'Noleggio rullo').prezzo == null);
+
   // ── rinumerare una fascia si porta dietro i clienti ──
   await page.click('#nav-dati');
   await page.waitForTimeout(200);
@@ -1773,6 +1810,28 @@ try {
   ok('chi è tutto fatturato non ha niente da incassare',
     (raccolto.match(/da incassare/g) || []).length === 1);
   await pagU.evaluate(() => cambiaRaccolta('data'));
+
+  // ── le piante in ufficio: prezzo dal cantiere, nome sul conto ──
+  const pianteU = await pagU.evaluate(d => {
+    const righe = costruisciConteggio(d, null).filter(r => r.voceID === 'piante');
+    const r = { voci: righe.map(x => x.voce), prezzi: righe.map(x => x.prezzo), manuali: righe.every(x => x.manuale) };
+    // Il cantiere corregge il prezzo e rimanda: il prezzo venuto da lì segue.
+    const corretto = JSON.parse(JSON.stringify(d));
+    corretto.righe.find(x => x.voce.includes('Lauro')).prezzo = 15;
+    r.dopoCorrezione = costruisciConteggio(corretto, righe).find(x => x.voce.includes('Lauro')).prezzo;
+    // Ma se l'ufficio l'ha cambiato a mano, resta quello dell'ufficio.
+    const aMano = righe.map(x => ({ ...x }));
+    aMano[0].prezzo = 13; aMano[0].manuale = true; aMano[0].daCantiere = false;
+    r.aManoResta = costruisciConteggio(corretto, aMano).find(x => x.voce.includes('Lauro')).prezzo;
+    r.foglio = costruisciFoglio({ cliente: d.cliente, data: d.data, righe: costruisciConteggio(d, null) });
+    return r;
+  }, piante.doc);
+  ok('in ufficio il prezzo delle piante è quello del cantiere', pianteU.prezzi.join(',') === '14.5,38', JSON.stringify(pianteU));
+  ok('e conta come scritto a mano: il listino non lo tocca', pianteU.manuali);
+  ok('se il cantiere lo corregge, il prezzo segue', pianteU.dopoCorrezione === 15, String(pianteU.dopoCorrezione));
+  ok('ma se l\'ufficio l\'ha cambiato a mano resta quello dell\'ufficio', pianteU.aManoResta === 13, String(pianteU.aManoResta));
+  ok('sul foglio del cliente le piante escono col loro nome',
+    pianteU.foglio.includes('Lauro') && pianteU.foglio.includes('Acero'));
 
   // ── due lavori dello stesso cliente in un conto unico ──
   // Due giornate, due rapportini, un foglio solo: un blocco per lavoro con la sua

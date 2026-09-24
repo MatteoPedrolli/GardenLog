@@ -5,34 +5,6 @@ avanti. Ogni voce dice cosa si è chiesto, cosa tocca e cosa resta da decidere,
 così chi la prende in mano non deve ricostruire la conversazione. Quando una
 voce si fa, si toglie da qui e quello che vale anche dopo va nel CLAUDE.md.
 
-## Piantumazione: più piante diverse, ognuna con nome, numero e prezzo
-
-*Chiesto il 24/09/2026.* Oggi piantumazione è un'operazione con una sola
-quantità («12 n») e senza nome. Spesso in un lavoro se ne mettono di più tipi:
-12 lauri, 3 aceri, 20 lavande.
-
-Cosa tocca:
-
-- sul telefono il dettaglio della piantumazione diventa un **elenco di righe**
-  (nome pianta + numero), con «aggiungi un'altra». Il modo più semplice di
-  salvarle è **un'operazione per specie**, tutte dello stesso tipo: lo schema
-  delle operazioni resta quello di oggi con in più un nome, e ogni specie ha già
-  la sua riga nel conto, giunta dall'`OperazioneID` come per i concimi;
-- nel rapportino il nome viaggia accanto alla quantità, come già fa `prodotto`.
-
-Deciso il 24/09/2026:
-
-1. **Il prezzo delle piante si scrive sul telefono.** È sull'etichetta del vaso:
-   in ufficio bisognerebbe alzarsi e andare in vivaio a controllare. È
-   un'eccezione dichiarata alla regola *sul telefono non ci sono prezzi*, e
-   quando si fa va scritta nel CLAUDE.md con questo perché, accanto alla regola.
-   Vale solo per le piante: il listino resta dell'ufficio per tutto il resto. In
-   ufficio il prezzo arriva sulla riga come un prezzo scritto a mano, quindi il
-   listino non lo sovrascrive.
-2. **Il nome della pianta esce sul conto del cliente** («Lauro × 12»). Per i
-   fitofarmaci resta la regola di oggi, il nome commerciale non esce: anche questa
-   differenza va scritta nel CLAUDE.md, o qualcuno la «sistemerà».
-
 ## Accorpare più voci del conto in una
 
 *Chiesto il 24/09/2026.* Esempio: una siepe nuova. Il rapportino porta ore,
