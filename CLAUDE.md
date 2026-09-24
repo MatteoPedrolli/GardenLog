@@ -667,6 +667,12 @@ non la misurazione), e cosa va chiesto alla segretaria prima che vada in pension
 
 Chi ci mette mano legga prima quello, o rifarà un ragionamento già fatto.
 
+## Richieste in attesa
+
+Quello che è stato chiesto e si farà più avanti sta in `RICHIESTE.md`, con cosa
+tocca e cosa resta da decidere. Prima di cominciare qualcosa di nuovo, guardare
+lì: può darsi che sia già stato ragionato.
+
 ## Cose da sapere prima di metterci mano
 
 - L'interfaccia usa `onclick="funzione()"`, quindi le funzioni devono restare
