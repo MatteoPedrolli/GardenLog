@@ -41,16 +41,50 @@ Cosa tocca:
   la sua riga nel conto, giunta dall'`OperazioneID` come per i concimi;
 - nel rapportino il nome viaggia accanto alla quantità, come già fa `prodotto`.
 
-Da decidere, prima di scrivere codice:
+Deciso il 24/09/2026:
 
-1. **Il prezzo.** Il CLAUDE.md dice che *sul telefono non ci sono prezzi*: il
-   listino sta in ufficio, in un posto solo. Le piante però spesso si comprano
-   per quel lavoro, e il prezzo lo sa chi le ha comprate. Le strade sono due:
-   il prezzo si scrive sul telefono solo per le piante, come eccezione dichiarata
-   (e va detto nel CLAUDE.md perché), oppure dal telefono arrivano nome e numero
-   e il prezzo lo mette l'ufficio sulla riga, dove un prezzo scritto a mano già
-   non viene mai sovrascritto.
-2. **Il nome sul foglio del cliente.** Per i diserbi il nome commerciale non esce
-   (`voce` generica, il nome in `prodotto`). Per le piante il cliente vuole
-   leggere «Lauro × 12», non «Piante × 35»: andrebbe stampato, e quindi la regola
-   del nome che non esce varrebbe per i fitofarmaci e non per le piante.
+1. **Il prezzo delle piante si scrive sul telefono.** È sull'etichetta del vaso:
+   in ufficio bisognerebbe alzarsi e andare in vivaio a controllare. È
+   un'eccezione dichiarata alla regola *sul telefono non ci sono prezzi*, e
+   quando si fa va scritta nel CLAUDE.md con questo perché, accanto alla regola.
+   Vale solo per le piante: il listino resta dell'ufficio per tutto il resto. In
+   ufficio il prezzo arriva sulla riga come un prezzo scritto a mano, quindi il
+   listino non lo sovrascrive.
+2. **Il nome della pianta esce sul conto del cliente** («Lauro × 12»). Per i
+   fitofarmaci resta la regola di oggi, il nome commerciale non esce: anche questa
+   differenza va scritta nel CLAUDE.md, o qualcuno la «sistemerà».
+
+## Accorpare più voci del conto in una
+
+*Chiesto il 24/09/2026.* Esempio: una siepe nuova. Il rapportino porta ore,
+piante, pali, telo pacciamante e pacciamatura, ognuno con la sua riga. A volte si
+vuole che al cliente arrivi una voce sola: si spuntano le righe, si uniscono, si
+dà un nome al gruppo («Fornitura e posa siepe»), e come prezzo compare
+**suggerita la somma** delle righe unite, che resta modificabile.
+
+Cosa tocca:
+
+- si fa **in ufficio**, nella schermata del lavoro in arrivo, dove il conto ha già
+  i prezzi e si corregge prima di archiviare. Sul telefono i prezzi non ci sono
+  (a parte le piante), quindi lì la somma non si potrebbe suggerire;
+- le righe unite **non si buttano**: restano dentro il gruppo, così in ufficio si
+  vede ancora di cosa è fatto e si può sciogliere. Al cliente, foglio e mail,
+  arriva solo il gruppo, con il suo nome e il suo prezzo;
+- un campo in più nel file d'archivio (il gruppo con dentro le sue righe), che
+  un archivio di prima non ha e resta valido: non serve cambiare versione.
+
+Da decidere quando si fa:
+
+- **cosa succede se il cantiere rimanda il rapportino corretto.** Oggi le righe
+  automatiche si riallineano da sole alla visita tramite `chiave`. Se una di
+  quelle sta dentro un gruppo, la sua quantità cambia ma il prezzo del gruppo era
+  stato scelto a mano: o il gruppo resta com'era e si segnala che sotto è cambiato
+  qualcosa, o il prezzo suggerito si ricalcola. La prima strada è più prudente,
+  perché un prezzo scritto a mano oggi non viene mai sovrascritto;
+- se il gruppo si fattura **a corpo** (quantità 1, prezzo del gruppo) o porta una
+  quantità sua. A corpo sembra il caso normale.
+
+## Una riga di testo sulle fasce: resta aperto
+
+Resta da decidere se la riga delle fasce va anche sul foglio del cliente (vedi
+sopra).
