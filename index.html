@@ -479,6 +479,10 @@ select.form-control { background-image: url("data:image/svg+xml,%3Csvg xmlns='ht
 .op-dett input[type=text] { flex: 1; min-width: 0; padding: 9px 8px; font-size: 0.85rem; }
 .op-dett .unita { font-size: 0.78rem; color: var(--text-light); min-width: 36px; }
 .op-pianta input[type=number] { width: 64px; }
+.scelte-arch { display: flex; flex-direction: column; gap: 6px; font-size: 0.9rem; }
+.scelte-arch label { display: flex; align-items: center; gap: 8px; }
+.op-insieme { font-size: 0.72rem; color: var(--text-light); }
+.op-dentro { margin-left: 18px; padding-left: 10px; border-left: 2px solid var(--velo); }
 .link-altre {
   background: none; border: none; cursor: pointer; padding: 10px 2px;
   font-family: var(--font-body); font-size: 0.82rem; color: var(--inchiostro-tenue); font-weight: 500;
@@ -1059,7 +1063,44 @@ const TIPI_DEFAULT = [
   { TipoID:'posa-tappeto-erboso',     Nome:'Posa tappeto erboso',      dettaglio:'quantita',    Unita:'m²',    Prato:'Sì', Siepe:'',   VoceID:'tappeto-erboso',    Ordine:11 },
   { TipoID:'piantumazione',           Nome:'Piantumazione',            dettaglio:'quantita',    Unita:'n',     Prato:'',   Siepe:'',   VoceID:'piante',            Ordine:12 },
   { TipoID:'scarico-verde',           Nome:'Scarico verde',            dettaglio:'quantita',    Unita:'kg',    Prato:'',   Siepe:'',   VoceID:'smaltimento-verde', Ordine:13 },
+  { TipoID:'pacciamatura',            Nome:'Pacciamatura',             dettaglio:'quantita',    Unita:'q',     Prato:'',   Siepe:'',   VoceID:'pacciamatura',      Ordine:14 },
+  { TipoID:'ala-gocciolante',         Nome:'Ala gocciolante',          dettaglio:'quantita',    Unita:'m',     Prato:'',   Siepe:'',   VoceID:'ala-gocciolante',   Ordine:15 },
+  { TipoID:'telo-pacciamante',        Nome:'Telo pacciamante',         dettaglio:'quantita',    Unita:'m²',    Prato:'',   Siepe:'',   VoceID:'telo-pacciamante',  Ordine:16 },
+  // Un insieme non è un'operazione: spuntarlo accende in un colpo quelle che un
+  // lavoro di quel genere chiede sempre. Un'aiuola vuol dire piante,
+  // pacciamatura, ala gocciolante e telo, e spuntarle una per una era lavoro
+  // ripetuto a ogni aiuola.
+  { TipoID:'aiuola',                  Nome:'Aiuola',                   dettaglio:'insieme',     Unita:'',      Prato:'',   Siepe:'',   VoceID:'',
+    Insieme:'piantumazione,pacciamatura,ala-gocciolante,telo-pacciamante', Ordine:12 },
 ];
+
+// Tipi e voci arrivati dopo che qualcuno aveva già il suo archivio sul telefono.
+// datiIniziali() li mette in un database nuovo; in uno che c'è già si aggiungono
+// **una volta sola** (`defaultAggiunti` se lo ricorda): chi ne cancella uno apposta
+// non se lo deve ritrovare al giro dopo. È un'aggiunta, non una conversione:
+// niente di quello che c'è viene toccato, e VERSIONE_DATI resta com'è.
+const DEFAULT_ARRIVATI_DOPO = {
+  tipiOperazione: ['pacciamatura', 'ala-gocciolante', 'telo-pacciamante', 'aiuola'],
+  voci: ['pacciamatura', 'ala-gocciolante', 'telo-pacciamante'],
+};
+
+function aggiungiDefaultArrivatiDopo(db) {
+  const fatti = new Set(db.defaultAggiunti || []);
+  let cambiato = false;
+  [['tipiOperazione', TIPI_DEFAULT, 'TipoID'], ['voci', VOCI_DEFAULT, 'VoceID']].forEach(([coll, def, id]) => {
+    DEFAULT_ARRIVATI_DOPO[coll].forEach(chiave => {
+      const segno = coll + ':' + chiave;
+      if (fatti.has(segno)) return;
+      fatti.add(segno);
+      cambiato = true;
+      if (db[coll].some(x => x[id] === chiave)) return;
+      const modello = def.find(x => x[id] === chiave);
+      if (modello) db[coll].push({ ...modello });
+    });
+  });
+  db.defaultAggiunti = [...fatti];
+  return cambiato;
+}
 
 // Le voci del conto di fine lavoro. Il prezzo è facoltativo apposta: dove
 // l'azienda ha una tariffa fissa lo si mette e la riga si calcola da sola,
@@ -1076,6 +1117,9 @@ const VOCI_DEFAULT = [
   { VoceID:'terriccio',         Nome:'Terriccio',         Unita:'sacchi', Ordine:8 },
   { VoceID:'tappeto-erboso',    Nome:'Tappeto erboso',    Unita:'m²',     Ordine:9 },
   { VoceID:'smaltimento-verde', Nome:'Smaltimento verde', Unita:'kg',     Ordine:10 },
+  { VoceID:'pacciamatura',      Nome:'Pacciamatura',      Unita:'q',      Ordine:11 },
+  { VoceID:'ala-gocciolante',   Nome:'Ala gocciolante',   Unita:'m',      Ordine:12 },
+  { VoceID:'telo-pacciamante',  Nome:'Telo pacciamante',  Unita:'m²',     Ordine:13 },
 ];
 
 // Quale voce di conto nasce da quale lavoro. Potature, taglio prato e
@@ -1144,6 +1188,7 @@ function normalizzaDB(grezzo) {
   // dire «non ancora scaricata», che è un valore buono: non c'è niente da
   // convertire, quindi non alza VERSIONE_DATI.
   pulito.agenda = grezzo?.agenda && grezzo.agenda.tipo === 'agenda' ? grezzo.agenda : null;
+  pulito.defaultAggiunti = Array.isArray(grezzo?.defaultAggiunti) ? grezzo.defaultAggiunti : [];
   return pulito;
 }
 
@@ -1175,6 +1220,7 @@ function datiIniziali() {
   db.fasce = FASCE_DEFAULT.map(f => ({ ...f }));
   db.tipiOperazione = TIPI_DEFAULT.map(t => ({ ...t }));
   db.voci = VOCI_DEFAULT.map(v => ({ ...v }));
+  aggiungiDefaultArrivatiDopo(db);   // già dentro: qui segna solo che ci sono
   return db;
 }
 
@@ -1269,6 +1315,7 @@ async function caricaDB() {
   }
   DB = dati;
   if (payload.meta) META = { ...META, ...payload.meta };
+  if (aggiungiDefaultArrivatiDopo(DB)) await salvaDB({ conta: false });
   return true;
 }
 
@@ -1971,6 +2018,21 @@ function tipiOrdinati(clienteID) {
     if (!o.TipoID) return;
     usi.set(o.TipoID, (usi.get(o.TipoID) || 0) + (visiteCliente.has(o.VisitaID) ? 10 : 1));
   });
+  // Un insieme non lascia operazioni sue: conta le visite in cui c'erano tutte le
+  // sue, con lo stesso peso per quelle di questo cliente.
+  DB.tipiOperazione.filter(eInsieme).forEach(ins => {
+    const dentro = componentiDi(ins).map(t => t.TipoID);
+    if (!dentro.length) return;
+    const perVisita = new Map();
+    DB.operazioni.forEach(o => {
+      if (!dentro.includes(o.TipoID)) return;
+      if (!perVisita.has(o.VisitaID)) perVisita.set(o.VisitaID, new Set());
+      perVisita.get(o.VisitaID).add(o.TipoID);
+    });
+    let n = 0;
+    perVisita.forEach((tipi, vid) => { if (tipi.size === dentro.length) n += visiteCliente.has(vid) ? 10 : 1; });
+    usi.set(ins.TipoID, n);
+  });
   return [...DB.tipiOperazione].sort((a, b) =>
     (usi.get(b.TipoID) || 0) - (usi.get(a.TipoID) || 0) ||
     (Number(a.Ordine) || 99) - (Number(b.Ordine) || 99));
@@ -1982,7 +2044,48 @@ function tipiOrdinati(clienteID) {
 // lauri, 3 aceri — e ognuna è un'operazione sua, con nome, numero e prezzo.
 const ePiantumazione = tipo => tipo && tipo.TipoID === 'piantumazione';
 
+// Un insieme accende le operazioni che contiene; lui non ne fa una sua.
+const eInsieme = tipo => tipo && tipo.dettaglio === 'insieme';
+function componentiDi(insieme) {
+  return String(insieme.Insieme || '').split(',').map(x => x.trim()).filter(Boolean)
+    .map(tipoDi).filter(t => t && !eInsieme(t));
+}
+// Gli insiemi spuntati in questa visita: le loro operazioni stanno raccolte sotto
+// di loro invece che sparse nell'elenco, dove andrebbero cercate una per una.
+let insiemiAperti = new Set();
+
+function rigaInsieme(tipo) {
+  const dentro = componentiDi(tipo);
+  const accese = dentro.filter(t => opDelTipo(t.TipoID).length).length;
+  const tutte = dentro.length && accese === dentro.length;
+  const aperto = insiemiAperti.has(tipo.TipoID);
+  const riga = `<div class="op-riga ${tutte ? 'on' : ''}" onclick="spuntaInsieme('${perOnclick(tipo.TipoID)}')">
+      <span class="op-box">${tutte ? '✓' : accese ? '–' : ''}</span>
+      <span style="flex:1">${perValore(tipo.Nome)}</span>
+      <span class="op-insieme">${dentro.length} operazioni</span>
+    </div>`;
+  return riga + (aperto ? `<div class="op-dentro">${dentro.map(rigaOperazione).join('')}</div>` : '');
+}
+
+function spuntaInsieme(tipoID) {
+  const tipo = tipoDi(tipoID);
+  if (!tipo) return;
+  const dentro = componentiDi(tipo);
+  const tutte = dentro.length && dentro.every(t => opDelTipo(t.TipoID).length);
+  if (tutte) {
+    const via = new Set(dentro.map(t => t.TipoID));
+    pendingOperazioni = pendingOperazioni.filter(o => !via.has(o.TipoID));
+    insiemiAperti.delete(tipoID);
+  } else {
+    dentro.forEach(t => { if (!opDelTipo(t.TipoID).length) pendingOperazioni.push(nuovaOperazione(t)); });
+    insiemiAperti.add(tipoID);
+  }
+  renderOperazioni();
+  aggiornaConto();
+}
+
 function rigaOperazione(tipo) {
+  if (eInsieme(tipo)) return rigaInsieme(tipo);
   const ops = opDelTipo(tipo.TipoID);
   const altra = ePiantumazione(tipo) && ops.length
     ? `<div class="op-dett"><button type="button" class="btn btn-secondary btn-sm" onclick="aggiungiPianta()">+ Un'altra pianta</button></div>`
@@ -2035,11 +2138,13 @@ function dettaglioOperazione(tipo, op) {
 function renderOperazioni() {
   const cima = document.getElementById('operazioni-check');
   if (!cima) return;
-  const ordinati = tipiOrdinati(document.getElementById('f-visita-cliente').value);
+  // Quello che sta dentro un insieme aperto si vede lì sotto, non due volte.
+  const raccolti = new Set([...insiemiAperti].flatMap(id => { const t = tipoDi(id); return t ? componentiDi(t).map(c => c.TipoID) : []; }));
+  const ordinati = tipiOrdinati(document.getElementById('f-visita-cliente').value).filter(t => !raccolti.has(t.TipoID));
   // Quello che hai già spuntato resta sempre in vista, anche se è un lavoro che
   // fai una volta l'anno: nascondere una cosa segnata è il modo migliore per
   // fartela dimenticare.
-  const inCima = ordinati.filter((t, i) => i < TIPI_IN_CIMA || opDelTipo(t.TipoID).length);
+  const inCima = ordinati.filter((t, i) => i < TIPI_IN_CIMA || opDelTipo(t.TipoID).length || insiemiAperti.has(t.TipoID));
   const sotto = ordinati.filter(t => !inCima.includes(t));
   cima.innerHTML = inCima.map(rigaOperazione).join('');
   document.getElementById('operazioni-altre').innerHTML = sotto.map(rigaOperazione).join('');
@@ -2156,6 +2261,7 @@ function mostraPromemoria(clienteID) {
 // ── APERTURA E SALVATAGGIO ──
 function openNuovaVisita() {
   pendingOperazioni = [];
+  insiemiAperti = new Set();
   pendingFasce = [fasciaProposta('')];
   editVisitaID = null;
   altreOperazioniAperte = false;
@@ -2180,6 +2286,7 @@ function openModificaVisita(vid) {
   editVisitaID = v.VisitaID;
   altreOperazioniAperte = false;
   pendingOperazioni = DB.operazioni.filter(o => o.VisitaID == vid).map(o => ({ ...o }));
+  insiemiAperti = new Set();
   pendingFasce = (v.Fasce || []).map(f => ({ ...f, proposta: false }));
   oreEreditate = pendingFasce.length ? '' : (v.Ore_Visita || '');
   document.getElementById('f-visita-data').value = v.Data ? new Date(v.Data).toISOString().split('T')[0] : '';
@@ -2869,7 +2976,11 @@ const ARCHIVI = {
         { v:'semente',     label:'Una semente e la quantità' },
         { v:'fitofarmaco', label:'Un fitofarmaco e la quantità' },
         { v:'quantita',    label:'Solo una quantità' },
+        { v:'insieme',     label:'Un insieme: accende altre operazioni' },
       ] },
+      { k:'Insieme', label:'Se è un insieme, quali operazioni accende', tipo:'scelte', opzioni: () =>
+        DB.tipiOperazione.filter(t => !eInsieme(t) && String(t.TipoID) !== String(archivioVoceId))
+          .map(t => ({ v: t.TipoID, label: t.Nome })) },
       { k:'Unita', label:'Unità di misura (kg, l, n, m², sacchi…)' },
       { k:'ChiedeCosa', label:'Chiede anche "cosa" (la specie, il materiale)', tipo:'flag' },
       { k:'Prato', label:'Riguarda il prato', tipo:'flag' },
@@ -2880,6 +2991,7 @@ const ARCHIVI = {
     ],
     riga: t => {
       const voce = t.VoceID ? DB.voci.find(v => v.VoceID === t.VoceID) : null;
+      if (eInsieme(t)) return `${t.Nome} · insieme di ${componentiDi(t).map(c => c.Nome).join(', ') || 'niente'}`;
       return `${t.Nome}${t.Unita ? ' · ' + t.Unita : ''}${isSi(t.Prato) ? ' · prato' : ''}${isSi(t.Siepe) ? ' · siepe' : ''}${voce ? ' → ' + voce.Nome : ''}`;
     },
     usato: t => DB.operazioni.filter(o => o.TipoID === t.TipoID).length,
@@ -3053,6 +3165,7 @@ async function importaBackup(input) {
     `${confronto('clienti')}\n${confronto('visite')}\n${confronto('operazioni')}\n\n` +
     'I dati attuali vanno persi. Procedere?')) return;
   DB = nuovo;
+  aggiungiDefaultArrivatiDopo(DB);
   applicaFasce();
   META.ultimoBackup = payload?.esportato || new Date().toISOString();
   META.modificheDalBackup = 0;
@@ -3329,6 +3442,14 @@ function openVoceArchivio(tipo, id) {
         </div>`;
     }
     const opzioni = typeof campo.opzioni === 'function' ? campo.opzioni() : campo.opzioni;
+    if (campo.tipo === 'scelte') {
+      const scelti = String(valore).split(',').map(x => x.trim());
+      return `<div class="form-group">
+          <label class="form-label">${campo.label}</label>
+          <div id="f-arch-${campo.k}" class="scelte-arch">${opzioni.map(o =>
+            `<label><input type="checkbox" value="${perValore(o.v)}" ${scelti.includes(o.v) ? 'checked' : ''}> ${perValore(o.label)}</label>`).join('')}</div>
+        </div>`;
+    }
     const controllo = campo.tipo === 'select'
       ? `<select class="form-control" id="f-arch-${campo.k}">${opzioni.map(o =>
           `<option value="${o.v}" ${String(valore) === o.v ? 'selected' : ''}>${o.label}</option>`).join('')}</select>`
@@ -3349,7 +3470,9 @@ async function salvaVoceArchivio() {
   const dati = {};
   for (const campo of def.campi) {
     const el = document.getElementById('f-arch-' + campo.k);
-    const v = campo.tipo === 'flag' ? (el.classList.contains('on') ? 'Sì' : '') : el.value.trim();
+    const v = campo.tipo === 'flag' ? (el.classList.contains('on') ? 'Sì' : '')
+      : campo.tipo === 'scelte' ? [...el.querySelectorAll('input:checked')].map(i => i.value).join(',')
+      : el.value.trim();
     if (campo.obbligatorio && !v) { showToast('⚠️ Manca: ' + campo.label); return; }
     dati[campo.k] = v;
   }

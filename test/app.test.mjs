@@ -818,6 +818,70 @@ try {
   ok('e nessun altro prezzo, nemmeno quelli rimasti sui conti di prima',
     piante.doc.righe.find(r => r.voce === 'Noleggio rullo').prezzo == null);
 
+  // ── un insieme di operazioni: l'aiuola ──
+  // Piante, pacciamatura, ala gocciolante e telo: spuntarle una per una era
+  // lavoro ripetuto a ogni aiuola.
+  const aiuola = await page.evaluate(() => {
+    const r = {};
+    r.nuovi = ['pacciamatura', 'ala-gocciolante', 'telo-pacciamante', 'aiuola'].every(id => !!tipoDi(id)) &&
+      ['pacciamatura', 'ala-gocciolante', 'telo-pacciamante'].every(id => DB.voci.some(v => v.VoceID === id));
+    r.unita = ['pacciamatura', 'ala-gocciolante', 'telo-pacciamante'].map(id => tipoDi(id).Unita).join(',');
+    // un archivio di prima, senza i tipi nuovi: si aggiungono una volta sola
+    const prova = { tipiOperazione: DB.tipiOperazione.filter(t => !['pacciamatura', 'aiuola'].includes(t.TipoID)).map(t => ({ ...t })),
+      voci: DB.voci.map(v => ({ ...v })), defaultAggiunti: [] };
+    aggiungiDefaultArrivatiDopo(prova);
+    r.aggiunti = prova.tipiOperazione.some(t => t.TipoID === 'aiuola') && prova.tipiOperazione.some(t => t.TipoID === 'pacciamatura');
+    r.nonDoppi = prova.tipiOperazione.filter(t => t.TipoID === 'telo-pacciamante').length === 1;
+    prova.tipiOperazione = prova.tipiOperazione.filter(t => t.TipoID !== 'aiuola');
+    aggiungiDefaultArrivatiDopo(prova);
+    r.cancellatoResta = !prova.tipiOperazione.some(t => t.TipoID === 'aiuola');
+
+    openNuovaVisita();
+    spuntaInsieme('aiuola');
+    r.accese = ['piantumazione', 'pacciamatura', 'ala-gocciolante', 'telo-pacciamante'].every(id => opDelTipo(id).length === 1);
+    r.raccolte = document.querySelectorAll('#operazioni-check .op-dentro > .op-riga').length;
+    r.unaVolta = [...document.querySelectorAll('.op-riga')].filter(e => e.textContent.includes('Pacciamatura')).length;
+    const pac = pendingOperazioni.find(o => o.TipoID === 'pacciamatura');
+    modificaOperazione(pendingOperazioni.indexOf(pac), 'Quantita', '3');
+    const riga = contoCorrente.find(x => x.VoceID === 'pacciamatura');
+    r.conto = riga ? riga.Quantita + ' ' + riga.Unita : '';
+    spuntaInsieme('aiuola');
+    r.spente = pendingOperazioni.length === 0;
+    closeDrawer('overlay-visita');
+    return r;
+  });
+  ok('ci sono pacciamatura, ala gocciolante, telo pacciamante e l\'insieme «Aiuola»', aiuola.nuovi);
+  ok('in quintali, metri e metri quadri', aiuola.unita === 'q,m,m²', aiuola.unita);
+  ok('su un telefono che ha già il suo archivio si aggiungono da soli, senza doppioni',
+    aiuola.aggiunti && aiuola.nonDoppi, JSON.stringify(aiuola));
+  ok('ma uno cancellato apposta non ritorna', aiuola.cancellatoResta);
+  ok('spuntare «Aiuola» accende le sue quattro operazioni', aiuola.accese, JSON.stringify(aiuola));
+  ok('raccolte sotto di lei', aiuola.raccolte === 4, String(aiuola.raccolte));
+  ok('e non ripetute nell\'elenco', aiuola.unaVolta === 1, String(aiuola.unaVolta));
+  ok('ognuna fa la sua riga nel conto', aiuola.conto === '3 q', aiuola.conto);
+  ok('e togliendo la spunta si spengono tutte', aiuola.spente);
+
+  // Gli insiemi si creano da Archivi: domani «Siepe nuova» non chiede a nessuno.
+  const insiemeNuovo = await page.evaluate(async () => {
+    openVoceArchivio('tipiOperazione');
+    document.getElementById('f-arch-Nome').value = 'Siepe nuova';
+    document.getElementById('f-arch-dettaglio').value = 'insieme';
+    document.querySelectorAll('#f-arch-Insieme input').forEach(i => { i.checked = ['piantumazione', 'telo-pacciamante'].includes(i.value); });
+    await salvaVoceArchivio();
+    const t = DB.tipiOperazione.find(x => x.Nome === 'Siepe nuova');
+    const r = { insieme: t && t.Insieme, dettaglio: t && t.dettaglio,
+      // un insieme non può contenere altri insiemi, né sé stesso
+      senzaInsiemi: (() => { openVoceArchivio('tipiOperazione', t.TipoID);
+        const v = [...document.querySelectorAll('#f-arch-Insieme input')].map(i => i.value);
+        closeDrawer('overlay-archivio'); return !v.includes('aiuola') && !v.includes(t.TipoID); })() };
+    DB.tipiOperazione = DB.tipiOperazione.filter(x => x !== t);
+    await salvaDB();
+    return r;
+  });
+  ok('un insieme nuovo si crea da Archivi scegliendo cosa accende',
+    insiemeNuovo.dettaglio === 'insieme' && insiemeNuovo.insieme === 'piantumazione,telo-pacciamante', JSON.stringify(insiemeNuovo));
+  ok('e fra le cose da accendere non ci sono altri insiemi', insiemeNuovo.senzaInsiemi);
+
   // ── rinumerare una fascia si porta dietro i clienti ──
   await page.click('#nav-dati');
   await page.waitForTimeout(200);

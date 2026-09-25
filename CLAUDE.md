@@ -114,6 +114,16 @@ per quanto si usano da quel cliente. Spuntando si apre solo il dettaglio che
 quel tipo richiede (`dettaglio`: niente, concime, semente, fitofarmaco,
 quantita) e i flag prato/siepe li mette il tipo, non l'utente.
 
+**Un insieme accende più operazioni in un colpo.** Un'aiuola chiede sempre
+piante, pacciamatura (q), ala gocciolante (m) e telo pacciamante (m²): spuntarle
+una per una era lavoro ripetuto a ogni aiuola. Un tipo con `dettaglio: 'insieme'`
+non fa un'operazione sua: il suo campo `Insieme` elenca i `TipoID` che accende, e
+le loro operazioni stanno **raccolte sotto di lui** (`insiemiAperti`) invece che
+sparse nell'elenco. Ognuna resta un'operazione normale, con la sua riga nel conto;
+se al cliente deve arrivare una voce sola, in ufficio si uniscono col gruppo a
+corpo. Gli insiemi si creano da **Archivi**, senza toccare il codice — «Aiuola» è
+già pronta — e un insieme non ne contiene altri.
+
 I campi che l'utente compila usano `oninput`, non `onchange`: con `onchange` il
 modello resta indietro fino al blur. E non si ridisegna l'elenco mentre si
 scrive — si aggiorna solo quello che cambia, o il campo sparisce da sotto le dita.
@@ -734,6 +744,11 @@ lì: può darsi che sia già stato ragionato.
 - L'aggancio tipo → voce sta su `TIPI_DEFAULT`, in un posto solo. `VoceID` vuoto
   non è una dimenticanza: potature, taglio prato e arieggiatura sono manodopera,
   già contata dalle ore, e collegarle vorrebbe dire fatturarle due volte.
+- Tipi e voci nuovi arrivano anche su un telefono che ha già il suo archivio, ma
+  **una volta sola**: si aggiungono a `DEFAULT_ARRIVATI_DOPO`, e
+  `aggiungiDefaultArrivatiDopo()` li mette dove mancano e se lo segna in
+  `defaultAggiunti`. Chi ne cancella uno apposta non se lo ritrova. È
+  un'aggiunta, non una conversione: non alza `VERSIONE_DATI`.
 - I tipi di operazione di partenza hanno identificativi parlanti e stabili
   (`concimazione`, `potatura-siepi`…) perché il codice li cerca per
   identificativo e mai per nome: chi rinomina un tipo non deve svuotare il
