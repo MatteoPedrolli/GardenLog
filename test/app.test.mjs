@@ -643,7 +643,9 @@ try {
     (await page.textContent('#overlay-visita .drawer')).includes('Prenota il prossimo intervento'));
 
   // Il cliente è quello che hai davanti: farlo ricercare un'altra volta sarebbe
-  // lavoro inventato.
+  // lavoro inventato. E la visita modificata e non ancora salvata non si perde:
+  // chiuderla per aprire la prenotazione buttava via le correzioni.
+  await page.fill('#f-visita-note', 'Correzione non ancora salvata');
   await page.evaluate(() => prenotaDaVisita());
   await page.waitForTimeout(250);
   // Si guarda il campo nascosto, che è lo stato vero: il nome a video resta
@@ -659,9 +661,40 @@ try {
       return document.getElementById('f-pren-cliente').value === '' &&
         document.getElementById('f-pren-cliente-nome').textContent === '';
     }));
-  ok('e chiude la visita, invece di lasciare due pannelli uno sull\'altro',
-    !(await page.evaluate(() => document.getElementById('overlay-visita').classList.contains('open'))));
-  await page.evaluate(() => closeDrawer('overlay-prenotazione'));
+  ok('la visita resta aperta sotto la prenotazione',
+    await page.evaluate(() => document.getElementById('overlay-visita').classList.contains('open')));
+  // Inviando la prenotazione si torna alla visita così com'era, modifiche comprese.
+  const dopoPrenota = await page.evaluate(async () => {
+    const quante = DB.prenotazioni.length;
+    // la consegna qui non interessa: resta ferma, o proverebbe la rete vera
+    const svuotaVera = window.svuotaCoda;
+    window.svuotaCoda = () => {};
+    scegliClientePrenotazione(DB.visite[0].ClienteID, 'Mario Rossi');
+    document.getElementById('f-pren-note').value = 'Rifilare la siepe';
+    await salvaPrenotazione();
+    window.svuotaCoda = svuotaVera;
+    const r = {
+      salvata: DB.prenotazioni.length === quante + 1,
+      prenotazioneChiusa: !document.getElementById('overlay-prenotazione').classList.contains('open'),
+      visitaAperta: document.getElementById('overlay-visita').classList.contains('open'),
+      nota: document.getElementById('f-visita-note').value,
+    };
+    // la prova non deve lasciare una prenotazione in giro per quelle che seguono
+    const via = DB.prenotazioni.pop();
+    DB.coda = DB.coda.filter(v => v.docID !== via.PrenotazioneID);
+    await salvaDB({ conta: false });
+    return r;
+  });
+  ok('inviata la prenotazione, la visita è ancora lì',
+    dopoPrenota.salvata && dopoPrenota.prenotazioneChiusa && dopoPrenota.visitaAperta, JSON.stringify(dopoPrenota));
+  ok('con le modifiche non ancora salvate', dopoPrenota.nota === 'Correzione non ancora salvata', dopoPrenota.nota);
+  // Col tasto indietro, con due pannelli aperti, si chiude quello sopra.
+  await page.evaluate(() => apriPrenotazione());
+  ok('il tasto indietro chiude la prenotazione e lascia la visita',
+    await page.evaluate(() => { tornaIndietro();
+      return !document.getElementById('overlay-prenotazione').classList.contains('open') &&
+        document.getElementById('overlay-visita').classList.contains('open'); }));
+  await page.evaluate(() => { document.getElementById('f-visita-note').value = ''; closeDrawer('overlay-visita'); });
   await page.waitForTimeout(150);
 
   // ── backup ──

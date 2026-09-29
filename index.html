@@ -229,6 +229,8 @@ select.form-control { background-image: url("data:image/svg+xml,%3Csvg xmlns='ht
   align-items: flex-end; justify-content: center;
 }
 .overlay.open { display: flex; }
+/* La prenotazione si apre anche sopra la visita, che resta aperta sotto. */
+#overlay-prenotazione { z-index: 110; }
 .drawer {
   background: var(--cream); width: 100%; max-width: 600px;
   border-radius: 24px 24px 0 0;
@@ -1406,7 +1408,10 @@ function armaIndietro() {
 
 // Chiude un livello solo. Restituisce false quando non c'era niente da chiudere.
 function tornaIndietro() {
-  const aperto = document.querySelector('.overlay.open');
+  // Se ci sono due pannelli uno sull'altro — la prenotazione aperta dalla visita —
+  // si chiude quello sopra.
+  const aperto = [...document.querySelectorAll('.overlay.open')]
+    .sort((a, b) => (parseInt(getComputedStyle(b).zIndex) || 0) - (parseInt(getComputedStyle(a).zIndex) || 0))[0];
   if (aperto) { aperto.classList.remove('open'); return true; }
   // la scheda di un cliente rimpiazza la lista: si torna alla lista
   if (currentPage === 'clienti' && !document.getElementById('clienti-list')) {
@@ -2620,12 +2625,13 @@ let orologioCoda = null;
 // perché il campo manca nello stesso modo e il lavoro non si deve perdere.
 
 // Dalla visita: il cliente è già quello che hai davanti, e quello che c'era da
-// dire per la prossima volta lo scrivi nelle note della prenotazione. Prima si
-// chiude la visita — o si resterebbe con due pannelli aperti uno sull'altro.
+// dire per la prossima volta lo scrivi nelle note della prenotazione. La visita
+// **resta aperta sotto**: chiuderla buttava via quello che non era ancora stato
+// salvato, e riaprendola si ritrovava la versione di prima. È successo davvero,
+// con le correzioni di un rapportino perse per una prenotazione fatta a metà.
 function prenotaDaVisita() {
   const cid = document.getElementById('f-visita-cliente').value;
   const nome = document.getElementById('f-visita-cliente-nome').textContent;
-  closeDrawer('overlay-visita');
   apriPrenotazione();
   if (cid) scegliClientePrenotazione(cid, nome);
 }

@@ -134,7 +134,11 @@ lavagna dell'ufficio. Scriverlo in tutti e due i posti voleva dire due posti dov
 cercarlo e due da tenere allineati. In fondo alla visita resta una scorciatoia che
 apre la prenotazione **col cliente già messo** — è quello che hai davanti, farlo
 ricercare sarebbe lavoro inventato — e quello che c'era da ricordare per la
-prossima volta si scrive nelle note della prenotazione.
+prossima volta si scrive nelle note della prenotazione. La visita **resta aperta sotto**
+la prenotazione: chiuderla per aprire l'altra buttava via quello che non era ancora
+stato salvato, e riaprendola si ritrovava la versione di prima. È successo davvero,
+con le correzioni di un rapportino. Con due pannelli aperti, il tasto indietro
+chiude quello sopra.
 
 Le note sono **l'unico campo di testo** della prenotazione, e sono obbligatorie:
 un cartellino col solo nome del cliente non dice niente a chi pianifica, e in
