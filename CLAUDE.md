@@ -401,6 +401,14 @@ data e cliente, e un cliente rinominato sul telefono metterebbe lo stesso lavoro
 in archivio due volte — pronto per essere fatturato due volte. Per questo
 `archivia()` riusa il nome del file già in archivio, se c'è.
 
+**Il conto si salva da solo.** Ogni modifica nella schermata del lavoro si scrive
+in archivio un momento dopo (`pianificaSalvataggio()`), e uscendo dalla schermata
+quello che resta si salva subito. Col solo bottone capitava di correggere i prezzi,
+passare ad altro e lasciare gli importi di prima, mentre in ufficio si credeva il
+conto giusto. Salvare vuol dire archiviare: il lavoro lascia «in arrivo» appena ci
+si mette mano, e da lì si ritrova in archivio fra i da pagare. Un salvataggio
+fallito si legge accanto ai bottoni, in rosso, oltre che nell'avviso.
+
 **Il listino dell'ufficio è l'unico che c'è.** Dal cantiere arrivano quantità e
 niente prezzi. Un prezzo scritto a mano non viene mai risovrascritto dal listino:
 sopravvive anche a una correzione rimandata dal cantiere.
@@ -568,9 +576,13 @@ passare dalla stampa. La schermata mostra anche ore e operazioni, che sul foglio
 del cliente non vanno: qui servono, perché sono il perché di quel totale ed è la
 domanda che arriva quando qualcuno telefona.
 
-**Non si corregge.** Per cambiare un lavoro chiuso si rimanda il rapportino
-corretto dal cantiere, e torna fra quelli in arrivo con la sua revisione nuova.
-Una modifica fatta solo in ufficio si perderebbe al primo reinvio.
+**Un conto da pagare si corregge dall'archivio**, con «Modifica»: si riapre nella
+stessa schermata del lavoro in arrivo, e si riscrive lo stesso file. Quello che
+l'ufficio decide lì — prezzi, righe aggiunte, gruppi — sopravvive a un rapportino
+corretto rimandato dal cantiere, come prima di archiviare; le quantità nate da ore
+e operazioni invece seguono il rapportino, e per cambiarle si corregge la visita
+sul telefono. Un conto **già pagato non si riapre**: è chiuso davvero. Se il conto
+era già passato alla posta, riaprirlo chiede conferma e ricorda di rimandarlo.
 
 **Si può togliere, però.** Non per correggere — per il lavoro che non ci doveva
 stare: una prova, un doppione. `eliminaArchiviato()` cancella il file dalla
@@ -580,8 +592,11 @@ arrivo e si riarchivia — è la solita regola, in arrivo perché l'archivio non
 copia — mentre se non c'è più, quel file era l'unica copia rimasta di lavoro fatto
 e non torna. Una conferma che dicesse sempre la stessa frase servirebbe a niente.
 
-**A sinistra sta il gestionale**: quanti lavori sono da fatturare e quanto fanno,
-quanti sono fatturati, e il totale. Resta lì mentre si scorre l'elenco, perché è
+**A sinistra sta il gestionale**: quanti lavori sono **da pagare** e quanto fanno,
+quanti sono **pagati**, e il totale. Nei file lo stato resta `da-fatturare` /
+`fatturato`: sono cambiate le parole a schermo, non i dati. Guardando «Tutto»
+l'elenco è **diviso**, i da pagare sopra e i pagati sotto: mescolati, un conto
+aperto si perdeva fra quelli chiusi. Resta lì mentre si scorre l'elenco, perché è
 la domanda che in ufficio ci si fa per prima e un numero in fondo alla pagina non
 risponde a nessuno. Raccogliendo **per cliente**, ogni gruppo dice quanto gli si
 deve ancora: è la riga che serve prima di alzare il telefono.

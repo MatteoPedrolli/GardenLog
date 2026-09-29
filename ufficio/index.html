@@ -163,6 +163,10 @@ table.scheda-cliente { table-layout: fixed; }
 .freccia-cliente { margin-left: auto; color: var(--text-light); }
 tr.riga-gruppo td { border-bottom: none; font-weight: 600; }
 tr.dentro-gruppo td { font-size: 0.82rem; color: var(--text-light); padding-top: 0; }
+.stato-salvataggio { align-self: center; }
+.stato-salvataggio.brutto { color: var(--red); font-weight: 600; }
+.parte-archivio { margin: 6px 0 10px; }
+.parte-archivio ~ .parte-archivio { margin-top: 26px; }
 .barra-scelti {
   position: sticky; top: 0; z-index: 5;
   display: flex; align-items: center; gap: 12px; flex-wrap: wrap; margin-bottom: 12px; padding: 10px 14px;
@@ -1231,6 +1235,7 @@ function unisciRighe() {
   LAVORO.righe.splice(Math.min(primo, LAVORO.righe.length), 0, gruppo);
   LAVORO.scelte = new Set();
   disegnaLavoro();
+  pianificaSalvataggio();
   // Il nome da dare è la prima cosa da fare: il campo è già lì, pronto.
   const campo = document.getElementById('nome-gruppo-' + LAVORO.righe.indexOf(gruppo));
   if (campo) { campo.focus(); campo.select(); }
@@ -1241,6 +1246,7 @@ function sciogliGruppo(i) {
   if (!g || !g.gruppo) return;
   LAVORO.righe.splice(i, 1, ...g.componenti);
   disegnaLavoro();
+  pianificaSalvataggio();
 }
 
 // La somma è cambiata sotto il gruppo (il cantiere ha rimandato il rapportino):
@@ -1251,6 +1257,7 @@ function usaSommaGruppo(i) {
   g.prezzo = sommaDi(g.componenti);
   g.sommaVista = g.prezzo;
   disegnaLavoro();
+  pianificaSalvataggio();
 }
 
 // Come si legge una riga **in ufficio**: la voce più il prodotto, quando c'è.
@@ -1283,6 +1290,54 @@ function totaleConteggio(righe) {
 
 async function archivia() {
   if (!LAVORO) return;
+  clearTimeout(TIMER_SALVATAGGIO);
+  const doc = LAVORO.doc;
+  const dallArchivio = LAVORO.dallArchivio;
+  const conteggio = totaleConteggio(LAVORO.righe);
+  if (!await scriviInArchivio()) return;
+  await ricarica();
+  LAVORO = null;
+  if (dallArchivio) { ARCHIVIATO = doc.id; vaiA('archiviato'); } else vaiA('arrivi');
+  avvisa('Archiviato: ' + (doc.cliente && doc.cliente.nome ? doc.cliente.nome : 'lavoro') + ' · ' + formattaEuro(conteggio.totale));
+}
+
+// Le modifiche al conto si salvano da sole, un momento dopo l'ultima. Col bottone
+// soltanto, capitava di correggere i prezzi, passare ad altro e lasciare in
+// archivio — o da nessuna parte — gli importi di prima, mentre in ufficio si
+// credeva il conto giusto. Salvare vuol dire archiviare: è l'archivio il posto
+// dove il conto esiste, e il lavoro lascia «in arrivo» appena ci si mette mano.
+let TIMER_SALVATAGGIO = null;
+
+function pianificaSalvataggio() {
+  if (!LAVORO) return;
+  LAVORO.daSalvare = true;
+  segnaStatoSalvataggio('Modifiche da salvare…', false);
+  clearTimeout(TIMER_SALVATAGGIO);
+  TIMER_SALVATAGGIO = setTimeout(salvaSubito, 800);
+}
+
+async function salvaSubito() {
+  clearTimeout(TIMER_SALVATAGGIO);
+  if (!LAVORO || !LAVORO.daSalvare) return true;
+  const ok = await scriviInArchivio();
+  if (ok && LAVORO) {
+    LAVORO.daSalvare = false;
+    LAVORO.salvato = new Date().toISOString();
+    segnaStatoSalvataggio('Salvato in archivio alle ' +
+      new Date(LAVORO.salvato).toLocaleTimeString('it-IT', { hour: '2-digit', minute: '2-digit' }), false);
+  }
+  return ok;
+}
+
+function segnaStatoSalvataggio(testo, brutto) {
+  const el = document.getElementById('stato-salvataggio');
+  if (!el) return;
+  el.textContent = testo;
+  el.classList.toggle('brutto', !!brutto);
+}
+
+async function scriviInArchivio() {
+  if (!LAVORO) return false;
   const doc = LAVORO.doc;
   const conteggio = totaleConteggio(LAVORO.righe);
   const lavoro = {
@@ -1297,6 +1352,8 @@ async function archivia() {
     totale: conteggio.totale,
     righeSenzaPrezzo: conteggio.escluse,
     stato: LAVORO.stato || 'da-fatturare',
+    // Riscrivere il conto non dimentica che era già passato alla posta.
+    inPosta: (ARCHIVIO.find(l => l.id === doc.id) || {}).inPosta || '',
     // Il rapportino ci viaggia dentro per intero: fra due anni questo file deve
     // raccontare il lavoro da solo, anche se la cartella degli arrivi è stata
     // svuotata e il telefono cambiato.
@@ -1320,13 +1377,19 @@ async function archivia() {
     // Un salvataggio fallito si dice a chiaro schermo. Se restasse in console,
     // l'unica traccia di questo lavoro tornerebbe a essere il file in arrivo.
     avvisa('Non ho potuto archiviare: ' + e.message, true);
-    return;
+    segnaStatoSalvataggio('Non salvato: ' + e.message, true);
+    return false;
   }
 
-  await ricarica();
-  LAVORO = null;
-  vaiA('arrivi');
-  avvisa('Archiviato: ' + (doc.cliente && doc.cliente.nome ? doc.cliente.nome : 'lavoro') + ' · ' + formattaEuro(conteggio.totale));
+  // Si aggiorna quello che l'app ha in memoria senza rileggere la cartella: una
+  // rilettura ridisegnerebbe la schermata mentre si sta scrivendo un prezzo.
+  const inMemoria = { ...leggiLavoro(lavoro), anno, file: nome };
+  const i = ARCHIVIO.findIndex(l => l.id === doc.id);
+  if (i >= 0) ARCHIVIO[i] = inMemoria; else ARCHIVIO.push(inMemoria);
+  ARRIVI = ARRIVI.filter(a => !(a.doc.id === doc.id && Number(a.doc.revisione) <= Number(doc.revisione)));
+  const pallino = document.getElementById('pallino-arrivi');
+  if (pallino) { pallino.textContent = ARRIVI.length; pallino.classList.toggle('visibile', ARRIVI.length > 0); }
+  return true;
 }
 
 async function cambiaStato(id, stato) {
@@ -1345,7 +1408,7 @@ async function cambiaStato(id, stato) {
   }
   lavoro.stato = stato;
   disegna();
-  avvisa(stato === 'fatturato' ? 'Segnato come fatturato' : 'Rimesso fra i lavori da fatturare');
+  avvisa(stato === 'fatturato' ? 'Segnato come pagato' : 'Rimesso fra i lavori da pagare');
 }
 
 // Togliere un lavoro dall'archivio. Non è una correzione — quella si fa
@@ -1618,6 +1681,9 @@ function aggiornaStatoCartella(testo) {
 // ── NAVIGAZIONE ──
 
 function vaiA(pagina) {
+  // Uscendo dalla schermata del lavoro quello che resta da salvare si salva ora:
+  // il conto si legge subito, prima del primo await, quindi va bene anche così.
+  if (PAGINA === 'lavoro' && pagina !== 'lavoro') salvaSubito();
   PAGINA = pagina;
   document.querySelectorAll('.pagina').forEach(p => p.classList.remove('attiva'));
   const p = document.getElementById('pagina-' + pagina);
@@ -1823,9 +1889,12 @@ function disegnaLavoro() {
 
   html += '<div class="bottoni">' +
     '<button class="principale" onclick="archivia()">' +
-      (LAVORO.corretto ? 'Aggiorna in archivio' : 'Archivia') + '</button>' +
+      (LAVORO.dallArchivio ? 'Fatto' : LAVORO.corretto ? 'Aggiorna in archivio' : 'Archivia') + '</button>' +
     '<button class="secondaria" onclick="stampaConto(\'lavoro\')">Stampa il conto</button>' +
-    '<button class="secondaria" onclick="tornaAgliArrivi()">Torna in arrivo</button>' +
+    '<button class="secondaria" onclick="tornaAgliArrivi()">' + (LAVORO.dallArchivio ? 'Torna al lavoro archiviato' : 'Torna in arrivo') + '</button>' +
+    '<span id="stato-salvataggio" class="meta stato-salvataggio">' +
+      (LAVORO.daSalvare ? 'Modifiche da salvare…' : LAVORO.salvato ? 'Salvato in archivio' :
+        'Le modifiche si salvano da sole in archivio') + '</span>' +
   '</div>';
 
   c.innerHTML = html;
@@ -1882,23 +1951,49 @@ function modificaRiga(indice, campo, valore) {
   if (cella) cella.textContent = imp == null ? '—' : formattaEuro(imp);
   const riepilogo = document.getElementById('riepilogo');
   if (riepilogo) riepilogo.innerHTML = riepilogoConto();
+  pianificaSalvataggio();
 }
 
 function aggiungiRiga() {
   if (!LAVORO) return;
   LAVORO.righe.push({ chiave: '', voceID: '', voce: '', quantita: '', unita: '', prezzo: '', manuale: true });
   disegnaLavoro();
+  pianificaSalvataggio();
 }
 
 function togliRiga(indice) {
   if (!LAVORO) return;
   LAVORO.righe.splice(indice, 1);
   disegnaLavoro();
+  pianificaSalvataggio();
 }
 
-function tornaAgliArrivi() {
+async function tornaAgliArrivi() {
+  await salvaSubito();
+  const dallArchivio = LAVORO && LAVORO.dallArchivio;
+  const id = LAVORO && LAVORO.doc.id;
   LAVORO = null;
-  vaiA('arrivi');
+  if (dallArchivio) { ARCHIVIATO = id; vaiA('archiviato'); } else vaiA('arrivi');
+}
+
+// Un conto ancora da pagare si corregge senza tornare in arrivo: si riapre nella
+// stessa schermata del lavoro, con quello che c'era. Si scrive nello stesso file
+// d'archivio, e un rapportino corretto che arriva dopo lo ritrova così com'è —
+// prezzi scritti a mano, righe aggiunte e gruppi compresi.
+function modificaArchiviato(id) {
+  const l = ARCHIVIO.find(x => x.id === id);
+  if (!l || l.stato === 'fatturato' || !l.rapportino) return;
+  if (l.inPosta && !confirm('Questo conto è già passato alla posta il ' + formattaData(l.inPosta) +
+    '.\n\nSe lo cambi, ricordati di rimandarlo al cliente. Continuare?')) return;
+  LAVORO = {
+    doc: l.rapportino,
+    righe: JSON.parse(JSON.stringify(l.righe || [])),
+    stato: l.stato,
+    corretto: false,
+    dallArchivio: true,
+    salvato: l.archiviato || '',
+  };
+  vaiA('lavoro');
 }
 
 // ── ARCHIVIO ──
@@ -1955,7 +2050,7 @@ function barraScelti() {
     '<span style="margin-left:auto; display:flex; gap:8px; flex-wrap:wrap">' +
       '<button class="principale piccola" onclick="stampaConto(\'insieme\')"' + (due ? '' : ' disabled') + '>Stampa insieme</button>' +
       '<button class="secondaria piccola" onclick="inviaInsieme()"' + (due ? '' : ' disabled') + '>Manda insieme</button>' +
-      '<button class="secondaria piccola" onclick="fatturaInsieme()">Segna fatturat' + (due ? 'i' : 'o') + '</button>' +
+      '<button class="secondaria piccola" onclick="fatturaInsieme()">Segna pagat' + (due ? 'i' : 'o') + '</button>' +
       '<button class="secondaria piccola" onclick="annullaScelta()">Annulla</button>' +
     '</span></div>';
 }   // { id, nome } quando si arriva da «Vedi conti»
@@ -1996,8 +2091,8 @@ function disegnaArchivio() {
 
   html += '<section class="coda"><h3 class="titolo-colonna">Gestionale</h3>' +
     '<div class="elenco-stati">' +
-      voce('da-fatturare', 'Da fatturare') +
-      voce('fatturato', 'Fatturato') +
+      voce('da-fatturare', 'Da pagare') +
+      voce('fatturato', 'Pagati') +
       voce('tutti', 'Tutto') +
     '</div>' +
     '<h3 class="titolo-colonna" style="margin-top:18px">Raccogli</h3>' +
@@ -2040,7 +2135,19 @@ function righeArchivioSole() {
       (FILTRO_ARCHIVIO.trim() || STATO_ARCHIVIO !== 'tutti' || CLIENTE_ARCHIVIO
         ? 'Nessun lavoro con questi filtri.' : 'Niente in archivio.') + '</div></div>';
   }
-  if (RACCOLTA_ARCHIVIO !== 'cliente') return lavori.map(schedaArchivio).join('');
+  if (RACCOLTA_ARCHIVIO !== 'cliente') {
+    // Guardando «tutto», quello che è ancora da incassare sta sopra e il resto
+    // sotto, divisi: mescolati, un conto aperto si perdeva fra quelli chiusi.
+    if (STATO_ARCHIVIO !== 'tutti') return lavori.map(schedaArchivio).join('');
+    const aperti = lavori.filter(l => l.stato !== 'fatturato');
+    const chiusi = lavori.filter(l => l.stato === 'fatturato');
+    const somma = elenco => elenco.reduce((t, l) => t + (Number(l.totale) || 0), 0);
+    const parte = (titolo, elenco) => elenco.length
+      ? '<h3 class="titolo-colonna parte-archivio">' + titolo + ' · ' + elenco.length + ' · ' + formattaEuro(somma(elenco)) + '</h3>' +
+        elenco.map(schedaArchivio).join('')
+      : '';
+    return parte('Da pagare', aperti) + parte('Pagati', chiusi);
+  }
 
   // Raccolti per cliente: quanti lavori ha e quanto di suo è ancora da
   // incassare. È la riga che serve prima di alzare il telefono.
@@ -2076,8 +2183,10 @@ function schedaArchivio(l) {
       '<input type="checkbox" class="scegli" title="Per un conto unico con altri lavori dello stesso cliente"' +
         (scelto ? ' checked' : '') + ' onclick="event.stopPropagation(); scegliLavoro(\'' + id + '\', this.checked)">' +
       '<span class="nome-cliente">' + perValore(nome) + '</span>' +
-      '<span class="etichetta ' + (l.stato === 'fatturato' ? 'fatturato">fatturato' : 'da-fatturare">da fatturare') + '</span>' +
+      '<span class="etichetta ' + (l.stato === 'fatturato' ? 'fatturato">pagato' : 'da-fatturare">da pagare') + '</span>' +
       (l.inPosta ? '<span class="meta">✉️ in posta</span>' : '') +
+      (l.stato !== 'fatturato' && l.rapportino
+        ? '<button class="secondaria piccola" onclick="event.stopPropagation(); modificaArchiviato(\'' + id + '\')">Modifica</button>' : '') +
       '<span class="meta">' + formattaData(l.data) + '</span>' +
       '<span style="margin-left:auto;font-family:var(--font-display);font-size:1.15rem;font-weight:700">' +
         formattaEuro(l.totale) + '</span>' +
@@ -2127,7 +2236,7 @@ function disegnaArchiviato() {
 
   let html = '<h2 class="titolo-pagina">' + perValore((l.cliente && l.cliente.nome) || 'senza nome') + '</h2>';
   html += '<p class="sottotitolo">' + formattaData(l.data) +
-    ' · ' + (l.stato === 'fatturato' ? 'fatturato' : 'da fatturare') +
+    ' · ' + (l.stato === 'fatturato' ? 'pagato' : 'da pagare') +
     (l.inPosta ? ' · mandato al cliente il ' + formattaData(l.inPosta) : '') + '</p>';
 
   html += '<div class="scheda"><div class="titolo-sezione">Conto</div>';
@@ -2187,12 +2296,14 @@ function disegnaArchiviato() {
     }
   }
 
+  const modificabile = l.stato !== 'fatturato' && !!l.rapportino;
   html += '<div class="bottoni">' +
+    (modificabile ? '<button class="secondaria" onclick="modificaArchiviato(\'' + id + '\')">Modifica il conto</button>' : '') +
     '<button class="secondaria" onclick="stampaConto(\'archivio\', \'' + id + '\')">Stampa</button>' +
     '<button class="secondaria" onclick="inviaConto(\'' + id + '\')">Invia al cliente</button>' +
     '<button class="' + (l.stato === 'fatturato' ? 'secondaria' : 'principale') +
       '" onclick="cambiaStato(\'' + id + '\', \'' +
-      (l.stato === 'fatturato' ? 'da-fatturare\')">Rimetti da fatturare' : 'fatturato\')">Segna fatturato') +
+      (l.stato === 'fatturato' ? 'da-fatturare\')">Rimetti da pagare' : 'fatturato\')">Segna pagato') +
       '</button>' +
     '<button class="secondaria" onclick="vaiA(\'archivio\')">Torna all\'archivio</button>' +
     '<button class="pericolo" onclick="eliminaArchiviato(\'' + id + '\')">Togli dall\'archivio</button>' +
@@ -2332,7 +2443,7 @@ async function fatturaInsieme() {
   }
   SCELTI_ARCHIVIO.clear();
   disegna();
-  avvisa(scelti.length === 1 ? 'Segnato come fatturato' : scelti.length + ' lavori segnati come fatturati');
+  avvisa(scelti.length === 1 ? 'Segnato come pagato' : scelti.length + ' lavori segnati come pagati');
 }
 
 // L'unico punto che porta fuori dall'app. Sta da solo per lo stesso motivo per

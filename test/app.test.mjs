@@ -1779,7 +1779,19 @@ try {
 
   const archivio = await pagU.evaluate(() => { vaiA('archivio'); return document.getElementById('pagina-archivio').innerHTML; });
   ok('a sinistra c\'è il gestionale con i due stati',
-    archivio.includes('Da fatturare') && archivio.includes('Fatturato') && archivio.includes('Gestionale'));
+    archivio.includes('Da pagare') && archivio.includes('Pagati') && archivio.includes('Gestionale'));
+  // Guardando tutto, i conti aperti stanno sopra e quelli pagati sotto, divisi.
+  ok('in archivio da pagare e pagati stanno divisi, i da pagare sopra',
+    await pagU.evaluate(() => {
+      // a questo punto del giro sono pagati tutti e due: uno torna aperto, per la prova
+      const prima = ARCHIVIO.map(l => l.stato);
+      ARCHIVIO[ARCHIVIO.length - 1].stato = 'da-fatturare';
+      disegnaArchivio();
+      const parti = [...document.querySelectorAll('#elenco-archivio .parte-archivio')].map(e => e.textContent);
+      ARCHIVIO.forEach((l, k) => { l.stato = prima[k]; });
+      disegnaArchivio();
+      return parti.length === 2 && parti[0].startsWith('Da pagare') && parti[1].startsWith('Pagati');
+    }));
   ok('e con quanto c\'è ancora da incassare', archivio.includes('stato-somma'));
 
   // ── dalla scheda cliente ai suoi conti ──
@@ -2251,6 +2263,66 @@ try {
       const esito = await scaricaAgenda();
       return esito === false && DB.agenda?.appuntamenti.length === 6;
     }));
+
+  // ── il conto si salva da solo, e uno da pagare si corregge dall'archivio ──
+  // Col solo bottone capitava di correggere i prezzi e passare ad altro: in
+  // archivio restavano gli importi di prima, e in ufficio si credeva il conto giusto.
+  const salvataggio = await pagU.evaluate(async d => {
+    const r = {};
+    const nuovo = JSON.parse(JSON.stringify(d));
+    nuovo.id = 'visita-autosalvata'; nuovo.revisione = 1; nuovo.cliente = { id: 'c-auto', nome: 'Anna Salvata' };
+    const arrivi = await window.RADICE.getDirectoryHandle('rapportini', { create: true });
+    await scriviTesto(arrivi, nomeFileRapportino(nuovo), JSON.stringify(nuovo));
+    await ricarica();
+    apriLavoro(nuovo.id);
+    const i = LAVORO.righe.findIndex(x => x.chiave === 'manodopera');
+    modificaRiga(i, 'prezzo', '41');
+    r.primaDelTempo = !ARCHIVIO.some(l => l.id === nuovo.id);
+    await new Promise(ok => setTimeout(ok, 1200));
+    const inArchivio = ARCHIVIO.find(l => l.id === nuovo.id);
+    r.salvato = !!inArchivio && inArchivio.righe.find(x => x.chiave === 'manodopera').prezzo == 41;
+    r.restaQui = PAGINA === 'lavoro';
+    r.nonPiuInArrivo = !ARRIVI.some(a => a.doc.id === nuovo.id);
+    r.detto = document.getElementById('stato-salvataggio').textContent.includes('Salvato');
+    // e su file, non solo in memoria
+    await ricarica();
+    const riletto = ARCHIVIO.find(l => l.id === nuovo.id);
+    r.suFile = !!riletto && riletto.righe.find(x => x.chiave === 'manodopera').prezzo == 41;
+    LAVORO = null; vaiA('archivio');
+    r.bottoneInElenco = document.getElementById('elenco-archivio').innerHTML.includes('modificaArchiviato(');
+
+    // uno da pagare si riapre e si corregge senza tornare in arrivo
+    modificaArchiviato(nuovo.id);
+    r.riaperto = PAGINA === 'lavoro' && LAVORO && LAVORO.dallArchivio;
+    const j = LAVORO.righe.findIndex(x => x.chiave === 'manodopera');
+    modificaRiga(j, 'prezzo', '43');
+    await tornaAgliArrivi();
+    r.tornato = PAGINA === 'archiviato';
+    r.corretto = ARCHIVIO.find(l => l.id === nuovo.id).righe.find(x => x.chiave === 'manodopera').prezzo == 43;
+    // uno pagato no
+    await cambiaStato(nuovo.id, 'fatturato');
+    modificaArchiviato(nuovo.id);
+    r.pagatoFermo = PAGINA !== 'lavoro';
+    r.pagatoSenzaBottone = !document.getElementById('pagina-archiviato').innerHTML.includes('Modifica il conto');
+
+    // pulizia: le prove che seguono non devono trovarselo
+    const l = ARCHIVIO.find(x => x.id === nuovo.id);
+    const cartellaAnno = await (await window.RADICE.getDirectoryHandle('archivio')).getDirectoryHandle(l.anno);
+    await cartellaAnno.removeEntry(l.file);
+    await arrivi.removeEntry(nomeFileRapportino(nuovo));
+    await ricarica();
+    vaiA('archivio');
+    return r;
+  }, doc);
+  ok('una modifica al conto in arrivo si salva da sola', salvataggio.salvato, JSON.stringify(salvataggio));
+  ok('su file, non solo a schermo', salvataggio.suFile);
+  ok('senza portare via dalla schermata mentre si scrive', salvataggio.restaQui);
+  ok('e la schermata dice che è salvato', salvataggio.detto);
+  ok('salvato, il lavoro non è più fra quelli in arrivo', salvataggio.nonPiuInArrivo);
+  ok('un conto da pagare ha il suo «Modifica» anche nell\'elenco', salvataggio.bottoneInElenco);
+  ok('e si riapre dall\'archivio senza passare dagli arrivi', salvataggio.riaperto);
+  ok('la correzione finisce nello stesso lavoro archiviato', salvataggio.corretto && salvataggio.tornato, JSON.stringify(salvataggio));
+  ok('un conto già pagato non si riapre', salvataggio.pagatoFermo && salvataggio.pagatoSenzaBottone);
 
   ok('nessun errore JavaScript nell\'app dell\'ufficio', erroriU.length === 0, erroriU.join(' | '));
   await ctxU.close();
