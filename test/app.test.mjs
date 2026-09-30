@@ -1369,6 +1369,19 @@ try {
     /^Conto \d{4}-\d{2}-\d{2} Mario Rossi/.test(foglio.titolo), foglio.titolo);
   ok('il foglio non si vede a schermo: esiste solo per la stampa',
     !(await pagU.isVisible('#foglio')));
+  // Sulla carta intestata i dati dell'azienda ci sono già: stampati sopra si
+  // sovrapporrebbero al logo. Il resto del foglio resta quello di sempre.
+  const senza = await pagU.evaluate(() => {
+    stampaConto('archivio', ARCHIVIO[0].id, true);
+    return document.getElementById('foglio').innerHTML;
+  });
+  ok('stampando senza intestazione i dati dell\'azienda non ci sono',
+    !senza.includes('Giardini Prova') && !senza.includes('01234567890'));
+  ok('ma il conto, il cliente e il totale sì',
+    senza.includes('Conto dei lavori') && senza.includes('Mario Rossi') && senza.includes('IVA inclusa'));
+  ok('la pagina del lavoro archiviato ha il bottone senza intestazione',
+    await pagU.evaluate(() => { apriArchiviato(ARCHIVIO[0].id);
+      return document.body.innerHTML.includes('Stampa senza intestazione'); }));
   // ── la lavagna ──
   // Non è un calendario: è quello che in ufficio si tiene a matita. Le prove non
   // passano dal trascinamento del mouse ma dalla funzione che il rilascio chiama:

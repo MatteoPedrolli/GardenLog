@@ -656,6 +656,13 @@ riga, o il foglio dichiara una cosa e ne mostra un'altra.
 li copre come tutto il resto. Se mancano, la stampa avvisa ma non si rifiuta — la
 decisione resta di chi stampa.
 
+**Accanto a ogni «Stampa» c'è «Stampa senza intestazione»**, per la carta
+intestata: i dati dell'azienda ci sono già stampati, e ripeterli sopra li
+sovrapporrebbe al logo. È un bottone e non una domanda a ogni stampa: si sceglie
+guardando il foglio che si ha in mano, e un dialogo in più a ogni conto è un clic
+in più per tutti. Senza intestazione l'avviso sull'intestazione mancante non
+compare: non serve.
+
 Il titolo della pagina viene cambiato prima di stampare, perché Chrome lo propone
 come nome del file in PDF, e rimesso a posto su `afterprint`: rimetterlo subito
 darebbe un file chiamato «GiardinoApp · Ufficio».

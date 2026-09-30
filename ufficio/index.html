@@ -1525,7 +1525,7 @@ function segnalaListinoDaSalvare() {
 // rapportini, un conto solo. Ogni lavoro resta un blocco con la sua data e il suo
 // subtotale — il cliente deve poter vedere cosa è stato fatto quando — e il totale
 // in fondo li somma. Con un lavoro solo il foglio è quello di sempre.
-function costruisciFoglio({ cliente, data, righe, lavori }) {
+function costruisciFoglio({ cliente, data, righe, lavori, senzaIntestazione }) {
   const blocchi = lavori || [{ data, righe }];
   const piu = blocchi.length > 1;
   const tutte = blocchi.flatMap(b => b.righe || []);
@@ -1537,7 +1537,9 @@ function costruisciFoglio({ cliente, data, righe, lavori }) {
     IMPOSTAZIONI.email,
   ].filter(x => x).join(' · ');
 
-  let html = '<div class="intestazione">' +
+  // Senza intestazione si stampa sulla carta intestata, che i dati dell'azienda
+  // li ha già: ripeterli sopra li sovrapporrebbe al logo.
+  let html = senzaIntestazione ? '' : '<div class="intestazione">' +
     '<div class="azienda">' + perValore(IMPOSTAZIONI.azienda) + '</div>' +
     (sede ? '<div class="recapiti">' + perValore(sede) + '</div>' : '') +
     (contatti ? '<div class="recapiti">' + perValore(contatti) + '</div>' : '') +
@@ -1588,7 +1590,7 @@ function costruisciFoglio({ cliente, data, righe, lavori }) {
   return html;
 }
 
-function stampaConto(origine, id) {
+function stampaConto(origine, id, senzaIntestazione) {
   let cliente, data, righe, lavori;
   if (origine === 'insieme') {
     const scelti = lavoriScelti();
@@ -1607,11 +1609,11 @@ function stampaConto(origine, id) {
 
   // Un foglio che va a un cliente senza dire da chi arriva non serve a niente:
   // si avvisa, ma la decisione resta di chi stampa.
-  if (!String(IMPOSTAZIONI.azienda || '').trim()) {
+  if (!senzaIntestazione && !String(IMPOSTAZIONI.azienda || '').trim()) {
     if (!confirm('Manca l\'intestazione con i dati dell\'azienda: si compila in Impostazioni.\n\nStampare comunque?')) return;
   }
 
-  document.getElementById('foglio').innerHTML = costruisciFoglio({ cliente, data, righe, lavori });
+  document.getElementById('foglio').innerHTML = costruisciFoglio({ cliente, data, righe, lavori, senzaIntestazione });
 
   // Chrome propone il titolo della pagina come nome del file quando si salva in
   // PDF, e lo legge a stampa avviata: rimetterlo a posto subito darebbe un PDF
@@ -1891,6 +1893,7 @@ function disegnaLavoro() {
     '<button class="principale" onclick="archivia()">' +
       (LAVORO.dallArchivio ? 'Fatto' : LAVORO.corretto ? 'Aggiorna in archivio' : 'Archivia') + '</button>' +
     '<button class="secondaria" onclick="stampaConto(\'lavoro\')">Stampa il conto</button>' +
+    '<button class="secondaria" onclick="stampaConto(\'lavoro\', \'\', true)">Stampa senza intestazione</button>' +
     '<button class="secondaria" onclick="tornaAgliArrivi()">' + (LAVORO.dallArchivio ? 'Torna al lavoro archiviato' : 'Torna in arrivo') + '</button>' +
     '<span id="stato-salvataggio" class="meta stato-salvataggio">' +
       (LAVORO.daSalvare ? 'Modifiche da salvare…' : LAVORO.salvato ? 'Salvato in archivio' :
@@ -2049,6 +2052,7 @@ function barraScelti() {
     (due ? '' : '<span class="meta">spuntane un altro dello stesso cliente per un conto unico</span>') +
     '<span style="margin-left:auto; display:flex; gap:8px; flex-wrap:wrap">' +
       '<button class="principale piccola" onclick="stampaConto(\'insieme\')"' + (due ? '' : ' disabled') + '>Stampa insieme</button>' +
+      '<button class="secondaria piccola" onclick="stampaConto(\'insieme\', \'\', true)"' + (due ? '' : ' disabled') + '>Insieme senza intestazione</button>' +
       '<button class="secondaria piccola" onclick="inviaInsieme()"' + (due ? '' : ' disabled') + '>Manda insieme</button>' +
       '<button class="secondaria piccola" onclick="fatturaInsieme()">Segna pagat' + (due ? 'i' : 'o') + '</button>' +
       '<button class="secondaria piccola" onclick="annullaScelta()">Annulla</button>' +
@@ -2300,6 +2304,7 @@ function disegnaArchiviato() {
   html += '<div class="bottoni">' +
     (modificabile ? '<button class="secondaria" onclick="modificaArchiviato(\'' + id + '\')">Modifica il conto</button>' : '') +
     '<button class="secondaria" onclick="stampaConto(\'archivio\', \'' + id + '\')">Stampa</button>' +
+    '<button class="secondaria" onclick="stampaConto(\'archivio\', \'' + id + '\', true)">Stampa senza intestazione</button>' +
     '<button class="secondaria" onclick="inviaConto(\'' + id + '\')">Invia al cliente</button>' +
     '<button class="' + (l.stato === 'fatturato' ? 'secondaria' : 'principale') +
       '" onclick="cambiaStato(\'' + id + '\', \'' +
