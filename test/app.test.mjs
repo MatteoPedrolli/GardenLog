@@ -579,6 +579,14 @@ try {
   await page.fill('#f-ril-cliente-search', 'Mario');
   await page.waitForTimeout(200);
   await page.click('#ril-cliente-suggestions .suggestion-item');
+  // Scegliendo un cliente dall'anagrafica del telefono i campi si riempiono, ma
+  // restano campi: telefono e mail il telefono non li conosce, e si scrivono qui.
+  ok('scegliendo il cliente nome e paese si riempiono da soli',
+    await page.inputValue('#f-ril-nome') === 'Mario Rossi',
+    await page.inputValue('#f-ril-nome'));
+  await page.fill('#f-ril-telefono', '0461 000000');
+  await page.fill('#f-ril-email', 'mario@esempio.it');
+  await page.fill('#f-ril-via', 'Via dei Prati 14');
   await page.selectOption('#f-ril-lavoro', 'prato-rotoli');
   await page.waitForTimeout(100);
   // Due dei quattro tipi hanno bisogno di un numero che esce dal CAD: dirlo
@@ -650,6 +658,26 @@ try {
   ok('e non porta nessun prezzo: il listino sta in ufficio',
     !/prezzo|importo|euro/i.test(JSON.stringify(docRilievo)),
     JSON.stringify(docRilievo).slice(0, 120));
+  // Telefono e mail scritti in giardino arrivano in ufficio: sono quello che
+  // serve per richiamare e mandare il preventivo, e il telefono non li tiene.
+  ok('il rilievo porta telefono, mail e via scritti in giardino',
+    docRilievo.cliente.telefono === '0461 000000' && docRilievo.cliente.email === 'mario@esempio.it' &&
+    docRilievo.cliente.indirizzo === 'Via dei Prati 14', JSON.stringify(docRilievo.cliente));
+  ok('e resta collegato al cliente dell\'anagrafica da cui è partito',
+    !!docRilievo.cliente.id && docRilievo.cliente.nome === 'Mario Rossi');
+  // Il caso di tutti i giorni: uno che non è ancora cliente. Basta il nome.
+  const sconosciuto = await page.evaluate(() => {
+    apriRilievo();
+    document.getElementById('f-ril-nome').value = 'Anna Nuova';
+    document.getElementById('f-ril-telefono').value = '333 1234567';
+    const a = anagraficaRilievo();
+    const doc = costruisciRilievo({ rilievo: { RilievoID: 'x', Anagrafica: a, Righe: [] }, cliente: null, voci: DB.voci });
+    closeDrawer('overlay-rilievo');
+    return doc.cliente;
+  });
+  ok('per chi non è ancora cliente basta scriverne il nome',
+    sconosciuto.nome === 'Anna Nuova' && sconosciuto.id === '' && sconosciuto.telefono === '333 1234567',
+    JSON.stringify(sconosciuto));
   ok('porta le righe con descrizione, quantità e unità',
     docRilievo.righe.length === 2 && docRilievo.righe[0].quantita === 240 &&
     docRilievo.righe[0].unita === 'm²' &&
@@ -688,14 +716,16 @@ try {
     await page.evaluate(async () => {
       const quanti = DB.rilievi.length;
       apriRilievo();
-      document.getElementById('f-ril-cliente').value = DB.clienti[0].ClienteID;
+      // Il nome c'è: così si ferma per le righe e non per il nome. Senza, la
+      // prova passava lo stesso — fermata da un'altra regola.
+      document.getElementById('f-ril-nome').value = 'Qualcuno';
       await salvaRilievo();
       const fermato = DB.rilievi.length === quanti &&
         document.getElementById('overlay-rilievo').classList.contains('open');
       closeDrawer('overlay-rilievo');
       return fermato;
     }));
-  ok('e senza cliente nemmeno: un preventivo ha bisogno di un nome',
+  ok('e senza un nome nemmeno: un preventivo ha bisogno di sapere per chi è',
     await page.evaluate(async () => {
       const quanti = DB.rilievi.length;
       apriRilievo();

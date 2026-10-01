@@ -433,12 +433,23 @@ function costruisciRilievo({ rilievo, cliente, voci }) {
     id: rilievo.RilievoID,
     revisione: (Number(rilievo.Revisione) || 0) + 1,
     creato: new Date().toISOString(),
-    cliente: {
-      id: (cliente && cliente.ClienteID) || rilievo.ClienteID || '',
-      nome: (cliente && cliente.Cliente) || rilievo.Cliente || '',
-      indirizzo: (cliente && cliente.Indirizzo) || '',
-      citta: (cliente && cliente.Citta) || '',
-    },
+    // L'anagrafica scritta sul rilievo vince su quella del telefono: è quello che
+    // si è visto e chiesto stando lì. Telefono e mail sono arrivati dopo, senza
+    // alzare VERSIONE_RILIEVO: un ufficio che non li conosce li ignora, un
+    // rilievo vecchio arriva senza — che vuol dire «non scritti».
+    cliente: (() => {
+      const a = rilievo.Anagrafica || {};
+      return {
+        id: (cliente && cliente.ClienteID) || rilievo.ClienteID || '',
+        nome: a.Cliente || (cliente && cliente.Cliente) || rilievo.Cliente || '',
+        indirizzo: a.Indirizzo || (cliente && cliente.Indirizzo) || '',
+        citta: a.Citta || (cliente && cliente.Citta) || '',
+        telefono: a.Telefono || '',
+        email: a.Email || '',
+      };
+    })(),
+    // Il sopralluogo della lavagna da cui nasce, se nasce da uno.
+    sopralluogo: rilievo.SopralluogoID || '',
     lavoro: rilievo.Lavoro || '',
     // Le mezze giornate stimate per tutto il lavoro, non per riga: è così che si
     // stima qui («arrotondo alla mezza giornata») ed è anche la larghezza che il
@@ -477,7 +488,11 @@ function leggiRilievo(grezzo) {
     ...doc,
     versione,
     revisione: Number(doc.revisione) || 1,
-    cliente: doc.cliente || { id: '', nome: '' },
+    cliente: {
+      id: '', nome: '', indirizzo: '', citta: '', telefono: '', email: '',
+      ...(doc.cliente || {}),
+    },
+    sopralluogo: doc.sopralluogo || '',
     lavoro: doc.lavoro || '',
     mezze: Number(doc.mezze) || 0,
     righe: (Array.isArray(doc.righe) ? doc.righe : []).map(r => ({

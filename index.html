@@ -522,6 +522,16 @@ select.form-control { background-image: url("data:image/svg+xml,%3Csvg xmlns='ht
   border-radius: 8px; font-family: var(--font-body); background: var(--white); color: var(--text); }
 /* La fila −/mezze/+ va a capo invece di sbordare: è la stessa riga che sulla
    lavagna spingeva le ore sopra il giorno dopo. */
+.ril-campo { margin-top: 6px; }
+/* Da dove arriva quello che c'è già scritto: un sopralluogo dell'ufficio o un
+   cliente dell'anagrafica. Si vede prima dei campi, o si crede di averli
+   battuti a mano. */
+.ril-da, .ril-collegato {
+  margin: 6px 0 0; padding: 8px 12px; background: var(--foglio); border-radius: 8px;
+  font-size: 0.82rem; color: var(--inchiostro); display: flex; align-items: center; gap: 8px;
+}
+.ril-collegato button { margin-left: auto; background: none; border: none; cursor: pointer;
+  color: var(--text-light); font-size: 1rem; }
 .larghezza-ril { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; font-size: 0.85rem; }
 .larghezza-ril button { width: 34px; height: 34px; border-radius: 8px; border: 1px solid var(--border);
   background: var(--white); color: var(--inchiostro); font-size: 1.05rem; cursor: pointer;
@@ -853,20 +863,32 @@ select.form-control { background-image: url("data:image/svg+xml,%3Csvg xmlns='ht
 
     <div class="drawer-body">
       <div class="form-group">
-        <label class="form-label">Cliente</label>
+        <label class="form-label">Per chi</label>
+        <div id="f-ril-da" class="ril-da" style="display:none"></div>
         <div class="addr-wrapper">
-          <input type="text" class="form-control" id="f-ril-cliente-search" placeholder="Cerca cliente..."
+          <input type="text" class="form-control" id="f-ril-cliente-search" placeholder="Cerca fra i clienti…"
                  autocomplete="off" oninput="filtraClientiRilievo(this.value)"
                  onfocus="filtraClientiRilievo(this.value)">
           <div class="suggestions" id="ril-cliente-suggestions" style="display:none"></div>
         </div>
         <input type="hidden" id="f-ril-cliente">
-        <div id="f-ril-cliente-selected" style="display:none; margin-top:6px; padding:8px 12px; background:var(--foglio); border-radius:8px; font-size:0.85rem; font-weight:500; color:var(--inchiostro)">
+        <input type="hidden" id="f-ril-sopralluogo">
+        <div id="f-ril-cliente-selected" class="ril-collegato" style="display:none">
           <span id="f-ril-cliente-nome"></span>
-          <button onclick="scollegaClienteRilievo()" style="background:none;border:none;cursor:pointer;color:var(--text-light);font-size:1rem;float:right">✕</button>
+          <button type="button" onclick="scollegaClienteRilievo()" title="Scollega">✕</button>
         </div>
-        <div class="dati-nota" style="margin:4px 0 0">Non è ancora cliente? Aggiungilo in anagrafica:
-          anche un preventivo ha bisogno di un nome, e l'ufficio importa i clienti nuovi da qui.</div>
+        <input type="text" class="form-control ril-campo" id="f-ril-nome" placeholder="Nome e cognome"
+               autocomplete="off" autocapitalize="words">
+        <input type="text" class="form-control ril-campo" id="f-ril-via" placeholder="Via e numero"
+               autocomplete="off">
+        <input type="text" class="form-control ril-campo" id="f-ril-paese" placeholder="Paese"
+               autocomplete="off" autocapitalize="words">
+        <input type="tel" class="form-control ril-campo" id="f-ril-telefono" placeholder="Telefono"
+               inputmode="tel" autocomplete="off">
+        <input type="email" class="form-control ril-campo" id="f-ril-email" placeholder="Email"
+               inputmode="email" autocapitalize="off" autocomplete="off">
+        <div class="dati-nota" style="margin:4px 0 0">Un preventivo si fa spesso per chi non è
+          ancora cliente: basta il nome. Telefono e mail arrivano in ufficio col rilievo.</div>
       </div>
 
       <div class="form-group">
@@ -2840,7 +2862,33 @@ function accodaAppuntamento(prenotazione) {
 let righeRilievo = [];
 let mezzeRilievo = 1;
 
-function apriRilievo() {
+// I campi dell'anagrafica del rilievo, in un posto solo: li riempie la ricerca
+// fra i clienti, li riempie un sopralluogo, li legge il salvataggio.
+const CAMPI_ANAGRAFICA_RILIEVO = {
+  Cliente: 'f-ril-nome', Indirizzo: 'f-ril-via', Citta: 'f-ril-paese',
+  Telefono: 'f-ril-telefono', Email: 'f-ril-email',
+};
+
+function anagraficaRilievo() {
+  const a = {};
+  Object.entries(CAMPI_ANAGRAFICA_RILIEVO).forEach(([k, id]) => {
+    a[k] = document.getElementById(id).value.trim();
+  });
+  return a;
+}
+
+// Riempie solo quello che arriva pieno: scegliere dall'anagrafica del telefono un
+// cliente che non ha il numero non deve cancellare il numero appena scritto.
+function riempiAnagraficaRilievo(dati) {
+  Object.entries(CAMPI_ANAGRAFICA_RILIEVO).forEach(([k, id]) => {
+    if (dati && dati[k]) document.getElementById(id).value = dati[k];
+  });
+}
+
+function apriRilievo(sopralluogoID) {
+  Object.values(CAMPI_ANAGRAFICA_RILIEVO).forEach(id => { document.getElementById(id).value = ''; });
+  document.getElementById('f-ril-sopralluogo').value = '';
+  document.getElementById('f-ril-da').style.display = 'none';
   document.getElementById('f-ril-note').value = '';
   document.getElementById('f-ril-libera').value = '';
   righeRilievo = [];
@@ -2851,6 +2899,7 @@ function apriRilievo() {
   mostraMezzeRilievo();
   mostraSeServeIlDisegno();
   scollegaClienteRilievo();
+  if (sopralluogoID) daSopralluogo(sopralluogoID);
   document.getElementById('overlay-rilievo').classList.add('open');
 }
 
@@ -2864,13 +2913,18 @@ function filtraClientiRilievo(q) {
 }
 
 function scegliClienteRilievo(id, nome) {
+  const c = DB.clienti.find(x => x.ClienteID == id);
   document.getElementById('f-ril-cliente').value = id;
-  document.getElementById('f-ril-cliente-nome').textContent = nome;
-  document.getElementById('f-ril-cliente-selected').style.display = 'block';
+  document.getElementById('f-ril-cliente-nome').textContent = '👤 ' + nome + ' · dall\'anagrafica';
+  document.getElementById('f-ril-cliente-selected').style.display = 'flex';
   document.getElementById('f-ril-cliente-search').style.display = 'none';
   document.getElementById('ril-cliente-suggestions').style.display = 'none';
+  riempiAnagraficaRilievo(c ? { Cliente: c.Cliente, Indirizzo: c.Indirizzo, Citta: c.Citta } : { Cliente: nome });
 }
 
+// Scollegare toglie il riferimento al cliente, non quello che c'è scritto: i
+// campi restano, perché sono quello che si è visto, e il nome lo si corregge a
+// mano se serve.
 function scollegaClienteRilievo() {
   document.getElementById('f-ril-cliente').value = '';
   document.getElementById('f-ril-cliente-nome').textContent = '';
@@ -2999,15 +3053,24 @@ function renderRilievoRighe() {
 
 async function salvaRilievo() {
   if (salvataggioInCorso) return;
-  const cid = document.getElementById('f-ril-cliente').value;
-  if (!cid) { showToast('⚠️ Scegli il cliente'); return; }
+  const anagrafica = anagraficaRilievo();
+  // Il nome basta: un preventivo si fa spesso a chi non è ancora cliente, e
+  // farlo prima aggiungere in anagrafica era lavoro in più col cliente davanti.
+  if (!anagrafica.Cliente) { showToast('⚠️ Scrivi per chi è'); return; }
   // Un rilievo senza righe è un foglio bianco: l'ufficio non ci può fare un
   // preventivo, e chi l'ha mandato non è più davanti al giardino per chiedere.
   if (!righeRilievo.length) { showToast('⚠️ Aggiungi almeno una riga'); return; }
 
   const rilievo = {
     RilievoID: 'ril-' + Date.now().toString(36),
-    ClienteID: cid,
+    ClienteID: document.getElementById('f-ril-cliente').value,
+    // Quello che si è scritto qui vince sull'anagrafica del telefono: è quello che
+    // si è visto e chiesto stando lì, e il cliente di prima può aver cambiato
+    // numero.
+    Anagrafica: anagrafica,
+    // Da quale sopralluogo della lavagna nasce, se nasce da uno: è il filo che
+    // l'ufficio segue per sapere che quel sopralluogo ha dato un rilievo.
+    SopralluogoID: document.getElementById('f-ril-sopralluogo').value,
     Lavoro: document.getElementById('f-ril-lavoro').value,
     Mezze: mezzeRilievo,
     Righe: righeRilievo.map(r => ({ ...r })),
@@ -3056,6 +3119,7 @@ function renderRilievi() {
   if (!elenco.length) { el.innerHTML = ''; return; }
   el.innerHTML = elenco.map(r => {
     const c = DB.clienti.find(x => x.ClienteID == r.ClienteID);
+    const nome = (r.Anagrafica && r.Anagrafica.Cliente) || (c && c.Cliente) || 'senza nome';
     const t = tipoRilievo(r.Lavoro);
     const coda = DB.coda || [];
     const posto = coda.findIndex(v => v.docID === r.RilievoID);
@@ -3065,7 +3129,7 @@ function renderRilievi() {
     const davanti = posto > 0 ? coda.slice(0, posto).find(v => v.errore) : null;
     const quante = Number(r.Mezze) || 0;
     return `<div class="card" style="padding:12px">
-      <div style="font-weight:600">${perValore(c ? c.Cliente : 'cliente eliminato')}</div>
+      <div style="font-weight:600">${perValore(nome)}</div>
       <div style="font-size:0.85rem; color:var(--text-mid)">${perValore(t ? t.nome : r.Lavoro)} · ${(r.Righe || []).length} ${(r.Righe || []).length === 1 ? 'riga' : 'righe'}</div>
       <div style="font-size:0.78rem; color:var(--text-light); margin-top:4px">
         ${quante} ${quante === 1 ? 'mezza giornata' : 'mezze giornate'} · 📤 da consegnare
