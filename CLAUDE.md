@@ -106,7 +106,11 @@ precompilato che nessuno ha guardato è un errore che paga il cliente.
 Sotto ogni fascia c'è **una riga di testo, `Cosa`**: cosa si è fatto in quelle ore.
 Viaggia nel rapportino (`ore.fasce[].cosa`) e in ufficio si legge sotto la sua
 fascia, nel lavoro in arrivo e in archivio; **al cliente non arriva**, come le
-fasce. Scriverla non conferma l'orario di una fascia proposta: sono due cose
+fasce. In ufficio ogni fascia porta anche **il giorno davanti
+all'orario** («Lun 21/09/2026», `righeFasce()`): in ufficio si guarda la riga, e la
+data in cima al lavoro costringeva ad alzare gli occhi. È la data della visita —
+le fasce un giorno loro non ce l'hanno, e non serviva: un lavoro di più giorni
+sono più visite. Scriverla non conferma l'orario di una fascia proposta: sono due cose
 diverse, e un «potatura» scritto sotto un orario mai guardato non lo rende giusto.
 
 **Le operazioni si spuntano.** L'elenco viene da `DB.tipiOperazione`, ordinato

@@ -1683,6 +1683,28 @@ function formattaOre(n) {
   return (Number(n) || 0).toFixed(2).replace('.', ',') + ' h';
 }
 
+// Le fasce di un lavoro, una riga ciascuna, col giorno davanti. Il giorno è
+// quello della visita: le fasce non ne hanno uno loro. Il capo lo voleva accanto
+// agli orari perché in ufficio si guarda la riga, e la data in cima al lavoro
+// costringeva ad alzare gli occhi. Al cliente non arriva, come le fasce.
+function righeFasce(fasce, data) {
+  const giorno = giornoDellaSettimana(data);
+  return fasce.map(f =>
+    '<tr><td class="meta">' + perValore(giorno) + '</td>' +
+      '<td>' + perValore(f.inizio) + ' – ' + perValore(f.fine) + '</td>' +
+      '<td>' + f.persone + (f.persone === 1 ? ' persona' : ' persone') + '</td>' +
+      '<td class="num">' + formattaOre(f.ore) + '</td></tr>' +
+    (f.cosa ? '<tr class="cosa-fascia"><td></td><td colspan="3">' + perValore(f.cosa) + '</td></tr>' : '')
+  ).join('');
+}
+
+// «Lun 21/09/2026»
+function giornoDellaSettimana(iso) {
+  const d = new Date(String(iso || '').slice(0, 10) + 'T12:00:00');
+  if (isNaN(d)) return '';
+  return ['Dom', 'Lun', 'Mar', 'Mer', 'Gio', 'Ven', 'Sab'][d.getDay()] + ' ' + formattaData(iso);
+}
+
 function formattaData(iso) {
   const m = /^(\d{4})-(\d{2})-(\d{2})/.exec(String(iso || ''));
   return m ? m[3] + '/' + m[2] + '/' + m[1] : (iso || '');
@@ -1863,12 +1885,7 @@ function disegnaLavoro() {
   html += '<div class="scheda"><div class="titolo-sezione">Ore</div>';
   if (d.ore.fasce && d.ore.fasce.length) {
     html += '<table class="elenco"><tbody>';
-    d.ore.fasce.forEach(f => {
-      html += '<tr><td>' + perValore(f.inizio) + ' – ' + perValore(f.fine) + '</td>' +
-        '<td>' + f.persone + (f.persone === 1 ? ' persona' : ' persone') + '</td>' +
-        '<td class="num">' + formattaOre(f.ore) + '</td></tr>' +
-        (f.cosa ? '<tr class="cosa-fascia"><td colspan="3">' + perValore(f.cosa) + '</td></tr>' : '');
-    });
+    html += righeFasce(d.ore.fasce, d.data);
     html += '</tbody></table>';
   }
   html += '<div class="totale"><span class="meta">Totale ore</span><span class="cifra">' +
@@ -2309,12 +2326,7 @@ function disegnaArchiviato() {
     html += '<div class="scheda"><div class="titolo-sezione">Ore</div>';
     if (r.ore && r.ore.fasce && r.ore.fasce.length) {
       html += '<table class="elenco"><tbody>';
-      r.ore.fasce.forEach(f => {
-        html += '<tr><td>' + perValore(f.inizio) + ' – ' + perValore(f.fine) + '</td>' +
-          '<td>' + f.persone + (f.persone === 1 ? ' persona' : ' persone') + '</td>' +
-          '<td class="num">' + formattaOre(f.ore) + '</td></tr>' +
-        (f.cosa ? '<tr class="cosa-fascia"><td colspan="3">' + perValore(f.cosa) + '</td></tr>' : '');
-      });
+      html += righeFasce(r.ore.fasce, r.data || l.data);
       html += '</tbody></table>';
     }
     html += '<div class="totale"><span class="meta">Totale ore</span><span class="cifra">' +
