@@ -146,12 +146,45 @@ table.elenco th {
 table.elenco td { padding: 9px 8px 9px 0; border-bottom: 1px solid var(--border); vertical-align: middle; }
 table.elenco tr:last-child td { border-bottom: none; }
 table.elenco td.num, table.elenco th.num { text-align: right; padding-right: 0; }
+/* La quantità e la sua unità sono due colonne attaccate, e senza un margine si
+   leggono come una parola sola: «Q.tàUM» in testa e «90n» sotto. Visto solo
+   guardando la pagina, non dai test. Vale sullo schermo e sulla carta. */
+table.elenco td.qta, table.elenco th.qta,
+#foglio td.qta, #foglio th.qta { text-align: right; padding-right: 14px; }
 /* Nella scheda cliente le due colonne vanno larghe uguali: lasciate libere, le
    celle si dimensionano sul contenuto e il telefono esce stretto come il numero. */
 /* Le note del rilievo si leggono come sono state scritte in giardino: gli a capo
    sono informazione, e su una riga sola diventano un muro. */
 .nota-rilievo { margin-top: 10px; padding: 10px 12px; background: var(--foglio);
   border-radius: 8px; font-size: 0.88rem; white-space: pre-line; }
+/* ── IL PREZZO CHE ASPETTA UNA CONFERMA ──
+   Ocra, non verde né rosso: non è un errore e non è un'approvazione, è un numero
+   che il listino propone e che nessuno ha ancora guardato. Il tratteggio dice la
+   stessa cosa a chi il colore non lo distingue — è la stessa idea della fascia
+   oraria proposta sul telefono, e lì come qui blocca quello che esce. */
+input.prezzo.proposto {
+  background: #fdf6e6; border-color: var(--ocra); border-style: dashed;
+}
+button.conferma {
+  margin-left: 4px; padding: 2px 7px; border: 1px solid var(--ocra);
+  background: var(--foglio); color: var(--ocra); border-radius: 6px; cursor: pointer;
+  font-size: 0.8rem; font-family: inherit;
+}
+input.stretto { width: 84px; text-align: right; }
+/* Quasi tutte le righe stanno nel totale: il menù che lo dice resta piccolo e
+   in sordina, e quando la riga è una tariffa è la riga intera a farsi notare.
+   A tutta larghezza ripeteva «Nel totale» tre volte e raddoppiava l'altezza. */
+select.tipo-riga {
+  width: auto; margin-top: 4px; padding: 3px 6px; font-size: 0.74rem;
+  color: var(--text-light); background: transparent; border-color: transparent;
+}
+select.tipo-riga:hover, select.tipo-riga:focus { border-color: var(--border); background: var(--white); }
+/* E la ✕ non sta attaccata all'importo. */
+table.elenco td.via-col { padding-left: 10px; width: 34px; }
+/* Una tariffa non entra nel totale: si vede che è di un'altra natura. */
+tr.riga-tariffa td { background: var(--foglio); }
+#foglio .apertura { margin: 18px 0; font-size: 0.95rem; }
+#foglio table.tariffe { margin-top: 18px; font-size: 0.88rem; }
 table.scheda-cliente { table-layout: fixed; }
 table.scheda-cliente td { width: 50%; padding-right: 10px; }
 table.scheda-cliente td:last-child { padding-right: 0; }
@@ -453,8 +486,8 @@ input.vuoto { background: #fffdf5; border-color: #ecdca8; }
     <button class="voce-barra attiva" id="v-arrivi" onclick="vaiA('arrivi')">
       <span>📥</span> In arrivo <span class="pallino" id="pallino-arrivi">0</span>
     </button>
-    <button class="voce-barra" id="v-rilievi" onclick="vaiA('rilievi')">
-      <span>📐</span> Rilievi <span class="pallino" id="pallino-rilievi">0</span>
+    <button class="voce-barra" id="v-preventivi" onclick="vaiA('preventivi')">
+      <span>📐</span> Preventivi <span class="pallino" id="pallino-preventivi">0</span>
     </button>
     <button class="voce-barra" id="v-lavagna" onclick="vaiA('lavagna')">
       <span>📋</span> Lavagna <span class="pallino" id="pallino-lavagna">0</span>
@@ -469,7 +502,8 @@ input.vuoto { background: #fffdf5; border-color: #ecdca8; }
   <main id="contenuto">
     <div class="pagina attiva" id="pagina-arrivi"></div>
     <div class="pagina" id="pagina-lavoro"></div>
-    <div class="pagina" id="pagina-rilievi"></div>
+    <div class="pagina" id="pagina-preventivi"></div>
+    <div class="pagina" id="pagina-preventivo"></div>
     <div class="pagina" id="pagina-lavagna"></div>
     <div class="pagina" id="pagina-clienti"></div>
     <div class="pagina" id="pagina-archivio"></div>
@@ -525,6 +559,10 @@ const MEZZE = ['mattina', 'pomeriggio'];
 const IMPOSTAZIONI_VUOTE = {
   azienda: '', indirizzo: '', citta: '', piva: '', telefono: '', email: '',
   nota: 'Questo documento non è una fattura.',
+  // Le condizioni stanno in fondo al preventivo e non al conto: validità,
+  // caparra, cosa succede se il lavoro cambia. Sono di un'azienda vera, quindi
+  // vivono qui e non nel codice, come l'intestazione.
+  condizioni: '',
 };
 
 let CARTELLA = null;
@@ -543,6 +581,15 @@ let TRASCINATO = null;
 let MOSTRA_FUTURI = false;
 let ARRIVI = [];
 let RILIEVI = [];
+let PREVENTIVI = [];
+let PREVENTIVO = null;
+
+// Come si chiama uno stato a schermo, in un posto solo: tre parole che compaiono
+// sull'elenco, sulla scheda e nei test, e che devono dire la stessa cosa.
+const STATI_PREVENTIVO = {
+  bozza: 'bozza', mandato: 'mandato al cliente',
+  accettato: 'accettato', rifiutato: 'rifiutato',
+};
 let ILLEGGIBILI = [];
 let ARCHIVIO = [];
 let LAVORO = null;
@@ -714,6 +761,7 @@ async function ricarica() {
   ARCHIVIO = await caricaArchivio();
   ARRIVI = await caricaArrivi();
   RILIEVI = await caricaRilievi();
+  PREVENTIVI = await caricaPreventivi();
   await assorbiAppuntamenti();
 }
 
@@ -1400,9 +1448,15 @@ function stampaConto(origine, id) {
 
 // ── FORMATI ──
 
+// Col punto fra le migliaia. Sui conti non si vedeva — sono centinaia di euro —
+// ma un preventivo arriva alle migliaia, e «4320,00 €» su un foglio che va a un
+// cliente si legge peggio di «4.320,00 €». Lo zero in più o in meno lì è una
+// cifra sbagliata letta ad alta voce al telefono.
 function formattaEuro(n) {
   const v = parseFloat(n);
-  return isNaN(v) ? '' : v.toFixed(2).replace('.', ',') + ' €';
+  if (isNaN(v)) return '';
+  const [intero, decimali] = v.toFixed(2).split('.');
+  return intero.replace(/\B(?=(\d{3})+(?!\d))/g, '.') + ',' + decimali + ' €';
 }
 
 function formattaQuantita(v) {
@@ -1458,7 +1512,7 @@ function vaiA(pagina) {
   if (p) p.classList.add('attiva');
   document.querySelectorAll('.voce-barra').forEach(v => v.classList.remove('attiva'));
   // La schermata di un lavoro vive dentro "In arrivo": è da lì che ci si arriva.
-  const dentro = { lavoro: 'arrivi', archiviato: 'archivio' };
+  const dentro = { lavoro: 'arrivi', archiviato: 'archivio', preventivo: 'preventivi' };
   const voce = document.getElementById('v-' + (dentro[pagina] || pagina));
   if (voce) voce.classList.add('attiva');
   disegna();
@@ -1474,11 +1528,15 @@ function disegna() {
   const pallinoL = document.getElementById('pallino-lavagna');
   pallinoL.textContent = daPianificare;
   pallinoL.classList.toggle('visibile', daPianificare > 0);
-  const pallinoR = document.getElementById('pallino-rilievi');
-  pallinoR.textContent = RILIEVI.length;
-  pallinoR.classList.toggle('visibile', RILIEVI.length > 0);
+  // Il pallino conta i rilievi che aspettano ancora un preventivo, non tutti
+  // quelli che ci sono: è il numero su cui si agisce, come quello degli arrivi.
+  const daPreventivare = rilieviDaPreventivare().length;
+  const pallinoP = document.getElementById('pallino-preventivi');
+  pallinoP.textContent = daPreventivare;
+  pallinoP.classList.toggle('visibile', daPreventivare > 0);
   if (PAGINA === 'arrivi') disegnaArrivi();
-  if (PAGINA === 'rilievi') disegnaRilievi();
+  if (PAGINA === 'preventivi') disegnaPreventivi();
+  if (PAGINA === 'preventivo') disegnaPreventivo();
   if (PAGINA === 'lavoro') disegnaLavoro();
   if (PAGINA === 'lavagna') disegnaLavagna();
   if (PAGINA === 'clienti') disegnaClienti();
@@ -1594,56 +1652,537 @@ async function caricaRilievi() {
   return trovati.sort((a, b) => String(b.doc.creato).localeCompare(String(a.doc.creato)));
 }
 
-function disegnaRilievi() {
-  const c = document.getElementById('pagina-rilievi');
+// ── IL PREVENTIVO ──
+// Nasce da un rilievo e porta il prezzo. Il margine fra il costo che esce dal
+// listino e il prezzo che va al cliente **dipende da troppe cose per essere una
+// regola**: l'app propone il prezzo di listino e chi firma lo corregge.
+//
+// Un prezzo proposto resta **segnato** finché non viene toccato o confermato, ed
+// è la stessa regola delle fasce orarie sul telefono: un numero precompilato che
+// nessuno ha guardato è un errore che paga il cliente. Lì blocca il salvataggio
+// della visita, qui blocca la stampa — perché è la stampa che esce di qui.
+const VERSIONE_PREVENTIVO = 1;
+const CARTELLA_PREVENTIVI = 'preventivi';
+
+// Una riga sta nel totale, oppure è una **tariffa**: un prezzo per una cosa che
+// forse servirà — il conferimento a discarica, il costo orario — che si dichiara
+// senza quantità e **fuori dal totale**. Sui preventivi veri ci sono sempre, e
+// sommarle direbbe una cifra che non esiste.
+const TIPI_RIGA_PREVENTIVO = [
+  { id: 'totale',  nome: 'Nel totale' },
+  { id: 'tariffa', nome: 'Tariffa, fuori dal totale' },
+];
+
+function righePreventivo(rilievo, vecchie) {
+  const prima = Array.isArray(vecchie) ? vecchie : [];
+  const righe = (rilievo.righe || []).map(r => {
+    const giaFatta = prima.find(x => x.chiave && x.chiave === r.id);
+    // Un prezzo già guardato non torna indietro a essere una proposta: chi l'ha
+    // messo sapeva qualcosa che il listino non sa, e rimetterlo in discussione a
+    // ogni rilettura vorrebbe dire riconfermarlo ogni volta.
+    if (giaFatta) return { ...giaFatta, descrizione: r.descrizione || giaFatta.descrizione,
+      quantita: r.quantita, unita: r.unita };
+    const inListino = voceInListino(r.voceID);
+    const dalListino = inListino && inListino.prezzo !== '' && inListino.prezzo != null
+      ? Number(inListino.prezzo) : '';
+    return {
+      chiave: r.id || '',
+      voceID: r.voceID || '',
+      voce: r.voce || '',
+      descrizione: r.descrizione || r.voce || '',
+      quantita: r.quantita == null ? '' : Number(r.quantita),
+      unita: r.unita || '',
+      prezzo: dalListino,
+      // Un prezzo che non c'è non è una proposta: è un buco, e va riempito. Solo
+      // quello che il listino ha proposto aspetta una conferma.
+      proposto: dalListino !== '',
+      tipo: 'totale',
+    };
+  });
+  // Le righe aggiunte in ufficio non nascono dal rilievo e restano dove sono.
+  prima.filter(r => !r.chiave).forEach(r => righe.push({ ...r }));
+  return righe;
+}
+
+function costruisciPreventivo(rilievo, precedente) {
+  return {
+    tipo: 'preventivo',
+    versione: VERSIONE_PREVENTIVO,
+    id: rilievo.id,
+    // A quale revisione del rilievo risponde: se dal campo ne arriva una più
+    // nuova, questo preventivo torna fra quelli da rifare. È la stessa regola
+    // dei rapportini in arrivo.
+    rilievo: Number(rilievo.revisione) || 1,
+    creato: (precedente && precedente.creato) || new Date().toISOString(),
+    aggiornato: new Date().toISOString(),
+    cliente: rilievo.cliente,
+    lavoro: rilievo.lavoro || '',
+    mezze: Number(rilievo.mezze) || 0,
+    stato: (precedente && precedente.stato) || 'bozza',
+    righe: righePreventivo(rilievo, precedente ? precedente.righe : null),
+    note: (precedente && precedente.note) || '',
+    // Il rilievo ci viaggia dentro per intero: fra due anni questo file deve
+    // raccontare da solo da dove viene quel prezzo, anche se la cartella dei
+    // rilievi è stata svuotata.
+    daRilievo: rilievo,
+  };
+}
+
+function leggiPreventivo(grezzo) {
+  let doc = grezzo;
+  if (typeof grezzo === 'string') {
+    try { doc = JSON.parse(grezzo); }
+    catch (e) { throw new Error('Il file non è leggibile: non è JSON valido'); }
+  }
+  if (!doc || doc.tipo !== 'preventivo') throw new Error('Questo file non è un preventivo');
+  const versione = Number(doc.versione) || 0;
+  if (versione !== VERSIONE_PREVENTIVO) {
+    throw new Error(`Preventivo della versione ${versione || '?'}: questa app legge la ${VERSIONE_PREVENTIVO}`);
+  }
+  if (!doc.id) throw new Error('Preventivo senza identificativo');
+  return {
+    ...doc,
+    versione,
+    rilievo: Number(doc.rilievo) || 1,
+    mezze: Number(doc.mezze) || 0,
+    stato: doc.stato || 'bozza',
+    righe: (Array.isArray(doc.righe) ? doc.righe : []).map(r => ({
+      ...r,
+      quantita: r.quantita === '' || r.quantita == null ? '' : Number(r.quantita),
+      prezzo: r.prezzo === '' || r.prezzo == null ? '' : Number(r.prezzo),
+      proposto: !!r.proposto,
+      tipo: r.tipo === 'tariffa' ? 'tariffa' : 'totale',
+    })),
+  };
+}
+
+// Il totale somma **solo le righe nel totale**: una tariffa dice quanto costa
+// una cosa che forse servirà, e metterla dentro gonfierebbe il preventivo di una
+// spesa che forse non si fa.
+function totalePreventivo(righe) {
+  let totale = 0, escluse = 0, tariffe = 0;
+  (righe || []).forEach(r => {
+    if (r.tipo === 'tariffa') { tariffe++; return; }
+    const i = importoRiga(r);
+    if (i == null) escluse++; else totale += i;
+  });
+  return { totale: Number(totale.toFixed(2)), escluse, tariffe };
+}
+
+function prezziDaConfermare(righe) {
+  return (righe || []).filter(r => r.proposto).length;
+}
+
+function nomeFilePreventivo(doc) {
+  const pulito = s => String(s || '').normalize('NFD').replace(/[̀-ͯ]/g, '')
+    .replace(/[^a-zA-Z0-9]+/g, '-').replace(/^-|-$/g, '').toLowerCase();
+  const quando = (doc.creato || '').slice(0, 10) || 'senza-data';
+  return `${quando}-${pulito(doc.cliente && doc.cliente.nome) || 'cliente'}-${doc.id}.json`;
+}
+
+// Un rilievo è «da preventivare» finché non esiste un preventivo per quella
+// revisione — non perché qualcuno l'abbia spostato. È la stessa regola dei
+// rapportini in arrivo, e per lo stesso motivo: nessuno deve ricordarsi di
+// segnare che ha finito.
+function rilieviDaPreventivare() {
+  return RILIEVI.filter(r => !PREVENTIVI.some(p => p.doc.id === r.doc.id &&
+    p.doc.rilievo >= r.doc.revisione));
+}
+
+async function caricaPreventivi() {
+  const radice = await sottocartella(CARTELLA, CARTELLA_PREVENTIVI, false);
+  if (!radice) return [];
+  const trovati = [];
+  for (const anno of await elencaCartelle(radice)) {
+    const cartellaAnno = await sottocartella(radice, anno, false);
+    if (!cartellaAnno) continue;
+    for (const nome of await elencaFile(cartellaAnno)) {
+      try {
+        trovati.push({ file: nome, anno, doc: leggiPreventivo(await leggiTesto(cartellaAnno, nome)) });
+      } catch (e) {
+        ILLEGGIBILI.push({ nome: CARTELLA_PREVENTIVI + '/' + anno + '/' + nome, motivo: e.message });
+      }
+    }
+  }
+  return trovati.sort((a, b) => String(b.doc.creato).localeCompare(String(a.doc.creato)));
+}
+
+function apriPreventivo(id) {
+  const gia = PREVENTIVI.find(p => p.doc.id === id);
+  const rilievo = RILIEVI.find(r => r.doc.id === id);
+  if (!rilievo && !gia) { avvisa('Rilievo non trovato: ricontrolla la cartella', true); return; }
+  // Se il campo ha rimandato il rilievo corretto, il preventivo si rifà su
+  // quello **tenendo i prezzi già decisi**: le quantità cambiano, il giudizio no.
+  PREVENTIVO = rilievo
+    ? { doc: costruisciPreventivo(rilievo.doc, gia ? gia.doc : null), file: gia ? gia.file : '', anno: gia ? gia.anno : '' }
+    : { doc: gia.doc, file: gia.file, anno: gia.anno };
+  vaiA('preventivo');
+}
+
+// Toccare un prezzo proposto significa farlo proprio: da lì in poi è una
+// decisione, e la casella torna bianca. Non si ridisegna la tabella mentre si
+// scrive — il campo sparirebbe da sotto le dita — quindi la classe si toglie a
+// mano, come fa il telefono con le fasce orarie.
+function modificaPrezzoRiga(i, valore, elemento) {
+  const r = PREVENTIVO.doc.righe[i];
+  if (!r) return;
+  r.prezzo = valore === '' ? '' : Number(String(valore).replace(',', '.'));
+  if (r.proposto) {
+    r.proposto = false;
+    if (elemento) elemento.classList.remove('proposto');
+    aggiornaCodaPreventivo();
+  }
+  aggiornaTotalePreventivo();
+}
+
+function confermaPrezzo(i) {
+  const r = PREVENTIVO.doc.righe[i];
+  if (!r) return;
+  r.proposto = false;
+  disegnaPreventivo();
+}
+
+// Tutti insieme, quando si è letta la colonna e va bene così. È il gesto che si
+// fa davvero: si scorre l'elenco con gli occhi e si dice sì.
+function confermaTuttiIPrezzi() {
+  PREVENTIVO.doc.righe.forEach(r => { r.proposto = false; });
+  disegnaPreventivo();
+}
+
+function modificaRigaPreventivo(i, campo, valore) {
+  const r = PREVENTIVO.doc.righe[i];
+  if (!r) return;
+  r[campo] = campo === 'quantita' ? (valore === '' ? '' : Number(valore)) : valore;
+  if (campo === 'quantita') aggiornaTotalePreventivo();
+}
+
+function cambiaTipoRiga(i, tipo) {
+  const r = PREVENTIVO.doc.righe[i];
+  if (!r) return;
+  r.tipo = tipo === 'tariffa' ? 'tariffa' : 'totale';
+  disegnaPreventivo();
+}
+
+function aggiungiRigaPreventivo(voceID) {
+  const v = voceID ? voceInListino(voceID) : null;
+  PREVENTIVO.doc.righe.push({
+    chiave: '', voceID: v ? v.voceID : '', voce: v ? v.voce : '',
+    descrizione: v ? v.voce : '', quantita: '', unita: v ? (v.unita || '') : '',
+    prezzo: v && v.prezzo !== '' && v.prezzo != null ? Number(v.prezzo) : '',
+    proposto: !!(v && v.prezzo !== '' && v.prezzo != null),
+    tipo: 'totale',
+  });
+  disegnaPreventivo();
+}
+
+function togliRigaPreventivo(i) {
+  PREVENTIVO.doc.righe.splice(i, 1);
+  disegnaPreventivo();
+}
+
+// Totale e coda si aggiornano da soli mentre si scrive, senza ridisegnare: sono
+// le due cose che devono seguire il numero sotto le dita.
+function aggiornaTotalePreventivo() {
+  const el = document.getElementById('totale-preventivo');
+  if (!el || !PREVENTIVO) return;
+  const t = totalePreventivo(PREVENTIVO.doc.righe);
+  el.textContent = formattaEuro(t.totale);
+  const fuori = document.getElementById('fuori-totale');
+  if (fuori) fuori.textContent = t.escluse
+    ? t.escluse + (t.escluse === 1 ? ' riga senza prezzo' : ' righe senza prezzo') : '';
+}
+
+function aggiornaCodaPreventivo() {
+  const el = document.getElementById('da-confermare');
+  if (!el || !PREVENTIVO) return;
+  const n = prezziDaConfermare(PREVENTIVO.doc.righe);
+  el.style.display = n ? 'block' : 'none';
+  el.innerHTML = n + (n === 1 ? ' prezzo proposto dal listino aspetta una conferma.' :
+    ' prezzi proposti dal listino aspettano una conferma.') +
+    ' Il margine fra costo e prezzo lo decidi tu: correggi quello che serve, poi conferma. ' +
+    '<button class="secondaria" onclick="confermaTuttiIPrezzi()">Vanno bene così</button>';
+}
+
+function disegnaPreventivo() {
+  const c = document.getElementById('pagina-preventivo');
+  if (!PREVENTIVO) { c.innerHTML = '<div class="vuoto-elenco">Nessun preventivo aperto.</div>'; return; }
+  const d = PREVENTIVO.doc;
+  const t = totalePreventivo(d.righe);
+  const tipo = tipoRilievo(d.lavoro);
+
+  let html = '<h2 class="titolo-pagina">' + perValore(d.cliente.nome || 'senza nome') + '</h2>';
+  html += '<p class="sottotitolo">' + perValore(tipo ? tipo.nome : d.lavoro) +
+    ' · ' + d.mezze + (d.mezze === 1 ? ' mezza giornata' : ' mezze giornate') +
+    ' · ' + STATI_PREVENTIVO[d.stato] + '</p>';
+
+  html += '<div id="da-confermare" class="avvertenza" style="display:none"></div>';
+
+  html += '<div class="scheda"><table class="elenco"><thead><tr>' +
+    '<th>Descrizione</th><th class="qta">Q.tà</th><th>UM</th><th class="num">Prezzo</th>' +
+    '<th class="num">Importo</th><th></th></tr></thead><tbody>';
+  d.righe.forEach((r, i) => {
+    const imp = r.tipo === 'tariffa' ? null : importoRiga(r);
+    html += '<tr' + (r.tipo === 'tariffa' ? ' class="riga-tariffa"' : '') + '>' +
+      '<td><input type="text" value="' + perValore(r.descrizione) + '" ' +
+        'oninput="modificaRigaPreventivo(' + i + ', \'descrizione\', this.value)">' +
+        '<select class="tipo-riga" onchange="cambiaTipoRiga(' + i + ', this.value)">' +
+        TIPI_RIGA_PREVENTIVO.map(x => '<option value="' + x.id + '"' +
+          (x.id === r.tipo ? ' selected' : '') + '>' + x.nome + '</option>').join('') +
+        '</select></td>' +
+      '<td class="qta">' + (r.tipo === 'tariffa' ? '<span class="meta">—</span>' :
+        '<input type="number" step="any" class="stretto" value="' + perValore(r.quantita) + '" ' +
+        'oninput="modificaRigaPreventivo(' + i + ', \'quantita\', this.value)">') + '</td>' +
+      '<td>' + perValore(r.unita) + '</td>' +
+      '<td class="num"><input type="number" step="any" class="stretto prezzo' +
+        (r.proposto ? ' proposto' : '') + '" value="' + perValore(r.prezzo) + '" ' +
+        'oninput="modificaPrezzoRiga(' + i + ', this.value, this)">' +
+        (r.proposto ? '<button class="conferma" onclick="confermaPrezzo(' + i + ')" ' +
+          'title="Va bene così">✓</button>' : '') + '</td>' +
+      '<td class="num">' + (r.tipo === 'tariffa' ? '<span class="meta">fuori totale</span>' :
+        (imp == null ? '<span class="meta">—</span>' : formattaEuro(imp))) + '</td>' +
+      '<td class="via-col"><button class="via" onclick="togliRigaPreventivo(' + i + ')" title="Togli">✕</button></td>' +
+    '</tr>';
+  });
+  html += '<tr class="riga-totale"><td colspan="4">Totale (IVA inclusa)</td>' +
+    '<td class="num" id="totale-preventivo">' + formattaEuro(t.totale) + '</td><td></td></tr>';
+  html += '</tbody></table>';
+  html += '<div class="meta" id="fuori-totale">' + (t.escluse
+    ? t.escluse + (t.escluse === 1 ? ' riga senza prezzo' : ' righe senza prezzo') : '') + '</div>';
+  html += '<select onchange="aggiungiRigaPreventivo(this.value); this.value=\'\'" style="margin-top:10px">' +
+    '<option value="">+ Aggiungi una voce di listino…</option>' +
+    LISTINO.voci.map(v => '<option value="' + perValore(v.voceID) + '">' + perValore(v.voce) + '</option>').join('') +
+    '</select>';
+  html += '</div>';
+
+  html += '<div class="scheda"><div class="titolo-sezione">Note sul preventivo</div>' +
+    '<textarea rows="3" oninput="PREVENTIVO.doc.note = this.value">' + perValore(d.note) + '</textarea>' +
+    '<div class="meta">Quello che va scritto sul foglio sotto le righe: esclusioni, riserve, ' +
+    'cosa è compreso e cosa no.</div></div>';
+
+  // Quello che il campo ha visto e che qui non si può più chiedere.
+  if (d.daRilievo && d.daRilievo.note) {
+    html += '<div class="scheda"><div class="titolo-sezione">Dal rilievo</div>' +
+      '<div class="nota-rilievo">' + perValore(d.daRilievo.note) + '</div></div>';
+  }
+
+  html += '<div class="bottoni">' +
+    '<button class="principale" onclick="salvaPreventivo()">Salva</button>' +
+    '<button class="secondaria" onclick="stampaPreventivo()">Stampa o salva in PDF</button>' +
+    (d.stato === 'accettato' ? '' :
+      '<button class="secondaria" onclick="accettaPreventivo()">Il cliente ha detto sì</button>') +
+    '<button class="secondaria" onclick="vaiA(\'preventivi\')">Torna all\'elenco</button>' +
+    '</div>';
+  c.innerHTML = html;
+  aggiornaCodaPreventivo();
+}
+
+async function salvaPreventivo() {
+  if (!PREVENTIVO) return;
+  const d = PREVENTIVO.doc;
+  d.aggiornato = new Date().toISOString();
+  const anno = PREVENTIVO.anno || String(d.creato || '').slice(0, 4) || String(new Date().getFullYear());
+  const nome = PREVENTIVO.file || nomeFilePreventivo(d);
+  try {
+    const radice = await sottocartella(CARTELLA, CARTELLA_PREVENTIVI, true);
+    if (!radice) throw new Error('non riesco a creare la cartella preventivi');
+    const cartellaAnno = await sottocartella(radice, anno, true);
+    if (!cartellaAnno) throw new Error('non riesco a creare la cartella ' + anno);
+    await scriviTesto(cartellaAnno, nome, JSON.stringify(d, null, 2));
+  } catch (e) {
+    // Un salvataggio fallito si dice a chiaro schermo: in console sparirebbe, e
+    // con lui il lavoro di mezz'ora passato a decidere i prezzi.
+    avvisa('Non ho potuto salvare il preventivo: ' + e.message, true);
+    return;
+  }
+  PREVENTIVO.file = nome;
+  PREVENTIVO.anno = anno;
+  await ricarica();
+  disegna();
+  avvisa('Preventivo salvato · ' + formattaEuro(totalePreventivo(d.righe).totale));
+}
+
+function stampaPreventivo() {
+  if (!PREVENTIVO) return;
+  const d = PREVENTIVO.doc;
+  // Un prezzo proposto dal listino e mai guardato non è un prezzo: è quello che
+  // il listino sa, e il listino non sa quanto vale questo lavoro. Qui si ferma,
+  // come sul telefono si ferma il salvataggio con una fascia oraria proposta.
+  const quanti = prezziDaConfermare(d.righe);
+  if (quanti) {
+    avvisa(quanti === 1
+      ? 'Un prezzo aspetta ancora una conferma: guardalo prima di stampare'
+      : quanti + ' prezzi aspettano ancora una conferma: guardali prima di stampare', true);
+    return;
+  }
+  if (!String(IMPOSTAZIONI.azienda || '').trim()) {
+    if (!confirm('Manca l\'intestazione con i dati dell\'azienda: si compila in Impostazioni.\n\nStampare comunque?')) return;
+  }
+  document.getElementById('foglio').innerHTML = costruisciFoglioPreventivo(d);
+  const titolo = document.title;
+  const ripristina = () => { document.title = titolo; window.removeEventListener('afterprint', ripristina); };
+  window.addEventListener('afterprint', ripristina);
+  document.title = 'Preventivo ' + String(d.creato || '').slice(0, 10) + ' ' +
+    ((d.cliente && d.cliente.nome) || 'cliente');
+  window.print();
+}
+
+// Il sì del cliente: oggi è un «ok» a penna sulla stampa, e da nessuna parte in
+// forma digitale. Qui costa un clic, e porta il lavoro sulla lavagna largo le
+// mezze giornate che il campo aveva stimato — lo stesso numero, misurato una
+// volta sola. Non si piazza su un giorno: quello lo decide chi pianifica.
+async function accettaPreventivo() {
+  if (!PREVENTIVO) return;
+  const d = PREVENTIVO.doc;
+  if (!confirm('Il cliente ha accettato questo preventivo?\n\nIl lavoro entra in «Da pianificare» sulla lavagna.')) return;
+  d.stato = 'accettato';
+  if (!LAVAGNA.visti.includes('prev-' + d.id)) {
+    LAVAGNA.visti.push('prev-' + d.id);
+    LAVAGNA.lavori.push(sistemaLavoro({
+      cliente: (d.cliente && d.cliente.nome) || '',
+      luogo: (d.cliente && d.cliente.citta) || '',
+      ore: (Number(d.mezze) || 1) * ORE_MEZZA,
+      mezze: Number(d.mezze) || 1,
+      note: d.note || (d.daRilievo && d.daRilievo.note) || '',
+      origine: 'preventivo accettato',
+      stato: 'lista',
+      da: 'prev-' + d.id,
+    }));
+    await salvaLavagna();
+  }
+  await salvaPreventivo();
+}
+
+function costruisciFoglioPreventivo(d) {
+  const t = totalePreventivo(d.righe);
+  const sede = [IMPOSTAZIONI.indirizzo, IMPOSTAZIONI.citta].filter(x => x).join(' · ');
+  const contatti = [
+    IMPOSTAZIONI.piva ? 'P.IVA ' + IMPOSTAZIONI.piva : '',
+    IMPOSTAZIONI.telefono, IMPOSTAZIONI.email,
+  ].filter(x => x).join(' · ');
+
+  let html = '<div class="intestazione">' +
+    '<div class="azienda">' + perValore(IMPOSTAZIONI.azienda) + '</div>' +
+    (sede ? '<div class="recapiti">' + perValore(sede) + '</div>' : '') +
+    (contatti ? '<div class="recapiti">' + perValore(contatti) + '</div>' : '') +
+  '</div>';
+
+  html += '<h1>Preventivo</h1>';
+  html += '<div class="a-chi">' +
+    '<div><div class="etichetta-campo">Spett.le</div>' +
+      '<strong>' + perValore((d.cliente && d.cliente.nome) || '') + '</strong>' +
+      ((d.cliente && d.cliente.indirizzo) ? '<br>' + perValore(d.cliente.indirizzo) : '') +
+      ((d.cliente && d.cliente.citta) ? '<br>' + perValore(d.cliente.citta) : '') +
+    '</div>' +
+    '<div style="text-align:right"><div class="etichetta-campo">Data</div>' +
+      '<strong>' + formattaData(d.creato) + '</strong></div>' +
+  '</div>';
+
+  // La frase che apre tutti i preventivi veri letti finora, parola per parola.
+  html += '<p class="apertura">A seguito Vostra gentile richiesta, Vi comunichiamo la nostra ' +
+    'migliore offerta per la seguente fornitura:</p>';
+
+  html += '<table><thead><tr><th>Descrizione</th><th class="qta">Q.tà</th>' +
+    '<th>UM</th><th class="num">Costo un.</th><th class="num">Totale</th></tr></thead><tbody>';
+  d.righe.filter(r => r.tipo !== 'tariffa').forEach(r => {
+    const imp = importoRiga(r);
+    html += '<tr>' +
+      // Sul foglio va la descrizione, non la voce di listino: «Piante» non si
+      // capisce, «Fornitura e messa a dimora di lauro 80-100» sì.
+      '<td>' + perValore(r.descrizione || r.voce) + '</td>' +
+      '<td class="qta">' + perValore(formattaQuantita(r.quantita)) + '</td>' +
+      '<td>' + perValore(r.unita) + '</td>' +
+      '<td class="num">' + (r.prezzo === '' || r.prezzo == null ? '' : formattaEuro(r.prezzo)) + '</td>' +
+      '<td class="num">' + (imp == null ? '<span class="da-definire">da definire</span>' : formattaEuro(imp)) + '</td>' +
+    '</tr>';
+  });
+  html += '<tr class="riga-totale"><td colspan="4">TOTALE PREVENTIVO S.E. &amp; O. (IVA inclusa)</td>' +
+    '<td class="num">' + formattaEuro(t.totale) + '</td></tr>';
+  html += '</tbody></table>';
+
+  // Le tariffe stanno sotto il totale e fuori da esso: dicono quanto costa una
+  // cosa che forse servirà, e sommarle direbbe una cifra che non esiste.
+  const tariffe = d.righe.filter(r => r.tipo === 'tariffa');
+  if (tariffe.length) {
+    html += '<table class="tariffe"><thead><tr><th>Non compreso nel totale</th>' +
+      '<th>UM</th><th class="num">Prezzo</th></tr></thead><tbody>';
+    tariffe.forEach(r => {
+      html += '<tr><td>' + perValore(r.descrizione || r.voce) + '</td>' +
+        '<td>' + perValore(r.unita) + '</td>' +
+        '<td class="num">' + (r.prezzo === '' || r.prezzo == null ? '' : formattaEuro(r.prezzo)) + '</td></tr>';
+    });
+    html += '</tbody></table>';
+  }
+
+  if (t.escluse) {
+    html += '<div class="incompleto">' + t.escluse +
+      (t.escluse === 1 ? ' voce resta da valutare e non è compresa' : ' voci restano da valutare e non sono comprese') +
+      ' nel totale qui sopra.</div>';
+  }
+  if (d.note) html += '<div class="nota-sotto">' + perValore(d.note) + '</div>';
+  if (IMPOSTAZIONI.condizioni) {
+    html += '<div class="nota-sotto">' + perValore(IMPOSTAZIONI.condizioni) + '</div>';
+  }
+  return html;
+}
+
+function disegnaPreventivi() {
+  const c = document.getElementById('pagina-preventivi');
   if (!CARTELLA) { c.innerHTML = schermataBenvenuto(); return; }
 
-  let html = '<h2 class="titolo-pagina">Rilievi</h2>';
-  html += '<p class="sottotitolo">Misure prese in campo, da cui nasce un preventivo</p>';
+  let html = '<h2 class="titolo-pagina">Preventivi</h2>';
+  html += '<p class="sottotitolo">I rilievi che arrivano dal campo, e i preventivi che ne nascono</p>';
   html += bloccoIlleggibili();
 
-  if (!RILIEVI.length) {
-    html += '<div class="scheda"><div class="vuoto-elenco">Nessun rilievo dal campo.</div></div>';
+  const daFare = rilieviDaPreventivare();
+  html += '<div class="titolo-sezione">Da preventivare</div>';
+  if (!daFare.length) {
+    html += '<div class="scheda"><div class="vuoto-elenco">Nessun rilievo in attesa.</div></div>';
   } else {
-    RILIEVI.forEach(r => {
+    daFare.forEach(r => {
       const d = r.doc;
-      const t = tipoRilievo(d.lavoro);
+      const tipo = tipoRilievo(d.lavoro);
       const cliente = CLIENTI.find(x => x.id === d.cliente.id || x.nome === d.cliente.nome);
-      html += '<div class="scheda">' +
+      const rifare = PREVENTIVI.some(p => p.doc.id === d.id);
+      html += '<div class="scheda cliccabile" onclick="apriPreventivo(\'' + perOnclick(d.id) + '\')">' +
         '<div class="riga-scheda">' +
           '<span class="nome-cliente">' + perValore(d.cliente.nome || 'senza nome') + '</span>' +
-          '<span class="etichetta nuovo">' + perValore(t ? t.nome : d.lavoro) + '</span>' +
+          (rifare ? '<span class="etichetta corretto">corretto dal campo · rev ' + d.revisione + '</span>'
+                  : '<span class="etichetta nuovo">' + perValore(tipo ? tipo.nome : d.lavoro) + '</span>') +
           '<span class="meta" style="margin-left:auto">' + formattaData(d.creato) + '</span>' +
         '</div>' +
         '<div class="meta" style="margin-top:6px">' +
-          d.mezze + (d.mezze === 1 ? ' mezza giornata' : ' mezze giornate') +
-          ' · ' + formattaOre(d.mezze * ORE_MEZZA) +
-          (d.cliente.citta ? ' · ' + perValore(d.cliente.citta) : '') +
-          // Chi ha telefono e mail lo sa solo l'anagrafica dell'ufficio, ed è
-          // quello che serve per richiamare e mandare il preventivo.
+          d.righe.length + (d.righe.length === 1 ? ' riga' : ' righe') +
+          ' · ' + d.mezze + (d.mezze === 1 ? ' mezza giornata' : ' mezze giornate') +
           (cliente ? '' : ' · <strong>non in anagrafica</strong>') +
+          (tipo && tipo.disegno ? ' · 📐 aspetta il disegno' : '') +
         '</div>' +
-        // Il disegno non arriva da qui: per il prato in rotoli e per l'impianto
-        // il numero esce dal CAD, e un rilievo di quel tipo è incompleto per
-        // costruzione. Dirlo evita di aprirlo credendolo finito.
-        (t && t.disegno ? '<div class="meta" style="margin-top:4px">📐 aspetta il disegno: l\'area o lo schema arrivano dal CAD</div>' : '') +
-        '<table class="elenco" style="margin-top:10px"><thead><tr>' +
-          '<th>Descrizione</th><th class="num">Q.tà</th><th>UM</th>' +
-        '</tr></thead><tbody>' +
-        d.righe.map(ri => '<tr>' +
-          '<td>' + perValore(ri.descrizione || ri.voce) + '</td>' +
-          '<td class="num">' + formattaQuantita(ri.quantita) + '</td>' +
-          '<td>' + perValore(ri.unita) + '</td>' +
-        '</tr>').join('') +
-        '</tbody></table>' +
         (d.note ? '<div class="nota-rilievo">' + perValore(d.note) + '</div>' : '') +
       '</div>';
     });
   }
 
-  html += '<div class="scheda"><p class="sottotitolo" style="margin:0">Il preventivo non si scrive ' +
-    'ancora qui: prezzare queste righe vuol dire decidere il margine fra il costo del listino e il ' +
-    'prezzo che va al cliente, ed è una decisione, non un calcolo.</p></div>';
+  html += '<div class="titolo-sezione">Fatti</div>';
+  if (!PREVENTIVI.length) {
+    html += '<div class="scheda"><div class="vuoto-elenco">Nessun preventivo.</div></div>';
+  } else {
+    PREVENTIVI.forEach(p => {
+      const d = p.doc;
+      const t = totalePreventivo(d.righe);
+      html += '<div class="scheda cliccabile" onclick="apriPreventivo(\'' + perOnclick(d.id) + '\')">' +
+        '<div class="riga-scheda">' +
+          '<span class="nome-cliente">' + perValore(d.cliente.nome || 'senza nome') + '</span>' +
+          '<span class="etichetta ' + (d.stato === 'accettato' ? 'corretto' : 'nuovo') + '">' +
+            STATI_PREVENTIVO[d.stato] + '</span>' +
+          '<span class="meta" style="margin-left:auto">' + formattaEuro(t.totale) + '</span>' +
+        '</div>' +
+        '<div class="meta" style="margin-top:6px">' + formattaData(d.creato) +
+          ' · ' + d.righe.length + (d.righe.length === 1 ? ' riga' : ' righe') +
+          (prezziDaConfermare(d.righe) ? ' · <strong>' + prezziDaConfermare(d.righe) + ' da confermare</strong>' : '') +
+        '</div>' +
+      '</div>';
+    });
+  }
+
   html += '<div class="bottoni"><button class="secondaria" onclick="ricontrolla()">Ricontrolla la cartella</button></div>';
   c.innerHTML = html;
 }
@@ -2910,6 +3449,10 @@ function disegnaImpostazioni() {
   html += '<div class="titolo-sezione" style="margin-top:18px">Nota in fondo al foglio</div>';
   html += '<textarea rows="3" oninput="modificaImpostazione(\'nota\', this.value)">' +
     perValore(IMPOSTAZIONI.nota) + '</textarea>';
+  html += '<div class="titolo-sezione" style="margin-top:18px">Condizioni in fondo al preventivo</div>';
+  html += '<textarea rows="3" oninput="modificaImpostazione(\'condizioni\', this.value)" ' +
+    'placeholder="Validità dell\'offerta, caparra, termini di pagamento, esclusioni...">' +
+    perValore(IMPOSTAZIONI.condizioni) + '</textarea>';
   html += '<div class="avvertenza">I prezzi in listino sono IVA inclusa, e il foglio lo scrive nel ' +
     'totale. Se un giorno diventassero al netto, va cambiato lì — non basta correggere i numeri.</div>';
   html += '<div class="bottoni"><button class="principale" onclick="salvaImpostazioni()">Salva</button>' +

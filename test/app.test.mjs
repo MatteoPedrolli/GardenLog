@@ -2119,19 +2119,16 @@ try {
   ok('il rilievo del cantiere arriva in ufficio',
     await pagU.evaluate(() => RILIEVI.length) === 1,
     await pagU.evaluate(() => RILIEVI.length + ' letti'));
-  await pagU.click('#v-rilievi');
+  await pagU.click('#v-preventivi');
   await pagU.waitForTimeout(200);
-  const schermoRilievi = await pagU.textContent('#pagina-rilievi');
+  const schermoRilievi = await pagU.textContent('#pagina-preventivi');
   ok('la schermata mostra il cliente e il tipo di lavoro',
     schermoRilievi.includes('Mario Rossi') && schermoRilievi.includes('Prato in rotoli'),
     schermoRilievi.slice(0, 160));
-  ok('e le righe come le ha scritte il campo, con quantità e unità',
-    schermoRilievi.includes('Fornitura e posa di tappeto erboso in rotoli') &&
-    schermoRilievi.includes('240') && schermoRilievi.includes('m²'));
-  // Una mezza giornata sono otto ore, e la definizione sta in rapportino.js:
-  // due idee diverse di quanto dura una mezza giornata sarebbero peggio di nessuna.
-  ok('le mezze giornate si leggono anche in ore, con lo stesso conto della lavagna',
-    schermoRilievi.includes('3 mezze giornate') && schermoRilievi.includes('24,00 h'),
+  // Le righe non stanno nell'elenco ma nella schermata del preventivo, dove si
+  // prezzano: qui basta quanto lavoro è, per decidere da quale cominciare.
+  ok('l\'elenco dice quante righe e quante mezze giornate, non le righe stesse',
+    schermoRilievi.includes('2 righe') && schermoRilievi.includes('3 mezze giornate'),
     schermoRilievi.slice(0, 200));
   ok('le note del campo si leggono come sono state scritte',
     schermoRilievi.includes('Accesso stretto') && schermoRilievi.includes('Rubinetto sul lato nord'));
@@ -2148,10 +2145,10 @@ try {
   ok('ma uno che non c\'è sì', await pagU.evaluate(() => {
     const tenuti = CLIENTI;
     CLIENTI = [];
-    disegnaRilievi();
-    const html = document.getElementById('pagina-rilievi').innerHTML;
+    disegnaPreventivi();
+    const html = document.getElementById('pagina-preventivi').innerHTML;
     CLIENTI = tenuti;
-    disegnaRilievi();
+    disegnaPreventivi();
     return html.includes('non in anagrafica');
   }));
   // Un rilievo troncato è un preventivo che non si fa: non può stare nascosto in
@@ -2159,13 +2156,13 @@ try {
   ok('un rilievo illeggibile si vede sulla sua pagina, non solo su quella dei rapportini',
     schermoRilievi.includes('non leggibili') && schermoRilievi.includes('rilievi/z-troncato.json'),
     schermoRilievi.slice(0, 200));
-  // Il preventivo non si scrive ancora qui, e la pagina lo dice invece di
-  // lasciare credere che manchi un bottone.
-  ok('e la pagina dice perché il preventivo non si fa ancora qui',
-    schermoRilievi.includes('margine'));
-  // Il pallino conta quello che la pagina mostra, o uno dei due mente.
-  ok('il pallino nella barra conta i rilievi arrivati',
-    await pagU.textContent('#pallino-rilievi') === '1');
+  // Un rilievo è «da preventivare» finché non esiste un preventivo per quella
+  // revisione, non perché qualcuno l'abbia spostato: è la stessa regola dei
+  // rapportini in arrivo. E il pallino conta quello, non tutti i rilievi.
+  ok('il rilievo compare fra quelli da preventivare',
+    schermoRilievi.includes('Da preventivare'));
+  ok('il pallino conta i rilievi che aspettano un preventivo',
+    await pagU.textContent('#pallino-preventivi') === '1');
   // L'ufficio non scrive in rilievi/ nemmeno per segnare che ha guardato: il
   // file resta dov'è, com'era.
   ok('l\'ufficio non ha toccato la cartella dei rilievi',
@@ -2175,6 +2172,181 @@ try {
       for await (const v of c.values()) nomi.push(v.name);
       return nomi.length === 2;
     }));
+
+  // ── DAL RILIEVO AL PREVENTIVO ──
+  // Il margine fra il costo che esce dal listino e il prezzo che va al cliente
+  // dipende da troppe cose per essere una regola: l'app propone il prezzo di
+  // listino e chi firma lo corregge. Un prezzo proposto resta **segnato** finché
+  // non viene guardato, come una fascia oraria proposta sul telefono — e lì come
+  // qui blocca quello che esce.
+  await pagU.evaluate(() => {
+    // Un prezzo in listino per il tappeto erboso, nessuno per lo smaltimento:
+    // servono tutti e due i casi.
+    importaVoce('tappeto-erboso', 'Tappeto erboso', 'm²');
+    modificaVoce('tappeto-erboso', 'prezzo', '12');
+    apriPreventivo(RILIEVI[0].doc.id);
+  });
+  await pagU.waitForTimeout(200);
+  const schermoPrev = await pagU.textContent('#pagina-preventivo');
+  // Le quantità stanno dentro i campi, quindi non le vede textContent: si
+  // guardano i valori, o la prova passerebbe anche con la tabella vuota.
+  const campiPrev = await pagU.evaluate(() =>
+    [...document.querySelectorAll('#pagina-preventivo input')].map(i => i.value).join('|'));
+  ok('il preventivo porta le righe del rilievo, con quantità e prezzo',
+    campiPrev.includes('240') && schermoPrev.includes('m²'),
+    campiPrev + ' § ' + schermoPrev.slice(0, 120));
+  ok('e le mezze giornate stimate dal campo',
+    schermoPrev.includes('3 mezze giornate'), schermoPrev.slice(0, 160));
+  ok('la descrizione è quella scritta in giardino, non la voce di listino',
+    await pagU.evaluate(() => PREVENTIVO.doc.righe[0].descrizione) ===
+      'Fornitura e posa di tappeto erboso in rotoli');
+  ok('il prezzo arriva dal listino, proposto',
+    await pagU.evaluate(() => PREVENTIVO.doc.righe[0].prezzo) === 12 &&
+    await pagU.evaluate(() => PREVENTIVO.doc.righe[0].proposto) === true);
+  // Un prezzo che non c'è non è una proposta: è un buco. Segnarlo direbbe che
+  // c'è qualcosa da confermare dove invece non c'è ancora niente.
+  ok('una riga senza prezzo in listino non è una proposta, è un buco',
+    await pagU.evaluate(() => PREVENTIVO.doc.righe[1].prezzo) === '' &&
+    await pagU.evaluate(() => PREVENTIVO.doc.righe[1].proposto) === false);
+  ok('la casella del prezzo proposto si vede che aspetta',
+    await pagU.evaluate(() => !!document.querySelector('#pagina-preventivo input.prezzo.proposto')));
+  ok('e la schermata dice quanti aspettano, e che il margine lo decidi tu',
+    schermoPrev.includes('aspetta una conferma') && schermoPrev.includes('margine'),
+    schermoPrev.slice(0, 200));
+
+  // Qui si ferma: è la stampa che esce di qui, come sul telefono si ferma il
+  // salvataggio della visita con una fascia oraria mai guardata.
+  const stampaFermata = await pagU.evaluate(() => {
+    let stampato = false;
+    const vera = window.print;
+    window.print = () => { stampato = true; };
+    stampaPreventivo();
+    window.print = vera;
+    return { stampato, avviso: document.getElementById('avviso').textContent };
+  });
+  ok('con un prezzo da confermare la stampa si ferma, e dice perché',
+    stampaFermata.stampato === false && stampaFermata.avviso.includes('conferma'),
+    JSON.stringify(stampaFermata));
+
+  // Toccare un prezzo proposto significa farlo proprio. Non si ridisegna la
+  // tabella mentre si scrive, quindi la casella deve tornare bianca da sola.
+  await pagU.fill('#pagina-preventivo input.prezzo', '18');
+  await pagU.waitForTimeout(150);
+  ok('scrivendoci dentro il prezzo diventa una decisione e la casella torna bianca',
+    await pagU.evaluate(() => PREVENTIVO.doc.righe[0].prezzo) === 18 &&
+    await pagU.evaluate(() => PREVENTIVO.doc.righe[0].proposto) === false &&
+    await pagU.evaluate(() => !document.querySelector('#pagina-preventivo input.prezzo.proposto')));
+  ok('e il totale segue senza che si ricarichi la pagina',
+    (await pagU.textContent('#totale-preventivo')).includes('4.320'),
+    await pagU.textContent('#totale-preventivo'));
+
+  // Una tariffa dice quanto costa una cosa che forse servirà — il conferimento a
+  // discarica, il costo orario — e **non entra nel totale**: sommarla direbbe
+  // una cifra che non esiste. Sui preventivi veri c'è sempre.
+  await pagU.evaluate(() => {
+    const i = PREVENTIVO.doc.righe.length - 1;
+    modificaRigaPreventivo(i, 'descrizione', 'Eventuale conferimento a discarica');
+    modificaPrezzoRiga(i, '0,22');
+    cambiaTipoRiga(i, 'tariffa');
+  });
+  await pagU.waitForTimeout(150);
+  const conTariffa = await pagU.evaluate(() => totalePreventivo(PREVENTIVO.doc.righe));
+  ok('una riga a tariffa resta fuori dal totale',
+    conTariffa.totale === 4320 && conTariffa.tariffe === 1, JSON.stringify(conTariffa));
+
+  // Confermati tutti, la stampa passa — e sul foglio va la descrizione, non la
+  // voce di listino: «Tappeto erboso» non dice al cliente cosa ha comprato.
+  const foglioPrev = await pagU.evaluate(() => {
+    confermaTuttiIPrezzi();
+    let stampato = false;
+    const vera = window.print;
+    window.print = () => { stampato = true; };
+    stampaPreventivo();
+    window.print = vera;
+    return { stampato, html: document.getElementById('foglio').innerHTML };
+  });
+  ok('confermati i prezzi la stampa parte', foglioPrev.stampato === true);
+  ok('il foglio porta la descrizione scritta in giardino',
+    foglioPrev.html.includes('Fornitura e posa di tappeto erboso in rotoli'));
+  ok('e la frase di apertura dei preventivi veri',
+    foglioPrev.html.includes('migliore offerta'));
+  ok('la tariffa sta sotto il totale, fuori da esso',
+    foglioPrev.html.includes('Non compreso nel totale') &&
+    foglioPrev.html.includes('Eventuale conferimento a discarica'));
+  ok('il totale dichiara che è IVA inclusa, come il conto',
+    foglioPrev.html.includes('IVA inclusa') && foglioPrev.html.includes('4.320'));
+  // La quantità e la sua unità sono due colonne attaccate: senza un margine si
+  // leggono come una parola sola — «Q.tàUM» in testa, «90n» sotto. Si vede solo
+  // a occhio, quindi qui si **misura**, come lo sbordo delle colonne in lavagna.
+  const distanze = await pagU.evaluate(() => {
+    const f = document.getElementById('foglio');
+    f.innerHTML = costruisciFoglioPreventivo(PREVENTIVO.doc);
+    f.style.display = 'block';
+    const stretti = [];
+    // Il riquadro della cella non dice niente: le celle di una tabella si toccano
+    // sempre, e il margine sta dentro. Quello che si legge è il **testo**, quindi
+    // si misura quello.
+    const quantoOccupa = el => {
+      const r = document.createRange();
+      r.selectNodeContents(el);
+      const b = r.getBoundingClientRect();
+      return b.width ? b : el.getBoundingClientRect();
+    };
+    [...document.querySelectorAll('#foglio tr, #pagina-preventivo tr')].forEach(tr => {
+      const q = tr.querySelector('.qta');
+      if (!q || !q.nextElementSibling || !q.textContent.trim()) return;
+      const dopo = q.nextElementSibling;
+      if (!dopo.textContent.trim()) return;
+      const a = quantoOccupa(q), b = quantoOccupa(dopo);
+      if (b.left - a.right < 8) stretti.push(tr.textContent.trim().slice(0, 40) +
+        ' (' + Math.round(b.left - a.right) + 'px)');
+    });
+    f.style.display = '';
+    return stretti;
+  });
+  ok('la quantità non si incolla alla sua unità, né a schermo né sulla carta',
+    distanze.length === 0, distanze.join(' | ') || 'tutte staccate');
+
+  // Salvato nella cartella, e da lì rientra: il preventivo è un file come
+  // l'archivio, perché il PC dell'ufficio ha già il suo backup.
+  await pagU.evaluate(async () => { await salvaPreventivo(); });
+  await pagU.waitForTimeout(300);
+  ok('il preventivo si scrive nella cartella e si rilegge',
+    await pagU.evaluate(() => PREVENTIVI.length) === 1,
+    await pagU.evaluate(() => PREVENTIVI.map(p => p.anno + '/' + p.file).join(', ')));
+  ok('e il rilievo non è più fra quelli da preventivare',
+    await pagU.evaluate(() => rilieviDaPreventivare().length) === 0);
+  ok('i prezzi confermati restano confermati dopo la rilettura',
+    await pagU.evaluate(() => PREVENTIVI[0].doc.righe.every(r => !r.proposto)));
+  ok('un preventivo di un\'altra versione viene rifiutato',
+    await pagU.evaluate(() => {
+      try { leggiPreventivo({ tipo: 'preventivo', versione: 99, id: 'x' }); return false; }
+      catch (e) { return e.message.includes('versione'); }
+    }));
+
+  // Il sì del cliente costa un clic, e porta il lavoro sulla lavagna largo le
+  // mezze giornate del rilievo: lo stesso numero, misurato una volta sola. Non
+  // su un giorno — quello lo decide chi pianifica, e niente si muove da solo.
+  const lavoriPrima = await pagU.evaluate(() => LAVAGNA.lavori.length);
+  await pagU.evaluate(async () => { await accettaPreventivo(); });
+  await pagU.waitForTimeout(400);
+  const accettato = await pagU.evaluate(() => {
+    const l = LAVAGNA.lavori[LAVAGNA.lavori.length - 1];
+    return { quanti: LAVAGNA.lavori.length, stato: PREVENTIVO.doc.stato,
+      cliente: l.cliente, mezze: l.mezze, giorno: l.giorno, colonna: l.stato, origine: l.origine };
+  });
+  ok('accettato, il lavoro entra sulla lavagna',
+    accettato.quanti === lavoriPrima + 1 && accettato.cliente === 'Mario Rossi',
+    JSON.stringify(accettato));
+  ok('largo le mezze giornate che il campo aveva stimato', accettato.mezze === 3);
+  ok('in colonna e senza un giorno: quello lo decide chi pianifica',
+    accettato.giorno === '' && accettato.colonna === 'lista');
+  ok('e il preventivo si segna accettato', accettato.stato === 'accettato');
+  // Due volte non deve entrare due volte: `visti` vale anche qui.
+  await pagU.evaluate(async () => { await accettaPreventivo(); });
+  await pagU.waitForTimeout(300);
+  ok('riaccettarlo non lo mette in lavagna una seconda volta',
+    await pagU.evaluate(() => LAVAGNA.lavori.length) === lavoriPrima + 1);
 
   ok('nessun errore JavaScript nell\'app dell\'ufficio', erroriU.length === 0, erroriU.join(' | '));
   await ctxU.close();
