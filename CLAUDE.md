@@ -930,6 +930,13 @@ In ufficio, all'avvio, un pannello dice cosa è cambiato. Si vede **una volta so
 per versione**, e si riapre dalla versione in fondo alla barra: chiuso e basta,
 quello che c'era scritto sparirebbe per sempre.
 
+**Sul telefono non c'è, ed è una decisione, non una dimenticanza.** Il telefono lo
+usa la stessa persona che decide le modifiche: annunciargliele vorrebbe dire
+raccontargli quello che ha appena chiesto. In ufficio invece ci lavora anche chi le
+modifiche non le ha chieste, ed è lì che non saperle costa. Se un giorno il
+telefono passasse a qualcun altro, questa ragione cade e il pannello va aggiunto —
+la barra dell'aggiornamento che c'è già dice *che* è cambiato qualcosa, mai *cosa*.
+
 **Scrivere una riga in `NOVITA` è parte della modifica**, come alzare il numero di
 `CACHE` in `sw.js`. Una voce in cima, la data di oggi, e **cosa si vede di
 diverso** — non cosa è cambiato nel codice: chi legge sta per cominciare a
