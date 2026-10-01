@@ -2,7 +2,7 @@
 <html lang="it">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
 <meta name="theme-color" content="#1a3a1a">
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-capable" content="yes">
@@ -13,7 +13,7 @@
 <link rel="icon" type="image/png" href="icon-192.png">
 <link rel="apple-touch-icon" href="apple-touch-icon.png">
 <link rel="preconnect" href="https://fonts.googleapis.com">
-<link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@400;600;700&family=DM+Sans:wght@300;400;500;600&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@300;400;500;600&display=swap" rel="stylesheet">
 <style>
 :root {
   /* ── CARTA E INCHIOSTRO ──
@@ -40,10 +40,11 @@
   --radius-sm: 10px;
   --shadow: 0 4px 24px rgba(36,33,28,0.10);
   --shadow-lg: 0 8px 40px rgba(36,33,28,0.16);
-  --font-display: 'Playfair Display', serif;
+  /* Calibri sul PC dell'ufficio; dove non c'è (il telefono) resta il DM Sans del
+     testo. Era un graziato ad alto contrasto, e sui nomi dei clienti si leggeva male. */
+  --font-display: Calibri, Carlito, 'DM Sans', sans-serif;
   --font-body: 'DM Sans', sans-serif;
   --nav-h: 64px;
-  --top-h: 60px;
 }
 
 
@@ -60,32 +61,24 @@ html, body {
 /* ── LAYOUT ── */
 #app { display: flex; flex-direction: column; height: 100dvh; }
 
-#topbar {
-  height: var(--top-h);
+/* Non c'è più una barra in alto: ripeteva il nome della pagina che la barra in
+   basso già evidenzia, e il ＋ faceva quello che fanno le schede della home. Resta
+   solo una fascia scura alta quanto la barra di stato dell'iPhone: con
+   «black-translucent» l'orologio è bianco, e sullo sfondo chiaro sparirebbe.
+   Nel browser è alta zero. */
+#barra-stato {
+  height: env(safe-area-inset-top, 0px);
   background: var(--inchiostro);
-  display: flex; align-items: center; justify-content: space-between;
-  padding: 0 18px;
   flex-shrink: 0;
-  position: relative;
-  z-index: 10;
 }
-#topbar h1 {
-  font-family: var(--font-display);
-  color: var(--white);
-  font-size: 1.25rem;
-  font-weight: 600;
-  letter-spacing: 0.02em;
+/* Il nome della pagina, piccolo, sulla stessa fascia scura dell'orologio: senza
+   si perdeva il segno di dove si è, con la barra di prima si perdeva spazio.
+   Sulla home non c'è: il riquadro scuro con la data fa già da testata. */
+#titoletto {
+  background: var(--inchiostro); color: rgba(255,255,255,0.85);
+  font-size: 0.78rem; font-weight: 600; letter-spacing: 0.08em; text-transform: uppercase;
+  padding: 6px 18px 7px; flex-shrink: 0;
 }
-#topbar .leaf { font-size: 1.4rem; }
-.topbar-action {
-  background: rgba(255,255,255,0.15);
-  border: none; color: var(--white);
-  width: 36px; height: 36px; border-radius: 50%;
-  font-size: 1.2rem; cursor: pointer;
-  display: flex; align-items: center; justify-content: center;
-  transition: background 0.2s;
-}
-.topbar-action:hover { background: rgba(255,255,255,0.25); }
 
 #content {
   flex: 1;
@@ -95,7 +88,10 @@ html, body {
 }
 
 #navbar {
-  height: var(--nav-h);
+  /* Con viewport-fit=cover la barra arriva fino in fondo allo schermo: il
+     margine sotto la tiene fuori dalla linea per tornare alla home. */
+  height: calc(var(--nav-h) + env(safe-area-inset-bottom, 0px));
+  padding-bottom: env(safe-area-inset-bottom, 0px);
   background: var(--white);
   border-top: 1px solid var(--border);
   display: flex;
@@ -111,9 +107,12 @@ html, body {
   cursor: pointer; transition: all 0.2s;
   font-family: var(--font-body);
   color: var(--text-light);
-  font-size: 0.62rem; font-weight: 500;
-  letter-spacing: 0.03em; text-transform: uppercase;
+  /* In minuscolo e senza spaziatura: in maiuscolo cinque voci non ci stavano, e
+     «Appuntamenti» e «Impostazioni» si toccavano. */
+  font-size: 0.66rem; font-weight: 500;
+  min-width: 0; white-space: nowrap;
 }
+.nav-item > span:last-child { max-width: 100%; overflow: hidden; text-overflow: ellipsis; }
 .nav-item .icon { font-size: 1.35rem; transition: transform 0.2s; }
 .nav-item.active { color: var(--inchiostro-tenue); }
 .nav-item.active .icon { transform: scale(1.15); }
@@ -174,7 +173,7 @@ html, body {
 .btn:disabled:hover { background: var(--inchiostro-tenue); transform: none; }
 
 .fab {
-  position: fixed; bottom: calc(var(--nav-h) + 16px); right: 18px;
+  position: fixed; bottom: calc(var(--nav-h) + env(safe-area-inset-bottom, 0px) + 16px); right: 18px;
   width: 54px; height: 54px; border-radius: 50%;
   background: var(--inchiostro-tenue); color: var(--white);
   border: none; font-size: 1.6rem; cursor: pointer;
@@ -230,11 +229,13 @@ select.form-control { background-image: url("data:image/svg+xml,%3Csvg xmlns='ht
   align-items: flex-end; justify-content: center;
 }
 .overlay.open { display: flex; }
+/* La prenotazione si apre anche sopra la visita, che resta aperta sotto. */
+#overlay-prenotazione { z-index: 110; }
 .drawer {
   background: var(--cream); width: 100%; max-width: 600px;
   border-radius: 24px 24px 0 0;
   max-height: 92dvh; overflow-y: auto;
-  padding: 0 0 32px;
+  padding: 0 0 calc(32px + env(safe-area-inset-bottom, 0px));
   animation: slideUp 0.3s ease;
 }
 @keyframes slideUp { from { transform: translateY(100%); } to { transform: translateY(0); } }
@@ -442,7 +443,10 @@ select.form-control { background-image: url("data:image/svg+xml,%3Csvg xmlns='ht
   margin: 22px 0 10px; padding-bottom: 6px;
   border-bottom: 2px solid var(--velo);
 }
-.fascia { display: flex; align-items: center; gap: 6px; margin-bottom: 8px; }
+.fascia-blocco { margin-bottom: 10px; }
+.fascia { display: flex; align-items: center; gap: 6px; margin-bottom: 4px; }
+.fascia-cosa { width: 100%; padding: 8px 10px; font-size: 0.85rem; border: 1px solid var(--border);
+  border-radius: var(--radius-sm); font-family: var(--font-body); background: var(--white); }
 .fascia input[type=time] { flex: 1; min-width: 0; padding: 9px 8px; font-size: 0.85rem; }
 .fascia input[type=number] { width: 54px; padding: 9px 4px; text-align: center; font-size: 0.85rem; }
 .fascia .freccia { color: var(--text-light); font-size: 0.8rem; }
@@ -476,6 +480,11 @@ select.form-control { background-image: url("data:image/svg+xml,%3Csvg xmlns='ht
 .op-dett input[type=number] { width: 76px; padding: 9px 6px; text-align: right; font-size: 0.85rem; }
 .op-dett input[type=text] { flex: 1; min-width: 0; padding: 9px 8px; font-size: 0.85rem; }
 .op-dett .unita { font-size: 0.78rem; color: var(--text-light); min-width: 36px; }
+.op-pianta input[type=number] { width: 64px; }
+.scelte-arch { display: flex; flex-direction: column; gap: 6px; font-size: 0.9rem; }
+.scelte-arch label { display: flex; align-items: center; gap: 8px; }
+.op-insieme { font-size: 0.72rem; color: var(--text-light); }
+.op-dentro { margin-left: 18px; padding-left: 10px; border-left: 2px solid var(--velo); }
 .link-altre {
   background: none; border: none; cursor: pointer; padding: 10px 2px;
   font-family: var(--font-body); font-size: 0.82rem; color: var(--inchiostro-tenue); font-weight: 500;
@@ -497,6 +506,10 @@ select.form-control { background-image: url("data:image/svg+xml,%3Csvg xmlns='ht
 .rapp-riga:last-child { border-bottom: none; }
 .rapp-riga.totale { font-weight: 600; color: var(--inchiostro); border-top: 1px solid var(--border); border-bottom: none; }
 .conto-riga { padding: 10px 0; border-bottom: 1px solid var(--border); }
+.conto-riepilogo { margin-top: 12px; font-size: 0.85rem; color: var(--text-mid); }
+.conto-riepilogo summary { cursor: pointer; padding: 6px 0; color: var(--inchiostro-tenue); font-weight: 500; }
+.conto-riepilogo ul { list-style: none; margin: 4px 0 0; padding: 0; }
+.riepilogo-voce { display: flex; justify-content: space-between; gap: 10px; padding: 5px 0; border-bottom: 1px dashed var(--border); }
 .conto-voce { display: flex; align-items: center; gap: 8px; font-size: 0.88rem; font-weight: 500; }
 .conto-numeri { display: flex; align-items: center; gap: 6px; margin-top: 6px; }
 .conto-numeri input { width: 68px; padding: 8px 6px; text-align: right; font-size: 0.85rem;
@@ -515,7 +528,7 @@ select.form-control { background-image: url("data:image/svg+xml,%3Csvg xmlns='ht
   font-family: var(--font-body); }
 
 .barra-aggiorna {
-  position: fixed; left: 0; right: 0; bottom: var(--nav-h);
+  position: fixed; left: 0; right: 0; bottom: calc(var(--nav-h) + env(safe-area-inset-bottom, 0px));
   background: var(--inchiostro); color: var(--white);
   padding: 12px 16px; display: none; align-items: center; gap: 12px;
   font-size: 0.85rem; z-index: 90;
@@ -552,7 +565,7 @@ select.form-control { background-image: url("data:image/svg+xml,%3Csvg xmlns='ht
 
 /* ── TOAST ── */
 #toast {
-  position: fixed; bottom: calc(var(--nav-h) + 80px); left: 50%;
+  position: fixed; bottom: calc(var(--nav-h) + env(safe-area-inset-bottom, 0px) + 80px); left: 50%;
   transform: translateX(-50%) translateY(20px);
   background: var(--inchiostro); color: white;
   padding: 10px 20px; border-radius: 24px;
@@ -608,14 +621,8 @@ select.form-control { background-image: url("data:image/svg+xml,%3Csvg xmlns='ht
 </head>
 <body>
 <div id="app">
-  <div id="topbar">
-    <span class="leaf">🌿</span>
-    <h1 id="topbar-title">GiardinoApp</h1>
-    <div style="display:flex; gap:8px; align-items:center">
-      <button class="topbar-action" onclick="navTo('dati')" title="Dati e backup">⚙</button>
-      <button class="topbar-action" id="topbar-action-btn" onclick="topbarAction()" title="Aggiungi">＋</button>
-    </div>
-  </div>
+  <div id="barra-stato"></div>
+  <div id="titoletto" style="display:none"></div>
 
   <div id="content">
     <!-- HOME -->
@@ -667,7 +674,6 @@ select.form-control { background-image: url("data:image/svg+xml,%3Csvg xmlns='ht
 
     <!-- VISITE -->
     <div id="page-visite" class="page">
-      <div class="section-title">Registro Visite</div>
       <div id="visite-list"></div>
     </div>
 
@@ -675,7 +681,7 @@ select.form-control { background-image: url("data:image/svg+xml,%3Csvg xmlns='ht
     <div id="page-prossimi" class="page">
       <div class="section-title">In programma <span id="agenda-quando" class="agenda-quando"></span></div>
       <div id="agenda-list"></div>
-      <button class="btn btn-secondary" style="margin:0 18px" onclick="scaricaAgenda({ avvisa: true })">🔄 Aggiorna dall'ufficio</button>
+      <button class="btn btn-secondary" style="margin:0 14px; width:calc(100% - 28px)" onclick="scaricaAgenda({ avvisa: true })">🔄 Aggiorna dall'ufficio</button>
 
       <div class="section-title">Prenota un appuntamento</div>
       <div class="card" style="padding:14px">
@@ -684,7 +690,7 @@ select.form-control { background-image: url("data:image/svg+xml,%3Csvg xmlns='ht
         <button class="btn btn-primary" onclick="apriPrenotazione()">📅 Prenota</button>
       </div>
 
-      <div class="section-title">Prenotati</div>
+      <div class="section-title" id="prenotazioni-titolo" style="display:none">Da consegnare</div>
       <div id="prenotazioni-list"></div>
     </div>
 
@@ -698,7 +704,7 @@ select.form-control { background-image: url("data:image/svg+xml,%3Csvg xmlns='ht
         <button class="btn btn-primary" onclick="apriRilievo()">📐 Prendi le misure</button>
       </div>
 
-      <div class="section-title">Rilevati</div>
+      <div class="section-title" id="rilievi-titolo" style="display:none">Da consegnare</div>
       <div id="rilievi-list"></div>
     </div>
 
@@ -758,10 +764,6 @@ select.form-control { background-image: url("data:image/svg+xml,%3Csvg xmlns='ht
       <div class="section-title">Dispositivo</div>
       <div class="card" style="padding:14px" id="card-diagnostica"></div>
 
-      <div class="section-title">Vecchio foglio Google</div>
-      <div class="card" style="padding:14px">
-        <div class="dati-nota">L'app non usa più Google Sheets. Questo serve una volta sola, per portare qui lo storico che è rimasto sul foglio — o per recuperarlo su un altro dispositivo finché il foglio esiste. Sostituisce i dati presenti e richiede connessione.</div>
-      </div>
     </div>
 
   </div>
@@ -778,6 +780,9 @@ select.form-control { background-image: url("data:image/svg+xml,%3Csvg xmlns='ht
     </button>
     <button class="nav-item" id="nav-prossimi" onclick="navTo('prossimi')">
       <span class="icon">📅</span><span>Appuntamenti</span>
+    </button>
+    <button class="nav-item" id="nav-dati" onclick="navTo('dati')">
+      <span class="icon">⚙️</span><span>Impostazioni</span>
     </button>
   </nav>
 </div>
@@ -821,6 +826,11 @@ select.form-control { background-image: url("data:image/svg+xml,%3Csvg xmlns='ht
         <label class="form-label">Manca qualcosa? (blocca il lavoro)</label>
         <input type="text" class="form-control" id="f-pren-requisiti" placeholder="Es. serve la piattaforma">
       </div>
+
+      <label class="form-group" style="display:flex; align-items:center; gap:8px">
+        <input type="checkbox" id="f-pren-sopralluogo" style="width:20px; height:20px">
+        <span class="form-label" style="margin:0">È un sopralluogo, si va a guardare</span>
+      </label>
 
       <div class="form-group">
         <label class="form-label">Cosa c'è da fare, e cosa ricordare</label>
@@ -1067,7 +1077,7 @@ select.form-control { background-image: url("data:image/svg+xml,%3Csvg xmlns='ht
         <div id="operazioni-altre" style="display:none"></div>
       </div>
 
-      <div class="rapporto-sez">Voci da conteggiare</div>
+      <div class="rapporto-sez">Altro da conteggiare</div>
       <div id="conto-righe"></div>
       <select class="form-control" id="f-conto-voce" style="margin-top:12px"
               onchange="aggiungiRigaDaVoce(this.value); this.value='';">
@@ -1077,6 +1087,7 @@ select.form-control { background-image: url("data:image/svg+xml,%3Csvg xmlns='ht
              placeholder="+ Voce non in elenco…"
              onkeydown="if(event.key==='Enter'){event.preventDefault();aggiungiRigaLibera();}"
              onblur="aggiungiRigaLibera()">
+      <div id="conto-riepilogo"></div>
 
       <div class="rapporto-sez">Note</div>
       <textarea class="form-control" id="f-visita-note" rows="3" placeholder="Osservazioni, variazioni, cose da ricordare..."></textarea>
@@ -1155,7 +1166,44 @@ const TIPI_DEFAULT = [
   { TipoID:'posa-tappeto-erboso',     Nome:'Posa tappeto erboso',      dettaglio:'quantita',    Unita:'m²',    Prato:'Sì', Siepe:'',   VoceID:'tappeto-erboso',    Ordine:11 },
   { TipoID:'piantumazione',           Nome:'Piantumazione',            dettaglio:'quantita',    Unita:'n',     Prato:'',   Siepe:'',   VoceID:'piante',            Ordine:12 },
   { TipoID:'scarico-verde',           Nome:'Scarico verde',            dettaglio:'quantita',    Unita:'kg',    Prato:'',   Siepe:'',   VoceID:'smaltimento-verde', Ordine:13 },
+  { TipoID:'pacciamatura',            Nome:'Pacciamatura',             dettaglio:'quantita',    Unita:'q',     Prato:'',   Siepe:'',   VoceID:'pacciamatura',      Ordine:14 },
+  { TipoID:'ala-gocciolante',         Nome:'Ala gocciolante',          dettaglio:'quantita',    Unita:'m',     Prato:'',   Siepe:'',   VoceID:'ala-gocciolante',   Ordine:15 },
+  { TipoID:'telo-pacciamante',        Nome:'Telo pacciamante',         dettaglio:'quantita',    Unita:'m²',    Prato:'',   Siepe:'',   VoceID:'telo-pacciamante',  Ordine:16 },
+  // Un insieme non è un'operazione: spuntarlo accende in un colpo quelle che un
+  // lavoro di quel genere chiede sempre. Un'aiuola vuol dire piante,
+  // pacciamatura, ala gocciolante e telo, e spuntarle una per una era lavoro
+  // ripetuto a ogni aiuola.
+  { TipoID:'aiuola',                  Nome:'Aiuola',                   dettaglio:'insieme',     Unita:'',      Prato:'',   Siepe:'',   VoceID:'',
+    Insieme:'piantumazione,pacciamatura,ala-gocciolante,telo-pacciamante', Ordine:12 },
 ];
+
+// Tipi e voci arrivati dopo che qualcuno aveva già il suo archivio sul telefono.
+// datiIniziali() li mette in un database nuovo; in uno che c'è già si aggiungono
+// **una volta sola** (`defaultAggiunti` se lo ricorda): chi ne cancella uno apposta
+// non se lo deve ritrovare al giro dopo. È un'aggiunta, non una conversione:
+// niente di quello che c'è viene toccato, e VERSIONE_DATI resta com'è.
+const DEFAULT_ARRIVATI_DOPO = {
+  tipiOperazione: ['pacciamatura', 'ala-gocciolante', 'telo-pacciamante', 'aiuola'],
+  voci: ['pacciamatura', 'ala-gocciolante', 'telo-pacciamante'],
+};
+
+function aggiungiDefaultArrivatiDopo(db) {
+  const fatti = new Set(db.defaultAggiunti || []);
+  let cambiato = false;
+  [['tipiOperazione', TIPI_DEFAULT, 'TipoID'], ['voci', VOCI_DEFAULT, 'VoceID']].forEach(([coll, def, id]) => {
+    DEFAULT_ARRIVATI_DOPO[coll].forEach(chiave => {
+      const segno = coll + ':' + chiave;
+      if (fatti.has(segno)) return;
+      fatti.add(segno);
+      cambiato = true;
+      if (db[coll].some(x => x[id] === chiave)) return;
+      const modello = def.find(x => x[id] === chiave);
+      if (modello) db[coll].push({ ...modello });
+    });
+  });
+  db.defaultAggiunti = [...fatti];
+  return cambiato;
+}
 
 // Le voci del conto di fine lavoro. Il prezzo è facoltativo apposta: dove
 // l'azienda ha una tariffa fissa lo si mette e la riga si calcola da sola,
@@ -1172,6 +1220,9 @@ const VOCI_DEFAULT = [
   { VoceID:'terriccio',         Nome:'Terriccio',         Unita:'sacchi', Ordine:8 },
   { VoceID:'tappeto-erboso',    Nome:'Tappeto erboso',    Unita:'m²',     Ordine:9 },
   { VoceID:'smaltimento-verde', Nome:'Smaltimento verde', Unita:'kg',     Ordine:10 },
+  { VoceID:'pacciamatura',      Nome:'Pacciamatura',      Unita:'q',      Ordine:11 },
+  { VoceID:'ala-gocciolante',   Nome:'Ala gocciolante',   Unita:'m',      Ordine:12 },
+  { VoceID:'telo-pacciamante',  Nome:'Telo pacciamante',  Unita:'m²',     Ordine:13 },
 ];
 
 // Quale voce di conto nasce da quale lavoro. Potature, taglio prato e
@@ -1240,6 +1291,7 @@ function normalizzaDB(grezzo) {
   // dire «non ancora scaricata», che è un valore buono: non c'è niente da
   // convertire, quindi non alza VERSIONE_DATI.
   pulito.agenda = grezzo?.agenda && grezzo.agenda.tipo === 'agenda' ? grezzo.agenda : null;
+  pulito.defaultAggiunti = Array.isArray(grezzo?.defaultAggiunti) ? grezzo.defaultAggiunti : [];
   return pulito;
 }
 
@@ -1271,6 +1323,7 @@ function datiIniziali() {
   db.fasce = FASCE_DEFAULT.map(f => ({ ...f }));
   db.tipiOperazione = TIPI_DEFAULT.map(t => ({ ...t }));
   db.voci = VOCI_DEFAULT.map(v => ({ ...v }));
+  aggiungiDefaultArrivatiDopo(db);   // già dentro: qui segna solo che ci sono
   return db;
 }
 
@@ -1365,6 +1418,7 @@ async function caricaDB() {
   }
   DB = dati;
   if (payload.meta) META = { ...META, ...payload.meta };
+  if (aggiungiDefaultArrivatiDopo(DB)) await salvaDB({ conta: false });
   return true;
 }
 
@@ -1427,14 +1481,13 @@ function navTo(page) {
   document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
   document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
   document.getElementById('page-'+page).classList.add('active');
-  // La pagina Dati si apre dall'ingranaggio e non ha una voce in basso:
-  // la barra resta su quella da cui si è arrivati.
   document.getElementById('nav-'+page)?.classList.add('active');
   currentPage = page;
-  const titles = { home:'GiardinoApp', clienti:'Clienti', visite:'Registro Visite', prossimi:'Prossimi Interventi', rilievi:'Rilievi', dati:'Dati e backup' };
-  document.getElementById('topbar-title').textContent = titles[page] || 'GiardinoApp';
-  document.getElementById('topbar-action-btn').style.display =
-    ['prossimi','rilievi','dati'].includes(page) ? 'none' : 'flex';
+  const titoli = { clienti: 'Clienti', visite: 'Registro', prossimi: 'Appuntamenti',
+    rilievi: 'Rilievi', dati: 'Impostazioni' };
+  const titoletto = document.getElementById('titoletto');
+  titoletto.textContent = titoli[page] || '';
+  titoletto.style.display = titoli[page] ? '' : 'none';
   if (page === 'dati') renderDati();
   // Aprendo la pagina si riprova a scaricare l'agenda, ma non a ogni tocco: in
   // ufficio la lavagna cambia qualche volta al giorno, e una richiesta per ogni
@@ -1458,7 +1511,10 @@ function armaIndietro() {
 
 // Chiude un livello solo. Restituisce false quando non c'era niente da chiudere.
 function tornaIndietro() {
-  const aperto = document.querySelector('.overlay.open');
+  // Se ci sono due pannelli uno sull'altro — la prenotazione aperta dalla visita —
+  // si chiude quello sopra.
+  const aperto = [...document.querySelectorAll('.overlay.open')]
+    .sort((a, b) => (parseInt(getComputedStyle(b).zIndex) || 0) - (parseInt(getComputedStyle(a).zIndex) || 0))[0];
   if (aperto) { aperto.classList.remove('open'); return true; }
   // la scheda di un cliente rimpiazza la lista: si torna alla lista
   if (currentPage === 'clienti' && !document.getElementById('clienti-list')) {
@@ -1473,11 +1529,6 @@ window.addEventListener('popstate', () => {
   if (tornaIndietro()) armaIndietro();
 });
 
-function topbarAction() {
-  if (currentPage === 'clienti') openNuovoCliente();
-  else if (currentPage === 'visite') openNuovaVisita();
-  else if (currentPage === 'home') openNuovaVisita();
-}
 
 // ── HOME ──
 function renderHome() {
@@ -1980,7 +2031,7 @@ function renderFasce() {
   if (!lista) return;
   lista.innerHTML = pendingFasce.map((f, i) => {
     const errata = f.Inizio && f.Fine && oreFascia(f) === 0;
-    return `<div class="fascia ${f.proposta ? 'proposta' : ''} ${errata ? 'errata' : ''}">
+    return `<div class="fascia-blocco"><div class="fascia ${f.proposta ? 'proposta' : ''} ${errata ? 'errata' : ''}">
       <input type="time" value="${perValore(f.Inizio)}" oninput="modificaFascia(${i}, 'Inizio', this.value)">
       <span class="freccia">→</span>
       <input type="time" value="${perValore(f.Fine)}" oninput="modificaFascia(${i}, 'Fine', this.value)">
@@ -1988,7 +2039,9 @@ function renderFasce() {
       <span class="pers">pers.</span>
       ${f.proposta ? `<button type="button" class="via" onclick="confermaFascia(${i})" title="Conferma">✓</button>` : ''}
       <button type="button" class="via" onclick="togliFascia(${i})" title="Togli">✕</button>
-    </div>`;
+    </div>
+    <input type="text" class="fascia-cosa" placeholder="Cosa si è fatto in queste ore" value="${perValore(f.Cosa || '')}"
+           oninput="scriviCosaFascia(${i}, this.value)"></div>`;
   }).join('');
 
   aggiornaTotaleOre();
@@ -2032,6 +2085,15 @@ function modificaFascia(i, campo, valore) {
   aggiornaConto();
 }
 
+// Cosa si è fatto in quelle ore: resta in ufficio, come le fasce, e al cliente
+// non arriva. Scriverla non conferma l'orario — una fascia proposta resta da
+// guardare anche se ci hai scritto sotto «potatura» — e non ridisegna niente,
+// o il campo sparirebbe da sotto le dita a metà parola.
+function scriviCosaFascia(i, valore) {
+  if (!pendingFasce[i]) return;
+  pendingFasce[i].Cosa = valore;
+}
+
 function confermaFascia(i) {
   if (!pendingFasce[i]) return;
   pendingFasce[i].proposta = false;
@@ -2064,18 +2126,83 @@ function tipiOrdinati(clienteID) {
     if (!o.TipoID) return;
     usi.set(o.TipoID, (usi.get(o.TipoID) || 0) + (visiteCliente.has(o.VisitaID) ? 10 : 1));
   });
+  // Un insieme non lascia operazioni sue: conta le visite in cui c'erano tutte le
+  // sue, con lo stesso peso per quelle di questo cliente.
+  DB.tipiOperazione.filter(eInsieme).forEach(ins => {
+    const dentro = componentiDi(ins).map(t => t.TipoID);
+    if (!dentro.length) return;
+    const perVisita = new Map();
+    DB.operazioni.forEach(o => {
+      if (!dentro.includes(o.TipoID)) return;
+      if (!perVisita.has(o.VisitaID)) perVisita.set(o.VisitaID, new Set());
+      perVisita.get(o.VisitaID).add(o.TipoID);
+    });
+    let n = 0;
+    perVisita.forEach((tipi, vid) => { if (tipi.size === dentro.length) n += visiteCliente.has(vid) ? 10 : 1; });
+    usi.set(ins.TipoID, n);
+  });
   return [...DB.tipiOperazione].sort((a, b) =>
     (usi.get(b.TipoID) || 0) - (usi.get(a.TipoID) || 0) ||
     (Number(a.Ordine) || 99) - (Number(b.Ordine) || 99));
 }
 
+// La piantumazione si riconosce dall'identificativo, che è stabile, e non da un
+// campo del tipo: i tipi stanno già nel DB di chi lavora, e cambiarne uno
+// vorrebbe dire una migrazione. Sono piante diverse nello stesso lavoro — 12
+// lauri, 3 aceri — e ognuna è un'operazione sua, con nome, numero e prezzo.
+const ePiantumazione = tipo => tipo && tipo.TipoID === 'piantumazione';
+
+// Un insieme accende le operazioni che contiene; lui non ne fa una sua.
+const eInsieme = tipo => tipo && tipo.dettaglio === 'insieme';
+function componentiDi(insieme) {
+  return String(insieme.Insieme || '').split(',').map(x => x.trim()).filter(Boolean)
+    .map(tipoDi).filter(t => t && !eInsieme(t));
+}
+// Gli insiemi spuntati in questa visita: le loro operazioni stanno raccolte sotto
+// di loro invece che sparse nell'elenco, dove andrebbero cercate una per una.
+let insiemiAperti = new Set();
+
+function rigaInsieme(tipo) {
+  const dentro = componentiDi(tipo);
+  const accese = dentro.filter(t => opDelTipo(t.TipoID).length).length;
+  const tutte = dentro.length && accese === dentro.length;
+  const aperto = insiemiAperti.has(tipo.TipoID);
+  const riga = `<div class="op-riga ${tutte ? 'on' : ''}" onclick="spuntaInsieme('${perOnclick(tipo.TipoID)}')">
+      <span class="op-box">${tutte ? '✓' : accese ? '–' : ''}</span>
+      <span style="flex:1">${perValore(tipo.Nome)}</span>
+      <span class="op-insieme">${dentro.length} operazioni</span>
+    </div>`;
+  return riga + (aperto ? `<div class="op-dentro">${dentro.map(rigaOperazione).join('')}</div>` : '');
+}
+
+function spuntaInsieme(tipoID) {
+  const tipo = tipoDi(tipoID);
+  if (!tipo) return;
+  const dentro = componentiDi(tipo);
+  const tutte = dentro.length && dentro.every(t => opDelTipo(t.TipoID).length);
+  if (tutte) {
+    const via = new Set(dentro.map(t => t.TipoID));
+    pendingOperazioni = pendingOperazioni.filter(o => !via.has(o.TipoID));
+    insiemiAperti.delete(tipoID);
+  } else {
+    dentro.forEach(t => { if (!opDelTipo(t.TipoID).length) pendingOperazioni.push(nuovaOperazione(t)); });
+    insiemiAperti.add(tipoID);
+  }
+  renderOperazioni();
+  aggiornaConto();
+}
+
 function rigaOperazione(tipo) {
+  if (eInsieme(tipo)) return rigaInsieme(tipo);
   const ops = opDelTipo(tipo.TipoID);
+  const altra = ePiantumazione(tipo) && ops.length
+    ? `<div class="op-dett"><button type="button" class="btn btn-secondary btn-sm" onclick="aggiungiPianta()">+ Un'altra pianta</button></div>`
+    : '';
   const riga = `<div class="op-riga ${ops.length ? 'on' : ''}" onclick="spuntaOperazione('${perOnclick(tipo.TipoID)}')">
       <span class="op-box">${ops.length ? '✓' : ''}</span>
       <span style="flex:1">${perValore(tipo.Nome)}</span>
     </div>`;
-  return riga + ops.map(o => dettaglioOperazione(tipo, o)).join('');
+  return riga + ops.map(o => dettaglioOperazione(tipo, o)).join('') + altra;
 }
 
 // Spuntare apre solo i campi che quell'operazione richiede davvero: un taglio
@@ -2089,6 +2216,18 @@ function dettaglioOperazione(tipo, op) {
   };
   const e = elenchi[tipo.dettaglio];
   const campi = [];
+  if (ePiantumazione(tipo)) {
+    // Il prezzo delle piante si scrive qui, ed è l'unico: sta sull'etichetta del
+    // vaso, e in ufficio per saperlo bisognerebbe andare in vivaio. Tutto il resto
+    // del listino resta dell'ufficio.
+    const piu = opDelTipo(tipo.TipoID).length > 1;
+    return `<div class="op-dett op-pianta">
+      <input type="text" placeholder="Pianta" value="${perValore(op.Descrizione)}" oninput="modificaOperazione(${i}, 'Descrizione', this.value)">
+      <input type="number" step="1" min="0" placeholder="n" value="${perValore(op.Quantita)}" oninput="modificaOperazione(${i}, 'Quantita', this.value)" aria-label="quante">
+      <input type="number" step="any" min="0" placeholder="€ cad." value="${perValore(op.Prezzo)}" oninput="modificaOperazione(${i}, 'Prezzo', this.value)" aria-label="prezzo di una">
+      ${piu ? `<button type="button" class="via" onclick="togliOperazione(${i})" title="Togli questa pianta">✕</button>` : ''}
+    </div>`;
+  }
   if (e) {
     const opzioni = DB[e.coll].map(p =>
       `<option value="${perValore(p[e.id])}" ${op[e.id] == p[e.id] ? 'selected' : ''}>${perValore(p[e.nome])}</option>`).join('');
@@ -2107,11 +2246,13 @@ function dettaglioOperazione(tipo, op) {
 function renderOperazioni() {
   const cima = document.getElementById('operazioni-check');
   if (!cima) return;
-  const ordinati = tipiOrdinati(document.getElementById('f-visita-cliente').value);
+  // Quello che sta dentro un insieme aperto si vede lì sotto, non due volte.
+  const raccolti = new Set([...insiemiAperti].flatMap(id => { const t = tipoDi(id); return t ? componentiDi(t).map(c => c.TipoID) : []; }));
+  const ordinati = tipiOrdinati(document.getElementById('f-visita-cliente').value).filter(t => !raccolti.has(t.TipoID));
   // Quello che hai già spuntato resta sempre in vista, anche se è un lavoro che
   // fai una volta l'anno: nascondere una cosa segnata è il modo migliore per
   // fartela dimenticare.
-  const inCima = ordinati.filter((t, i) => i < TIPI_IN_CIMA || opDelTipo(t.TipoID).length);
+  const inCima = ordinati.filter((t, i) => i < TIPI_IN_CIMA || opDelTipo(t.TipoID).length || insiemiAperti.has(t.TipoID));
   const sotto = ordinati.filter(t => !inCima.includes(t));
   cima.innerHTML = inCima.map(rigaOperazione).join('');
   document.getElementById('operazioni-altre').innerHTML = sotto.map(rigaOperazione).join('');
@@ -2127,25 +2268,38 @@ function toggleAltreOperazioni() {
   renderOperazioni();
 }
 
+function nuovaOperazione(tipo) {
+  return {
+    OperazioneID: generateID(),
+    TipoID: tipo.TipoID,
+    Tipo_operazione: tipo.Nome,
+    Descrizione: '',
+    // Prato e siepe erano due interruttori da ricordarsi di accendere, e
+    // scordarli faceva sparire l'operazione dal report Prati. Ora lo sa il tipo.
+    Flag_prato: isSi(tipo.Prato) ? 'Sì' : '',
+    Flag_siepe: isSi(tipo.Siepe) ? 'Sì' : '',
+    ConcimeID: '', SementeID: '', FitofarmacaID: '',
+    Quantita: '', Unita: tipo.Unita || '',
+    Prezzo: '',
+  };
+}
+
 function spuntaOperazione(tipoID) {
   const tipo = tipoDi(tipoID);
   if (!tipo) return;
   if (opDelTipo(tipoID).length) {
     pendingOperazioni = pendingOperazioni.filter(o => o.TipoID !== tipoID);
   } else {
-    pendingOperazioni.push({
-      OperazioneID: generateID(),
-      TipoID: tipo.TipoID,
-      Tipo_operazione: tipo.Nome,
-      Descrizione: '',
-      // Prato e siepe erano due interruttori da ricordarsi di accendere, e
-      // scordarli faceva sparire l'operazione dal report Prati. Ora lo sa il tipo.
-      Flag_prato: isSi(tipo.Prato) ? 'Sì' : '',
-      Flag_siepe: isSi(tipo.Siepe) ? 'Sì' : '',
-      ConcimeID: '', SementeID: '', FitofarmacaID: '',
-      Quantita: '', Unita: tipo.Unita || '',
-    });
+    pendingOperazioni.push(nuovaOperazione(tipo));
   }
+  renderOperazioni();
+  aggiornaConto();
+}
+
+function aggiungiPianta() {
+  const tipo = tipoDi('piantumazione');
+  if (!tipo) return;
+  pendingOperazioni.push(nuovaOperazione(tipo));
   renderOperazioni();
   aggiornaConto();
 }
@@ -2215,6 +2369,7 @@ function mostraPromemoria(clienteID) {
 // ── APERTURA E SALVATAGGIO ──
 function openNuovaVisita() {
   pendingOperazioni = [];
+  insiemiAperti = new Set();
   pendingFasce = [fasciaProposta('')];
   editVisitaID = null;
   altreOperazioniAperte = false;
@@ -2239,6 +2394,7 @@ function openModificaVisita(vid) {
   editVisitaID = v.VisitaID;
   altreOperazioniAperte = false;
   pendingOperazioni = DB.operazioni.filter(o => o.VisitaID == vid).map(o => ({ ...o }));
+  insiemiAperti = new Set();
   pendingFasce = (v.Fasce || []).map(f => ({ ...f, proposta: false }));
   oreEreditate = pendingFasce.length ? '' : (v.Ore_Visita || '');
   document.getElementById('f-visita-data').value = v.Data ? new Date(v.Data).toISOString().split('T')[0] : '';
@@ -2340,7 +2496,8 @@ async function saveVisita({ invia = false } = {}) {
   aggiungiOperazioneLibera();   // quello che è rimasto scritto nella casella non si perde
 
   const visitaID = editVisitaID || generateID();
-  const fasce = pendingFasce.map(({ Inizio, Fine, Persone }) => ({ Inizio, Fine, Persone: Number(Persone) || 1 }));
+  const fasce = pendingFasce.map(({ Inizio, Fine, Persone, Cosa }) =>
+    ({ Inizio, Fine, Persone: Number(Persone) || 1, Cosa: String(Cosa || '').trim() }));
   const precedente = DB.visite.find(v => v.VisitaID == visitaID);
   const visita = {
     // Si riparte da quello che la visita aveva: ricostruirla da zero
@@ -2451,10 +2608,15 @@ function righeAutomatiche(fasce, operazioni) {
     const aCorpo = isSi(voce?.ACorpo);
     const quantita = aCorpo ? 1 : parseFloat(o.Quantita);
     if (!quantita) return;                  // senza quantità non c'è niente da conteggiare
-    righe.push({ Chiave: o.OperazioneID, VoceID: tipo.VoceID,
+    const riga = { Chiave: o.OperazioneID, VoceID: tipo.VoceID,
       Voce: (voce?.Nome || tipo.Nome) + (o.Descrizione ? ' – ' + o.Descrizione : ''),
       Unita: aCorpo ? '' : (o.Unita || voce?.Unita || ''),
-      Quantita: quantita });
+      Quantita: quantita };
+    // Solo le piante portano un prezzo dal cantiere: vedi dettaglioOperazione.
+    if (ePiantumazione(tipo) && o.Prezzo !== '' && o.Prezzo != null && !isNaN(parseFloat(o.Prezzo))) {
+      riga.Prezzo = parseFloat(o.Prezzo);
+    }
+    righe.push(riga);
   });
   return righe;
 }
@@ -2476,12 +2638,22 @@ function aggiornaConto() {
   renderContoRighe();
 }
 
+// Le righe che nascono da ore e operazioni non si mostrano più una per una: erano
+// le stesse informazioni di sopra dette una seconda volta. Qui si scrive solo
+// quello che non nasce da nient'altro — il noleggio del rullo, lo smaltimento —
+// e che solo chi è in giardino sa. Le righe automatiche partono lo stesso col
+// rapportino, e si correggono in ufficio; chi vuole vedere cosa parte apre il
+// riepilogo, chiuso di suo.
+let riepilogoContoAperto = false;
+
 function renderContoRighe() {
   const el = document.getElementById('conto-righe');
   if (!el) return;
-  el.innerHTML = contoCorrente.length
-    ? contoCorrente.map((r, i) => {
-        return `<div class="conto-riga">
+  const conIndice = contoCorrente.map((r, i) => ({ r, i }));
+  const altre = conIndice.filter(x => !x.r.Chiave);
+  const quantita = r => [formattaQuantita(r.Quantita), r.Unita].filter(Boolean).join(' ');
+  el.innerHTML = (altre.length
+    ? altre.map(({ r, i }) => `<div class="conto-riga">
           <div class="conto-voce">
             <span style="flex:1">${perValore(r.Voce)}</span>
             <button type="button" class="via" onclick="togliRigaConto(${i})" title="Togli">✕</button>
@@ -2491,9 +2663,17 @@ function renderContoRighe() {
                    oninput="modificaRigaConto(${i}, 'Quantita', this.value)" aria-label="quantità">
             <span class="unita">${perValore(r.Unita)}</span>
           </div>
-        </div>`;
-      }).join('')
-    : '<div class="dati-nota">Le ore e i materiali che registri qui sopra compaiono da soli. I prezzi li mette l\'ufficio.</div>';
+        </div>`).join('')
+    : '<div class="dati-nota">Ore e materiali delle operazioni partono da soli. Qui va quello che non nasce da lì: un noleggio, uno smaltimento. I prezzi li mette l\'ufficio.</div>');
+  const riepilogo = document.getElementById('conto-riepilogo');
+  if (!riepilogo) return;
+  riepilogo.innerHTML = (contoCorrente.length
+      ? `<details class="conto-riepilogo" ${riepilogoContoAperto ? 'open' : ''} ontoggle="riepilogoContoAperto = this.open">
+          <summary>Cosa parte per il conto (${contoCorrente.length} ${contoCorrente.length === 1 ? 'voce' : 'voci'})</summary>
+          <ul>${contoCorrente.map(r => `<li class="riepilogo-voce"><span>${perValore(r.Voce)}</span>
+            <span>${perValore(quantita(r))}${r.Prezzo != null ? ' · ' + perValore(String(r.Prezzo).replace('.', ',')) + ' € cad.' : ''}</span></li>`).join('')}</ul>
+        </details>`
+      : '');
 }
 
 // Non ridisegno le righe: si sta scrivendo dentro un campo.
@@ -2548,12 +2728,13 @@ let orologioCoda = null;
 // perché il campo manca nello stesso modo e il lavoro non si deve perdere.
 
 // Dalla visita: il cliente è già quello che hai davanti, e quello che c'era da
-// dire per la prossima volta lo scrivi nelle note della prenotazione. Prima si
-// chiude la visita — o si resterebbe con due pannelli aperti uno sull'altro.
+// dire per la prossima volta lo scrivi nelle note della prenotazione. La visita
+// **resta aperta sotto**: chiuderla buttava via quello che non era ancora stato
+// salvato, e riaprendola si ritrovava la versione di prima. È successo davvero,
+// con le correzioni di un rapportino perse per una prenotazione fatta a metà.
 function prenotaDaVisita() {
   const cid = document.getElementById('f-visita-cliente').value;
   const nome = document.getElementById('f-visita-cliente-nome').textContent;
-  closeDrawer('overlay-visita');
   apriPrenotazione();
   if (cid) scegliClientePrenotazione(cid, nome);
 }
@@ -2561,6 +2742,7 @@ function prenotaDaVisita() {
 function apriPrenotazione() {
   ['f-pren-ore', 'f-pren-settimana', 'f-pren-requisiti', 'f-pren-note']
     .forEach(id => document.getElementById(id).value = '');
+  document.getElementById('f-pren-sopralluogo').checked = false;
   mostraSettimanaScelta();
   scollegaClientePrenotazione();
   document.getElementById('overlay-prenotazione').classList.add('open');
@@ -2618,6 +2800,7 @@ async function salvaPrenotazione() {
     Ore: document.getElementById('f-pren-ore').value,
     Settimana: lunediDellaSettimana(document.getElementById('f-pren-settimana').value),
     Requisiti: document.getElementById('f-pren-requisiti').value.trim(),
+    Sopralluogo: document.getElementById('f-pren-sopralluogo').checked ? 'Sì' : '',
     Note: note,
     Creata: new Date().toISOString(),
     Consegnata: '',
@@ -2861,9 +3044,17 @@ function accodaRilievo(rilievo) {
 function renderRilievi() {
   const el = document.getElementById('rilievi-list');
   if (!el) return;
-  const elenco = [...(DB.rilievi || [])].sort((a, b) => String(b.Creato).localeCompare(String(a.Creato)));
+  // Stessa regola delle prenotazioni: quelli già arrivati in ufficio non servono
+  // qui — là diventano un preventivo, e ripeterli sul telefono vorrebbe dire due
+  // elenchi da tenere allineati. Restano quelli ancora da consegnare, perché un
+  // rilievo fermo deve dire accanto a sé perché non è partito.
+  const inCoda = new Set((DB.coda || []).map(v => v.docID));
+  const elenco = [...(DB.rilievi || [])].filter(r => inCoda.has(r.RilievoID))
+    .sort((a, b) => String(b.Creato).localeCompare(String(a.Creato)));
+  const titolo = document.getElementById('rilievi-titolo');
+  if (titolo) titolo.style.display = elenco.length ? '' : 'none';
   if (!elenco.length) { el.innerHTML = ''; return; }
-  el.innerHTML = elenco.slice(0, 10).map(r => {
+  el.innerHTML = elenco.map(r => {
     const c = DB.clienti.find(x => x.ClienteID == r.ClienteID);
     const t = tipoRilievo(r.Lavoro);
     const coda = DB.coda || [];
@@ -2877,7 +3068,7 @@ function renderRilievi() {
       <div style="font-weight:600">${perValore(c ? c.Cliente : 'cliente eliminato')}</div>
       <div style="font-size:0.85rem; color:var(--text-mid)">${perValore(t ? t.nome : r.Lavoro)} · ${(r.Righe || []).length} ${(r.Righe || []).length === 1 ? 'riga' : 'righe'}</div>
       <div style="font-size:0.78rem; color:var(--text-light); margin-top:4px">
-        ${quante} ${quante === 1 ? 'mezza giornata' : 'mezze giornate'} · ${voce ? '📤 da consegnare' : '✅ in ufficio'}
+        ${quante} ${quante === 1 ? 'mezza giornata' : 'mezze giornate'} · 📤 da consegnare
       </div>
       ${r.Note ? `<div style="font-size:0.8rem; color:var(--text-mid); margin-top:4px; white-space:pre-line">${perValore(r.Note)}</div>` : ''}
       ${voce && voce.errore ? `<div class="errore-consegna" onclick="svuotaCoda({ avvisa: true })">
@@ -2956,18 +3147,25 @@ function renderAgenda() {
     return;
   }
   el.innerHTML = agenda.appuntamenti.map(a => `<div class="card" style="padding:12px">
-    <div style="font-size:0.78rem; color:var(--primary); font-weight:600">${perValore(etichettaMezzaGiornata(a.giorno, a.mezza))}</div>
+    <div style="font-size:0.78rem; color:var(--primary); font-weight:600">${perValore(etichettaMezzaGiornata(a.giorno, a.mezza))}${a.ora ? ' · ore ' + perValore(a.ora) : ''}</div>
     <div style="font-weight:600">${perValore(a.cliente || 'senza cliente')}</div>
-    ${a.note ? `<div style="font-size:0.82rem; color:var(--text-mid); margin-top:4px; font-style:italic">${perValore(a.note)}</div>` : ''}
+    ${a.note ? `<div style="font-size:0.82rem; color:var(--text-mid); margin-top:4px">${perValore(a.note)}</div>` : ''}
   </div>`).join('');
 }
 
 function renderPrenotazioni() {
   const el = document.getElementById('prenotazioni-list');
   if (!el) return;
-  const elenco = [...(DB.prenotazioni || [])].sort((a, b) => String(b.Creata).localeCompare(String(a.Creata)));
+  // Quelle già arrivate in ufficio non servono qui: si guardano sulla lavagna, e
+  // tornano con l'agenda. Restano solo quelle ancora sul telefono, perché una
+  // prenotazione ferma deve dire accanto a sé perché non è partita.
+  const inCoda = new Set((DB.coda || []).map(v => v.docID));
+  const elenco = [...(DB.prenotazioni || [])].filter(p => inCoda.has(p.PrenotazioneID))
+    .sort((a, b) => String(b.Creata).localeCompare(String(a.Creata)));
+  const titolo = document.getElementById('prenotazioni-titolo');
+  if (titolo) titolo.style.display = elenco.length ? '' : 'none';
   if (!elenco.length) { el.innerHTML = ''; return; }
-  el.innerHTML = elenco.slice(0, 10).map(p => {
+  el.innerHTML = elenco.map(p => {
     const c = DB.clienti.find(x => x.ClienteID == p.ClienteID);
     const coda = DB.coda || [];
     const posto = coda.findIndex(v => v.docID === p.PrenotazioneID);
@@ -2978,7 +3176,7 @@ function renderPrenotazioni() {
     // proprio il caso in cui non è colpa sua.
     const davanti = posto > 0 ? coda.slice(0, posto).find(v => v.errore) : null;
     return `<div class="card" style="padding:12px">
-      <div style="font-weight:600">${perValore(c ? c.Cliente : 'cliente eliminato')}</div>
+      <div style="font-weight:600">${perValore(c ? c.Cliente : 'cliente eliminato')}${isSi(p.Sopralluogo) ? ' <span style="font-size:0.7rem; font-weight:600; color:var(--text-light)">· sopralluogo</span>' : ''}</div>
       <div style="font-size:0.85rem; color:var(--text-mid); white-space:pre-line">${perValore(p.Note)}</div>
       <div style="font-size:0.78rem; color:var(--text-light); margin-top:4px">
         ${p.Ore ? formattaQuantita(p.Ore) + ' h · ' : ''}${p.Settimana ? etichettaSettimana(p.Settimana) + ' · ' : ''}${voce ? '📤 da consegnare' : '✅ in ufficio'}
@@ -3155,7 +3353,11 @@ const ARCHIVI = {
         { v:'semente',     label:'Una semente e la quantità' },
         { v:'fitofarmaco', label:'Un fitofarmaco e la quantità' },
         { v:'quantita',    label:'Solo una quantità' },
+        { v:'insieme',     label:'Un insieme: accende altre operazioni' },
       ] },
+      { k:'Insieme', label:'Se è un insieme, quali operazioni accende', tipo:'scelte', opzioni: () =>
+        DB.tipiOperazione.filter(t => !eInsieme(t) && String(t.TipoID) !== String(archivioVoceId))
+          .map(t => ({ v: t.TipoID, label: t.Nome })) },
       { k:'Unita', label:'Unità di misura (kg, l, n, m², sacchi…)' },
       { k:'ChiedeCosa', label:'Chiede anche "cosa" (la specie, il materiale)', tipo:'flag' },
       { k:'Prato', label:'Riguarda il prato', tipo:'flag' },
@@ -3166,6 +3368,7 @@ const ARCHIVI = {
     ],
     riga: t => {
       const voce = t.VoceID ? DB.voci.find(v => v.VoceID === t.VoceID) : null;
+      if (eInsieme(t)) return `${t.Nome} · insieme di ${componentiDi(t).map(c => c.Nome).join(', ') || 'niente'}`;
       return `${t.Nome}${t.Unita ? ' · ' + t.Unita : ''}${isSi(t.Prato) ? ' · prato' : ''}${isSi(t.Siepe) ? ' · siepe' : ''}${voce ? ' → ' + voce.Nome : ''}`;
     },
     usato: t => DB.operazioni.filter(o => o.TipoID === t.TipoID).length,
@@ -3339,6 +3542,7 @@ async function importaBackup(input) {
     `${confronto('clienti')}\n${confronto('visite')}\n${confronto('operazioni')}\n\n` +
     'I dati attuali vanno persi. Procedere?')) return;
   DB = nuovo;
+  aggiungiDefaultArrivatiDopo(DB);
   applicaFasce();
   META.ultimoBackup = payload?.esportato || new Date().toISOString();
   META.modificheDalBackup = 0;
@@ -3615,6 +3819,14 @@ function openVoceArchivio(tipo, id) {
         </div>`;
     }
     const opzioni = typeof campo.opzioni === 'function' ? campo.opzioni() : campo.opzioni;
+    if (campo.tipo === 'scelte') {
+      const scelti = String(valore).split(',').map(x => x.trim());
+      return `<div class="form-group">
+          <label class="form-label">${campo.label}</label>
+          <div id="f-arch-${campo.k}" class="scelte-arch">${opzioni.map(o =>
+            `<label><input type="checkbox" value="${perValore(o.v)}" ${scelti.includes(o.v) ? 'checked' : ''}> ${perValore(o.label)}</label>`).join('')}</div>
+        </div>`;
+    }
     const controllo = campo.tipo === 'select'
       ? `<select class="form-control" id="f-arch-${campo.k}">${opzioni.map(o =>
           `<option value="${o.v}" ${String(valore) === o.v ? 'selected' : ''}>${o.label}</option>`).join('')}</select>`
@@ -3635,7 +3847,9 @@ async function salvaVoceArchivio() {
   const dati = {};
   for (const campo of def.campi) {
     const el = document.getElementById('f-arch-' + campo.k);
-    const v = campo.tipo === 'flag' ? (el.classList.contains('on') ? 'Sì' : '') : el.value.trim();
+    const v = campo.tipo === 'flag' ? (el.classList.contains('on') ? 'Sì' : '')
+      : campo.tipo === 'scelte' ? [...el.querySelectorAll('input:checked')].map(i => i.value).join(',')
+      : el.value.trim();
     if (campo.obbligatorio && !v) { showToast('⚠️ Manca: ' + campo.label); return; }
     dati[campo.k] = v;
   }

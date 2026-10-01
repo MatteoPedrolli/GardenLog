@@ -7,7 +7,7 @@
 <title>GiardinoApp · Ufficio</title>
 <link rel="icon" type="image/png" href="../icon-192.png">
 <link rel="preconnect" href="https://fonts.googleapis.com">
-<link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@400;600;700&family=DM+Sans:wght@300;400;500;600&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@300;400;500;600&display=swap" rel="stylesheet">
 <style>
 :root {
   /* ── CARTA E INCHIOSTRO ──
@@ -33,7 +33,9 @@
   --radius: 14px;
   --radius-sm: 9px;
   --shadow: 0 2px 14px rgba(36,33,28,0.09);
-  --font-display: 'Playfair Display', serif;
+  /* Calibri sul PC dell'ufficio; dove non c'è (il telefono) resta il DM Sans del
+     testo. Era un graziato ad alto contrasto, e sui nomi dei clienti si leggeva male. */
+  --font-display: Calibri, Carlito, 'DM Sans', sans-serif;
   --font-body: 'DM Sans', sans-serif;
   --barra-l: 240px;
 }
@@ -62,16 +64,11 @@ body {
   display: flex; flex-direction: column;
   position: sticky; top: 0; height: 100dvh;
 }
-#barra h1 {
-  font-family: var(--font-display);
-  font-size: 1.15rem; font-weight: 600;
-  padding: 22px 20px 6px;
-  letter-spacing: 0.02em;
-}
-#barra .sotto {
-  font-size: 0.72rem; color: rgba(255,255,255,0.55);
-  padding: 0 20px 20px; letter-spacing: 0.06em; text-transform: uppercase;
-}
+/* Niente nome dell'app in cima alla barra, e niente titolo in testa alle pagine
+   che ripeta la voce evidenziata qui: dicevano due volte la stessa cosa e
+   rubavano spazio alla schermata. Il titolo resta dove dice qualcosa che la
+   barra non sa, come il nome del cliente di un lavoro. */
+#barra { padding-top: 14px; }
 .voce-barra {
   background: none; border: none; color: rgba(255,255,255,0.75);
   font-family: var(--font-body); font-size: 0.92rem; text-align: left;
@@ -92,7 +89,7 @@ body {
   word-break: break-word;
 }
 
-#contenuto { flex: 1; padding: 28px 34px 60px; max-width: 1100px; }
+#contenuto { flex: 1; padding: 18px 34px 60px; max-width: 1100px; }
 
 h2.titolo-pagina {
   font-family: var(--font-display); font-size: 1.6rem; font-weight: 600;
@@ -110,6 +107,10 @@ p.sottotitolo { color: var(--text-light); font-size: 0.88rem; margin-bottom: 22p
   box-shadow: var(--shadow);
 }
 .scheda.cliccabile { cursor: pointer; transition: all 0.15s; }
+/* La riga di cosa si è fatto sta sotto la sua fascia, attaccata: senza bordo in
+   mezzo, o sembrerebbe una fascia a sé. */
+table.elenco tr:has(+ tr.cosa-fascia) td { border-bottom: none; padding-bottom: 2px; }
+tr.cosa-fascia td { color: var(--text-mid); font-size: 0.86rem; padding-top: 0; }
 .scheda.cliccabile:hover { border-color: var(--ocra); transform: translateY(-1px); }
 
 .riga-scheda { display: flex; align-items: baseline; gap: 12px; flex-wrap: wrap; }
@@ -136,6 +137,7 @@ button.secondaria { background: var(--white); color: var(--text-mid); border-col
 button.secondaria:hover { border-color: var(--ocra); color: var(--inchiostro-tenue); }
 button.pericolo { background: var(--white); color: var(--red); border-color: #f2d4d0; }
 button.piccola { padding: 6px 12px; font-size: 0.82rem; }
+button.secondaria[disabled] { opacity: 0.55; cursor: default; border-color: var(--border); color: var(--text-light); }
 .bottoni { display: flex; gap: 10px; flex-wrap: wrap; margin-top: 18px; }
 
 table.elenco { width: 100%; border-collapse: collapse; }
@@ -146,11 +148,12 @@ table.elenco th {
 table.elenco td { padding: 9px 8px 9px 0; border-bottom: 1px solid var(--border); vertical-align: middle; }
 table.elenco tr:last-child td { border-bottom: none; }
 table.elenco td.num, table.elenco th.num { text-align: right; padding-right: 0; }
-/* La quantità e la sua unità sono due colonne attaccate, e senza un margine si
-   leggono come una parola sola: «Q.tàUM» in testa e «90n» sotto. Visto solo
-   guardando la pagina, non dai test. Vale sullo schermo e sulla carta. */
-table.elenco td.qta, table.elenco th.qta,
-#foglio td.qta, #foglio th.qta { text-align: right; padding-right: 14px; }
+/* Dopo una colonna di numeri allineati a destra l'unità ci finiva attaccata:
+   «1a corpo», e nelle intestazioni «QUANTITÀUNITÀ». Lo stesso succedeva sul
+   foglio di stampa — «90n», «12sacchi» — quindi la regola vale anche lì: è lo
+   stesso difetto, e due regole diverse per lo stesso difetto si disallineano. */
+table.elenco td.num + td:not(.num), table.elenco th.num + th:not(.num),
+#foglio td.num + td:not(.num), #foglio th.num + th:not(.num) { padding-left: 8px; }
 /* Nella scheda cliente le due colonne vanno larghe uguali: lasciate libere, le
    celle si dimensionano sul contenuto e il telefono esce stretto come il numero. */
 /* Le note del rilievo si leggono come sono state scritte in giardino: gli a capo
@@ -186,10 +189,35 @@ tr.riga-tariffa td { background: var(--foglio); }
 #foglio .apertura { margin: 18px 0; font-size: 0.95rem; }
 #foglio table.tariffe { margin-top: 18px; font-size: 0.88rem; }
 table.scheda-cliente { table-layout: fixed; }
+.scheda-chiusa { padding: 12px 20px; margin-bottom: 8px; }
+.testa-cliente {
+  display: flex; align-items: baseline; gap: 10px; width: 100%; padding: 0;
+  background: none; border: none; cursor: pointer; text-align: left; color: var(--text);
+}
+.testa-cliente:hover .nome-cliente { color: var(--inchiostro-tenue); }
+.freccia-cliente { margin-left: auto; color: var(--text-light); }
+tr.riga-gruppo td { border-bottom: none; font-weight: 600; }
+tr.dentro-gruppo td { font-size: 0.82rem; color: var(--text-light); padding-top: 0; }
+.stato-salvataggio { align-self: center; }
+.stato-salvataggio.brutto { color: var(--red); font-weight: 600; }
+.parte-archivio { margin: 6px 0 10px; }
+.parte-archivio ~ .parte-archivio { margin-top: 26px; }
+.barra-scelti {
+  position: sticky; top: 0; z-index: 5;
+  display: flex; align-items: center; gap: 12px; flex-wrap: wrap; margin-bottom: 12px; padding: 10px 14px;
+  border-radius: var(--radius-sm); background: var(--white); border: 1px solid var(--ocra);
+  box-shadow: var(--shadow); font-size: 0.9rem;
+}
+.scheda.scelta { border-color: var(--ocra); background: var(--foglio); }
+input.scegli { width: 18px; height: 18px; margin: 0; cursor: pointer; align-self: center; accent-color: var(--inchiostro-tenue); }
+.solo-cliente {
+  display: flex; align-items: center; gap: 10px; margin-bottom: 12px; padding: 9px 12px;
+  border-radius: var(--radius-sm); background: var(--foglio); border: 1px solid var(--ocra); font-size: 0.88rem;
+}
 table.scheda-cliente td { width: 50%; padding-right: 10px; }
 table.scheda-cliente td:last-child { padding-right: 0; }
 
-input[type=text], input[type=number], input[type=search], textarea, select {
+input[type=text], input[type=number], input[type=search], input[type=tel], input[type=email], textarea, select {
   font-family: var(--font-body); font-size: 0.92rem; color: var(--text);
   border: 1px solid var(--border); border-radius: var(--radius-sm);
   padding: 8px 10px; background: var(--white); width: 100%;
@@ -259,6 +287,20 @@ input.vuoto { background: #fffdf5; border-color: #ecdca8; }
 .tavolo { display: flex; gap: 14px; align-items: flex-start; }
 
 .coda { width: 290px; flex-shrink: 0; }
+.tavolo-lavagna { flex-direction: column; align-items: stretch; }
+.tavolo-lavagna .giorni { width: 100%; }
+.coda-sotto { width: auto; margin-top: 18px; }
+.griglia-coda { display: grid; grid-template-columns: minmax(0, 3fr) minmax(0, 1fr) minmax(0, 1fr); gap: 10px; align-items: start; }
+/* Da sinistra a destra, poi a capo: la griglia si legge come una pagina, ed è
+   l'ordine di priorità. Tre colonne perché le ultime due sono dei sopralluoghi e
+   dei bloccati. */
+.coda-lista.pronti { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); align-items: start; }
+.coda-lista.pronti > .vuoto-mezza { grid-column: 1 / -1; }
+.coda-lista.fermi, .coda-lista.sopralluoghi { min-height: 160px; }
+.coda-sotto #nuovo-lavoro { max-width: 480px; }
+@media (max-width: 900px) {
+  .coda-lista.pronti { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
 .titolo-colonna {
   font-size: 0.72rem; font-weight: 600; text-transform: uppercase;
   letter-spacing: 0.06em; color: var(--text-light); margin: 0 0 8px;
@@ -329,6 +371,13 @@ input.vuoto { background: #fffdf5; border-color: #ecdca8; }
   min-width: 0; overflow-wrap: anywhere;
 }
 .cartellino:active { cursor: grabbing; }
+/* In coda, chiuso: il nome, la prima riga delle note, settimana e inserimento.
+   Il resto al clic. */
+.cartellino.chiuso { padding: 6px 8px; gap: 1px; }
+.cartellino.chiuso .cliente-cart { font-size: 0.82rem; }
+.cartellino.chiuso .riga-cart { gap: 4px; margin-top: 1px; }
+.cosa-cart.una-riga { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; overflow-wrap: normal; }
+.cartellino.aperto { box-shadow: 0 1px 4px rgba(0,0,0,0.08); }
 /* ── I TRE STATI ──
    Grigio previsto, verde confermato, blu fatto. Il colore non basta da solo — si
    perde a chi distingue male verde e grigio, e sulla carta — quindi ogni
@@ -378,6 +427,13 @@ input.vuoto { background: #fffdf5; border-color: #ecdca8; }
   background: var(--foglio); padding: 1px 7px; border-radius: 999px;
 }
 .quando-cart, .origine-cart { font-size: 0.68rem; color: var(--text-light); }
+.ora-cart { font-weight: 700; color: var(--inchiostro); }
+/* Né grigio né verde né blu: quelli sono gli stati. Lo dice la parola. */
+.sopralluogo-cart {
+  font-size: 0.64rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.04em;
+  color: var(--inchiostro-tenue); border: 1px solid var(--ocra); background: var(--foglio);
+  padding: 0 6px; border-radius: 999px;
+}
 .requisito-cart {
   font-size: 0.68rem; color: var(--earth); background: var(--earth-light);
   border: 1px solid var(--earth); padding: 0 5px; border-radius: 999px;
@@ -461,7 +517,9 @@ input.vuoto { background: #fffdf5; border-color: #ecdca8; }
 }
 #foglio td { padding: 7px 8px 7px 0; border-bottom: 1px solid #ccc; }
 #foglio td.num, #foglio th.num { text-align: right; padding-right: 0; }
-#foglio .da-definire { color: #555; font-style: italic; }
+#foglio .da-definire { color: #555; }
+#foglio .riga-blocco td { padding-top: 16px; font-weight: 700; border-bottom: 1px solid #000; }
+#foglio .riga-subtotale td { color: #333; border-bottom: none; }
 #foglio .riga-totale td {
   border-bottom: none; border-top: 2px solid #000; padding-top: 12px;
   font-weight: 600; font-size: 1.05rem;
@@ -481,8 +539,6 @@ input.vuoto { background: #fffdf5; border-color: #ecdca8; }
 
 <div id="app">
   <nav id="barra">
-    <h1>GiardinoApp</h1>
-    <div class="sotto">Ufficio</div>
     <button class="voce-barra attiva" id="v-arrivi" onclick="vaiA('arrivi')">
       <span>📥</span> In arrivo <span class="pallino" id="pallino-arrivi">0</span>
     </button>
@@ -493,7 +549,7 @@ input.vuoto { background: #fffdf5; border-color: #ecdca8; }
       <span>📋</span> Lavagna <span class="pallino" id="pallino-lavagna">0</span>
     </button>
     <button class="voce-barra" id="v-clienti" onclick="vaiA('clienti')"><span>👥</span> Clienti</button>
-    <button class="voce-barra" id="v-archivio" onclick="vaiA('archivio')"><span>🗂️</span> Archivio</button>
+    <button class="voce-barra" id="v-archivio" onclick="CLIENTE_ARCHIVIO = null; vaiA('archivio')"><span>🗂️</span> Archivio</button>
     <button class="voce-barra" id="v-listino" onclick="vaiA('listino')"><span>🏷️</span> Listino</button>
     <button class="voce-barra" id="v-impostazioni" onclick="vaiA('impostazioni')"><span>⚙️</span> Impostazioni</button>
     <div id="stato-cartella">Nessuna cartella collegata</div>
@@ -765,6 +821,11 @@ async function ricarica() {
   await assorbiAppuntamenti();
 }
 
+function dataDelDocumento(doc) {
+  const d = new Date(doc.creato || '');
+  return isNaN(d) ? '' : isoData(d);
+}
+
 // Le prenotazioni fatte dal cantiere entrano sulla lavagna da sole: chi prenota è
 // col cliente davanti, e chiedere all'ufficio di ricopiarle a mano vorrebbe dire
 // perderne una ogni tanto. Ognuna si guarda una volta sola — finita in «visti»,
@@ -773,6 +834,7 @@ async function assorbiAppuntamenti() {
   const cartella = await sottocartella(CARTELLA, CARTELLA_APPUNTAMENTI, false);
   if (!cartella) return;
   const nuovi = [];
+  let recuperati = 0;
   for (const nome of await elencaFile(cartella)) {
     let doc;
     try {
@@ -781,7 +843,14 @@ async function assorbiAppuntamenti() {
       ILLEGGIBILI.push({ nome: CARTELLA_APPUNTAMENTI + '/' + nome, motivo: e.message });
       continue;
     }
-    if (LAVAGNA.visti.includes(doc.id)) continue;
+    const inserito = dataDelDocumento(doc);
+    if (LAVAGNA.visti.includes(doc.id)) {
+      // Le prenotazioni entrate prima che la lavagna segnasse la data: il loro
+      // documento ce l'ha ancora, ed è l'unico posto dove recuperarla.
+      const giaDentro = LAVAGNA.lavori.find(l => l.da === doc.id && !l.inserito);
+      if (giaDentro && inserito) { giaDentro.inserito = inserito; recuperati++; }
+      continue;
+    }
     LAVAGNA.visti.push(doc.id);
     nuovi.push(sistemaLavoro({
       cliente: doc.cliente.nome || '',
@@ -791,11 +860,13 @@ async function assorbiAppuntamenti() {
       settimana: doc.settimana || '',
       origine: 'prenotato dal cantiere',
       requisiti: doc.requisiti,
+      sopralluogo: doc.sopralluogo,
       stato: 'lista',
       da: doc.id,
+      inserito,
     }));
   }
-  if (!nuovi.length) return;
+  if (!nuovi.length && !recuperati) return;
   LAVAGNA.lavori = LAVAGNA.lavori.concat(nuovi);
   await salvaLavagna();
 }
@@ -904,6 +975,11 @@ function modificaCliente(id, campo, valore) {
   if (!c) return;
   c[campo] = valore;
   CLIENTI_DA_SALVARE = true;
+  // Il nome sta anche in testa alla scheda: si aggiorna lì, senza ridisegnare
+  // l'elenco sotto le dita.
+  if (campo === 'nome') document.querySelectorAll('[data-nome-di]').forEach(el => {
+    if (el.dataset.nomeDi === id) el.textContent = valore || 'senza nome';
+  });
   const cartello = document.getElementById('clienti-da-salvare');
   if (cartello) cartello.style.display = 'block';
 }
@@ -933,6 +1009,21 @@ async function caricaLavagna() {
   }
 }
 
+// «8», «8.30», «8:30», «830» → «08:30». Quello che non è un'ora torna vuoto: un
+// orario sbagliato su un appuntamento confermato è peggio di nessun orario.
+function leggiOra(testo) {
+  const m = String(testo || '').trim().match(/^(\d{1,2})(?:[:.,h]?(\d{2}))?$/);
+  if (!m) return '';
+  const h = Number(m[1]), min = Number(m[2] || 0);
+  if (h > 23 || min > 59) return '';
+  return String(h).padStart(2, '0') + ':' + String(min).padStart(2, '0');
+}
+
+// Dall'una in poi è pomeriggio. L'ora e la mezza giornata non possono dire due
+// cose diverse: è la mezza giornata che si adegua, perché l'ora è quella che si
+// è detta al cliente.
+const mezzaDellOra = ora => Number(ora.slice(0, 2)) >= 13 ? 'pomeriggio' : 'mattina';
+
 function sistemaLavoro(l) {
   return {
     id: l.id || 'l' + Math.random().toString(36).slice(2),
@@ -951,6 +1042,10 @@ function sistemaLavoro(l) {
     // la scrive prenotando e torna in giardino con l'agenda.
     note: l.note || '',
     rimandato: !!l.rimandato,
+    // Un sopralluogo è un'andata a guardare, non un lavoro: ha la sua colonna in
+    // coda perché in mezzo agli altri non si distingueva, e chi pianifica lo
+    // tratta diverso — mezz'ora, spesso col titolare, e da lì nasce un preventivo.
+    sopralluogo: !!l.sopralluogo,
     stato: l.stato === 'matita' || l.stato === 'confermato' ? l.stato : 'lista',
     // Fatto è un interruttore, non un terzo stato: così togliendo la spunta il
     // lavoro ritrova da sé se era a matita o confermato, senza che nessuno debba
@@ -961,12 +1056,20 @@ function sistemaLavoro(l) {
     // e niente su questa lavagna si muove da solo.
     giorno: l.giorno || '',
     mezza: l.mezza === 'pomeriggio' ? 'pomeriggio' : (l.mezza === 'mattina' ? 'mattina' : ''),
+    // L'ora detta al cliente, «08:30». Facoltativa e solo per chi ha già una
+    // mezza giornata: un lavoro in coda non ha un giorno, quindi non ha un'ora.
+    ora: leggiOra(l.ora),
     // Quante mezze giornate occupa. Si allarga e si stringe a mano, un passo per
     // volta: dedurle dalla stima ore legava la pianificazione a un numero messo
     // a occhio, e chi pianifica sa cose che la stima non sa. I lavori salvati
     // prima portavano un interruttore: si convertono una volta e amen.
     mezze: Math.max(1, Number(l.mezze) || (l.piuGiorni ? Math.ceil((Number(l.ore) || 0) / ORE_MEZZA) : 1)),
     da: l.da || '',
+    // Il giorno in cui è entrato sulla lavagna. Guardando la coda la domanda è
+    // anche «da quanto aspetta», e senza la data un lavoro di maggio e uno di ieri
+    // sembravano uguali. È arrivato dopo: i lavori messi a mano prima non ce
+    // l'hanno e restano senza, perché non è scritta da nessuna parte.
+    inserito: /^\d{4}-\d{2}-\d{2}$/.test(l.inserito || '') ? l.inserito : '',
   };
 }
 
@@ -988,7 +1091,7 @@ async function salvaLavagna() {
   return true;
 }
 
-// I prossimi sei appuntamenti pianificati, per chi è in giardino. Un file a parte
+// I prossimi dieci appuntamenti pianificati, per chi è in giardino. Un file a parte
 // e non un pezzo di lavagna.json: quello porta tutto — luoghi, ore, requisiti — e
 // deve restare in ufficio.
 async function salvaAgenda() {
@@ -1107,8 +1210,19 @@ function prodottoDellaRiga(doc, riga) {
   return op && op.prodottoID ? { id: op.prodottoID, nome: op.prodotto || '' } : null;
 }
 
+// L'operazione da cui nasce una riga, quando c'è.
+function operazioneDellaRiga(doc, riga) {
+  if (!riga.chiave || riga.chiave === 'manodopera') return null;
+  return (doc.operazioni || []).find(o => o.id && o.id === riga.chiave) || null;
+}
+
 function costruisciConteggio(doc, precedenti) {
-  const vecchie = Array.isArray(precedenti) ? precedenti : [];
+  const precedentiTutte = Array.isArray(precedenti) ? precedenti : [];
+  const gruppi = precedentiTutte.filter(x => x.gruppo);
+  // Le righe dentro un gruppo si riallineano come le altre — la quantità segue il
+  // rapportino — ma restano dentro il loro gruppo.
+  const vecchie = precedentiTutte.filter(x => !x.gruppo)
+    .concat(gruppi.flatMap(g => g.componenti || []));
   const righe = (doc.righe || []).map(r => {
     const vecchia = vecchie.find(x => x.chiave && x.chiave === r.chiave);
     const inListino = voceInListino(r.voceID);
@@ -1117,13 +1231,25 @@ function costruisciConteggio(doc, precedenti) {
     // quando un prodotto nuovo non ha ancora il suo prezzo.
     const daProdotto = prodottoDellaRiga(doc, r);
     const inProdotti = daProdotto ? prodottoInListino(daProdotto.id) : null;
+    const op = operazioneDellaRiga(doc, r);
+    const pianta = !!op && op.tipoID === 'piantumazione';
+    // Il prezzo delle piante arriva dal cantiere, che lo legge sull'etichetta del
+    // vaso: conta come un prezzo scritto a mano, e il listino non lo tocca.
+    const dalCantiere = r.prezzo == null || r.prezzo === '' || isNaN(Number(r.prezzo)) ? null : Number(r.prezzo);
     let prezzo = '';
     let manuale = false;
-    if (vecchia && vecchia.manuale) {
+    let daCantiere = false;
+    if (vecchia && vecchia.manuale && !(vecchia.daCantiere && dalCantiere != null)) {
       // Un prezzo scritto a mano non viene mai risovrascritto dal listino:
-      // chi l'ha messo sapeva qualcosa che il listino non sa.
+      // chi l'ha messo sapeva qualcosa che il listino non sa. Uno venuto dal
+      // cantiere invece segue il cantiere, se lo corregge rimandando il rapportino.
       prezzo = vecchia.prezzo;
       manuale = true;
+      daCantiere = !!vecchia.daCantiere;
+    } else if (dalCantiere != null) {
+      prezzo = dalCantiere;
+      manuale = true;
+      daCantiere = true;
     } else if (inProdotti && inProdotti.prezzo !== '' && inProdotti.prezzo != null) {
       prezzo = Number(inProdotti.prezzo);
     } else if (inListino && inListino.prezzo !== '' && inListino.prezzo != null) {
@@ -1138,19 +1264,94 @@ function costruisciConteggio(doc, precedenti) {
       // voce, e il nome commerciale — diserbi compresi — resta in ufficio. È la
       // stessa divisione di ore e operazioni: l'ufficio vede tutto, al cliente
       // va il conto.
-      voce: (inListino && inListino.voce) || r.voce || '',
+      // Le piante invece escono col loro nome, «Piante – Lauro»: il cliente vuole
+      // sapere cosa ha nel giardino, e non c'è un nome commerciale da tenere in casa.
+      voce: pianta && op.descrizione
+        ? ((inListino && inListino.voce) || 'Piante') + ' – ' + op.descrizione
+        : (inListino && inListino.voce) || r.voce || '',
       prodottoID: daProdotto ? daProdotto.id : '',
       prodotto: daProdotto ? daProdotto.nome : '',
       quantita: aCorpo ? 1 : (r.quantita == null ? '' : Number(r.quantita)),
       unita: aCorpo ? '' : ((inListino && inListino.unita) || r.unita || ''),
       prezzo,
       manuale,
+      daCantiere,
     };
   });
+  // Il gruppo tiene il suo nome e il suo prezzo: il prezzo l'ha deciso chi
+  // fattura, e come ogni prezzo scritto a mano non si sovrascrive. Se sotto è
+  // cambiato qualcosa lo dice la schermata, con la somma nuova accanto.
+  const nelGruppo = new Map();
+  gruppi.forEach(g => (g.componenti || []).forEach(c => { if (c.chiave) nelGruppo.set(c.chiave, g); }));
+  const libere = righe.filter(r => !nelGruppo.has(r.chiave));
+  const rifatti = gruppi.map(g => ({
+    ...g,
+    componenti: righe.filter(r => nelGruppo.get(r.chiave) === g)
+      .concat((g.componenti || []).filter(c => !c.chiave).map(c => ({ ...c }))),
+  })).filter(g => g.componenti.length);
   // Le righe aggiunte in ufficio non hanno chiave e non nascono da niente:
   // restano dove sono, come sul telefono.
-  vecchie.filter(r => !r.chiave).forEach(r => righe.push({ ...r }));
-  return righe;
+  const manuali = precedentiTutte.filter(r => !r.gruppo && !r.chiave).map(r => ({ ...r }));
+  return libere.concat(rifatti, manuali);
+}
+
+// ── ACCORPARE ──
+// Una siepe nuova porta ore, piante, pali, telo e pacciamatura, ognuno con la
+// sua riga. A volte al cliente deve arrivare una voce sola: si spuntano, si
+// uniscono, si dà un nome al gruppo. Si fattura **a corpo** — quantità 1, il
+// prezzo è del gruppo — e come prezzo si propone la somma, che resta da decidere.
+// Le righe unite non si buttano: stanno dentro il gruppo, così in ufficio si vede
+// ancora di cosa è fatto e si può sciogliere. Al cliente arriva solo il gruppo.
+const sommaDi = righe => totaleConteggio(righe).totale;
+
+function sceltaRiga(i, acceso) {
+  if (!LAVORO) return;
+  if (!LAVORO.scelte) LAVORO.scelte = new Set();
+  if (acceso) LAVORO.scelte.add(i); else LAVORO.scelte.delete(i);
+  const b = document.getElementById('bottone-unisci');
+  if (b) {
+    const n = LAVORO.scelte.size;
+    b.disabled = n < 2;
+    b.textContent = n < 2 ? 'Unisci le voci spuntate' : 'Unisci ' + n + ' voci';
+  }
+}
+
+function unisciRighe() {
+  if (!LAVORO || !LAVORO.scelte || LAVORO.scelte.size < 2) return;
+  const indici = [...LAVORO.scelte].sort((a, b) => a - b);
+  const dentro = indici.map(i => LAVORO.righe[i]).filter(r => r && !r.gruppo);
+  if (dentro.length < 2) return;
+  const somma = sommaDi(dentro);
+  const gruppo = { gruppo: true, chiave: '', voceID: '', voce: 'Voci unite', quantita: 1, unita: '',
+    prezzo: somma, manuale: true, sommaVista: somma, componenti: dentro };
+  const primo = indici[0];
+  LAVORO.righe = LAVORO.righe.filter(r => !dentro.includes(r));
+  LAVORO.righe.splice(Math.min(primo, LAVORO.righe.length), 0, gruppo);
+  LAVORO.scelte = new Set();
+  disegnaLavoro();
+  pianificaSalvataggio();
+  // Il nome da dare è la prima cosa da fare: il campo è già lì, pronto.
+  const campo = document.getElementById('nome-gruppo-' + LAVORO.righe.indexOf(gruppo));
+  if (campo) { campo.focus(); campo.select(); }
+}
+
+function sciogliGruppo(i) {
+  const g = LAVORO && LAVORO.righe[i];
+  if (!g || !g.gruppo) return;
+  LAVORO.righe.splice(i, 1, ...g.componenti);
+  disegnaLavoro();
+  pianificaSalvataggio();
+}
+
+// La somma è cambiata sotto il gruppo (il cantiere ha rimandato il rapportino):
+// si accetta quella nuova solo con un tocco, mai da sé.
+function usaSommaGruppo(i) {
+  const g = LAVORO && LAVORO.righe[i];
+  if (!g || !g.gruppo) return;
+  g.prezzo = sommaDi(g.componenti);
+  g.sommaVista = g.prezzo;
+  disegnaLavoro();
+  pianificaSalvataggio();
 }
 
 // Come si legge una riga **in ufficio**: la voce più il prodotto, quando c'è.
@@ -1183,6 +1384,54 @@ function totaleConteggio(righe) {
 
 async function archivia() {
   if (!LAVORO) return;
+  clearTimeout(TIMER_SALVATAGGIO);
+  const doc = LAVORO.doc;
+  const dallArchivio = LAVORO.dallArchivio;
+  const conteggio = totaleConteggio(LAVORO.righe);
+  if (!await scriviInArchivio()) return;
+  await ricarica();
+  LAVORO = null;
+  if (dallArchivio) { ARCHIVIATO = doc.id; vaiA('archiviato'); } else vaiA('arrivi');
+  avvisa('Archiviato: ' + (doc.cliente && doc.cliente.nome ? doc.cliente.nome : 'lavoro') + ' · ' + formattaEuro(conteggio.totale));
+}
+
+// Le modifiche al conto si salvano da sole, un momento dopo l'ultima. Col bottone
+// soltanto, capitava di correggere i prezzi, passare ad altro e lasciare in
+// archivio — o da nessuna parte — gli importi di prima, mentre in ufficio si
+// credeva il conto giusto. Salvare vuol dire archiviare: è l'archivio il posto
+// dove il conto esiste, e il lavoro lascia «in arrivo» appena ci si mette mano.
+let TIMER_SALVATAGGIO = null;
+
+function pianificaSalvataggio() {
+  if (!LAVORO) return;
+  LAVORO.daSalvare = true;
+  segnaStatoSalvataggio('Modifiche da salvare…', false);
+  clearTimeout(TIMER_SALVATAGGIO);
+  TIMER_SALVATAGGIO = setTimeout(salvaSubito, 800);
+}
+
+async function salvaSubito() {
+  clearTimeout(TIMER_SALVATAGGIO);
+  if (!LAVORO || !LAVORO.daSalvare) return true;
+  const ok = await scriviInArchivio();
+  if (ok && LAVORO) {
+    LAVORO.daSalvare = false;
+    LAVORO.salvato = new Date().toISOString();
+    segnaStatoSalvataggio('Salvato in archivio alle ' +
+      new Date(LAVORO.salvato).toLocaleTimeString('it-IT', { hour: '2-digit', minute: '2-digit' }), false);
+  }
+  return ok;
+}
+
+function segnaStatoSalvataggio(testo, brutto) {
+  const el = document.getElementById('stato-salvataggio');
+  if (!el) return;
+  el.textContent = testo;
+  el.classList.toggle('brutto', !!brutto);
+}
+
+async function scriviInArchivio() {
+  if (!LAVORO) return false;
   const doc = LAVORO.doc;
   const conteggio = totaleConteggio(LAVORO.righe);
   const lavoro = {
@@ -1197,6 +1446,8 @@ async function archivia() {
     totale: conteggio.totale,
     righeSenzaPrezzo: conteggio.escluse,
     stato: LAVORO.stato || 'da-fatturare',
+    // Riscrivere il conto non dimentica che era già passato alla posta.
+    inPosta: (ARCHIVIO.find(l => l.id === doc.id) || {}).inPosta || '',
     // Il rapportino ci viaggia dentro per intero: fra due anni questo file deve
     // raccontare il lavoro da solo, anche se la cartella degli arrivi è stata
     // svuotata e il telefono cambiato.
@@ -1220,13 +1471,19 @@ async function archivia() {
     // Un salvataggio fallito si dice a chiaro schermo. Se restasse in console,
     // l'unica traccia di questo lavoro tornerebbe a essere il file in arrivo.
     avvisa('Non ho potuto archiviare: ' + e.message, true);
-    return;
+    segnaStatoSalvataggio('Non salvato: ' + e.message, true);
+    return false;
   }
 
-  await ricarica();
-  LAVORO = null;
-  vaiA('arrivi');
-  avvisa('Archiviato: ' + (doc.cliente && doc.cliente.nome ? doc.cliente.nome : 'lavoro') + ' · ' + formattaEuro(conteggio.totale));
+  // Si aggiorna quello che l'app ha in memoria senza rileggere la cartella: una
+  // rilettura ridisegnerebbe la schermata mentre si sta scrivendo un prezzo.
+  const inMemoria = { ...leggiLavoro(lavoro), anno, file: nome };
+  const i = ARCHIVIO.findIndex(l => l.id === doc.id);
+  if (i >= 0) ARCHIVIO[i] = inMemoria; else ARCHIVIO.push(inMemoria);
+  ARRIVI = ARRIVI.filter(a => !(a.doc.id === doc.id && Number(a.doc.revisione) <= Number(doc.revisione)));
+  const pallino = document.getElementById('pallino-arrivi');
+  if (pallino) { pallino.textContent = ARRIVI.length; pallino.classList.toggle('visibile', ARRIVI.length > 0); }
+  return true;
 }
 
 async function cambiaStato(id, stato) {
@@ -1245,7 +1502,7 @@ async function cambiaStato(id, stato) {
   }
   lavoro.stato = stato;
   disegna();
-  avvisa(stato === 'fatturato' ? 'Segnato come fatturato' : 'Rimesso fra i lavori da fatturare');
+  avvisa(stato === 'fatturato' ? 'Segnato come pagato' : 'Rimesso fra i lavori da pagare');
 }
 
 // Togliere un lavoro dall'archivio. Non è una correzione — quella si fa
@@ -1358,8 +1615,15 @@ function segnalaListinoDaSalvare() {
 // importo su un foglio che esce senza dire se l'IVA c'è dentro è un'ambiguità
 // che qualcuno paga.
 
-function costruisciFoglio({ cliente, data, righe }) {
-  const { totale, escluse } = totaleConteggio(righe);
+// Un foglio può portare più lavori dello stesso cliente: due giornate, due
+// rapportini, un conto solo. Ogni lavoro resta un blocco con la sua data e il suo
+// subtotale — il cliente deve poter vedere cosa è stato fatto quando — e il totale
+// in fondo li somma. Con un lavoro solo il foglio è quello di sempre.
+function costruisciFoglio({ cliente, data, righe, lavori, senzaIntestazione }) {
+  const blocchi = lavori || [{ data, righe }];
+  const piu = blocchi.length > 1;
+  const tutte = blocchi.flatMap(b => b.righe || []);
+  const { totale, escluse } = totaleConteggio(tutte);
   const sede = [IMPOSTAZIONI.indirizzo, IMPOSTAZIONI.citta].filter(x => x).join(' · ');
   const contatti = [
     IMPOSTAZIONI.piva ? 'P.IVA ' + IMPOSTAZIONI.piva : '',
@@ -1367,7 +1631,9 @@ function costruisciFoglio({ cliente, data, righe }) {
     IMPOSTAZIONI.email,
   ].filter(x => x).join(' · ');
 
-  let html = '<div class="intestazione">' +
+  // Senza intestazione si stampa sulla carta intestata, che i dati dell'azienda
+  // li ha già: ripeterli sopra li sovrapporrebbe al logo.
+  let html = senzaIntestazione ? '' : '<div class="intestazione">' +
     '<div class="azienda">' + perValore(IMPOSTAZIONI.azienda) + '</div>' +
     (sede ? '<div class="recapiti">' + perValore(sede) + '</div>' : '') +
     (contatti ? '<div class="recapiti">' + perValore(contatti) + '</div>' : '') +
@@ -1380,13 +1646,15 @@ function costruisciFoglio({ cliente, data, righe }) {
       ((cliente && cliente.indirizzo) ? '<br>' + perValore(cliente.indirizzo) : '') +
       ((cliente && cliente.citta) ? '<br>' + perValore(cliente.citta) : '') +
     '</div>' +
-    '<div style="text-align:right"><div class="etichetta-campo">Data del lavoro</div>' +
-      '<strong>' + formattaData(data) + '</strong></div>' +
+    '<div style="text-align:right"><div class="etichetta-campo">' + (piu ? 'Date dei lavori' : 'Data del lavoro') + '</div>' +
+      '<strong>' + blocchi.map(b => formattaData(b.data)).join('<br>') + '</strong></div>' +
   '</div>';
 
   html += '<table><thead><tr><th>Voce</th><th class="num">Quantità</th>' +
     '<th>Unità</th><th class="num">Prezzo</th><th class="num">Importo</th></tr></thead><tbody>';
-  (righe || []).forEach(r => {
+  blocchi.forEach(b => {
+  if (piu) html += '<tr class="riga-blocco"><td colspan="5">Lavoro del ' + formattaData(b.data) + '</td></tr>';
+  (b.righe || []).forEach(r => {
     const imp = importoRiga(r);
     html += '<tr>' +
       '<td>' + perValore(r.voce) + '</td>' +
@@ -1397,6 +1665,9 @@ function costruisciFoglio({ cliente, data, righe }) {
       // si valuta, come fa il testo della mail sul telefono.
       '<td class="num">' + (imp == null ? '<span class="da-definire">da definire</span>' : formattaEuro(imp)) + '</td>' +
     '</tr>';
+  });
+  if (piu) html += '<tr class="riga-subtotale"><td colspan="4">Subtotale</td>' +
+    '<td class="num">' + formattaEuro(totaleConteggio(b.righe).totale) + '</td></tr>';
   });
   html += '<tr class="riga-totale"><td colspan="4">Totale (IVA inclusa)</td>' +
     '<td class="num">' + formattaEuro(totale) + '</td></tr>';
@@ -1413,9 +1684,15 @@ function costruisciFoglio({ cliente, data, righe }) {
   return html;
 }
 
-function stampaConto(origine, id) {
-  let cliente, data, righe;
-  if (origine === 'lavoro') {
+function stampaConto(origine, id, senzaIntestazione) {
+  let cliente, data, righe, lavori;
+  if (origine === 'insieme') {
+    const scelti = lavoriScelti();
+    if (scelti.length < 2) return;
+    cliente = scelti[0].cliente || {};
+    data = scelti[0].data;
+    lavori = scelti.map(l => ({ data: l.data, righe: l.righe }));
+  } else if (origine === 'lavoro') {
     if (!LAVORO) return;
     cliente = LAVORO.doc.cliente; data = LAVORO.doc.data; righe = LAVORO.righe;
   } else {
@@ -1426,11 +1703,11 @@ function stampaConto(origine, id) {
 
   // Un foglio che va a un cliente senza dire da chi arriva non serve a niente:
   // si avvisa, ma la decisione resta di chi stampa.
-  if (!String(IMPOSTAZIONI.azienda || '').trim()) {
+  if (!senzaIntestazione && !String(IMPOSTAZIONI.azienda || '').trim()) {
     if (!confirm('Manca l\'intestazione con i dati dell\'azienda: si compila in Impostazioni.\n\nStampare comunque?')) return;
   }
 
-  document.getElementById('foglio').innerHTML = costruisciFoglio({ cliente, data, righe });
+  document.getElementById('foglio').innerHTML = costruisciFoglio({ cliente, data, righe, lavori, senzaIntestazione });
 
   // Chrome propone il titolo della pagina come nome del file quando si salva in
   // PDF, e lo legge a stampa avviata: rimetterlo a posto subito darebbe un PDF
@@ -1506,6 +1783,9 @@ function aggiornaStatoCartella(testo) {
 // ── NAVIGAZIONE ──
 
 function vaiA(pagina) {
+  // Uscendo dalla schermata del lavoro quello che resta da salvare si salva ora:
+  // il conto si legge subito, prima del primo await, quindi va bene anche così.
+  if (PAGINA === 'lavoro' && pagina !== 'lavoro') salvaSubito();
   PAGINA = pagina;
   document.querySelectorAll('.pagina').forEach(p => p.classList.remove('attiva'));
   const p = document.getElementById('pagina-' + pagina);
@@ -1552,8 +1832,7 @@ function disegnaArrivi() {
   const c = document.getElementById('pagina-arrivi');
   if (!CARTELLA) { c.innerHTML = schermataBenvenuto(); return; }
 
-  let html = '<h2 class="titolo-pagina">In arrivo</h2>';
-  html += '<p class="sottotitolo">Rapportini depositati dal telefono e non ancora archiviati</p>';
+  let html = '<p class="sottotitolo">Rapportini depositati dal telefono e non ancora archiviati</p>';
 
   html += bloccoIlleggibili();
 
@@ -1921,7 +2200,7 @@ function disegnaPreventivo() {
   html += '<div id="da-confermare" class="avvertenza" style="display:none"></div>';
 
   html += '<div class="scheda"><table class="elenco"><thead><tr>' +
-    '<th>Descrizione</th><th class="qta">Q.tà</th><th>UM</th><th class="num">Prezzo</th>' +
+    '<th>Descrizione</th><th class="num">Q.tà</th><th>UM</th><th class="num">Prezzo</th>' +
     '<th class="num">Importo</th><th></th></tr></thead><tbody>';
   d.righe.forEach((r, i) => {
     const imp = r.tipo === 'tariffa' ? null : importoRiga(r);
@@ -1932,7 +2211,7 @@ function disegnaPreventivo() {
         TIPI_RIGA_PREVENTIVO.map(x => '<option value="' + x.id + '"' +
           (x.id === r.tipo ? ' selected' : '') + '>' + x.nome + '</option>').join('') +
         '</select></td>' +
-      '<td class="qta">' + (r.tipo === 'tariffa' ? '<span class="meta">—</span>' :
+      '<td class="num">' + (r.tipo === 'tariffa' ? '<span class="meta">—</span>' :
         '<input type="number" step="any" class="stretto" value="' + perValore(r.quantita) + '" ' +
         'oninput="modificaRigaPreventivo(' + i + ', \'quantita\', this.value)">') + '</td>' +
       '<td>' + perValore(r.unita) + '</td>' +
@@ -2084,7 +2363,7 @@ function costruisciFoglioPreventivo(d) {
   html += '<p class="apertura">A seguito Vostra gentile richiesta, Vi comunichiamo la nostra ' +
     'migliore offerta per la seguente fornitura:</p>';
 
-  html += '<table><thead><tr><th>Descrizione</th><th class="qta">Q.tà</th>' +
+  html += '<table><thead><tr><th>Descrizione</th><th class="num">Q.tà</th>' +
     '<th>UM</th><th class="num">Costo un.</th><th class="num">Totale</th></tr></thead><tbody>';
   d.righe.filter(r => r.tipo !== 'tariffa').forEach(r => {
     const imp = importoRiga(r);
@@ -2092,7 +2371,7 @@ function costruisciFoglioPreventivo(d) {
       // Sul foglio va la descrizione, non la voce di listino: «Piante» non si
       // capisce, «Fornitura e messa a dimora di lauro 80-100» sì.
       '<td>' + perValore(r.descrizione || r.voce) + '</td>' +
-      '<td class="qta">' + perValore(formattaQuantita(r.quantita)) + '</td>' +
+      '<td class="num">' + perValore(formattaQuantita(r.quantita)) + '</td>' +
       '<td>' + perValore(r.unita) + '</td>' +
       '<td class="num">' + (r.prezzo === '' || r.prezzo == null ? '' : formattaEuro(r.prezzo)) + '</td>' +
       '<td class="num">' + (imp == null ? '<span class="da-definire">da definire</span>' : formattaEuro(imp)) + '</td>' +
@@ -2228,7 +2507,8 @@ function disegnaLavoro() {
     d.ore.fasce.forEach(f => {
       html += '<tr><td>' + perValore(f.inizio) + ' – ' + perValore(f.fine) + '</td>' +
         '<td>' + f.persone + (f.persone === 1 ? ' persona' : ' persone') + '</td>' +
-        '<td class="num">' + formattaOre(f.ore) + '</td></tr>';
+        '<td class="num">' + formattaOre(f.ore) + '</td></tr>' +
+        (f.cosa ? '<tr class="cosa-fascia"><td colspan="3">' + perValore(f.cosa) + '</td></tr>' : '');
     });
     html += '</tbody></table>';
   }
@@ -2260,11 +2540,15 @@ function disegnaLavoro() {
   }
 
   html += '<div class="scheda"><div class="titolo-sezione">Conto</div>';
-  html += '<table class="elenco"><thead><tr><th>Voce</th><th class="num">Quantità</th>' +
+  html += '<table class="elenco"><thead><tr><th></th><th>Voce</th><th class="num">Quantità</th>' +
     '<th>Unità</th><th class="num">Prezzo</th><th class="num">Importo</th><th></th></tr></thead><tbody>';
+  LAVORO.scelte = new Set();
   LAVORO.righe.forEach((r, i) => {
     const imp = importoRiga(r);
+    if (r.gruppo) { html += rigaGruppo(r, i, imp); return; }
     html += '<tr>' +
+      '<td><input type="checkbox" class="scegli" title="Spunta per unirla ad altre in una voce sola"' +
+        ' onclick="sceltaRiga(' + i + ', this.checked)"></td>' +
       '<td>' + (r.chiave ? perValore(voceConProdotto(r)) :
         '<input type="text" value="' + perValore(r.voce) + '" oninput="modificaRiga(' + i + ', \'voce\', this.value)">') + '</td>' +
       '<td class="num"><input type="text" class="quantita" value="' + perValore(formattaQuantita(r.quantita)) +
@@ -2279,18 +2563,45 @@ function disegnaLavoro() {
     '</tr>';
   });
   html += '</tbody></table>';
-  html += '<div class="bottoni"><button class="secondaria piccola" onclick="aggiungiRiga()">+ Aggiungi una riga</button></div>';
+  html += '<div class="bottoni"><button class="secondaria piccola" onclick="aggiungiRiga()">+ Aggiungi una riga</button>' +
+    '<button class="secondaria piccola" id="bottone-unisci" onclick="unisciRighe()" disabled>Unisci le voci spuntate</button></div>';
   html += '<div id="riepilogo">' + riepilogoConto() + '</div>';
   html += '</div>';
 
   html += '<div class="bottoni">' +
     '<button class="principale" onclick="archivia()">' +
-      (LAVORO.corretto ? 'Aggiorna in archivio' : 'Archivia') + '</button>' +
+      (LAVORO.dallArchivio ? 'Fatto' : LAVORO.corretto ? 'Aggiorna in archivio' : 'Archivia') + '</button>' +
     '<button class="secondaria" onclick="stampaConto(\'lavoro\')">Stampa il conto</button>' +
-    '<button class="secondaria" onclick="tornaAgliArrivi()">Torna in arrivo</button>' +
+    '<button class="secondaria" onclick="stampaConto(\'lavoro\', \'\', true)">Stampa senza intestazione</button>' +
+    '<button class="secondaria" onclick="tornaAgliArrivi()">' + (LAVORO.dallArchivio ? 'Torna al lavoro archiviato' : 'Torna in arrivo') + '</button>' +
+    '<span id="stato-salvataggio" class="meta stato-salvataggio">' +
+      (LAVORO.daSalvare ? 'Modifiche da salvare…' : LAVORO.salvato ? 'Salvato in archivio' :
+        'Le modifiche si salvano da sole in archivio') + '</span>' +
   '</div>';
 
   c.innerHTML = html;
+}
+
+function rigaGruppo(g, i, imp) {
+  const somma = sommaDi(g.componenti);
+  const cambiata = Math.abs(somma - (Number(g.sommaVista) || 0)) > 0.005;
+  return '<tr class="riga-gruppo"><td></td>' +
+      '<td><input type="text" id="nome-gruppo-' + i + '" value="' + perValore(g.voce) + '"' +
+        ' oninput="modificaRiga(' + i + ', \'voce\', this.value)" title="Il nome che legge il cliente"></td>' +
+      '<td class="num">1</td><td class="meta">a corpo</td>' +
+      '<td class="num"><input type="text" class="prezzo" value="' + perValore(formattaQuantita(g.prezzo)) + '"' +
+        ' oninput="modificaRiga(' + i + ', \'prezzo\', this.value)"></td>' +
+      '<td class="num" id="importo-' + i + '">' + (imp == null ? '—' : formattaEuro(imp)) + '</td>' +
+      '<td class="num"><button class="secondaria piccola" onclick="sciogliGruppo(' + i + ')" title="Rimette le voci com\'erano">Sciogli</button></td>' +
+    '</tr>' +
+    '<tr class="dentro-gruppo"><td></td><td colspan="6">' +
+      'Dentro: ' + g.componenti.map(c => perValore(voceConProdotto(c)) +
+        (c.quantita !== '' && c.quantita != null ? ' ' + perValore(formattaQuantita(c.quantita)) + (c.unita ? ' ' + perValore(c.unita) : '') : '')).join(' · ') +
+      ' — somma ' + formattaEuro(somma) +
+      (cambiata ? '<div class="avvertenza" style="margin:6px 0 0">Le voci dentro sono cambiate: la somma ora è ' +
+        formattaEuro(somma) + ', il prezzo del gruppo è rimasto ' + formattaEuro(g.prezzo) + '. ' +
+        '<button class="secondaria piccola" onclick="usaSommaGruppo(' + i + ')">Usa la somma</button></div>' : '') +
+    '</td></tr>';
 }
 
 function riepilogoConto() {
@@ -2313,7 +2624,7 @@ function modificaRiga(indice, campo, valore) {
   if (campo === 'quantita' || campo === 'prezzo') {
     r[campo] = valore.trim() === '' ? '' : valore.replace(',', '.');
     // Da qui in poi quel prezzo è dell'ufficio, e il listino non lo tocca più.
-    if (campo === 'prezzo') r.manuale = true;
+    if (campo === 'prezzo') { r.manuale = true; r.daCantiere = false; }
   } else {
     r[campo] = valore;
   }
@@ -2322,28 +2633,110 @@ function modificaRiga(indice, campo, valore) {
   if (cella) cella.textContent = imp == null ? '—' : formattaEuro(imp);
   const riepilogo = document.getElementById('riepilogo');
   if (riepilogo) riepilogo.innerHTML = riepilogoConto();
+  pianificaSalvataggio();
 }
 
 function aggiungiRiga() {
   if (!LAVORO) return;
   LAVORO.righe.push({ chiave: '', voceID: '', voce: '', quantita: '', unita: '', prezzo: '', manuale: true });
   disegnaLavoro();
+  pianificaSalvataggio();
 }
 
 function togliRiga(indice) {
   if (!LAVORO) return;
   LAVORO.righe.splice(indice, 1);
   disegnaLavoro();
+  pianificaSalvataggio();
 }
 
-function tornaAgliArrivi() {
+async function tornaAgliArrivi() {
+  await salvaSubito();
+  const dallArchivio = LAVORO && LAVORO.dallArchivio;
+  const id = LAVORO && LAVORO.doc.id;
   LAVORO = null;
-  vaiA('arrivi');
+  if (dallArchivio) { ARCHIVIATO = id; vaiA('archiviato'); } else vaiA('arrivi');
+}
+
+// Un conto ancora da pagare si corregge senza tornare in arrivo: si riapre nella
+// stessa schermata del lavoro, con quello che c'era. Si scrive nello stesso file
+// d'archivio, e un rapportino corretto che arriva dopo lo ritrova così com'è —
+// prezzi scritti a mano, righe aggiunte e gruppi compresi.
+function modificaArchiviato(id) {
+  const l = ARCHIVIO.find(x => x.id === id);
+  if (!l || l.stato === 'fatturato' || !l.rapportino) return;
+  if (l.inPosta && !confirm('Questo conto è già passato alla posta il ' + formattaData(l.inPosta) +
+    '.\n\nSe lo cambi, ricordati di rimandarlo al cliente. Continuare?')) return;
+  LAVORO = {
+    doc: l.rapportino,
+    righe: JSON.parse(JSON.stringify(l.righe || [])),
+    stato: l.stato,
+    corretto: false,
+    dallArchivio: true,
+    salvato: l.archiviato || '',
+  };
+  vaiA('lavoro');
 }
 
 // ── ARCHIVIO ──
 
 let FILTRO_ARCHIVIO = '';
+let CLIENTE_ARCHIVIO = null;
+// I lavori spuntati per un conto unico. Solo dello stesso cliente: unire due
+// clienti vorrebbe dire mandare a uno il conto dell'altro.
+let SCELTI_ARCHIVIO = new Set();
+
+const stessoNome = (a, b) => !!String(a || '').trim() &&
+  String(a || '').trim().toLowerCase() === String(b || '').trim().toLowerCase();
+const stessoCliente = (a, b) => (a && b && a.id && a.id === b.id) || stessoNome(a && a.nome, b && b.nome);
+
+function lavoriScelti() {
+  return ARCHIVIO.filter(l => SCELTI_ARCHIVIO.has(l.id))
+    .sort((a, b) => String(a.data).localeCompare(String(b.data)));
+}
+
+function scegliLavoro(id, acceso) {
+  const l = ARCHIVIO.find(x => x.id === id);
+  if (!l) return;
+  if (acceso) {
+    const altro = lavoriScelti()[0];
+    if (altro && !stessoCliente(altro.cliente, l.cliente)) {
+      avvisa('Un conto unico è per un cliente solo: hai già scelto un lavoro di ' +
+        ((altro.cliente && altro.cliente.nome) || 'un altro cliente'), true);
+    } else {
+      SCELTI_ARCHIVIO.add(id);
+    }
+  } else {
+    SCELTI_ARCHIVIO.delete(id);
+  }
+  const el = document.getElementById('elenco-archivio');
+  if (el) el.innerHTML = righeArchivio();
+}
+
+function annullaScelta() {
+  SCELTI_ARCHIVIO.clear();
+  const el = document.getElementById('elenco-archivio');
+  if (el) el.innerHTML = righeArchivio();
+}
+
+function barraScelti() {
+  const scelti = lavoriScelti();
+  if (!scelti.length) return '';
+  const { totale } = totaleConteggio(scelti.flatMap(l => l.righe || []));
+  const nome = (scelti[0].cliente && scelti[0].cliente.nome) || 'senza nome';
+  const due = scelti.length > 1;
+  return '<div class="barra-scelti">' +
+    '<span><b>' + scelti.length + (due ? ' lavori' : ' lavoro') + '</b> di ' + perValore(nome) +
+      ' · ' + formattaEuro(totale) + '</span>' +
+    (due ? '' : '<span class="meta">spuntane un altro dello stesso cliente per un conto unico</span>') +
+    '<span style="margin-left:auto; display:flex; gap:8px; flex-wrap:wrap">' +
+      '<button class="principale piccola" onclick="stampaConto(\'insieme\')"' + (due ? '' : ' disabled') + '>Stampa insieme</button>' +
+      '<button class="secondaria piccola" onclick="stampaConto(\'insieme\', \'\', true)"' + (due ? '' : ' disabled') + '>Insieme senza intestazione</button>' +
+      '<button class="secondaria piccola" onclick="inviaInsieme()"' + (due ? '' : ' disabled') + '>Manda insieme</button>' +
+      '<button class="secondaria piccola" onclick="fatturaInsieme()">Segna pagat' + (due ? 'i' : 'o') + '</button>' +
+      '<button class="secondaria piccola" onclick="annullaScelta()">Annulla</button>' +
+    '</span></div>';
+}   // { id, nome } quando si arriva da «Vedi conti»
 let STATO_ARCHIVIO = 'tutti';
 let RACCOLTA_ARCHIVIO = 'data';
 let ARCHIVIATO = null;
@@ -2352,8 +2745,7 @@ function disegnaArchivio() {
   const c = document.getElementById('pagina-archivio');
   if (!CARTELLA) { c.innerHTML = schermataBenvenuto(); return; }
 
-  let html = '<h2 class="titolo-pagina">Archivio</h2>';
-  html += '<p class="sottotitolo">' + ARCHIVIO.length +
+  let html = '<p class="sottotitolo">' + ARCHIVIO.length +
     (ARCHIVIO.length === 1 ? ' lavoro archiviato' : ' lavori archiviati') + '</p>';
 
   html += '<div class="tavolo">';
@@ -2361,10 +2753,13 @@ function disegnaArchivio() {
   // ── a sinistra il gestionale: cosa è ancora da incassare ──
   // Sta lì e resta lì mentre si scorre l'elenco: è la domanda che in ufficio ci
   // si fa per prima, e un numero in fondo alla pagina non risponde a nessuno.
+  // Arrivando da «Vedi conti» anche il gestionale parla di quel cliente: quanto
+  // gli si deve è la domanda per cui si è aperto il suo archivio.
+  const base = CLIENTE_ARCHIVIO ? contiDelCliente(CLIENTE_ARCHIVIO) : ARCHIVIO;
   const conti = {
-    'da-fatturare': ARCHIVIO.filter(l => l.stato === 'da-fatturare'),
-    fatturato: ARCHIVIO.filter(l => l.stato === 'fatturato'),
-    tutti: ARCHIVIO,
+    'da-fatturare': base.filter(l => l.stato === 'da-fatturare'),
+    fatturato: base.filter(l => l.stato === 'fatturato'),
+    tutti: base,
   };
   const somma = elenco => elenco.reduce((s, l) => s + (Number(l.totale) || 0), 0);
   const voce = (chiave, etichetta) => {
@@ -2379,8 +2774,8 @@ function disegnaArchivio() {
 
   html += '<section class="coda"><h3 class="titolo-colonna">Gestionale</h3>' +
     '<div class="elenco-stati">' +
-      voce('da-fatturare', 'Da fatturare') +
-      voce('fatturato', 'Fatturato') +
+      voce('da-fatturare', 'Da pagare') +
+      voce('fatturato', 'Pagati') +
       voce('tutti', 'Tutto') +
     '</div>' +
     '<h3 class="titolo-colonna" style="margin-top:18px">Raccogli</h3>' +
@@ -2394,27 +2789,48 @@ function disegnaArchivio() {
       perValore(FILTRO_ARCHIVIO) + '" oninput="filtraArchivio(this.value)"></div>' +
   '</section>';
 
-  html += '<section style="flex:1; min-width:0" id="elenco-archivio">' + righeArchivio() + '</section>';
+  html += '<section style="flex:1; min-width:0">' +
+    (CLIENTE_ARCHIVIO ? '<div class="solo-cliente">Solo i conti di <b>' + perValore(CLIENTE_ARCHIVIO.nome) +
+      '</b><button class="bottone-cart" style="margin-left:auto" onclick="tuttiIClienti()">✕ Tutti i clienti</button></div>' : '') +
+    '<div id="elenco-archivio">' + righeArchivio() + '</div></section>';
   html += '</div>';
   c.innerHTML = html;
 }
 
 function lavoriArchivio() {
   const filtro = FILTRO_ARCHIVIO.trim().toLowerCase();
+  const delCliente = CLIENTE_ARCHIVIO ? new Set(contiDelCliente(CLIENTE_ARCHIVIO)) : null;
   return ARCHIVIO
+    .filter(l => !delCliente || delCliente.has(l))
     .filter(l => STATO_ARCHIVIO === 'tutti' || l.stato === STATO_ARCHIVIO)
     .filter(l => !filtro || String((l.cliente && l.cliente.nome) || '').toLowerCase().includes(filtro))
     .sort((a, b) => String(b.data).localeCompare(String(a.data)));
 }
 
 function righeArchivio() {
+  return barraScelti() + righeArchivioSole();
+}
+
+function righeArchivioSole() {
   const lavori = lavoriArchivio();
   if (!lavori.length) {
     return '<div class="scheda"><div class="vuoto-elenco">' +
-      (FILTRO_ARCHIVIO.trim() || STATO_ARCHIVIO !== 'tutti'
+      (FILTRO_ARCHIVIO.trim() || STATO_ARCHIVIO !== 'tutti' || CLIENTE_ARCHIVIO
         ? 'Nessun lavoro con questi filtri.' : 'Niente in archivio.') + '</div></div>';
   }
-  if (RACCOLTA_ARCHIVIO !== 'cliente') return lavori.map(schedaArchivio).join('');
+  if (RACCOLTA_ARCHIVIO !== 'cliente') {
+    // Guardando «tutto», quello che è ancora da incassare sta sopra e il resto
+    // sotto, divisi: mescolati, un conto aperto si perdeva fra quelli chiusi.
+    if (STATO_ARCHIVIO !== 'tutti') return lavori.map(schedaArchivio).join('');
+    const aperti = lavori.filter(l => l.stato !== 'fatturato');
+    const chiusi = lavori.filter(l => l.stato === 'fatturato');
+    const somma = elenco => elenco.reduce((t, l) => t + (Number(l.totale) || 0), 0);
+    const parte = (titolo, elenco) => elenco.length
+      ? '<h3 class="titolo-colonna parte-archivio">' + titolo + ' · ' + elenco.length + ' · ' + formattaEuro(somma(elenco)) + '</h3>' +
+        elenco.map(schedaArchivio).join('')
+      : '';
+    return parte('Da pagare', aperti) + parte('Pagati', chiusi);
+  }
 
   // Raccolti per cliente: quanti lavori ha e quanto di suo è ancora da
   // incassare. È la riga che serve prima di alzare il telefono.
@@ -2443,11 +2859,17 @@ function righeArchivio() {
 function schedaArchivio(l) {
   const id = perOnclick(l.id);
   const nome = (l.cliente && l.cliente.nome) || 'senza nome';
-  return '<div class="scheda cliccabile" onclick="apriArchiviato(\'' + id + '\')">' +
+  const scelto = SCELTI_ARCHIVIO.has(l.id);
+  return '<div class="scheda cliccabile' + (scelto ? ' scelta' : '') + '" onclick="apriArchiviato(\'' + id + '\')">' +
     '<div class="riga-scheda">' +
+      // La casella non apre il lavoro: il clic resta suo.
+      '<input type="checkbox" class="scegli" title="Per un conto unico con altri lavori dello stesso cliente"' +
+        (scelto ? ' checked' : '') + ' onclick="event.stopPropagation(); scegliLavoro(\'' + id + '\', this.checked)">' +
       '<span class="nome-cliente">' + perValore(nome) + '</span>' +
-      '<span class="etichetta ' + (l.stato === 'fatturato' ? 'fatturato">fatturato' : 'da-fatturare">da fatturare') + '</span>' +
+      '<span class="etichetta ' + (l.stato === 'fatturato' ? 'fatturato">pagato' : 'da-fatturare">da pagare') + '</span>' +
       (l.inPosta ? '<span class="meta">✉️ in posta</span>' : '') +
+      (l.stato !== 'fatturato' && l.rapportino
+        ? '<button class="secondaria piccola" onclick="event.stopPropagation(); modificaArchiviato(\'' + id + '\')">Modifica</button>' : '') +
       '<span class="meta">' + formattaData(l.data) + '</span>' +
       '<span style="margin-left:auto;font-family:var(--font-display);font-size:1.15rem;font-weight:700">' +
         formattaEuro(l.totale) + '</span>' +
@@ -2497,7 +2919,7 @@ function disegnaArchiviato() {
 
   let html = '<h2 class="titolo-pagina">' + perValore((l.cliente && l.cliente.nome) || 'senza nome') + '</h2>';
   html += '<p class="sottotitolo">' + formattaData(l.data) +
-    ' · ' + (l.stato === 'fatturato' ? 'fatturato' : 'da fatturare') +
+    ' · ' + (l.stato === 'fatturato' ? 'pagato' : 'da pagare') +
     (l.inPosta ? ' · mandato al cliente il ' + formattaData(l.inPosta) : '') + '</p>';
 
   html += '<div class="scheda"><div class="titolo-sezione">Conto</div>';
@@ -2505,7 +2927,9 @@ function disegnaArchiviato() {
     '<th>Unità</th><th class="num">Prezzo</th><th class="num">Importo</th></tr></thead><tbody>';
   l.righe.forEach(riga => {
     const imp = importoRiga(riga);
-    html += '<tr><td>' + perValore(voceConProdotto(riga)) + '</td>' +
+    html += '<tr><td>' + perValore(voceConProdotto(riga)) +
+      (riga.gruppo ? '<div class="meta">dentro: ' + (riga.componenti || []).map(c => perValore(voceConProdotto(c))).join(' · ') + '</div>' : '') +
+      '</td>' +
       '<td class="num">' + perValore(formattaQuantita(riga.quantita)) + '</td>' +
       '<td class="meta">' + perValore(riga.unita) + '</td>' +
       '<td class="num">' + (riga.prezzo === '' || riga.prezzo == null ? '' : formattaEuro(riga.prezzo)) + '</td>' +
@@ -2529,7 +2953,8 @@ function disegnaArchiviato() {
       r.ore.fasce.forEach(f => {
         html += '<tr><td>' + perValore(f.inizio) + ' – ' + perValore(f.fine) + '</td>' +
           '<td>' + f.persone + (f.persone === 1 ? ' persona' : ' persone') + '</td>' +
-          '<td class="num">' + formattaOre(f.ore) + '</td></tr>';
+          '<td class="num">' + formattaOre(f.ore) + '</td></tr>' +
+        (f.cosa ? '<tr class="cosa-fascia"><td colspan="3">' + perValore(f.cosa) + '</td></tr>' : '');
       });
       html += '</tbody></table>';
     }
@@ -2554,12 +2979,15 @@ function disegnaArchiviato() {
     }
   }
 
+  const modificabile = l.stato !== 'fatturato' && !!l.rapportino;
   html += '<div class="bottoni">' +
+    (modificabile ? '<button class="secondaria" onclick="modificaArchiviato(\'' + id + '\')">Modifica il conto</button>' : '') +
     '<button class="secondaria" onclick="stampaConto(\'archivio\', \'' + id + '\')">Stampa</button>' +
+    '<button class="secondaria" onclick="stampaConto(\'archivio\', \'' + id + '\', true)">Stampa senza intestazione</button>' +
     '<button class="secondaria" onclick="inviaConto(\'' + id + '\')">Invia al cliente</button>' +
     '<button class="' + (l.stato === 'fatturato' ? 'secondaria' : 'principale') +
       '" onclick="cambiaStato(\'' + id + '\', \'' +
-      (l.stato === 'fatturato' ? 'da-fatturare\')">Rimetti da fatturare' : 'fatturato\')">Segna fatturato') +
+      (l.stato === 'fatturato' ? 'da-fatturare\')">Rimetti da pagare' : 'fatturato\')">Segna pagato') +
       '</button>' +
     '<button class="secondaria" onclick="vaiA(\'archivio\')">Torna all\'archivio</button>' +
     '<button class="pericolo" onclick="eliminaArchiviato(\'' + id + '\')">Togli dall\'archivio</button>' +
@@ -2570,14 +2998,21 @@ function disegnaArchiviato() {
 
 // Niente colonne allineate con gli spazi: le app di posta usano caratteri a
 // larghezza variabile e arrivano storte. Una voce per riga.
-function testoConto(l) {
-  const { totale, escluse } = totaleConteggio(l.righe);
+function testoConto(l) { return testoConti([l]); }
+
+// Come il foglio: più lavori dello stesso cliente in un messaggio solo, ognuno
+// con la sua data e il suo subtotale, e il totale in fondo.
+function testoConti(lavori) {
+  const piu = lavori.length > 1;
+  const { totale, escluse } = totaleConteggio(lavori.flatMap(l => l.righe || []));
   const righe = [];
   righe.push('CONTO DEI LAVORI');
-  righe.push((l.cliente && l.cliente.nome) || '');
-  if (l.data) righe.push(formattaData(l.data));
+  righe.push((lavori[0].cliente && lavori[0].cliente.nome) || '');
+  if (!piu && lavori[0].data) righe.push(formattaData(lavori[0].data));
+  lavori.forEach(l => {
   righe.push('');
-  l.righe.forEach(r => {
+  if (piu) righe.push('Lavoro del ' + formattaData(l.data));
+  (l.righe || []).forEach(r => {
     const imp = importoRiga(r);
     const quantita = formattaQuantita(r.quantita);
     const misurabile = quantita && (r.unita || parseFloat(r.quantita) !== 1);
@@ -2590,6 +3025,8 @@ function testoConto(l) {
       righe.push('  ' + r.voce + ' — ' +
         (conUnita ? conUnita + ' × ' + formattaEuro(r.prezzo) + ' = ' : '') + formattaEuro(imp));
     }
+  });
+  if (piu) righe.push('  Subtotale: ' + formattaEuro(totaleConteggio(l.righe).totale));
   });
   righe.push('');
   righe.push('  TOTALE (IVA inclusa): ' + formattaEuro(totale));
@@ -2637,6 +3074,62 @@ async function inviaConto(id) {
   disegna();
 }
 
+// Riscrive il file d'archivio di un lavoro con qualche campo cambiato. Dice se ci
+// è riuscito: chi chiama deve fermarsi e dirlo, non andare avanti come se niente.
+async function aggiornaArchiviato(l, campi) {
+  const aggiornato = { ...l, ...campi };
+  delete aggiornato.anno;
+  delete aggiornato.file;
+  try {
+    const radice = await sottocartella(CARTELLA, CARTELLA_ARCHIVIO, true);
+    const cartellaAnno = await sottocartella(radice, l.anno, true);
+    await scriviTesto(cartellaAnno, l.file, JSON.stringify(aggiornato, null, 2));
+  } catch (e) {
+    return e;
+  }
+  Object.assign(l, campi);
+  return null;
+}
+
+// Più lavori dello stesso cliente in una mail sola. Si segnano tutti in posta
+// prima di aprirla, per la stessa ragione del conto singolo; se uno non si riesce
+// a segnare ci si ferma, e la posta non si apre: una mail partita per due lavori
+// di cui l'archivio ne ricorda uno è il doppione del mese dopo.
+async function inviaInsieme() {
+  const scelti = lavoriScelti();
+  if (scelti.length < 2) return;
+  const cl = scelti[0].cliente || {};
+  const cliente = CLIENTI.find(c => c.id === cl.id) ||
+    CLIENTI.find(c => stessoNome(c.nome, cl.nome));
+  const indirizzo = (cliente && cliente.email) || '';
+  if (!indirizzo) {
+    avvisa('Manca l\'email di ' + (cl.nome || 'questo cliente') +
+      ': mettila in Clienti, o scrivila a mano nella posta', true);
+  }
+  const quando = new Date().toISOString();
+  for (const l of scelti) {
+    const errore = await aggiornaArchiviato(l, { inPosta: quando });
+    if (errore) { avvisa('Non ho potuto segnare l\'invio: ' + errore.message, true); disegna(); return; }
+  }
+  const oggetto = 'Conto dei lavori del ' + scelti.map(l => formattaData(l.data)).join(', ');
+  apriPosta('mailto:' + encodeURIComponent(indirizzo) +
+    '?subject=' + encodeURIComponent(oggetto) +
+    '&body=' + encodeURIComponent(testoConti(scelti)));
+  SCELTI_ARCHIVIO.clear();
+  disegna();
+}
+
+async function fatturaInsieme() {
+  const scelti = lavoriScelti();
+  for (const l of scelti) {
+    const errore = await aggiornaArchiviato(l, { stato: 'fatturato' });
+    if (errore) { avvisa('Non ho potuto salvare: ' + errore.message, true); disegna(); return; }
+  }
+  SCELTI_ARCHIVIO.clear();
+  disegna();
+  avvisa(scelti.length === 1 ? 'Segnato come pagato' : scelti.length + ' lavori segnati come pagati');
+}
+
 // L'unico punto che porta fuori dall'app. Sta da solo per lo stesso motivo per
 // cui ci sta usaCartella: aprire la posta è una cosa che un test non può fare.
 function apriPosta(url) {
@@ -2646,13 +3139,13 @@ function apriPosta(url) {
 // ── PAGINA CLIENTI ──
 
 let FILTRO_CLIENTI = '';
+let CLIENTI_APERTI = new Set();
 
 function disegnaClienti() {
   const c = document.getElementById('pagina-clienti');
   if (!CARTELLA) { c.innerHTML = schermataBenvenuto(); return; }
 
-  let html = '<h2 class="titolo-pagina">Clienti</h2>';
-  html += '<p class="sottotitolo">' + CLIENTI.length +
+  let html = '<p class="sottotitolo">' + CLIENTI.length +
     (CLIENTI.length === 1 ? ' cliente' : ' clienti') + ' · telefono e mail stanno qui, il cantiere non li ha</p>';
 
   html += '<div id="clienti-da-salvare" class="avvertenza" style="display:' +
@@ -2690,19 +3183,69 @@ function righeClienti() {
               : 'Anagrafica vuota. Importala dal telefono, o prendi i clienti dai rapportini arrivati.') +
       '</div></div>';
   }
+  // Chiusa, una scheda è solo il nome: con tutti i campi aperti l'elenco era un
+  // muro di caselle, e chi cerca un cliente scorre i nomi, non gli indirizzi.
   return elenco.map(c => {
     const id = perOnclick(c.id);
+    const aperta = CLIENTI_APERTI.has(c.id);
+    const testa = '<button type="button" class="testa-cliente" onclick="apriChiudiCliente(\'' + id + '\')"' +
+      ' aria-expanded="' + aperta + '">' +
+      '<span class="nome-cliente" data-nome-di="' + perValore(c.id) + '">' + perValore(c.nome || 'senza nome') + '</span>' +
+      '<span class="freccia-cliente">' + (aperta ? '▾' : '▸') + '</span></button>';
+    if (!aperta) return '<div class="scheda scheda-chiusa">' + testa + '</div>';
     const campo = (nome, etichetta, tipo) =>
       '<td><input type="' + (tipo || 'text') + '" placeholder="' + etichetta + '" value="' +
         perValore(c[nome]) + '" oninput="modificaCliente(\'' + id + '\', \'' + nome + '\', this.value)"></td>';
-    return '<div class="scheda"><table class="elenco scheda-cliente"><tbody>' +
+    const conti = contiDelCliente(c).length;
+    return '<div class="scheda">' + testa +
+      '<table class="elenco scheda-cliente" style="margin-top:10px"><tbody>' +
       '<tr>' + campo('nome', 'Nome') + campo('telefono', 'Telefono', 'tel') + '</tr>' +
       '<tr>' + campo('indirizzo', 'Indirizzo') + campo('citta', 'Città') + '</tr>' +
       '<tr>' + campo('email', 'Email', 'email') + campo('note', 'Note') + '</tr>' +
       '</tbody></table>' +
-      '<div class="bottoni"><button class="pericolo piccola" onclick="eliminaCliente(\'' + id + '\')">Elimina</button></div>' +
+      '<div class="bottoni">' +
+        '<button class="secondaria piccola" onclick="vediConti(\'' + id + '\')"' + (conti ? '' : ' disabled') + '>' +
+          (conti ? 'Vedi conti (' + conti + ')' : 'Nessun conto in archivio') + '</button>' +
+        '<button class="pericolo piccola" onclick="eliminaCliente(\'' + id + '\')">Elimina</button>' +
+      '</div>' +
     '</div>';
   }).join('');
+}
+
+function apriChiudiCliente(id) {
+  if (CLIENTI_APERTI.has(id)) CLIENTI_APERTI.delete(id); else CLIENTI_APERTI.add(id);
+  const el = document.getElementById('elenco-clienti');
+  if (el) el.innerHTML = righeClienti();
+}
+
+// I lavori in archivio di questo cliente. Per identificativo, ma anche per nome:
+// un cliente aggiunto a mano in ufficio ha un id suo, che i rapportini del
+// cantiere non conoscono, e senza il nome i suoi conti non si troverebbero.
+// Il nome si confronta intero e non a pezzi, o «Rossi» si porterebbe dietro le
+// fatture di «Rossini».
+function contiDelCliente(c) {
+  const nome = String(c.nome || '').trim().toLowerCase();
+  return ARCHIVIO.filter(l => {
+    const cl = l.cliente || {};
+    return (c.id && cl.id === c.id) || (nome && String(cl.nome || '').trim().toLowerCase() === nome);
+  });
+}
+
+// Porta all'archivio con i soli conti di quel cliente. Il filtro resta scritto,
+// col suo nome e una ✕, e si toglie da lì: un archivio che mostra solo una parte
+// senza dirlo farebbe credere che il resto non ci sia.
+function vediConti(id) {
+  const c = CLIENTI.find(x => x.id === id);
+  if (!c) return;
+  CLIENTE_ARCHIVIO = { id: c.id, nome: c.nome || 'senza nome' };
+  FILTRO_ARCHIVIO = '';
+  STATO_ARCHIVIO = 'tutti';
+  vaiA('archivio');
+}
+
+function tuttiIClienti() {
+  CLIENTE_ARCHIVIO = null;
+  disegnaArchivio();
 }
 
 // Come nell'archivio: ridisegnare tutto a ogni tasto farebbe perdere il fuoco.
@@ -2713,7 +3256,9 @@ function filtraClienti(valore) {
 }
 
 function aggiungiCliente() {
-  CLIENTI.push(sistemaCliente({ nome: '' }));
+  const nuovo = sistemaCliente({ nome: '' });
+  CLIENTI.push(nuovo);
+  CLIENTI_APERTI.add(nuovo.id);   // un cliente nuovo si apre: c'è da scriverlo
   CLIENTI_DA_SALVARE = true;
   disegnaClienti();
 }
@@ -2857,12 +3402,14 @@ function oreNellaMezza(l, giorno, mezza) {
   return Number(((Number(l.ore) || 0) / c.length).toFixed(2));
 }
 
-// Tre regole per la coda: quello che non si può fare va in fondo, quello che è già
-// slittato va in cima, e per il resto conta chi scade prima. Dentro i giorni non
-// si ordina niente: lì l'ordine è quello che gli dà chi pianifica.
+// L'ordine della coda è uno solo: chi scade prima. Uno slittato non passa più
+// davanti per il fatto di essere slittato — lo dice l'avviso in cima e l'etichetta
+// sul cartellino, ma la griglia si legge da sinistra a destra come una priorità, e
+// un lavoro che sale perché è tornato indietro la falsava. Quello che non si può
+// fare sta in fondo, ed è la colonna dei bloccati. Dentro i giorni non si ordina
+// niente: lì l'ordine è quello che gli dà chi pianifica.
 function ordinaCoda(a, b) {
   if (bloccato(a) !== bloccato(b)) return bloccato(a) ? 1 : -1;
-  if (a.rimandato !== b.rimandato) return a.rimandato ? -1 : 1;
   if (!a.settimana !== !b.settimana) return a.settimana ? -1 : 1;
   return String(a.settimana).localeCompare(String(b.settimana));
 }
@@ -2874,13 +3421,54 @@ function etichettaStato(l) {
   return l.stato === 'confermato' ? 'confermato' : 'a matita';
 }
 
+// I cartellini in coda sono chiusi: con la coda piena erano un muro, e chi la
+// guarda cerca un nome. Aperti si leggono interi.
+const CODA_APERTI = new Set();
+
+function apriChiudiCartellino(id) {
+  if (CODA_APERTI.has(id)) CODA_APERTI.delete(id); else CODA_APERTI.add(id);
+  disegnaLavagna();
+}
+
+const giornoMese = iso => iso.slice(8, 10) + '/' + iso.slice(5, 7);
+
+// Chiuso porta quello che serve a scegliere: chi, che cosa (la prima riga delle
+// note), per quando e da quando aspetta. Si era chiesto apposta che dalla coda si
+// vedesse cosa c'è da fare e quando è entrato: chiudere non vuol dire toglierlo.
+function cartellinoChiuso(l) {
+  const id = perOnclick(l.id);
+  const classi = ['cartellino', 'chiuso'];
+  if (bloccato(l)) classi.push('bloccato');
+  const primaRiga = String(l.note || '').split('\n').find(r => r.trim()) || '';
+  return '<article class="' + classi.join(' ') + '" draggable="true"' +
+      ' ondragstart="iniziaTrascino(event, \'' + id + '\')"' +
+      ' onclick="apriChiudiCartellino(\'' + id + '\')"' +
+      ' title="Un clic per i dettagli · trascinalo in una mezza giornata">' +
+    '<div class="testa-cart"><div class="cliente-cart testo-cart">' + perValore(l.cliente || 'senza nome') + '</div>' +
+      '<span class="stato-cart">' + etichettaStato(l) + '</span></div>' +
+    (primaRiga ? '<div class="cosa-cart una-riga">' + perValore(primaRiga) + '</div>' : '') +
+    '<div class="riga-cart">' +
+      (l.sopralluogo ? '<span class="sopralluogo-cart">sopralluogo</span>' : '') +
+      (l.rimandato ? '<span class="rimandato-cart">slittato</span>' : '') +
+      // Di un bloccato la cosa da sapere è cosa manca: «bloccato» da solo no.
+      l.requisiti.map(r => '<span class="requisito-cart">⚠ ' + perValore(r) + '</span>').join('') +
+      (l.settimana ? '<span class="quando-cart">' + perValore(etichettaSettimana(l.settimana)) + '</span>' : '') +
+      (l.ore ? '<span class="ore-cart">~' + formattaQuantita(l.ore) + ' h</span>' : '') +
+      (l.origine || l.inserito ? '<span class="origine-cart">' + perValore(l.origine || 'inserito') +
+        (l.inserito ? ' il ' + perValore(giornoMese(l.inserito)) : '') + '</span>' : '') +
+    '</div>' +
+  '</article>';
+}
+
 function cartellino(l) {
+  if (!piazzato(l) && !CODA_APERTI.has(l.id)) return cartellinoChiuso(l);
   const classi = ['cartellino'];
   if (piazzato(l)) classi.push(l.stato);
   // Il blu sta sopra gli altri due: quando è fatto, è quello che si vede.
   if (l.fatto) classi.push('fatto');
   if (bloccato(l)) classi.push('bloccato');
   const inLista = !piazzato(l);
+  if (inLista) classi.push('aperto');
   const mezze = mezzeOccupate(l);
   const c = copertura(l);
   const ultimoGiorno = c.length ? c[c.length - 1].giorno : '';
@@ -2892,11 +3480,13 @@ function cartellino(l) {
   return '<article class="' + classi.join(' ') + '" draggable="' + (l.fatto ? 'false' : 'true') + '"' +
       (l.fatto ? '' : ' ondragstart="iniziaTrascino(event, \'' + id + '\')"') +
       (piazzato(l) && !l.fatto ? ' onclick="cambiaPenna(\'' + id + '\')"' : '') +
+      (inLista ? ' onclick="apriChiudiCartellino(\'' + id + '\')"' : '') +
       ' title="' + (l.fatto ? 'Fatto: togli la spunta per rimetterlo in gioco'
-        : piazzato(l) ? 'Un clic per confermare o tornare a matita' : 'Trascinalo in una mezza giornata') + '">' +
+        : piazzato(l) ? 'Un clic per confermare o tornare a matita' : 'Un clic per richiuderlo · trascinalo in una mezza giornata') + '">' +
     '<div class="testa-cart">' +
       '<div class="testo-cart">' +
-        '<div class="cliente-cart">' + perValore(l.cliente || 'senza nome') + '</div>' +
+        '<div class="cliente-cart">' + (piazzato(l) && l.ora ? '<span class="ora-cart">' + l.ora + '</span> ' : '') +
+          perValore(l.cliente || 'senza nome') + '</div>' +
         (l.luogo ? '<div class="luogo-cart">' + perValore(l.luogo) + '</div>' : '') +
       '</div>' +
       // La spunta è un comando suo: il clic sul cartellino continua a fare
@@ -2908,6 +3498,11 @@ function cartellino(l) {
     (l.note ? '<div class="cosa-cart">' + perValore(l.note) + '</div>' : '') +
     '<div class="riga-cart">' +
       '<span class="stato-cart">' + etichettaStato(l) + '</span>' +
+      (l.sopralluogo ? '<span class="sopralluogo-cart">sopralluogo</span>' : '') +
+      (piazzato(l) && !l.fatto ? '<button type="button" class="bottone-cart' + (l.ora ? ' acceso' : '') + '"' +
+        ' onclick="event.stopPropagation(); scriviOra(\'' + id + '\')"' +
+        ' title="' + (l.ora ? 'Cambia o togli l\'ora' : 'Scrivi l\'ora detta al cliente') + '">🕘' +
+        (l.ora ? '' : ' ora') + '</button>' : '') +
       (l.ore ? '<span class="ore-cart">~' + formattaQuantita(l.ore) + ' h</span>' : '') +
       (l.rimandato && inLista ? '<span class="rimandato-cart">slittato</span>' : '') +
       (inLista && l.settimana ? '<span class="quando-cart">' + perValore(etichettaSettimana(l.settimana)) + '</span>' : '') +
@@ -2919,7 +3514,10 @@ function cartellino(l) {
         '<button type="button" class="bottone-cart" onclick="event.stopPropagation(); allarga(\'' + id + '\')"' +
           ' title="Allarga alla mezza giornata successiva">+</button>' +
         '</span>' : '') +
-      (inLista && l.origine ? '<span class="origine-cart">' + perValore(l.origine) + '</span>' : '') +
+      (inLista && l.origine ? '<span class="origine-cart">' + perValore(l.origine) +
+        (l.inserito ? ' il ' + perValore(giornoMese(l.inserito)) : '') + '</span>'
+        : inLista && l.inserito ? '<span class="origine-cart">inserito il ' +
+          perValore(giornoMese(l.inserito)) + '</span>' : '') +
       (inLista ? '<button type="button" class="bottone-cart" style="margin-left:auto"' +
         ' onclick="event.stopPropagation(); apriModuloLavoro(\'' + id + '\')" title="Modifica">✎</button>' +
         '<button type="button" class="bottone-cart"' +
@@ -2943,7 +3541,6 @@ function disegnaLavagna() {
   const ultimo = giorni[5].toLocaleDateString('it-IT', { day: 'numeric', month: 'long', year: 'numeric' });
 
   let html = '<div class="testata-lavagna">' +
-    '<div><h2 class="titolo-pagina" style="margin:0">Lavagna</h2></div>' +
     '<button class="freccia-sett" onclick="cambiaSettimana(-1)" title="Settimana precedente">←</button>' +
     '<div><div class="settimana-num">Settimana ' + numeroSettimana(SETTIMANA) + '</div>' +
       '<div class="settimana-date">' + primo + ' – ' + ultimo + '</div></div>' +
@@ -2951,45 +3548,70 @@ function disegnaLavagna() {
     '<button class="secondaria piccola" onclick="questaSettimana()">Oggi</button>' +
   '</div>';
 
-  html += '<div class="tavolo">';
+  html += '<div class="tavolo tavolo-lavagna">';
 
-  // ── la colonna di sinistra: quello che c'è da fare e non ha una data ──
+  // ── sotto la settimana: quello che c'è da fare e non ha una data ──
+  // Stava in una colonna a sinistra, e i sei giorni si dividevano quello che
+  // restava: stretti, sbordavano. Sotto, la settimana ha tutta la larghezza e la
+  // coda si legge come una pagina: da sinistra a destra, riga dopo riga, per
+  // priorità. I bloccati hanno la loro colonna in fondo a destra: non si possono
+  // ancora fare, e in mezzo agli altri facevano da rumore.
+  let coda = '';
   const settimanaMostrata = isoData(SETTIMANA);
   const tuttaLaCoda = LAVAGNA.lavori.filter(l => !piazzato(l)).sort(ordinaCoda);
   const piuAvanti = tuttaLaCoda.filter(l => perPiuAvanti(l, settimanaMostrata));
   const inCoda = MOSTRA_FUTURI ? tuttaLaCoda : tuttaLaCoda.filter(l => !perPiuAvanti(l, settimanaMostrata));
   const rimasti = inCoda.filter(l => l.rimandato).length;
   const prenotati = inCoda.filter(l => l.origine === 'prenotato dal cantiere' && !l.rimandato).length;
-  html += '<section class="coda"><h3 class="titolo-colonna">Da pianificare</h3>';
+  coda += '<section class="coda coda-sotto">';
   if (prenotati) {
-    html += '<div class="rimasti" style="background:var(--foglio); border-color:var(--ocra); color:var(--inchiostro)">' +
+    coda += '<div class="rimasti" style="background:var(--foglio); border-color:var(--ocra); color:var(--inchiostro)">' +
       '📨 ' + prenotati + (prenotati === 1 ? ' prenotazione arrivata' : ' prenotazioni arrivate') + ' dal cantiere</div>';
   }
   if (rimasti) {
-    html += '<div class="rimasti">⚠ ' + rimasti +
+    coda += '<div class="rimasti">⚠ ' + rimasti +
       (rimasti === 1 ? ' lavoro è slittato' : ' lavori sono slittati') +
       ' e aspettano<button class="bottone-cart" style="margin-left:auto" onclick="hoVisto()">Ho visto</button></div>';
   }
-  html += '<div class="coda-lista" ondragover="sopraZona(event, this)" ondragleave="fuoriZona(this)"' +
-    ' ondrop="rilascia(event, this, \'\', \'\')">' +
-    (inCoda.length ? inCoda.map(cartellino).join('')
-      : '<div class="vuoto-mezza">Niente in attesa.<br>Quello che arriva dai rapportini compare qui.</div>') +
-    '</div>';
+  // Tutte le liste riportano in coda: in quale finisca un lavoro lo decide il
+  // lavoro, non il punto dove lo lasci. Bloccato vuol dire che ha un requisito
+  // scritto, e lasciarlo cadere a destra non lo scrive. Un sopralluogo bloccato
+  // sta coi bloccati: anche lui non si può ancora fare, ed è la cosa da sapere.
+  const zonaCoda = cls => '<div class="coda-lista ' + cls + '" ondragover="sopraZona(event, this)"' +
+    ' ondragleave="fuoriZona(this)" ondrop="rilascia(event, this, \'\', \'\')">';
+  const pronti = inCoda.filter(l => !bloccato(l) && !l.sopralluogo);
+  const sopralluoghi = inCoda.filter(l => !bloccato(l) && l.sopralluogo);
+  const fermi = inCoda.filter(bloccato);
+  coda += '<div class="griglia-coda"><div><h3 class="titolo-colonna">Da pianificare</h3>' +
+    zonaCoda('pronti') +
+      (pronti.length ? pronti.map(cartellino).join('')
+        : '<div class="vuoto-mezza">Niente in attesa.<br>Quello che arriva dai rapportini compare qui.</div>') +
+    '</div></div>' +
+    '<div><h3 class="titolo-colonna">Sopralluoghi</h3>' +
+    zonaCoda('sopralluoghi') +
+      (sopralluoghi.length ? sopralluoghi.map(cartellino).join('')
+        : '<div class="vuoto-mezza">Nessun sopralluogo.</div>') +
+    '</div></div>' +
+    '<div><h3 class="titolo-colonna">Bloccati</h3>' +
+    zonaCoda('fermi') +
+      (fermi.length ? fermi.map(cartellino).join('')
+        : '<div class="vuoto-mezza">Niente di bloccato.</div>') +
+    '</div></div></div>';
   // Nascondere qualcosa senza dire quanto e senza un modo per guardarlo è il
   // tipo di aiuto che fa perdere un lavoro: il conto sta lì, e si apre.
   if (piuAvanti.length || MOSTRA_FUTURI) {
-    html += '<div class="piu-avanti">' +
+    coda += '<div class="piu-avanti">' +
       (piuAvanti.length
         ? piuAvanti.length + (piuAvanti.length === 1 ? ' lavoro è per una settimana dopo' : ' lavori sono per le settimane dopo')
         : 'Niente per le settimane dopo') +
       '<button class="bottone-cart" style="margin-left:auto" onclick="mostraFuturi()">' +
       (MOSTRA_FUTURI ? 'Nascondi' : 'Mostra') + '</button></div>';
   }
-  html += '<div class="bottoni">' +
+  coda += '<div class="bottoni">' +
     '<button class="secondaria piccola" onclick="apriModuloLavoro()">+ Aggiungi</button>' +
   '</div>';
-  html += '<div id="nuovo-lavoro"></div>';
-  html += '</section>';
+  coda += '<div id="nuovo-lavoro"></div>';
+  coda += '</section>';
 
   // ── la settimana ──
   html += '<section class="giorni">';
@@ -3024,7 +3646,7 @@ function disegnaLavagna() {
         '<b>' + formattaQuantita(oreGiorno) + ' h</b></div>' +
     '</div>';
   });
-  html += '</section></div>';
+  html += '</section>' + coda + '</div>';
 
   // In fondo: serve quando non ti ricordi cosa vuol dire un tratteggio, e chi non
   // se lo sta chiedendo non deve scavalcarla per arrivare alla lavagna.
@@ -3033,7 +3655,8 @@ function disegnaLavagna() {
     '<span><i class="campione penna"></i><b>Confermato</b> — il cliente sa che arrivate</span>' +
     '<span><i class="campione fatto"></i><b>Fatto</b> — spuntato, è storia</span>' +
     '<span><i class="campione bloccato"></i><b>Bloccato</b> — manca qualcosa per poterlo fare</span>' +
-    '<span>Un clic sul cartellino conferma · la <b>✓</b> segna che è fatto · <b>+</b> e <b>−</b> allargano il lavoro di mezza giornata</span>' +
+    '<span><span class="sopralluogo-cart">sopralluogo</span> si va a guardare, non a lavorare</span>' +
+    '<span>In coda un clic apre i dettagli · sulla settimana un clic sul cartellino conferma · <b>🕘</b> scrive l\'ora · la <b>✓</b> segna che è fatto · <b>+</b> e <b>−</b> allargano il lavoro di mezza giornata</span>' +
   '</div>';
 
   c.innerHTML = html;
@@ -3067,10 +3690,13 @@ async function spostaLavoro(id, giorno, mezza) {
       'Se ' + cosa + ' bisogna avvisarlo. Procedere?')) return;
   }
   if (!giorno) {
-    l.stato = 'lista'; l.giorno = ''; l.mezza = ''; l.mezze = 1;
+    l.stato = 'lista'; l.giorno = ''; l.mezza = ''; l.mezze = 1; l.ora = '';
     l.rimandato = true;   // era già stato programmato: torna in cima alla coda
   } else {
     if (l.giorno === giorno && l.mezza === mezza) return;
+    // Un'ora della mattina su un pomeriggio direbbe due cose diverse: passando
+    // all'altra mezza giornata si toglie, e la si riscrive quando la si sa.
+    if (l.mezza !== mezza) l.ora = '';
     l.giorno = giorno; l.mezza = mezza;
     if (l.stato === 'lista') l.stato = 'matita';
     l.rimandato = false;
@@ -3097,6 +3723,27 @@ async function spuntaFatto(id) {
   const l = LAVAGNA.lavori.find(x => x.id === id);
   if (!l || !piazzato(l)) return;   // fatto vuol dire in un giorno, non in coda
   l.fatto = !l.fatto;
+  await salvaLavagna();
+  disegnaLavagna();
+}
+
+// Un prompt e non un campo sul cartellino: un campo da compilare dentro una
+// cosa che si trascina e si clicca per confermare sarebbe il quarto comando
+// sullo stesso rettangolo.
+async function scriviOra(id) {
+  const l = LAVAGNA.lavori.find(x => x.id === id);
+  if (!l || !piazzato(l) || l.fatto) return;
+  const scritto = prompt('A che ora, per ' + (l.cliente || 'questo lavoro') + '?\n' +
+    'Per esempio 8:30. Lascia vuoto per toglierla.', l.ora || '');
+  if (scritto === null) return;
+  const ora = leggiOra(scritto);
+  if (scritto.trim() && !ora) { avvisa('«' + scritto + '» non è un\'ora: scrivila come 8:30', true); return; }
+  if (ora === l.ora) return;
+  // Come per lo spostamento: il cliente confermato sa a che ora arrivate.
+  if (l.stato === 'confermato' && !confirm(l.cliente + ' è confermato: il cliente sa che arrivate.\n\n' +
+    'Se cambi l\'ora bisogna avvisarlo. Procedere?')) return;
+  l.ora = ora;
+  if (ora) l.mezza = mezzaDellOra(ora);
   await salvaLavagna();
   disegnaLavagna();
 }
@@ -3163,6 +3810,8 @@ function apriModuloLavoro(id) {
       perValore(etichettaSettimana(l ? l.settimana : '')) + '</div>' +
     '<input type="text" id="n-requisito" placeholder="Manca qualcosa? (blocca il lavoro)" value="' +
       perValore(l && l.requisiti.length ? l.requisiti.join(', ') : '') + '" style="margin-bottom:6px">' +
+    '<label class="meta" style="display:flex; align-items:center; gap:6px; margin-bottom:6px">' +
+      '<input type="checkbox" id="n-sopralluogo"' + (l && l.sopralluogo ? ' checked' : '') + '> È un sopralluogo</label>' +
     '<textarea id="n-note" rows="3" placeholder="Cosa c\'è da fare, e cosa ricordare — torna in giardino con l\'agenda">' +
       perValore(l ? l.note : '') + '</textarea>' +
     '<div class="bottoni">' +
@@ -3197,6 +3846,7 @@ async function salvaModuloLavoro() {
     ore: Number(valore('n-ore').replace(',', '.')) || 0,
     settimana: lunediDellaSettimana(valore('n-settimana')),
     requisiti,
+    sopralluogo: !!(document.getElementById('n-sopralluogo') || {}).checked,
     note: valore('n-note').trim(),
   };
 
@@ -3207,7 +3857,8 @@ async function salvaModuloLavoro() {
     // settimana né se è confermato, e ricostruirlo da zero lo staccherebbe.
     Object.assign(esistente, campi);
   } else {
-    LAVAGNA.lavori.push(sistemaLavoro({ ...campi, origine: 'aggiunto in ufficio', stato: 'lista' }));
+    LAVAGNA.lavori.push(sistemaLavoro({ ...campi, origine: 'aggiunto in ufficio', stato: 'lista',
+      inserito: isoData(new Date()) }));
   }
   if (!(await salvaLavagna())) return;
   chiudiModuloLavoro();
@@ -3221,8 +3872,7 @@ function disegnaListino() {
   const c = document.getElementById('pagina-listino');
   if (!CARTELLA) { c.innerHTML = schermataBenvenuto(); return; }
 
-  let html = '<h2 class="titolo-pagina">Listino</h2>';
-  html += '<p class="sottotitolo">I prezzi stanno qui, non sul telefono: si correggono in un posto solo</p>';
+  let html = '<p class="sottotitolo">I prezzi stanno qui, non sul telefono: si correggono in un posto solo</p>';
 
   html += '<div id="listino-da-salvare" class="avvertenza" style="display:' +
     (LISTINO_DA_SALVARE ? 'block' : 'none') + '">' +
@@ -3434,8 +4084,7 @@ function disegnaImpostazioni() {
   const c = document.getElementById('pagina-impostazioni');
   if (!CARTELLA) { c.innerHTML = schermataBenvenuto(); return; }
 
-  let html = '<h2 class="titolo-pagina">Impostazioni</h2>';
-  html += '<p class="sottotitolo">Quello che finisce in testa al foglio che consegni al cliente</p>';
+  let html = '<p class="sottotitolo">Quello che finisce in testa al foglio che consegni al cliente</p>';
 
   html += '<div id="impostazioni-da-salvare" class="avvertenza" style="display:' +
     (IMPOSTAZIONI_DA_SALVARE ? 'block' : 'none') + '">' +

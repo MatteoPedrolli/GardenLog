@@ -56,9 +56,20 @@ try {
   ok('contatore in home aggiornato', (await page.textContent('#stat-clienti')) === '1');
 
   // ── archivio concimi ──
-  await page.click('.topbar-action');
+  // Niente barra in alto: ripeteva il nome della pagina e il ＋ faceva quello che
+  // fanno le schede della home. Le impostazioni stanno in fondo, con le altre.
+  ok('in alto non c\'è più la barra col titolo', !(await page.$('#topbar')));
+  await page.click('#nav-dati');
   await page.waitForTimeout(200);
   ok('pagina Dati raggiungibile', await page.isVisible('#page-dati'));
+  ok('con il suo titoletto piccolo in cima', (await page.textContent('#titoletto')) === 'Impostazioni');
+  // Il bottone dell'agenda era largo il 100% più i margini, e usciva dallo schermo.
+  ok('nella pagina Appuntamenti niente esce dal bordo destro',
+    await page.evaluate(() => { navTo('prossimi'); const w = document.documentElement.clientWidth;
+      const fuori = [...document.querySelectorAll('#page-prossimi *')].some(e => e.getBoundingClientRect().right > w + 1);
+      navTo('dati'); return !fuori; }));
+  ok('dalla sua voce nella barra in basso, che resta accesa',
+    await page.evaluate(() => document.getElementById('nav-dati').classList.contains('active')));
   await page.click('#archivi-list .card:has(.card-title:text-is("Concimi")) button.btn');
   await page.fill('#f-arch-Concime', 'Nitrophoska');
   await page.fill('#f-arch-N_percento', '12');
@@ -68,8 +79,8 @@ try {
   ok('concime aggiunto in archivio', await page.evaluate(() => DB.concimi.length) === 1);
 
   // ── visita: fasce orarie e checklist ──
-  await page.click('#nav-visite');
-  await page.click('#topbar-action-btn');
+  await page.click('#nav-home');
+  await page.click('.quick-card:has-text("Nuova visita")');
   await page.fill('#f-visita-cliente-search', 'Mario');
   await page.waitForTimeout(200);
   await page.click('#visita-cliente-suggestions .suggestion-item');
@@ -109,41 +120,51 @@ try {
   // ── le voci da conteggiare si compilano mentre registri ──
   // Senza prezzi: il listino sta in ufficio. Il cantiere dice cosa è stato fatto
   // e quanto, che è la cosa che solo lui sa.
-  ok('tre righe automatiche: manodopera, trasferimento, concime',
-    await page.locator('#conto-righe .conto-riga').count() === 3);
-  ok('manodopera precompilata con le ore calcolate',
-    await page.locator('#conto-righe .conto-riga').first().locator('input').first().inputValue() === '8');
+  // Le righe che nascono da ore e operazioni non si ripetono una per una: stanno
+  // nel riepilogo chiuso, e partono lo stesso col rapportino.
+  const voceRiepilogo = i => page.locator('#conto-riepilogo .riepilogo-voce').nth(i);
+  ok('tre righe automatiche nel riepilogo: manodopera, trasferimento, concime',
+    await page.locator('#conto-riepilogo .riepilogo-voce').count() === 3);
+  ok('che non si ripetono come righe da compilare',
+    await page.locator('#conto-righe .conto-riga').count() === 0);
+  ok('e il riepilogo parte chiuso', !(await page.locator('#conto-riepilogo details').evaluate(d => d.open)));
+  ok('manodopera con le ore calcolate', (await voceRiepilogo(0).textContent()).includes('8 h'),
+    await voceRiepilogo(0).textContent());
   ok('il trasferimento c\'è sempre, senza aggiungerlo',
-    (await page.textContent('#conto-righe')).includes('Trasferimento'));
+    (await page.textContent('#conto-riepilogo')).includes('Trasferimento'));
   ok('l\'operazione libera non fa riga di conto',
-    !(await page.textContent('#conto-righe')).includes('Riparazione irrigazione'));
-  ok('ogni riga ha un campo solo, la quantità: nessun prezzo sul telefono',
-    await page.locator('#conto-righe .conto-riga').first().locator('input').count() === 1);
+    !(await page.textContent('#conto-riepilogo')).includes('Riparazione irrigazione'));
   ok('e in fondo non c\'è nessun totale da leggere',
     await page.locator('#conto-totale').count() === 0);
 
-  const riga = i => page.locator('#conto-righe .conto-riga').nth(i);
 
   await page.fill('#f-conto-libera', 'Noleggio rullo');
   await page.press('#f-conto-libera', 'Enter');
   await page.waitForTimeout(150);
-  ok('riga aggiunta a mano', await page.locator('#conto-righe .conto-riga').count() === 4);
+  ok('riga aggiunta a mano', await page.locator('#conto-righe .conto-riga').count() === 1);
+  ok('ogni riga ha un campo solo, la quantità: nessun prezzo sul telefono',
+    await page.locator('#conto-righe .conto-riga').first().locator('input').count() === 1);
+  ok('e nel riepilogo compare anche lei', await page.locator('#conto-riepilogo .riepilogo-voce').count() === 4);
 
   // il conto segue le ore mentre le correggi, senza uscire dalla schermata
   await page.locator('#fasce-list .fascia').first().locator('input[type=number]').fill('3');
   await page.waitForTimeout(200);
   ok('cambiando le persone la manodopera si aggiorna da sola',
-    await riga(0).locator('input').first().inputValue() === '12');
+    (await voceRiepilogo(0).textContent()).includes('12 h'), await voceRiepilogo(0).textContent());
   ok('e la riga aggiunta a mano resta dov\'è',
     (await page.textContent('#conto-righe')).includes('Noleggio rullo'));
   await page.locator('#fasce-list .fascia').first().locator('input[type=number]').fill('2');
   await page.waitForTimeout(200);
+  // Cosa si è fatto in quelle ore: una riga sotto la fascia, che resta in ufficio.
+  await page.locator('#fasce-list .fascia-cosa').first().fill('Potatura siepe lato strada');
 
   await page.click('#btn-salva-visita');
   await page.waitForTimeout(300);
   ok('visita salvata', await page.evaluate(() => DB.visite.length) === 1);
   ok('ore e fasce registrate',
     await page.evaluate(() => DB.visite[0].Ore_Visita === 8 && DB.visite[0].Fasce.length === 1));
+  ok('con scritto cosa si è fatto in quelle ore',
+    await page.evaluate(() => DB.visite[0].Fasce[0].Cosa) === 'Potatura siepe lato strada');
   ok('operazione agganciata al suo tipo',
     await page.evaluate(() => DB.operazioni.find(o => o.TipoID === 'concimazione') != null));
   ok('operazione libera salvata senza tipo',
@@ -379,10 +400,29 @@ try {
   ok('porta la settimana, scritta come il lunedì che la apre',
     docAppuntamento.settimana === '2027-03-15', docAppuntamento.settimana);
   ok('e si legge sempre nello stesso modo',
-    await page.evaluate(() => etichettaSettimana('2027-03-15')) === 'dal 15/03 · settimana 12',
+    await page.evaluate(() => etichettaSettimana('2027-03-15')) ===
+      (new Date().getFullYear() === 2027 ? 'dal 15/03 · settimana 12' : 'dal 15/03/2027 · settimana 12'),
     await page.evaluate(() => etichettaSettimana('2027-03-15')));
+  // Un 2029 battuto al posto di 2026 si leggeva identico a quello giusto, e il
+  // lavoro spariva fra quelli «per più avanti» senza che niente lo dicesse.
+  ok('l\'anno compare quando non è quello in corso, e solo allora',
+    await page.evaluate(() => {
+      const quest = lunediDellaSettimana(new Date(new Date().getFullYear(), 5, 15));
+      const altro = lunediDellaSettimana(new Date(new Date().getFullYear() + 3, 5, 15));
+      return !/\/\d{4}/.test(etichettaSettimana(quest)) &&
+        etichettaSettimana(altro).includes('/' + (new Date().getFullYear() + 3));
+    }));
+  // Si guarda mentre è ancora sul telefono: quelle consegnate non si mostrano più.
   ok('la schermata mostra la settimana scelta, non la data battuta',
-    (await page.textContent('#prenotazioni-list')).includes('settimana 12'));
+    await page.evaluate(() => {
+      const p = DB.prenotazioni[0];
+      DB.coda.push({ docID: p.PrenotazioneID, tipo: 'appuntamento', doc: {}, creato: '', tentativi: 0, errore: '' });
+      renderPrenotazioni();
+      const testo = document.getElementById('prenotazioni-list').textContent;
+      DB.coda = DB.coda.filter(v => v.docID !== p.PrenotazioneID);
+      renderPrenotazioni();
+      return testo.includes('settimana 12');
+    }));
 
   // ── come si contano le settimane ──
   // La settimana 1 è quella che contiene il 1° gennaio, come sul calendario
@@ -436,8 +476,11 @@ try {
     fermaEvisibile.html.slice(0, 200));
   ok('e dice quanti tentativi ha fatto, con come riprovare',
     fermaEvisibile.html.includes('3 tentativi') && fermaEvisibile.html.includes('riprovare'));
-  ok('quella consegnata non porta nessun errore',
-    !fermaEvisibile.dopo.includes('Non è partita') && fermaEvisibile.dopo.includes('in ufficio'));
+  // Quelle arrivate in ufficio si guardano sulla lavagna e tornano con l'agenda:
+  // qui restano solo quelle ancora da consegnare.
+  ok('quella consegnata non si mostra più, e il titolo se ne va con lei',
+    fermaEvisibile.dopo === '' && await page.evaluate(() =>
+      document.getElementById('prenotazioni-titolo').style.display === 'none'));
 
   // E il caso peggiore: svuotaCoda() si ferma quando il servizio non risponde,
   // quindi la prenotazione dietro non viene nemmeno provata e non ha un errore
@@ -697,9 +740,15 @@ try {
   ok('e il banner della coda lo chiama rilievo, non rapportino',
     rilievoFermo.banner.includes('rilievo') && !rilievoFermo.banner.includes('rapportino'),
     rilievoFermo.banner.slice(0, 160));
-  ok('la pagina mostra il rilievo con il tipo di lavoro e le mezze giornate',
-    (await page.textContent('#rilievi-list')).includes('Prato in rotoli') &&
-    (await page.textContent('#rilievi-list')).includes('3 mezze giornate'));
+  // Finché è in coda la scheda dice di che lavoro si tratta e quanto è grosso;
+  // una volta in ufficio sparisce, come le prenotazioni consegnate: là diventa un
+  // preventivo, e ripeterlo qui vorrebbe dire due elenchi da tenere allineati.
+  ok('finché è da consegnare la scheda dice il tipo di lavoro e le mezze giornate',
+    rilievoFermo.suo.includes('Prato in rotoli') && rilievoFermo.suo.includes('3 mezze giornate'),
+    rilievoFermo.suo.slice(0, 160));
+  ok('consegnato sparisce dall\'elenco, e con lui il titolo della sezione',
+    (await page.textContent('#rilievi-list')).trim() === '' &&
+    await page.evaluate(() => document.getElementById('rilievi-titolo').style.display) === 'none');
   await page.evaluate(() => { DB.visite[0].Consegnato = ''; return salvaDB({ conta: false }); });
   await ctx.unroute(CONSEGNA);
 
@@ -720,6 +769,7 @@ try {
     catch (e) { return e.message.includes('versione'); }
   }));
   ok('il documento porta le ore calcolate', doc.ore.totale === 8 && doc.ore.fasce.length === 1);
+  ok('e cosa si è fatto in ogni fascia', doc.ore.fasce[0].cosa === 'Potatura siepe lato strada');
   ok('il nome del prodotto viaggia col documento, non solo il codice',
     doc.operazioni.some(o => o.prodotto === 'Nitrophoska'),
     JSON.stringify(doc.operazioni.map(o => o.prodotto)));
@@ -790,9 +840,10 @@ try {
   await page.click('.visit-card button:has-text("Apri")');
   await page.waitForTimeout(300);
   ok('riaprendo, il conto è quello di prima',
-    await page.locator('#conto-righe .conto-riga').count() === 4);
+    await page.locator('#conto-riepilogo .riepilogo-voce').count() === 4 &&
+    await page.locator('#conto-righe .conto-riga').count() === 1);
   ok('le quantità sono quelle di prima',
-    await page.locator('#conto-righe .conto-riga').first().locator('input').first().inputValue() === '8');
+    (await page.locator('#conto-riepilogo .riepilogo-voce').first().textContent()).includes('8 h'));
   ok('la riga aggiunta a mano non sparisce',
     (await page.textContent('#conto-righe')).includes('Noleggio rullo'));
 
@@ -806,7 +857,9 @@ try {
     (await page.textContent('#overlay-visita .drawer')).includes('Prenota il prossimo intervento'));
 
   // Il cliente è quello che hai davanti: farlo ricercare un'altra volta sarebbe
-  // lavoro inventato.
+  // lavoro inventato. E la visita modificata e non ancora salvata non si perde:
+  // chiuderla per aprire la prenotazione buttava via le correzioni.
+  await page.fill('#f-visita-note', 'Correzione non ancora salvata');
   await page.evaluate(() => prenotaDaVisita());
   await page.waitForTimeout(250);
   // Si guarda il campo nascosto, che è lo stato vero: il nome a video resta
@@ -822,9 +875,51 @@ try {
       return document.getElementById('f-pren-cliente').value === '' &&
         document.getElementById('f-pren-cliente-nome').textContent === '';
     }));
-  ok('e chiude la visita, invece di lasciare due pannelli uno sull\'altro',
-    !(await page.evaluate(() => document.getElementById('overlay-visita').classList.contains('open'))));
-  await page.evaluate(() => closeDrawer('overlay-prenotazione'));
+  ok('la visita resta aperta sotto la prenotazione',
+    await page.evaluate(() => document.getElementById('overlay-visita').classList.contains('open')));
+  // Inviando la prenotazione si torna alla visita così com'era, modifiche comprese.
+  const dopoPrenota = await page.evaluate(async () => {
+    const quante = DB.prenotazioni.length;
+    // la consegna qui non interessa: resta ferma, o proverebbe la rete vera
+    const svuotaVera = window.svuotaCoda;
+    window.svuotaCoda = () => {};
+    scegliClientePrenotazione(DB.visite[0].ClienteID, 'Mario Rossi');
+    document.getElementById('f-pren-note').value = 'Rifilare la siepe';
+    document.getElementById('f-pren-sopralluogo').checked = true;
+    await salvaPrenotazione();
+    window.svuotaCoda = svuotaVera;
+    const ultima = DB.prenotazioni[DB.prenotazioni.length - 1];
+    const inCoda = DB.coda.find(v => v.docID === ultima.PrenotazioneID);
+    apriPrenotazione();
+    const ripulita = !document.getElementById('f-pren-sopralluogo').checked;
+    closeDrawer('overlay-prenotazione');
+    const r = {
+      sopralluogo: ultima.Sopralluogo === 'Sì' && inCoda.doc.sopralluogo === true &&
+        leggiAppuntamento(JSON.stringify(inCoda.doc)).sopralluogo === true,
+      ripulita,
+      salvata: DB.prenotazioni.length === quante + 1,
+      prenotazioneChiusa: !document.getElementById('overlay-prenotazione').classList.contains('open'),
+      visitaAperta: document.getElementById('overlay-visita').classList.contains('open'),
+      nota: document.getElementById('f-visita-note').value,
+    };
+    // la prova non deve lasciare una prenotazione in giro per quelle che seguono
+    const via = DB.prenotazioni.pop();
+    DB.coda = DB.coda.filter(v => v.docID !== via.PrenotazioneID);
+    await salvaDB({ conta: false });
+    return r;
+  });
+  ok('inviata la prenotazione, la visita è ancora lì',
+    dopoPrenota.salvata && dopoPrenota.prenotazioneChiusa && dopoPrenota.visitaAperta, JSON.stringify(dopoPrenota));
+  ok('una prenotazione segnata sopralluogo parte come sopralluogo', dopoPrenota.sopralluogo);
+  ok('e la prenotazione dopo riparte senza la spunta', dopoPrenota.ripulita);
+  ok('con le modifiche non ancora salvate', dopoPrenota.nota === 'Correzione non ancora salvata', dopoPrenota.nota);
+  // Col tasto indietro, con due pannelli aperti, si chiude quello sopra.
+  await page.evaluate(() => apriPrenotazione());
+  ok('il tasto indietro chiude la prenotazione e lascia la visita',
+    await page.evaluate(() => { tornaIndietro();
+      return !document.getElementById('overlay-prenotazione').classList.contains('open') &&
+        document.getElementById('overlay-visita').classList.contains('open'); }));
+  await page.evaluate(() => { document.getElementById('f-visita-note').value = ''; closeDrawer('overlay-visita'); });
   await page.waitForTimeout(150);
 
   // ── backup ──
@@ -832,7 +927,7 @@ try {
     JSON.stringify({ app: 'GiardinoApp', versione: VERSIONE_DATI, esportato: new Date().toISOString(), db: DB }));
   await page.evaluate(() => { DB.clienti = []; DB.visite = []; DB.operazioni = []; return salvaDB(); });
   ok('dati azzerati per la prova', await page.evaluate(() => DB.clienti.length) === 0);
-  await page.click('.topbar-action');
+  await page.click('#nav-dati');
   await page.setInputFiles('#file-backup', { name: 'backup.json', mimeType: 'application/json', buffer: Buffer.from(backup) });
   await page.waitForTimeout(400);
   ok('backup reimportato per intero',
@@ -919,13 +1014,13 @@ try {
   ok('CSV con la virgola come decimale', /;6,00;/.test(csv), csv.split('\n')[1]);
 
   // ── apostrofo nel cognome: "Dall'Oglio" non è un caso di scuola ──
-  await page.click('#nav-clienti');
-  await page.click('#topbar-action-btn');
+  await page.click('#nav-home');
+  await page.click('.quick-card:has-text("Nuovo cliente")');
   await page.fill('#f-cliente-nome', "Luca Dall'Oglio");
   await page.click('#btn-salva-cliente');
   await page.waitForTimeout(300);
-  await page.click('#nav-visite');
-  await page.click('#topbar-action-btn');
+  await page.click('#nav-home');
+  await page.click('.quick-card:has-text("Nuova visita")');
   await page.fill('#f-visita-cliente-search', 'Dall');
   await page.waitForTimeout(200);
   await page.click('#visita-cliente-suggestions .suggestion-item');
@@ -944,8 +1039,109 @@ try {
     JSON.stringify(anagraficaDalTelefono.clienti.map(c => c.nome)));
   await page.evaluate(() => closeDrawer('overlay-visita'));
 
+  // ── piantumazione: più piante diverse, ognuna col suo nome, numero e prezzo ──
+  // In un lavoro se ne mettono di più tipi, e il prezzo sta sull'etichetta del
+  // vaso: è l'unico prezzo che si scrive sul telefono.
+  const piante = await page.evaluate(() => {
+    openNuovaVisita();
+    spuntaOperazione('piantumazione');
+    const scrivi = (n, campo, v) => {
+      const ops = pendingOperazioni.filter(o => o.TipoID === 'piantumazione');
+      modificaOperazione(pendingOperazioni.indexOf(ops[n]), campo, v);
+    };
+    scrivi(0, 'Descrizione', 'Lauro'); scrivi(0, 'Quantita', '12'); scrivi(0, 'Prezzo', '14.5');
+    aggiungiPianta();
+    scrivi(1, 'Descrizione', 'Acero'); scrivi(1, 'Quantita', '3'); scrivi(1, 'Prezzo', '38');
+    const campi = document.querySelectorAll('.op-pianta').length;
+    const righe = contoCorrente.filter(r => r.VoceID === 'piante').map(r => ({ voce: r.Voce, q: r.Quantita, p: r.Prezzo }));
+    const ops = pendingOperazioni.filter(o => o.TipoID === 'piantumazione');
+    const visita = { VisitaID: 'v-piante', Data: '2026-09-24', ClienteID: DB.clienti[0].ClienteID, Fasce: [],
+      Conto: contoCorrente.map(r => ({ ...r })) };
+    // un conto di una visita di prima, col suo prezzo storico, non deve viaggiare
+    visita.Conto.push({ VoceID: 'noleggio', Voce: 'Noleggio rullo', Quantita: 1, Prezzo: 40 });
+    const doc = costruisciRapportino({ visita, cliente: DB.clienti[0],
+      operazioni: ops.map(o => ({ ...o, VisitaID: 'v-piante' })),
+      tipi: DB.tipiOperazione, voci: DB.voci, concimi: DB.concimi, sementi: DB.sementi, fitofarmaci: DB.fitofarmaci });
+    closeDrawer('overlay-visita');
+    return { campi, righe, doc };
+  });
+  ok('la piantumazione chiede pianta, numero e prezzo, e ne accetta più d\'una',
+    piante.campi === 2, String(piante.campi));
+  ok('ogni pianta ha la sua riga nel conto, col suo nome',
+    piante.righe.length === 2 && piante.righe[0].voce.includes('Lauro') && piante.righe[1].voce.includes('Acero'),
+    JSON.stringify(piante.righe));
+  ok('il rapportino porta il prezzo delle piante',
+    piante.doc.righe.filter(r => r.prezzo != null).map(r => r.prezzo).join(',') === '14.5,38',
+    JSON.stringify(piante.doc.righe));
+  ok('e nessun altro prezzo, nemmeno quelli rimasti sui conti di prima',
+    piante.doc.righe.find(r => r.voce === 'Noleggio rullo').prezzo == null);
+
+  // ── un insieme di operazioni: l'aiuola ──
+  // Piante, pacciamatura, ala gocciolante e telo: spuntarle una per una era
+  // lavoro ripetuto a ogni aiuola.
+  const aiuola = await page.evaluate(() => {
+    const r = {};
+    r.nuovi = ['pacciamatura', 'ala-gocciolante', 'telo-pacciamante', 'aiuola'].every(id => !!tipoDi(id)) &&
+      ['pacciamatura', 'ala-gocciolante', 'telo-pacciamante'].every(id => DB.voci.some(v => v.VoceID === id));
+    r.unita = ['pacciamatura', 'ala-gocciolante', 'telo-pacciamante'].map(id => tipoDi(id).Unita).join(',');
+    // un archivio di prima, senza i tipi nuovi: si aggiungono una volta sola
+    const prova = { tipiOperazione: DB.tipiOperazione.filter(t => !['pacciamatura', 'aiuola'].includes(t.TipoID)).map(t => ({ ...t })),
+      voci: DB.voci.map(v => ({ ...v })), defaultAggiunti: [] };
+    aggiungiDefaultArrivatiDopo(prova);
+    r.aggiunti = prova.tipiOperazione.some(t => t.TipoID === 'aiuola') && prova.tipiOperazione.some(t => t.TipoID === 'pacciamatura');
+    r.nonDoppi = prova.tipiOperazione.filter(t => t.TipoID === 'telo-pacciamante').length === 1;
+    prova.tipiOperazione = prova.tipiOperazione.filter(t => t.TipoID !== 'aiuola');
+    aggiungiDefaultArrivatiDopo(prova);
+    r.cancellatoResta = !prova.tipiOperazione.some(t => t.TipoID === 'aiuola');
+
+    openNuovaVisita();
+    spuntaInsieme('aiuola');
+    r.accese = ['piantumazione', 'pacciamatura', 'ala-gocciolante', 'telo-pacciamante'].every(id => opDelTipo(id).length === 1);
+    r.raccolte = document.querySelectorAll('#operazioni-check .op-dentro > .op-riga').length;
+    r.unaVolta = [...document.querySelectorAll('.op-riga')].filter(e => e.textContent.includes('Pacciamatura')).length;
+    const pac = pendingOperazioni.find(o => o.TipoID === 'pacciamatura');
+    modificaOperazione(pendingOperazioni.indexOf(pac), 'Quantita', '3');
+    const riga = contoCorrente.find(x => x.VoceID === 'pacciamatura');
+    r.conto = riga ? riga.Quantita + ' ' + riga.Unita : '';
+    spuntaInsieme('aiuola');
+    r.spente = pendingOperazioni.length === 0;
+    closeDrawer('overlay-visita');
+    return r;
+  });
+  ok('ci sono pacciamatura, ala gocciolante, telo pacciamante e l\'insieme «Aiuola»', aiuola.nuovi);
+  ok('in quintali, metri e metri quadri', aiuola.unita === 'q,m,m²', aiuola.unita);
+  ok('su un telefono che ha già il suo archivio si aggiungono da soli, senza doppioni',
+    aiuola.aggiunti && aiuola.nonDoppi, JSON.stringify(aiuola));
+  ok('ma uno cancellato apposta non ritorna', aiuola.cancellatoResta);
+  ok('spuntare «Aiuola» accende le sue quattro operazioni', aiuola.accese, JSON.stringify(aiuola));
+  ok('raccolte sotto di lei', aiuola.raccolte === 4, String(aiuola.raccolte));
+  ok('e non ripetute nell\'elenco', aiuola.unaVolta === 1, String(aiuola.unaVolta));
+  ok('ognuna fa la sua riga nel conto', aiuola.conto === '3 q', aiuola.conto);
+  ok('e togliendo la spunta si spengono tutte', aiuola.spente);
+
+  // Gli insiemi si creano da Archivi: domani «Siepe nuova» non chiede a nessuno.
+  const insiemeNuovo = await page.evaluate(async () => {
+    openVoceArchivio('tipiOperazione');
+    document.getElementById('f-arch-Nome').value = 'Siepe nuova';
+    document.getElementById('f-arch-dettaglio').value = 'insieme';
+    document.querySelectorAll('#f-arch-Insieme input').forEach(i => { i.checked = ['piantumazione', 'telo-pacciamante'].includes(i.value); });
+    await salvaVoceArchivio();
+    const t = DB.tipiOperazione.find(x => x.Nome === 'Siepe nuova');
+    const r = { insieme: t && t.Insieme, dettaglio: t && t.dettaglio,
+      // un insieme non può contenere altri insiemi, né sé stesso
+      senzaInsiemi: (() => { openVoceArchivio('tipiOperazione', t.TipoID);
+        const v = [...document.querySelectorAll('#f-arch-Insieme input')].map(i => i.value);
+        closeDrawer('overlay-archivio'); return !v.includes('aiuola') && !v.includes(t.TipoID); })() };
+    DB.tipiOperazione = DB.tipiOperazione.filter(x => x !== t);
+    await salvaDB();
+    return r;
+  });
+  ok('un insieme nuovo si crea da Archivi scegliendo cosa accende',
+    insiemeNuovo.dettaglio === 'insieme' && insiemeNuovo.insieme === 'piantumazione,telo-pacciamante', JSON.stringify(insiemeNuovo));
+  ok('e fra le cose da accendere non ci sono altri insiemi', insiemeNuovo.senzaInsiemi);
+
   // ── rinumerare una fascia si porta dietro i clienti ──
-  await page.click('.topbar-action');
+  await page.click('#nav-dati');
   await page.waitForTimeout(200);
   await page.evaluate(() => openVoceArchivio('fasce', '1'));
   await page.fill('#f-arch-FasciaID', '7');
@@ -1017,8 +1213,8 @@ try {
   ok('indietro da una pagina riporta alla home', await page.isVisible('#page-home'));
   ok('indietro non ha fatto uscire dall\'app', await page.evaluate(() => typeof DB === 'object'));
 
-  await page.click('#nav-clienti');
-  await page.click('#topbar-action-btn');
+  await page.click('#nav-home');
+  await page.click('.quick-card:has-text("Nuovo cliente")');
   await page.waitForTimeout(200);
   ok('pannello aperto', await page.evaluate(() => !!document.querySelector('.overlay.open')));
   await page.goBack();
@@ -1185,6 +1381,8 @@ try {
   ok('il listino dell\'ufficio vince sul prezzo proposto dal cantiere', prezzoApplicato === 35);
   ok('la schermata del lavoro mostra le ore del cantiere',
     (await pagU.textContent('#pagina-lavoro')).includes('8,00 h'));
+  ok('e sotto la fascia cosa si è fatto in quelle ore',
+    (await pagU.textContent('#pagina-lavoro')).includes('Potatura siepe lato strada'));
 
   const conto = await pagU.evaluate(() => totaleConteggio(LAVORO.righe));
   ok('il totale somma le righe complete', conto.totale > 0, JSON.stringify(conto));
@@ -1397,10 +1595,24 @@ try {
     foglio.html.includes('da definire'));
   // Ore e operazioni restano in ufficio: al cliente va il conto.
   ok('il foglio non porta le operazioni agronomiche', !foglio.html.includes('Nitrophoska'));
+  ok('né quello che si è scritto sulle fasce, che resta in ufficio', !foglio.html.includes('Potatura siepe lato strada'));
   ok('il nome che Chrome proporrà per il PDF parla di conto e cliente',
     /^Conto \d{4}-\d{2}-\d{2} Mario Rossi/.test(foglio.titolo), foglio.titolo);
   ok('il foglio non si vede a schermo: esiste solo per la stampa',
     !(await pagU.isVisible('#foglio')));
+  // Sulla carta intestata i dati dell'azienda ci sono già: stampati sopra si
+  // sovrapporrebbero al logo. Il resto del foglio resta quello di sempre.
+  const senza = await pagU.evaluate(() => {
+    stampaConto('archivio', ARCHIVIO[0].id, true);
+    return document.getElementById('foglio').innerHTML;
+  });
+  ok('stampando senza intestazione i dati dell\'azienda non ci sono',
+    !senza.includes('Giardini Prova') && !senza.includes('01234567890'));
+  ok('ma il conto, il cliente e il totale sì',
+    senza.includes('Conto dei lavori') && senza.includes('Mario Rossi') && senza.includes('IVA inclusa'));
+  ok('la pagina del lavoro archiviato ha il bottone senza intestazione',
+    await pagU.evaluate(() => { apriArchiviato(ARCHIVIO[0].id);
+      return document.body.innerHTML.includes('Stampa senza intestazione'); }));
   // ── la lavagna ──
   // Non è un calendario: è quello che in ufficio si tiene a matita. Le prove non
   // passano dal trascinamento del mouse ma dalla funzione che il rilascio chiama:
@@ -1431,6 +1643,14 @@ try {
     return LAVAGNA.lavori.length;
   });
   ok('un lavoro aggiunto a mano entra in coda', messoAMano === 1);
+  // Guardando la coda la domanda è anche «da quanto aspetta».
+  ok('col giorno in cui è stato inserito',
+    await pagU.evaluate(() => LAVAGNA.lavori[0].inserito === isoData(new Date())),
+    await pagU.evaluate(() => LAVAGNA.lavori[0].inserito));
+  ok('e il cartellino lo dice',
+    await pagU.evaluate(() => { disegnaLavagna(); const oggi = new Date();
+      return document.querySelector('#pagina-lavagna .coda').textContent.includes('aggiunto in ufficio il ' +
+        String(oggi.getDate()).padStart(2, '0') + '/' + String(oggi.getMonth() + 1).padStart(2, '0')); }));
   // Si sceglie un giorno e conta la sua settimana: il mercoledì 23 sta nella
   // settimana che apre lunedì 21.
   ok('col giorno scelto agganciato alla sua settimana',
@@ -1511,8 +1731,10 @@ try {
   // ── le colonne non si pestano i piedi ──
   // La colonna del giorno si dimensionava sul contenuto e sbordava su quella
   // dopo: le ore della mattina finivano sopra il «MATTINA» del giorno accanto.
-  // Si vedeva solo a occhio, quindi qui si misura.
-  await pagU.setViewportSize({ width: 1280, height: 800 });
+  // Si vedeva solo a occhio, quindi qui si misura. Da quando la coda sta sotto,
+  // a 1280 i giorni hanno tutta la larghezza e non sono più stretti: la prova si
+  // fa su una finestra più piccola, o non proverebbe niente.
+  await pagU.setViewportSize({ width: 1050, height: 800 });
   const sbordo = await pagU.evaluate(() => {
     // Un cartellino con dentro del testo vero, in una colonna stretta: su una
     // lavagna quasi vuota lo sbordo non si manifesta e la prova non prova niente.
@@ -1669,8 +1891,11 @@ try {
     disegnaLavagna();
   });
 
-  // ── l'ordine della coda: bloccati in fondo, slittati in cima ──
+  // ── l'ordine della coda: chi scade prima, e i bloccati in fondo ──
+  // Uno slittato non passa più davanti per il fatto di essere slittato: la griglia
+  // si legge come una priorità, e lui ce l'ha come tutti, dalla sua settimana.
   const ordine = await pagU.evaluate(async () => {
+    LAVAGNA.lavori.find(l => l.cliente.startsWith('Mario Rossi')).settimana = '2026-09-28';
     LAVAGNA.lavori.push(sistemaLavoro({ cliente: 'Scade prima', settimana: '2026-09-21', stato: 'lista' }));
     LAVAGNA.lavori.push(sistemaLavoro({ cliente: 'Scade dopo', settimana: '2026-09-22', stato: 'lista' }));
     LAVAGNA.lavori.push(sistemaLavoro({ cliente: 'Bloccato', settimana: '2026-09-21',
@@ -1679,13 +1904,122 @@ try {
     disegnaLavagna();
     return LAVAGNA.lavori.filter(l => !piazzato(l)).sort(ordinaCoda).map(l => l.cliente);
   });
-  ok('chi è slittato sta in cima', ordine[0].startsWith('Mario Rossi'), JSON.stringify(ordine));
-  ok('poi chi scade prima', ordine[1] === 'Scade prima' && ordine[2] === 'Scade dopo', JSON.stringify(ordine));
+  ok('chi scade prima sta in cima', ordine[0] === 'Scade prima' && ordine[1] === 'Scade dopo', JSON.stringify(ordine));
+  ok('e lo slittato non passa davanti a chi scade prima di lui',
+    ordine[2].startsWith('Mario Rossi'), JSON.stringify(ordine));
+  // Sotto la settimana, da sinistra a destra: i bloccati nella colonna loro.
+  const colonne = await pagU.evaluate(() => {
+    MOSTRA_FUTURI = true; disegnaLavagna();
+    const nomi = sel => [...document.querySelectorAll('#pagina-lavagna ' + sel + ' .cliente-cart')].map(e => e.textContent);
+    const griglia = document.querySelector('#pagina-lavagna .coda-lista.pronti');
+    const r = { pronti: nomi('.coda-lista.pronti'), fermi: nomi('.coda-lista.fermi'),
+      colonne: getComputedStyle(griglia).gridTemplateColumns.split(' ').length,
+      sotto: griglia.getBoundingClientRect().top > document.querySelector('#pagina-lavagna .giorni').getBoundingClientRect().bottom };
+    MOSTRA_FUTURI = false; disegnaLavagna();
+    return r;
+  });
+  ok('la coda sta sotto la settimana', colonne.sotto);
+  ok('i lavori da pianificare si riempiono su tre colonne', colonne.colonne === 3, String(colonne.colonne));
+  ok('nell\'ordine di priorità', JSON.stringify(colonne.pronti) === JSON.stringify(ordine.filter(n => n !== 'Bloccato')),
+    JSON.stringify(colonne.pronti));
+  ok('e i bloccati stanno nella colonna loro, non in mezzo',
+    JSON.stringify(colonne.fermi) === '["Bloccato"]' && !colonne.pronti.includes('Bloccato'), JSON.stringify(colonne));
   ok('e quello che non si può fare sta in fondo, anche se scade domani',
     ordine[ordine.length - 1] === 'Bloccato', JSON.stringify(ordine));
 
+  // ── la coda chiusa, i sopralluoghi, l'ora ──
+  const chiusi = await pagU.evaluate(async () => {
+    const l = LAVAGNA.lavori.find(x => x.cliente === 'Scade prima');
+    l.note = 'Potatura siepe\nchiedere la chiave del cancello';
+    l.inserito = '2026-09-02';
+    disegnaLavagna();
+    const cart = () => [...document.querySelectorAll('#pagina-lavagna .coda-lista.pronti .cartellino')]
+      .find(c => c.textContent.includes('Scade prima'));
+    const prima = { chiuso: cart().classList.contains('chiuso'), testo: cart().textContent,
+      bottoni: cart().querySelectorAll('button').length };
+    cart().click();
+    const aperto = { aperto: cart().classList.contains('aperto'), testo: cart().textContent,
+      bottoni: cart().querySelectorAll('button').length };
+    cart().click();
+    return { prima, aperto, richiuso: cart().classList.contains('chiuso') };
+  });
+  ok('in coda i cartellini stanno chiusi', chiusi.prima.chiuso && chiusi.prima.bottoni === 0, JSON.stringify(chiusi.prima));
+  // Si era chiesto apposta: dalla coda si vede cosa c'è da fare e da quando aspetta.
+  ok('ma chiusi dicono lo stesso cosa c\'è da fare e quando è entrato',
+    chiusi.prima.testo.includes('Potatura siepe') && chiusi.prima.testo.includes('il 02/09') &&
+    !chiusi.prima.testo.includes('chiave del cancello'), chiusi.prima.testo);
+  ok('e lo stato a parole', chiusi.prima.testo.includes('in attesa'));
+  ok('un clic lo apre, con le note intere e i comandi',
+    chiusi.aperto.aperto && chiusi.aperto.testo.includes('chiave del cancello') && chiusi.aperto.bottoni === 2,
+    JSON.stringify(chiusi.aperto));
+  ok('e un altro lo richiude', chiusi.richiuso);
+
+  const sopra = await pagU.evaluate(async () => {
+    apriModuloLavoro();
+    document.getElementById('n-cliente').value = 'Da guardare';
+    document.getElementById('n-note').value = 'Misurare il prato dietro casa';
+    document.getElementById('n-sopralluogo').checked = true;
+    await salvaModuloLavoro();
+    LAVAGNA.lavori.push(sistemaLavoro({ cliente: 'Da guardare ma bloccato', sopralluogo: true,
+      requisiti: ['manca il numero del cliente'], stato: 'lista' }));
+    disegnaLavagna();
+    const nomi = sel => [...document.querySelectorAll('#pagina-lavagna ' + sel + ' .cliente-cart')].map(e => e.textContent);
+    const r = { sopralluoghi: nomi('.coda-lista.sopralluoghi'), pronti: nomi('.coda-lista.pronti'),
+      fermi: nomi('.coda-lista.fermi'), segnato: LAVAGNA.lavori.find(l => l.cliente === 'Da guardare').sopralluogo,
+      parola: document.querySelector('#pagina-lavagna .coda-lista.sopralluoghi').textContent.includes('sopralluogo') };
+    LAVAGNA.lavori = LAVAGNA.lavori.filter(l => l.cliente !== 'Da guardare ma bloccato');
+    await salvaLavagna();
+    return r;
+  });
+  ok('un sopralluogo aggiunto a mano sta nella colonna sua',
+    sopra.segnato === true && JSON.stringify(sopra.sopralluoghi) === '["Da guardare"]' &&
+    !sopra.pronti.includes('Da guardare'), JSON.stringify(sopra));
+  ok('e il cartellino lo dice a parole, non col colore', sopra.parola);
+  ok('e un bloccato, chiuso, dice cosa manca',
+    await pagU.evaluate(() => [...document.querySelectorAll('#pagina-lavagna .coda-lista.fermi .cartellino.chiuso')]
+      .some(c => c.textContent.includes('serve la piattaforma'))));
+  ok('un sopralluogo bloccato sta coi bloccati', sopra.fermi.includes('Da guardare ma bloccato'), JSON.stringify(sopra.fermi));
+
+  const ora = await pagU.evaluate(async () => {
+    const l = LAVAGNA.lavori.find(x => x.cliente === 'Da guardare');
+    await spostaLavoro(l.id, '2026-09-22', 'mattina');
+    const risposte = ['14.30'];
+    const prompt0 = window.prompt;
+    window.prompt = () => risposte.shift();
+    await scriviOra(l.id);
+    const dopo = { ora: l.ora, mezza: l.mezza, schermo: document.getElementById('pagina-lavagna').innerHTML.includes('14:30') };
+    const suFile = JSON.parse(await leggiTesto(window.RADICE, 'lavagna.json')).lavori.find(x => x.id === l.id).ora;
+    const agenda = costruisciAgenda(LAVAGNA.lavori, new Date('2026-09-21T12:00:00'))
+      .appuntamenti.find(a => a.cliente === 'Da guardare');
+    risposte.push('alle otto');
+    await scriviOra(l.id);
+    const sbagliata = l.ora;
+    await spostaLavoro(l.id, '2026-09-23', 'mattina');
+    const spostato = l.ora;
+    await spostaLavoro(l.id, '', '');
+    window.prompt = prompt0;
+    return { dopo, suFile, agenda, sbagliata, spostato, inCoda: l.ora,
+      letture: [leggiOra('8'), leggiOra('830'), leggiOra('8:30'), leggiOra('25:00'), leggiOra('')] };
+  });
+  ok('l\'ora si scrive sul cartellino e si legge davanti al nome', ora.dopo.ora === '14:30' && ora.dopo.schermo, JSON.stringify(ora.dopo));
+  // L'ora è quella detta al cliente: è la mezza giornata che si adegua.
+  ok('e un\'ora del pomeriggio sposta il cartellino al pomeriggio', ora.dopo.mezza === 'pomeriggio');
+  ok('si salva sul file della lavagna', ora.suFile === '14:30');
+  ok('e parte con l\'agenda', ora.agenda && ora.agenda.ora === '14:30', JSON.stringify(ora.agenda));
+  ok('un\'ora che non è un\'ora non si scrive', ora.sbagliata === '14:30');
+  ok('passando all\'altra mezza giornata l\'ora si toglie, o direbbe il contrario', ora.spostato === '');
+  ok('e tornando in coda non resta appesa', ora.inCoda === '');
+  ok('8, 830 e 8:30 sono la stessa ora; 25:00 non è un\'ora',
+    JSON.stringify(ora.letture) === '["08:00","08:30","08:30","",""]', JSON.stringify(ora.letture));
+  await pagU.evaluate(async () => {
+    LAVAGNA.lavori = LAVAGNA.lavori.filter(l => l.cliente !== 'Da guardare');
+    await salvaLavagna(); disegnaLavagna();
+  });
+
   ok('un lavoro aggiunto a mano si rilegge dal file',
     await pagU.evaluate(async () => { await ricarica(); return LAVAGNA.lavori.length; }) === 4);
+  ok('con la sua data di inserimento, che non va persa salvando',
+    await pagU.evaluate(() => LAVAGNA.lavori.find(l => l.origine === 'aggiunto in ufficio').inserito === isoData(new Date())));
 
   // ── correggere un lavoro senza cancellarlo e riscriverlo ──
   ok('il modulo si riapre già compilato', await pagU.evaluate(() => {
@@ -1811,8 +2145,52 @@ try {
 
   const archivio = await pagU.evaluate(() => { vaiA('archivio'); return document.getElementById('pagina-archivio').innerHTML; });
   ok('a sinistra c\'è il gestionale con i due stati',
-    archivio.includes('Da fatturare') && archivio.includes('Fatturato') && archivio.includes('Gestionale'));
+    archivio.includes('Da pagare') && archivio.includes('Pagati') && archivio.includes('Gestionale'));
+  // Guardando tutto, i conti aperti stanno sopra e quelli pagati sotto, divisi.
+  ok('in archivio da pagare e pagati stanno divisi, i da pagare sopra',
+    await pagU.evaluate(() => {
+      // a questo punto del giro sono pagati tutti e due: uno torna aperto, per la prova
+      const prima = ARCHIVIO.map(l => l.stato);
+      ARCHIVIO[ARCHIVIO.length - 1].stato = 'da-fatturare';
+      disegnaArchivio();
+      const parti = [...document.querySelectorAll('#elenco-archivio .parte-archivio')].map(e => e.textContent);
+      ARCHIVIO.forEach((l, k) => { l.stato = prima[k]; });
+      disegnaArchivio();
+      return parti.length === 2 && parti[0].startsWith('Da pagare') && parti[1].startsWith('Pagati');
+    }));
   ok('e con quanto c\'è ancora da incassare', archivio.includes('stato-somma'));
+
+  // ── dalla scheda cliente ai suoi conti ──
+  // Chiusa, una scheda è solo il nome: con tutti i campi aperti l'elenco era un
+  // muro di caselle.
+  const schede = await pagU.evaluate(() => {
+    CLIENTI_APERTI = new Set();
+    if (!CLIENTI.some(c => c.id === 'cliente-verdi')) CLIENTI.push(sistemaCliente({ id: 'cliente-verdi', nome: 'Giuseppe Verdi' }));
+    // Un omonimo parziale: «Verdi» non deve portarsi dietro i conti di «Giuseppe Verdi».
+    CLIENTI.push(sistemaCliente({ id: 'cliente-verdini', nome: 'Giuseppe Verdini' }));
+    vaiA('clienti');
+    const el = document.getElementById('elenco-clienti');
+    const chiuse = el.querySelectorAll('input').length === 0 && el.querySelectorAll('.testa-cliente').length === CLIENTI.length;
+    apriChiudiCliente('cliente-verdi');
+    const aperta = el.querySelectorAll('input').length > 0 && el.innerHTML.includes('Vedi conti (1)');
+    const verdini = contiDelCliente(CLIENTI.find(c => c.id === 'cliente-verdini')).length;
+    vediConti('cliente-verdi');
+    const pag = document.getElementById('pagina-archivio');
+    const r = { chiuse, aperta, verdini, pagina: PAGINA,
+      nomi: [...pag.querySelectorAll('#elenco-archivio .nome-cliente')].map(e => e.textContent),
+      detto: pag.innerHTML.includes('Solo i conti di') };
+    tuttiIClienti();
+    r.tutti = document.querySelectorAll('#pagina-archivio #elenco-archivio .scheda').length;
+    CLIENTI = CLIENTI.filter(c => c.id !== 'cliente-verdini');
+    return r;
+  });
+  ok('in Clienti le schede chiuse mostrano solo il nome', schede.chiuse, JSON.stringify(schede));
+  ok('e un clic le apre con i campi e «Vedi conti»', schede.aperta, JSON.stringify(schede));
+  ok('«Vedi conti» porta in archivio con i soli conti di quel cliente',
+    schede.pagina === 'archivio' && schede.nomi.length === 1 && schede.nomi[0] === 'Giuseppe Verdi', JSON.stringify(schede));
+  ok('e l\'archivio dice che sta mostrando solo quelli', schede.detto);
+  ok('un nome che ne contiene un altro non si porta dietro i suoi conti', schede.verdini === 0);
+  ok('e togliendo il filtro tornano tutti', schede.tutti === 2, JSON.stringify(schede));
 
   const dettaglio = await pagU.evaluate(() => {
     apriArchiviato(ARCHIVIO.find(l => l.id !== 'altro-lavoro').id);
@@ -1881,6 +2259,131 @@ try {
   ok('chi è tutto fatturato non ha niente da incassare',
     (raccolto.match(/da incassare/g) || []).length === 1);
   await pagU.evaluate(() => cambiaRaccolta('data'));
+
+  // ── le piante in ufficio: prezzo dal cantiere, nome sul conto ──
+  const pianteU = await pagU.evaluate(d => {
+    const righe = costruisciConteggio(d, null).filter(r => r.voceID === 'piante');
+    const r = { voci: righe.map(x => x.voce), prezzi: righe.map(x => x.prezzo), manuali: righe.every(x => x.manuale) };
+    // Il cantiere corregge il prezzo e rimanda: il prezzo venuto da lì segue.
+    const corretto = JSON.parse(JSON.stringify(d));
+    corretto.righe.find(x => x.voce.includes('Lauro')).prezzo = 15;
+    r.dopoCorrezione = costruisciConteggio(corretto, righe).find(x => x.voce.includes('Lauro')).prezzo;
+    // Ma se l'ufficio l'ha cambiato a mano, resta quello dell'ufficio.
+    const aMano = righe.map(x => ({ ...x }));
+    aMano[0].prezzo = 13; aMano[0].manuale = true; aMano[0].daCantiere = false;
+    r.aManoResta = costruisciConteggio(corretto, aMano).find(x => x.voce.includes('Lauro')).prezzo;
+    r.foglio = costruisciFoglio({ cliente: d.cliente, data: d.data, righe: costruisciConteggio(d, null) });
+    return r;
+  }, piante.doc);
+  ok('in ufficio il prezzo delle piante è quello del cantiere', pianteU.prezzi.join(',') === '14.5,38', JSON.stringify(pianteU));
+  ok('e conta come scritto a mano: il listino non lo tocca', pianteU.manuali);
+  ok('se il cantiere lo corregge, il prezzo segue', pianteU.dopoCorrezione === 15, String(pianteU.dopoCorrezione));
+  ok('ma se l\'ufficio l\'ha cambiato a mano resta quello dell\'ufficio', pianteU.aManoResta === 13, String(pianteU.aManoResta));
+  ok('sul foglio del cliente le piante escono col loro nome',
+    pianteU.foglio.includes('Lauro') && pianteU.foglio.includes('Acero'));
+
+  // ── più voci del conto unite in una, a corpo ──
+  // Una siepe nuova: piante, pali, telo… e al cliente una voce sola. Il prezzo
+  // proposto è la somma, e una volta deciso non si sovrascrive.
+  const gruppo = await pagU.evaluate(d => {
+    const prima = PAGINA;
+    LAVORO = { doc: d, righe: costruisciConteggio(d, null), stato: 'da-fatturare', corretto: false };
+    vaiA('lavoro');
+    const r = {};
+    const indici = LAVORO.righe.map((x, i) => x.voceID === 'piante' ? i : -1).filter(i => i >= 0);
+    indici.forEach(i => sceltaRiga(i, true));
+    unisciRighe();
+    const g = LAVORO.righe.find(x => x.gruppo);
+    r.dentro = g ? g.componenti.length : 0;
+    r.prezzo = g && g.prezzo;
+    r.aCorpo = g && g.quantita === 1;
+    const i = LAVORO.righe.indexOf(g);
+    modificaRiga(i, 'voce', 'Fornitura piante siepe');
+    r.foglio = costruisciFoglio({ cliente: d.cliente, data: d.data, righe: LAVORO.righe });
+    r.totale = totaleConteggio(LAVORO.righe).totale;
+    r.altri = totaleConteggio(LAVORO.righe.filter(x => !x.gruppo)).totale;
+    // il cantiere rimanda il rapportino: due lauri in più
+    const corretto = JSON.parse(JSON.stringify(d));
+    corretto.righe.find(x => x.voce.includes('Lauro')).quantita = 14;
+    LAVORO.righe = costruisciConteggio(corretto, LAVORO.righe);
+    LAVORO.doc = corretto;
+    const g2 = LAVORO.righe.find(x => x.gruppo);
+    r.dopo = { prezzo: g2.prezzo, nome: g2.voce, lauri: g2.componenti.find(c => c.voce.includes('Lauro')).quantita };
+    disegnaLavoro();
+    r.avviso = document.getElementById('pagina-lavoro').textContent.includes('Le voci dentro sono cambiate');
+    usaSommaGruppo(LAVORO.righe.indexOf(g2));
+    r.conSomma = LAVORO.righe.find(x => x.gruppo).prezzo;
+    sciogliGruppo(LAVORO.righe.findIndex(x => x.gruppo));
+    r.sciolto = !LAVORO.righe.some(x => x.gruppo) && LAVORO.righe.filter(x => x.voceID === 'piante').length === 2;
+    LAVORO = null; vaiA(prima);
+    return r;
+  }, piante.doc);
+  ok('due voci spuntate si uniscono in un gruppo che le tiene dentro', gruppo.dentro === 2, JSON.stringify(gruppo));
+  ok('a corpo, col prezzo proposto uguale alla somma', gruppo.aCorpo && gruppo.prezzo === 288, String(gruppo.prezzo));
+  ok('al cliente arriva il gruppo col suo nome, non le voci dentro',
+    gruppo.foglio.includes('Fornitura piante siepe') && !gruppo.foglio.includes('Lauro'));
+  ok('e il totale conta il gruppo una volta sola, non anche le voci dentro',
+    Math.abs(gruppo.totale - (288 + gruppo.altri)) < 0.005 && !gruppo.foglio.includes('Acero'), JSON.stringify([gruppo.totale, gruppo.altri]));
+  ok('se il cantiere rimanda il rapportino il gruppo tiene nome e prezzo',
+    gruppo.dopo.prezzo === 288 && gruppo.dopo.nome === 'Fornitura piante siepe', JSON.stringify(gruppo.dopo));
+  ok('mentre le voci dentro seguono il rapportino', gruppo.dopo.lauri === 14, JSON.stringify(gruppo.dopo));
+  ok('e la schermata dice che sotto è cambiato qualcosa', gruppo.avviso);
+  ok('la somma nuova si prende solo con un tocco', gruppo.conSomma === 317, String(gruppo.conSomma));
+  ok('e un gruppo si scioglie rimettendo le voci com\'erano', gruppo.sciolto);
+
+  // ── due lavori dello stesso cliente in un conto unico ──
+  // Due giornate, due rapportini, un foglio solo: un blocco per lavoro con la sua
+  // data e il suo subtotale, il totale in fondo. E mai due clienti insieme.
+  const insieme = await pagU.evaluate(async a => {
+    const archivio = await window.RADICE.getDirectoryHandle('archivio', { create: true });
+    const anno = await archivio.getDirectoryHandle(a, { create: true });
+    await scriviTesto(anno, '2026-05-11-verdi-secondo.json', JSON.stringify({
+      tipo: 'lavoro-archiviato', versione: 1, id: 'secondo-verdi', revisione: 1,
+      cliente: { id: 'cliente-verdi', nome: 'Giuseppe Verdi', citta: 'Lavis' },
+      data: '2026-05-11',
+      righe: [{ chiave: 'manodopera', voce: 'Manodopera', quantita: 2, unita: 'h', prezzo: 35 },
+              { voce: 'Smaltimento verde', quantita: 1, unita: '', prezzo: '' }],
+      totale: 70, righeSenzaPrezzo: 1, stato: 'da-fatturare', rapportino: null,
+    }));
+    await ricarica();
+    vaiA('archivio');
+    const r = {};
+    const altroCliente = ARCHIVIO.find(l => l.id !== 'altro-lavoro' && l.id !== 'secondo-verdi');
+    scegliLavoro('altro-lavoro', true);
+    scegliLavoro(altroCliente.id, true);
+    r.rifiutaAltroCliente = SCELTI_ARCHIVIO.size === 1 && document.getElementById('avviso').classList.contains('brutto');
+    scegliLavoro('secondo-verdi', true);
+    r.scelti = [...SCELTI_ARCHIVIO].sort().join(',');
+    r.barra = document.getElementById('elenco-archivio').innerHTML.includes('Stampa insieme');
+    stampaConto('insieme');
+    const foglio = document.getElementById('foglio');
+    r.foglio = { blocchi: foglio.querySelectorAll('.riga-blocco').length,
+      sub: foglio.querySelectorAll('.riga-subtotale').length,
+      totale: foglio.querySelector('.riga-totale').textContent,
+      date: foglio.textContent.includes('04/05/2026') && foglio.textContent.includes('11/05/2026'),
+      parziale: foglio.textContent.includes('non è compresa') };
+    window.apriPosta = url => { window.__posta = url; };
+    window.__posta = '';
+    await inviaInsieme();
+    r.posta = decodeURIComponent(window.__posta);
+    r.inPosta = ARCHIVIO.filter(l => l.id === 'altro-lavoro' || l.id === 'secondo-verdi').every(l => !!l.inPosta);
+    r.dopo = SCELTI_ARCHIVIO.size;
+    // e il file d'archivio lo ricorda, non solo lo schermo
+    r.suFile = JSON.parse(await leggiTesto(anno, '2026-05-11-verdi-secondo.json')).inPosta ? true : false;
+    await anno.removeEntry('2026-05-11-verdi-secondo.json');
+    await ricarica();
+    return r;
+  }, annoLavoro);
+  ok('un conto unico non mette insieme due clienti, e lo dice', insieme.rifiutaAltroCliente, JSON.stringify(insieme));
+  ok('due lavori dello stesso cliente si spuntano insieme', insieme.scelti === 'altro-lavoro,secondo-verdi' && insieme.barra, insieme.scelti);
+  ok('il foglio unico ha un blocco e un subtotale per lavoro',
+    insieme.foglio.blocchi === 2 && insieme.foglio.sub === 2 && insieme.foglio.date, JSON.stringify(insieme.foglio));
+  ok('e il totale li somma', insieme.foglio.totale.includes('245,00'), insieme.foglio.totale);
+  ok('dicendo che una voce da definire resta fuori', insieme.foglio.parziale);
+  ok('«Manda insieme» apre una mail sola con i due lavori e il totale',
+    insieme.posta.includes('Lavoro del 04/05/2026') && insieme.posta.includes('Lavoro del 11/05/2026') &&
+    insieme.posta.includes('TOTALE (IVA inclusa): 245,00'), insieme.posta.slice(0, 400));
+  ok('e li segna in posta tutti e due, anche sul file', insieme.inPosta && insieme.suFile && insieme.dopo === 0);
 
   // ── togliere un lavoro dall'archivio ──
   // Non è una correzione — quella si fa rimandando il rapportino dal cantiere —
@@ -1986,6 +2489,21 @@ try {
       chiudiModuloLavoro();
       return uno;
     }));
+  ok('col giorno in cui è stata fatta in giardino',
+    prenotata && prenotata.inserito === await pagU.evaluate(d => isoData(new Date(d.creato)), docAppuntamento),
+    JSON.stringify(prenotata && prenotata.inserito));
+  // Le prenotazioni entrate prima che la lavagna segnasse la data: il documento
+  // ce l'ha ancora, e rileggendo la cartella la si recupera.
+  ok('una prenotazione entrata senza data la recupera dal suo documento',
+    await pagU.evaluate(async id => {
+      LAVAGNA.lavori.find(l => l.da === id).inserito = '';
+      await salvaLavagna();
+      await ricarica();
+      return !!LAVAGNA.lavori.find(l => l.da === id).inserito;
+    }, docAppuntamento.id));
+  ok('e la data resta anche rileggendo la lavagna dal file',
+    await pagU.evaluate(async id => { await ricarica(); return !!LAVAGNA.lavori.find(l => l.da === id).inserito; },
+      docAppuntamento.id));
   ok('rileggendo la cartella non entra una seconda volta',
     await pagU.evaluate(async id => {
       const quanti = LAVAGNA.lavori.filter(l => l.da === id).length;
@@ -2011,7 +2529,7 @@ try {
       sistemaLavoro({ cliente: 'Mattina', giorno: window.GIORNI.presto, mezza: 'mattina', stato: 'matita' }),
       sistemaLavoro({ cliente: 'In coda', settimana: window.GIORNI.presto, stato: 'lista' }),
     ];
-    for (let i = 1; i <= 6; i++) {
+    for (let i = 1; i <= 10; i++) {
       LAVAGNA.lavori.push(sistemaLavoro({ cliente: 'Numero ' + i, giorno: fraGiorni(20 + i), mezza: 'mattina' }));
     }
     await salvaLavagna();
@@ -2025,8 +2543,8 @@ try {
   }));
   ok('la lavagna salvandosi scrive l\'agenda per il cantiere',
     agendaPrima.tipo === 'agenda' && agendaPrima.versione === 1);
-  ok('ci stanno solo i sei appuntamenti più vicini',
-    agendaPrima.appuntamenti.length === 6, String(agendaPrima.appuntamenti.length));
+  ok('ci stanno solo i dieci appuntamenti più vicini',
+    agendaPrima.appuntamenti.length === 10, String(agendaPrima.appuntamenti.length));
   ok('in ordine, prima la mattina e poi il pomeriggio',
     agendaPrima.appuntamenti[0]?.cliente === 'Mattina' && agendaPrima.appuntamenti[1]?.cliente === 'Pomeriggio',
     agendaPrima.appuntamenti.map(a => a.cliente).join(' → '));
@@ -2049,9 +2567,11 @@ try {
     !!spostato && spostato.giorno === await pagU.evaluate(() => window.GIORNI.dopo),
     spostato && spostato.giorno);
   // Il vincolo che conta: quello che non parte non si può leggere per strada.
+  // L'ora detta al cliente sì: è arrivata dopo, ed è la cosa che in giardino serve
+  // di più. La stima delle ore di lavoro no.
   ok('niente indirizzi, ore, requisiti o prezzi nell\'agenda',
     agenda.appuntamenti.length > 0 &&
-    agenda.appuntamenti.every(a => Object.keys(a).sort().join(',') === 'cliente,giorno,mezza,note') &&
+    agenda.appuntamenti.every(a => Object.keys(a).sort().join(',') === 'cliente,giorno,mezza,note,ora') &&
     !agendaScritta.includes('Tigli') && !agendaScritta.includes('piattaforma'),
     Object.keys(agenda.appuntamenti[0] || {}).join(','));
 
@@ -2071,7 +2591,7 @@ try {
       schermo: document.getElementById('agenda-list').innerHTML };
   }, CONSEGNA);
   ok('il telefono scarica l\'agenda scritta dall\'ufficio',
-    scaricata.esito === true && scaricata.quanti === 6, JSON.stringify(scaricata.esito));
+    scaricata.esito === true && scaricata.quanti === 10, JSON.stringify(scaricata.esito));
   ok('e la mostra con giorno, cliente e note',
     scaricata.schermo.includes(scaricata.atteso) &&
     scaricata.schermo.includes('Pomeriggio') &&
@@ -2083,7 +2603,7 @@ try {
   await page.goto(BASE, { waitUntil: 'load' });
   await page.waitForTimeout(600);
   ok('senza rete resta l\'agenda scaricata prima',
-    await page.evaluate(() => { navTo('prossimi'); return DB.agenda?.appuntamenti.length; }) === 6);
+    await page.evaluate(() => { navTo('prossimi'); return DB.agenda?.appuntamenti.length; }) === 10);
   ok('e non finge di aggiornarla',
     await page.evaluate(async () => await scaricaAgenda()) === false);
 
@@ -2095,7 +2615,7 @@ try {
   ok('un\'agenda di un\'altra versione non sostituisce quella buona',
     await page.evaluate(async () => {
       const esito = await scaricaAgenda();
-      return esito === false && DB.agenda?.appuntamenti.length === 6;
+      return esito === false && DB.agenda?.appuntamenti.length === 10;
     }));
   // Senza questo la verifica sopra passerebbe anche se il documento non fosse
   // mai stato chiesto: «false» lo restituisce anche chi si è fermato prima.
@@ -2109,9 +2629,68 @@ try {
   ok('una pagina HTML al posto dell\'agenda non cancella quella che c\'è',
     await page.evaluate(async () => {
       const esito = await scaricaAgenda();
-      return esito === false && DB.agenda?.appuntamenti.length === 6;
+      return esito === false && DB.agenda?.appuntamenti.length === 10;
     }));
 
+  // ── il conto si salva da solo, e uno da pagare si corregge dall'archivio ──
+  // Col solo bottone capitava di correggere i prezzi e passare ad altro: in
+  // archivio restavano gli importi di prima, e in ufficio si credeva il conto giusto.
+  const salvataggio = await pagU.evaluate(async d => {
+    const r = {};
+    const nuovo = JSON.parse(JSON.stringify(d));
+    nuovo.id = 'visita-autosalvata'; nuovo.revisione = 1; nuovo.cliente = { id: 'c-auto', nome: 'Anna Salvata' };
+    const arrivi = await window.RADICE.getDirectoryHandle('rapportini', { create: true });
+    await scriviTesto(arrivi, nomeFileRapportino(nuovo), JSON.stringify(nuovo));
+    await ricarica();
+    apriLavoro(nuovo.id);
+    const i = LAVORO.righe.findIndex(x => x.chiave === 'manodopera');
+    modificaRiga(i, 'prezzo', '41');
+    r.primaDelTempo = !ARCHIVIO.some(l => l.id === nuovo.id);
+    await new Promise(ok => setTimeout(ok, 1200));
+    const inArchivio = ARCHIVIO.find(l => l.id === nuovo.id);
+    r.salvato = !!inArchivio && inArchivio.righe.find(x => x.chiave === 'manodopera').prezzo == 41;
+    r.restaQui = PAGINA === 'lavoro';
+    r.nonPiuInArrivo = !ARRIVI.some(a => a.doc.id === nuovo.id);
+    r.detto = document.getElementById('stato-salvataggio').textContent.includes('Salvato');
+    // e su file, non solo in memoria
+    await ricarica();
+    const riletto = ARCHIVIO.find(l => l.id === nuovo.id);
+    r.suFile = !!riletto && riletto.righe.find(x => x.chiave === 'manodopera').prezzo == 41;
+    LAVORO = null; vaiA('archivio');
+    r.bottoneInElenco = document.getElementById('elenco-archivio').innerHTML.includes('modificaArchiviato(');
+
+    // uno da pagare si riapre e si corregge senza tornare in arrivo
+    modificaArchiviato(nuovo.id);
+    r.riaperto = PAGINA === 'lavoro' && LAVORO && LAVORO.dallArchivio;
+    const j = LAVORO.righe.findIndex(x => x.chiave === 'manodopera');
+    modificaRiga(j, 'prezzo', '43');
+    await tornaAgliArrivi();
+    r.tornato = PAGINA === 'archiviato';
+    r.corretto = ARCHIVIO.find(l => l.id === nuovo.id).righe.find(x => x.chiave === 'manodopera').prezzo == 43;
+    // uno pagato no
+    await cambiaStato(nuovo.id, 'fatturato');
+    modificaArchiviato(nuovo.id);
+    r.pagatoFermo = PAGINA !== 'lavoro';
+    r.pagatoSenzaBottone = !document.getElementById('pagina-archiviato').innerHTML.includes('Modifica il conto');
+
+    // pulizia: le prove che seguono non devono trovarselo
+    const l = ARCHIVIO.find(x => x.id === nuovo.id);
+    const cartellaAnno = await (await window.RADICE.getDirectoryHandle('archivio')).getDirectoryHandle(l.anno);
+    await cartellaAnno.removeEntry(l.file);
+    await arrivi.removeEntry(nomeFileRapportino(nuovo));
+    await ricarica();
+    vaiA('archivio');
+    return r;
+  }, doc);
+  ok('una modifica al conto in arrivo si salva da sola', salvataggio.salvato, JSON.stringify(salvataggio));
+  ok('su file, non solo a schermo', salvataggio.suFile);
+  ok('senza portare via dalla schermata mentre si scrive', salvataggio.restaQui);
+  ok('e la schermata dice che è salvato', salvataggio.detto);
+  ok('salvato, il lavoro non è più fra quelli in arrivo', salvataggio.nonPiuInArrivo);
+  ok('un conto da pagare ha il suo «Modifica» anche nell\'elenco', salvataggio.bottoneInElenco);
+  ok('e si riapre dall\'archivio senza passare dagli arrivi', salvataggio.riaperto);
+  ok('la correzione finisce nello stesso lavoro archiviato', salvataggio.corretto && salvataggio.tornato, JSON.stringify(salvataggio));
+  ok('un conto già pagato non si riapre', salvataggio.pagatoFermo && salvataggio.pagatoSenzaBottone);
   // ── IL RILIEVO ARRIVA IN UFFICIO ──
   // Il giro completo del quarto documento: il telefono l'ha scritto in giardino,
   // il servizio l'ha depositato, l'ufficio lo legge. Qui si legge e non si tocca
@@ -2292,19 +2871,23 @@ try {
       const b = r.getBoundingClientRect();
       return b.width ? b : el.getBoundingClientRect();
     };
-    [...document.querySelectorAll('#foglio tr, #pagina-preventivo tr')].forEach(tr => {
-      const q = tr.querySelector('.qta');
-      if (!q || !q.nextElementSibling || !q.textContent.trim()) return;
-      const dopo = q.nextElementSibling;
-      if (!dopo.textContent.trim()) return;
-      const a = quantoOccupa(q), b = quantoOccupa(dopo);
-      if (b.left - a.right < 8) stretti.push(tr.textContent.trim().slice(0, 40) +
+    // Ogni numero allineato a destra seguito da del testo: è la coppia che si
+    // incolla, ovunque capiti. Guardarne solo una — quella della quantità —
+    // lascerebbe fuori tutte le altre tabelle, che hanno lo stesso difetto.
+    [...document.querySelectorAll('#foglio td.num, #foglio th.num, ' +
+      '#pagina-preventivo td.num, #pagina-preventivo th.num')].forEach(cella => {
+      const dopo = cella.nextElementSibling;
+      if (!dopo || dopo.classList.contains('num')) return;
+      if (!cella.textContent.trim() || !dopo.textContent.trim()) return;
+      const a = quantoOccupa(cella), b = quantoOccupa(dopo);
+      if (b.left - a.right < 6) stretti.push(
+        cella.textContent.trim().slice(0, 14) + '|' + dopo.textContent.trim().slice(0, 14) +
         ' (' + Math.round(b.left - a.right) + 'px)');
     });
     f.style.display = '';
     return stretti;
   });
-  ok('la quantità non si incolla alla sua unità, né a schermo né sulla carta',
+  ok('un numero allineato a destra non si incolla al testo che lo segue',
     distanze.length === 0, distanze.join(' | ') || 'tutte staccate');
 
   // Salvato nella cartella, e da lì rientra: il preventivo è un file come

@@ -54,6 +54,13 @@ npm test     # il giro di prova, serve playwright (npm i)
 npm start    # server locale: i service worker non vanno su file://
 ```
 
+Quando cambiano `index.html` o `ufficio/index.html` si alza il numero di `CACHE`
+in `sw.js`, o il telefono continua a servire la copia vecchia.
+
+Le correzioni del beta testing sono **piccole** e vanno su `main`: i lavori grossi
+(i preventivi) vanno avanti su un ramo loro, e un rifacimento fatto qui ci si
+scontrerebbe. Prima di ogni modifica `git fetch origin main`.
+
 I test vanno lanciati prima di ogni commit. Coprono le cose che rompendosi non
 si fanno notare: il calcolo di azoto e potassio, la persistenza dopo la
 ricarica, il backup, le eliminazioni a cascata, l'apertura offline. Se una
@@ -61,9 +68,16 @@ funzionalità nuova tocca i dati, merita una verifica lì dentro.
 
 ## Modalità costruzione
 
-Il sistema **non è ancora in servizio in azienda**, e finché non lo è vale questa
-regola: **non si scrivono migrazioni**. Lo schema cambia quando serve, si alza
-`VERSIONE_DATI`, e i dati di una versione diversa non vengono convertiti.
+**Dal 23/09/2026 la suite è in servizio in azienda**: rapportini veri, fatture
+vere. La regola di questa sezione resta — **non si scrivono migrazioni**, lo schema
+cambia quando serve, si alza `VERSIONE_DATI` e i dati di una versione diversa non
+vengono convertiti — ma non si alza più `VERSIONE_DATI` da soli.
+
+**Prima di alzarla si chiede, dicendo cosa costa**: quali dati di chi lavora
+finiscono in `CHIAVE_DA_PARTE` al primo avvio, e quali backup e documenti in giro
+(rapportini in coda, appuntamenti, agenda) non si riaprono più. Con dati veri sul
+telefono e in ufficio, un cambio di schema non è più un dettaglio di chi scrive il
+codice: è una decisione di chi li usa.
 
 Mantenere nove passaggi di conversione per dati che nessuno userà più costava più
 di quanto valessero, e ogni passaggio era una cosa in più che poteva rompersi
@@ -78,10 +92,11 @@ file. Sono l'unica copia rimasta: si cancellano solo con una conferma. Un backup
 di un'altra versione, allo stesso modo, viene rifiutato invece che importato a
 metà — il file resta lì, da riaprire quando servirà.
 
-**Il giorno in cui l'azienda ci lavora davvero questa regola si rovescia.** Da lì
-in poi ogni cambio di schema vuole la sua migrazione, o si perdono dati veri. Chi
-fa quel passaggio alza `VERSIONE_DATI` un'ultima volta, rimette l'imbuto e
-riscrive questa sezione.
+**Il rovesciamento è un passaggio da fare apposta, non una data.** Essere in
+servizio non lo fa scattare da solo: finché siamo in beta testing la regola resta
+questa. Il giorno in cui si decide, da lì in poi ogni cambio di schema vuole la
+sua migrazione, o si perdono dati veri. Chi fa quel passaggio alza `VERSIONE_DATI`
+un'ultima volta, rimette l'imbuto e riscrive questa sezione.
 
 ## La schermata visita è un rapporto, non un registro
 
@@ -96,10 +111,26 @@ persone; il totale lo fa `oreTotali()`. Una fascia che l'app propone resta
 rifiuta di salvare se ne resta una: le ore finiscono in fattura, e un orario
 precompilato che nessuno ha guardato è un errore che paga il cliente.
 
+Sotto ogni fascia c'è **una riga di testo, `Cosa`**: cosa si è fatto in quelle ore.
+Viaggia nel rapportino (`ore.fasce[].cosa`) e in ufficio si legge sotto la sua
+fascia, nel lavoro in arrivo e in archivio; **al cliente non arriva**, come le
+fasce. Scriverla non conferma l'orario di una fascia proposta: sono due cose
+diverse, e un «potatura» scritto sotto un orario mai guardato non lo rende giusto.
+
 **Le operazioni si spuntano.** L'elenco viene da `DB.tipiOperazione`, ordinato
 per quanto si usano da quel cliente. Spuntando si apre solo il dettaglio che
 quel tipo richiede (`dettaglio`: niente, concime, semente, fitofarmaco,
 quantita) e i flag prato/siepe li mette il tipo, non l'utente.
+
+**Un insieme accende più operazioni in un colpo.** Un'aiuola chiede sempre
+piante, pacciamatura (q), ala gocciolante (m) e telo pacciamante (m²): spuntarle
+una per una era lavoro ripetuto a ogni aiuola. Un tipo con `dettaglio: 'insieme'`
+non fa un'operazione sua: il suo campo `Insieme` elenca i `TipoID` che accende, e
+le loro operazioni stanno **raccolte sotto di lui** (`insiemiAperti`) invece che
+sparse nell'elenco. Ognuna resta un'operazione normale, con la sua riga nel conto;
+se al cliente deve arrivare una voce sola, in ufficio si uniscono col gruppo a
+corpo. Gli insiemi si creano da **Archivi**, senza toccare il codice — «Aiuola» è
+già pronta — e un insieme non ne contiene altri.
 
 I campi che l'utente compila usano `oninput`, non `onchange`: con `onchange` il
 modello resta indietro fino al blur. E non si ridisegna l'elenco mentre si
@@ -111,7 +142,11 @@ lavagna dell'ufficio. Scriverlo in tutti e due i posti voleva dire due posti dov
 cercarlo e due da tenere allineati. In fondo alla visita resta una scorciatoia che
 apre la prenotazione **col cliente già messo** — è quello che hai davanti, farlo
 ricercare sarebbe lavoro inventato — e quello che c'era da ricordare per la
-prossima volta si scrive nelle note della prenotazione.
+prossima volta si scrive nelle note della prenotazione. La visita **resta aperta sotto**
+la prenotazione: chiuderla per aprire l'altra buttava via quello che non era ancora
+stato salvato, e riaprendola si ritrovava la versione di prima. È successo davvero,
+con le correzioni di un rapportino. Con due pannelli aperti, il tasto indietro
+chiude quello sopra.
 
 Le note sono **l'unico campo di testo** della prenotazione, e sono obbligatorie:
 un cartellino col solo nome del cliente non dice niente a chi pianifica, e in
@@ -122,12 +157,38 @@ prenotazioni sono il posto dove sta scritto cosa si era detto di fare.
 
 **La pagina Prossimi guarda in due direzioni.** In cima c'è l'agenda che arriva
 dall'ufficio — dove si va, con le note di chi c'è stato prima — e sotto quello che
-si è prenotato da qui. `DB.agenda` è una copia di quello che l'ufficio ha deciso,
+si è prenotato da qui — ma **solo quello ancora da consegnare**. Le prenotazioni
+arrivate in ufficio non servivano qui: si guardano sulla lavagna e tornano con
+l'agenda. Quelle ferme invece restano, col loro errore accanto, ed è il motivo per
+cui la sezione non è sparita del tutto: una prenotazione che non parte deve dirlo
+lì dove la si cerca. Vuota, la sezione non ha nemmeno il titolo. `DB.agenda` è una copia di quello che l'ufficio ha deciso,
 non un dato nostro: si riscrive intera a ogni scaricamento e non si modifica a mano.
 Sta nel DB perché in giardino il campo spesso non c'è, ed è lì che serve; assente
 vuol dire «non ancora scaricata», che è un valore buono e non chiede una
 migrazione. Un'agenda che non si scarica **non cancella quella di prima**: vecchia
 di un giorno è un'informazione, il vuoto no.
+
+## Sul telefono lo schermo è poco
+
+**Non c'è una barra in alto.** Ripeteva il nome della pagina che la barra in basso
+già evidenzia, e il suo ＋ faceva quello che fanno le schede «Nuova visita» e
+«Nuovo cliente» della home: era spazio tolto alla schermata per dire due volte la
+stessa cosa. Le **impostazioni** (la pagina Dati e backup) sono l'ultima voce della
+barra in basso, con le altre. Le voci sono in minuscolo: in maiuscolo cinque non ci
+stavano.
+
+Resta un **titoletto** piccolo, `#titoletto`, sulla stessa fascia scura: senza, si
+perdeva il segno di dove si è. Dice la pagina in una parola ed è alto la metà della
+barra di prima; sulla home non c'è, perché il riquadro con la data fa già da
+testata.
+
+Sopra, resta `#barra-stato`, una fascia scura alta quanto la barra di
+stato dell'iPhone: con `black-translucent` l'orologio è bianco, e sullo sfondo
+chiaro sparirebbe. Per saperne l'altezza serve `viewport-fit=cover`, che però porta
+la pagina fino in fondo allo schermo: per questo barra in basso, pannelli, avvisi
+e barra dell'aggiornamento sommano `env(safe-area-inset-bottom)`. Chi aggiunge
+qualcosa fissato in basso deve fare lo stesso, o finisce sotto la linea per tornare
+alla home.
 
 ## Il prato sta sul cliente
 
@@ -153,17 +214,39 @@ visite, quelle operazioni ci sono già.
 
 ## Le voci da conteggiare
 
-**Visita e conto sono la stessa schermata.** In fondo, dopo le operazioni, c'è
-l'elenco delle voci da conteggiare, e si compila mentre registri. Erano due
-schermate: per mostrare il conto, il rapportino ti ripeteva ore e operazioni in
-sola lettura — le stesse informazioni due volte, una da compilare e una da
-rileggere. Chi le separa di nuovo reintroduce quella copia.
+**Visita e conto sono la stessa schermata.** Erano due schermate: per mostrare il
+conto, il rapportino ti ripeteva ore e operazioni in sola lettura — le stesse
+informazioni due volte, una da compilare e una da rileggere. Chi le separa di
+nuovo reintroduce quella copia.
+
+**E il conto non ripete quello che sta sopra.** In fondo alla visita c'è solo
+**«Altro da conteggiare»**: quello che non nasce da ore e operazioni — un noleggio,
+uno smaltimento — e che sa solo chi è in giardino. Le righe automatiche
+(manodopera, trasferimento, i materiali delle operazioni) non si mostrano più una
+per una: erano ore e operazioni dette una seconda volta. Si calcolano lo stesso,
+stanno in `contoCorrente` e partono col rapportino come prima; si leggono nel
+riepilogo **«Cosa parte per il conto»**, chiuso di suo, e si correggono in ufficio.
+Dal telefono non si toglie più il trasferimento né si ritocca la manodopera: le
+ore si correggono sulla fascia, il resto lo decide chi fattura.
 
 **Sul telefono non ci sono prezzi.** Il listino sta in ufficio, in un posto solo
 invece che su due dispositivi che divergono. Il cantiere dice *cosa* è stato
 fatto e *quanto* — la cosa che solo lui sa — e quanto vale lo decide chi
 fattura. Chi rimette un campo prezzo qui rimette anche il problema di tenerli
 allineati.
+
+**L'unica eccezione sono le piante**, e è voluta: il prezzo sta sull'etichetta
+del vaso, e in ufficio per saperlo bisognerebbe alzarsi e andare in vivaio. La
+piantumazione chiede quindi pianta, numero e prezzo a pezzo, e ne accetta più
+d'una (12 lauri, 3 aceri): ogni pianta è **un'operazione sua dello stesso tipo**,
+con la sua riga nel conto, così lo schema delle operazioni resta quello di sempre.
+Il tipo si riconosce dall'identificativo `piantumazione` (`ePiantumazione()`), non
+da un campo nuovo sul tipo: i tipi stanno già nei DB di chi lavora. Il prezzo
+viaggia nel rapportino preso **dall'operazione**, non dalla riga del conto, perché
+i conti delle visite di prima portano ancora i loro prezzi storici e quelli non
+devono partire come un listino. In ufficio conta come un prezzo scritto a mano: il
+listino non lo tocca; se il cantiere lo corregge rimandando il rapportino, segue
+il cantiere, finché l'ufficio non lo cambia a mano (`daCantiere`).
 
 L'elenco **nasce già compilato**: la manodopera dalle fasce orarie, i materiali
 dalle operazioni che hanno una voce collegata. Chi lo apre corregge, non scrive
@@ -204,6 +287,10 @@ restano sull'operazione, dove servono al registro dei trattamenti.
 tutto, al cliente va il conto — e tiene i nomi commerciali dei diserbi fuori da un
 documento che esce.
 
+**Le piante invece escono col loro nome**, «Piante – Lauro»: il cliente vuole
+sapere cosa ha in giardino, e non c'è un nome commerciale da tenere in casa. È una
+differenza voluta fra piante e fitofarmaci, non una svista da uniformare.
+
 I `Conto` delle visite già registrate **conservano i loro `Prezzo`**: sono il
 registro di quello che è stato fatturato prima che il listino passasse in
 ufficio, non un listino. Riscriverli cancellerebbe l'unica traccia che ne resta.
@@ -232,20 +319,23 @@ viaggiano separate e finiscono in tre cartelle: `rapportini/`, `appuntamenti/` e
 `rilievi/`. Il quarto è l'**agenda**, e va nell'altro verso: la scrive l'ufficio e
 la legge il telefono.
 
-**L'agenda porta quattro campi e non uno di più**: giorno, mezza giornata, cliente,
-note. Non è economia di formato, è la ragione per cui esiste così: è l'unico
+**L'agenda porta cinque campi e non uno di più**: giorno, mezza giornata, ora,
+cliente, note. Non è economia di formato, è la ragione per cui esiste così: è l'unico
 documento che si *legge* dall'indirizzo dello script, che è pubblico per chi lo
-conosce. Indirizzi, telefoni, ore, requisiti e prezzi restano in ufficio, e chi
-aggiunge un campo a `costruisciAgenda()` lo pubblica là.
+conosce. Indirizzi, telefoni, stime ore, requisiti e prezzi restano in ufficio, e chi
+aggiunge un campo a `costruisciAgenda()` lo pubblica là. L'ora è arrivata dopo,
+senza alzare `VERSIONE_AGENDA`: è quella detta al cliente, non dice niente di
+riservato, e in giardino è la cosa che serve di più. Un telefono non aggiornato la
+ignora, un'agenda vecchia arriva senza — che vuol dire «ora non fissata».
 
 Le note sì, e sono il motivo per cui l'agenda vale la pena: sono la cosa che fa il
 giro completo. Il cantiere le scrive prenotando, l'ufficio se le tiene sul
 cartellino, e tornano in giardino il giorno del lavoro.
 
-Sei appuntamenti, da oggi in avanti, e solo quelli già piazzati su una mezza
+Dieci appuntamenti, da oggi in avanti, e solo quelli già piazzati su una mezza
 giornata: un lavoro ancora in colonna non ha un momento suo, e metterlo in agenda
-vorrebbe dire prometterlo. Oltre i sei la pianificazione cambia ancora, e una lista
-lunga sarebbe una lista sbagliata.
+vorrebbe dire prometterlo. Erano sei, e in giardino non bastavano; oltre i dieci la
+pianificazione cambia ancora, e una lista lunga sarebbe una lista sbagliata.
 
 Entrambi, in modalità costruzione, si leggono **solo alla loro versione corrente**:
 o il documento è di questa versione, o si rifiuta dicendolo. Archiviare un
@@ -404,6 +494,12 @@ l'archivio nel browser perde la sola rete di sicurezza che c'è.
   GiardinoApp/listino.json           ← i prezzi, solo dell'ufficio
 ```
 
+**Le pagine non hanno un titolo che ripeta la barra.** Il nome dell'app in cima
+alla barra laterale e «Clienti», «Archivio», «Lavagna» in testa alle pagine dicevano
+la stessa cosa della voce evidenziata, e rubavano spazio alla schermata. Un titolo
+resta solo dove dice qualcosa che la barra non sa: il nome del cliente di un lavoro
+aperto, o la schermata per collegare la cartella.
+
 **Tutto il contatto con l'API delle cartelle sta in un punto solo.** `usaCartella()`
 prende una maniglia e il resto dell'app non sa da dove arrivi: è il motivo per cui
 si può provare senza aprire una finestra di sistema, che un test non saprebbe
@@ -419,9 +515,32 @@ data e cliente, e un cliente rinominato sul telefono metterebbe lo stesso lavoro
 in archivio due volte — pronto per essere fatturato due volte. Per questo
 `archivia()` riusa il nome del file già in archivio, se c'è.
 
+**Il conto si salva da solo.** Ogni modifica nella schermata del lavoro si scrive
+in archivio un momento dopo (`pianificaSalvataggio()`), e uscendo dalla schermata
+quello che resta si salva subito. Col solo bottone capitava di correggere i prezzi,
+passare ad altro e lasciare gli importi di prima, mentre in ufficio si credeva il
+conto giusto. Salvare vuol dire archiviare: il lavoro lascia «in arrivo» appena ci
+si mette mano, e da lì si ritrova in archivio fra i da pagare. Un salvataggio
+fallito si legge accanto ai bottoni, in rosso, oltre che nell'avviso.
+
 **Il listino dell'ufficio è l'unico che c'è.** Dal cantiere arrivano quantità e
 niente prezzi. Un prezzo scritto a mano non viene mai risovrascritto dal listino:
 sopravvive anche a una correzione rimandata dal cantiere.
+
+**Più voci si possono unire in una, a corpo.** Una siepe nuova porta ore, piante,
+pali, telo e pacciamatura, ognuno con la sua riga; a volte al cliente deve arrivare
+una voce sola. Nella schermata del lavoro si spuntano le righe e «Unisci» fa un
+**gruppo**: un nome da dare, quantità 1, e come prezzo proposto la somma delle
+righe, che resta modificabile. Le righe non si buttano: stanno in `componenti`,
+così in ufficio si vede di cosa è fatto il gruppo e si può **sciogliere**. Al
+cliente, foglio e mail, arriva solo il gruppo.
+
+**Il prezzo del gruppo non si sovrascrive**, come ogni prezzo deciso in ufficio. Se
+il cantiere rimanda il rapportino corretto, le righe dentro seguono il rapportino
+come tutte le altre (`costruisciConteggio()` le cerca anche lì) ma restano nel
+gruppo, e il gruppo tiene nome e prezzo. Se la somma sotto è cambiata rispetto a
+quella accettata (`sommaVista`) la schermata lo dice, con la somma nuova e un
+bottone per prenderla: la si accetta con un tocco, mai da sola.
 
 **Il listino si modifica a video e si scrive su file col bottone.** Finché resta da
 salvare, `LISTINO_DA_SALVARE` impedisce a una rilettura della cartella di
@@ -439,8 +558,8 @@ essere fatturato, e non può stare nascosto in una console.
 
 ## La lavagna non è un calendario
 
-Vive solo in ufficio, sul PC. A sinistra quello che c'è da fare e non ha ancora
-una data, a destra la settimana spezzata in mezze giornate. È la lavagna che si
+Vive solo in ufficio, sul PC. In alto la settimana spezzata in mezze giornate,
+sotto quello che c'è da fare e non ha ancora una data. È la lavagna che si
 teneva a matita, non un'agenda: **niente si muove da solo**, nemmeno passando di
 settimana.
 
@@ -493,6 +612,11 @@ calendario lo sanno usare tutti i telefoni, mentre `<input type="week">` su iOS
 diventa una casella di testo. Sotto al campo compare la settimana che ne esce, o
 si finisce per credere di aver fissato una data.
 
+**L'anno si scrive quando non è quello in corso**: «dal 24/09/2029 · settimana 39».
+È successo davvero, un 2029 battuto al posto di 2026: l'etichetta era identica a
+quella giusta e il lavoro spariva fra quelli per più avanti senza che niente lo
+dicesse.
+
 **Quello che è per più avanti non sta in mezzo ai piedi.** La colonna mostra i
 lavori della settimana guardata e di quelle già passate; gli altri restano da
 parte, contati, con un bottone per guardarli — nascondere senza dire quanto è il
@@ -502,10 +626,39 @@ mostrata e non l'oggi, così spostandosi avanti con le frecce i lavori di quella
 settimana compaiono da soli — e il pallino nella barra conta quello che la
 colonna mostra, o uno dei due mente.
 
-**Tre regole per la coda**, in quest'ordine: quello che non si può fare (ha un
-requisito aperto) va in fondo, quello che è già slittato va in cima, e per il resto
-conta chi scade prima. Dentro i giorni non si ordina niente: lì l'ordine lo dà chi
-pianifica.
+**La coda sta sotto la settimana, non accanto.** Era una colonna a sinistra, e i
+sei giorni si dividevano quello che restava: stretti, sbordavano. Sotto, i giorni
+hanno tutta la larghezza e la coda si legge come una pagina: tre colonne riempite
+da sinistra a destra, riga dopo riga, **in ordine di priorità** — chi scade prima,
+poi chi non ha settimana. Uno slittato non passa davanti per il fatto di essere
+slittato: lo dicono l'avviso e l'etichetta, ma salire in cima falsava la priorità.
+
+**I sopralluoghi e i bloccati hanno una colonna ciascuno**, a destra. Un
+sopralluogo (`sopralluogo`, una casella sul lavoro e sulla prenotazione del
+telefono) è un'andata a guardare, non un lavoro, e in mezzo agli altri non si
+distingueva; un bloccato ha un requisito aperto e non si può ancora fare. Un
+sopralluogo bloccato sta **coi bloccati**: anche lui non si può fare, ed è la cosa
+da sapere. Un lavoro si rimette in coda lasciandolo su una qualsiasi delle colonne:
+dove finisce lo decide il lavoro, non il punto dove lo lasci. Sulla settimana il
+sopralluogo si riconosce dalla parola, non dal colore: grigio, verde e blu sono
+già degli stati. Il campo è arrivato dopo, senza alzare versioni: chi non ce l'ha
+non è un sopralluogo, ed è quello che erano tutti prima.
+
+**In coda i cartellini stanno chiusi**, sempre, e si aprono con un clic: con la coda
+piena erano un muro. Chiusi portano però quello che serve a scegliere — nome, la
+prima riga delle note, settimana, da quando aspetta, e per un bloccato cosa manca
+— perché si era chiesto apposta che dalla coda si vedesse cosa c'è da fare e
+quando è entrato. Sui giorni restano aperti: lì sono pochi, e si guardano interi.
+
+**L'ora è quella detta al cliente**, e si scrive col 🕘 sul cartellino già piazzato:
+in coda un lavoro non ha un giorno, quindi non ha un'ora. Ora e mezza giornata non
+possono dire due cose diverse: scrivendo le 14:30 il cartellino passa al
+pomeriggio, perché è l'ora che si è promessa; trascinandolo all'altra mezza
+giornata l'ora si toglie, e si riscrive quando la si sa. Cambiare l'ora di un
+confermato chiede conferma, come spostarlo. Dentro la mezza giornata l'ora **non
+riordina** i cartellini: l'ordine lì resta di chi pianifica.
+
+Dentro i giorni non si ordina niente: lì l'ordine lo dà chi pianifica.
 
 **Una mezza giornata sono otto ore di manodopera** — quattro d'orologio in due.
 Servono a sapere quante mezze giornate occupa un lavoro lungo, non a dichiarare
@@ -541,6 +694,13 @@ I lavori arrivano da due parti:
   chiedere all'ufficio di ricopiarle vorrebbe dire perderne una ogni tanto;
 - a mano, per le telefonate e per quello che decide l'ufficio.
 
+Ogni lavoro porta **il giorno in cui è entrato** (`inserito`), e il cartellino in
+coda lo dice accanto all'origine: guardando la coda la domanda è anche «da quanto
+aspetta». Il campo è arrivato dopo, senza alzare versioni: un lavoro che non ce
+l'ha vale ancora. Le prenotazioni la recuperano da `creato` sul loro documento in
+`appuntamenti/`, a ogni rilettura; i lavori messi a mano prima restano senza, perché
+la data non è mai stata scritta da nessuna parte e inventarla sarebbe peggio.
+
 Tutto quello che è già stato guardato finisce in `visti`, così quello che l'ufficio
 ha scartato non ricompare al giro dopo. Sul telefono il mese del prossimo intervento
 è il valore di una select (`"03"`, non `"marzo"`): passa da `nomeMese()` prima di
@@ -553,9 +713,13 @@ passare dalla stampa. La schermata mostra anche ore e operazioni, che sul foglio
 del cliente non vanno: qui servono, perché sono il perché di quel totale ed è la
 domanda che arriva quando qualcuno telefona.
 
-**Non si corregge.** Per cambiare un lavoro chiuso si rimanda il rapportino
-corretto dal cantiere, e torna fra quelli in arrivo con la sua revisione nuova.
-Una modifica fatta solo in ufficio si perderebbe al primo reinvio.
+**Un conto da pagare si corregge dall'archivio**, con «Modifica»: si riapre nella
+stessa schermata del lavoro in arrivo, e si riscrive lo stesso file. Quello che
+l'ufficio decide lì — prezzi, righe aggiunte, gruppi — sopravvive a un rapportino
+corretto rimandato dal cantiere, come prima di archiviare; le quantità nate da ore
+e operazioni invece seguono il rapportino, e per cambiarle si corregge la visita
+sul telefono. Un conto **già pagato non si riapre**: è chiuso davvero. Se il conto
+era già passato alla posta, riaprirlo chiede conferma e ricorda di rimandarlo.
 
 **Si può togliere, però.** Non per correggere — per il lavoro che non ci doveva
 stare: una prova, un doppione. `eliminaArchiviato()` cancella il file dalla
@@ -565,8 +729,11 @@ arrivo e si riarchivia — è la solita regola, in arrivo perché l'archivio non
 copia — mentre se non c'è più, quel file era l'unica copia rimasta di lavoro fatto
 e non torna. Una conferma che dicesse sempre la stessa frase servirebbe a niente.
 
-**A sinistra sta il gestionale**: quanti lavori sono da fatturare e quanto fanno,
-quanti sono fatturati, e il totale. Resta lì mentre si scorre l'elenco, perché è
+**A sinistra sta il gestionale**: quanti lavori sono **da pagare** e quanto fanno,
+quanti sono **pagati**, e il totale. Nei file lo stato resta `da-fatturare` /
+`fatturato`: sono cambiate le parole a schermo, non i dati. Guardando «Tutto»
+l'elenco è **diviso**, i da pagare sopra e i pagati sotto: mescolati, un conto
+aperto si perdeva fra quelli chiusi. Resta lì mentre si scorre l'elenco, perché è
 la domanda che in ufficio ci si fa per prima e un numero in fondo alla pagina non
 risponde a nessuno. Raccogliendo **per cliente**, ogni gruppo dice quanto gli si
 deve ancora: è la riga che serve prima di alzare il telefono.
@@ -578,6 +745,17 @@ stanno lì — oggetto e conto già scritti. Il lavoro si segna *in posta* e non
 prima di aprirla, o una mail mandata resterebbe senza traccia in archivio. Senza
 email il conto si manda lo stesso, con il destinatario da scrivere a mano, ma
 l'app lo dice.
+
+**Più lavori, un conto solo.** Due giornate dallo stesso cliente sono due
+rapportini e due file in archivio, e restano tali; si spuntano, e «Stampa insieme»
+e «Manda insieme» fanno un foglio o una mail soli. Dentro, **un blocco per lavoro**
+con la sua data e il suo subtotale, e il totale in fondo: il cliente deve poter
+vedere cosa è stato fatto quando, e sommare le voci uguali lo nasconderebbe. Si
+uniscono **solo lavori dello stesso cliente** (stesso `id` o stesso nome intero):
+unire due clienti vorrebbe dire mandare a uno il conto dell'altro. Mandando insieme
+si segnano *in posta* tutti prima di aprire la posta, e se uno non si riesce a
+segnare la posta non si apre: una mail per due lavori di cui l'archivio ne ricorda
+uno è il doppione del mese dopo.
 
 Nel testo della mail niente colonne allineate con gli spazi: le app di posta usano
 caratteri a larghezza variabile e arrivano storte. Una voce per riga.
@@ -611,6 +789,13 @@ riga, o il foglio dichiara una cosa e ne mostra un'altra.
 li copre come tutto il resto. Se mancano, la stampa avvisa ma non si rifiuta — la
 decisione resta di chi stampa.
 
+**Accanto a ogni «Stampa» c'è «Stampa senza intestazione»**, per la carta
+intestata: i dati dell'azienda ci sono già stampati, e ripeterli sopra li
+sovrapporrebbe al logo. È un bottone e non una domanda a ogni stampa: si sceglie
+guardando il foglio che si ha in mano, e un dialogo in più a ogni conto è un clic
+in più per tutti. Senza intestazione l'avviso sull'intestazione mancante non
+compare: non serve.
+
 Il titolo della pagina viene cambiato prima di stampare, perché Chrome lo propone
 come nome del file in PDF, e rimesso a posto su `afterprint`: rimetterlo subito
 darebbe un file chiamato «GiardinoApp · Ufficio».
@@ -629,6 +814,16 @@ la regola di sempre — un file, un solo autore — anche quando i dati viaggian
 
 Chi compare sui rapportini e non in anagrafica si aggiunge con un bottone: il
 cantiere l'ha già scritto una volta, e farlo ribattere sarebbe lavoro inventato.
+
+**Una scheda cliente chiusa è solo il nome**, e si apre con un clic: con tutti i
+campi aperti l'elenco era un muro di caselle, e chi cerca un cliente scorre i nomi.
+Aperta, porta **«Vedi conti»**, che va in archivio con i soli lavori di quel
+cliente — il gestionale a sinistra compreso, perché quanto gli si deve è la domanda
+per cui lo si apre. Il filtro resta scritto in cima con una ✕: un archivio che
+mostra una parte senza dirlo fa credere che il resto non ci sia. I conti si
+trovano per `id` **o per nome intero**: un cliente aggiunto a mano in ufficio ha un
+id che i rapportini non conoscono, e il nome a pezzi porterebbe le fatture di
+«Rossini» dentro quelle di «Rossi».
 
 **I prodotti seguono la stessa regola.** Concimi, sementi e fitofarmaci vivono sul
 telefono — in giardino senza rete devi poter scegliere un concime, e N% e K%
@@ -672,6 +867,13 @@ lavagna vengono prima.
 Le due app usano la stessa palette. I verdi rimasti sul telefono — la pastiglia
 del prato, quella della siepe — non sono cromia: dicono di che pianta si parla.
 
+**Niente corsivo e niente graziati.** I nomi dei clienti erano in Playfair Display,
+un graziato ad alto contrasto, e le note dell'agenda in corsivo: tutti e due si
+leggevano male, e chi usa l'app lo ha chiesto espressamente. I titoli e i nomi usano
+`--font-display`, che è Calibri sul PC dell'ufficio e ricade sul DM Sans del testo
+dove Calibri non c'è. Per mettere in evidenza si usa il peso o il colore, non il
+corsivo.
+
 ## I preventivi
 
 Non sono ancora costruiti. Quello che si è capito sta in `ufficio/PREVENTIVI.md`:
@@ -680,6 +882,12 @@ CAD non si rifà, dove sta il lavoro vero (il passaggio dai numeri al preventivo
 non la misurazione), e cosa va chiesto alla segretaria prima che vada in pensione.
 
 Chi ci mette mano legga prima quello, o rifarà un ragionamento già fatto.
+
+## Richieste in attesa
+
+Quello che è stato chiesto e si farà più avanti sta in `RICHIESTE.md`, con cosa
+tocca e cosa resta da decidere. Prima di cominciare qualcosa di nuovo, guardare
+lì: può darsi che sia già stato ragionato.
 
 ## Cose da sapere prima di metterci mano
 
@@ -695,6 +903,11 @@ Chi ci mette mano legga prima quello, o rifarà un ragionamento già fatto.
 - L'aggancio tipo → voce sta su `TIPI_DEFAULT`, in un posto solo. `VoceID` vuoto
   non è una dimenticanza: potature, taglio prato e arieggiatura sono manodopera,
   già contata dalle ore, e collegarle vorrebbe dire fatturarle due volte.
+- Tipi e voci nuovi arrivano anche su un telefono che ha già il suo archivio, ma
+  **una volta sola**: si aggiungono a `DEFAULT_ARRIVATI_DOPO`, e
+  `aggiungiDefaultArrivatiDopo()` li mette dove mancano e se lo segna in
+  `defaultAggiunti`. Chi ne cancella uno apposta non se lo ritrova. È
+  un'aggiunta, non una conversione: non alza `VERSIONE_DATI`.
 - I tipi di operazione di partenza hanno identificativi parlanti e stabili
   (`concimazione`, `potatura-siepi`…) perché il codice li cerca per
   identificativo e mai per nome: chi rinomina un tipo non deve svuotare il
