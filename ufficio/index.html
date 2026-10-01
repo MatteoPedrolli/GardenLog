@@ -83,6 +83,9 @@ body {
   border-radius: 11px; display: none; align-items: center; justify-content: center; padding: 0 6px;
 }
 .voce-barra .pallino.visibile { display: flex; }
+#versione-app {
+  padding: 10px 20px 16px; font-size: 0.72rem; color: rgba(255,255,255,0.4);
+}
 #stato-cartella {
   margin-top: auto; padding: 16px 20px; font-size: 0.75rem;
   color: rgba(255,255,255,0.55); border-top: 1px solid rgba(255,255,255,0.12);
@@ -259,6 +262,32 @@ input.vuoto { background: #fffdf5; border-color: #ecdca8; }
 }
 #avviso.visibile { opacity: 1; transform: translateX(-50%) translateY(0); }
 #avviso.brutto { background: var(--red); }
+
+/* Il pannello delle novità copre la pagina, una volta sola per versione: è
+   l'unico momento in cui conviene fermare chi sta per cominciare a lavorare.
+   Non si chiude cliccando fuori — un pannello che sparisce per un clic distratto
+   non l'ha letto nessuno — ma il bottone è uno solo e sta sotto il testo. */
+#novita {
+  position: fixed; inset: 0; background: rgba(36,33,28,0.5);
+  display: none; align-items: center; justify-content: center; padding: 24px; z-index: 200;
+}
+#novita.aperto { display: flex; }
+.scheda-novita {
+  background: var(--white); border-radius: var(--radius); padding: 26px 30px;
+  max-width: 620px; max-height: 80vh; overflow-y: auto; box-shadow: 0 18px 50px rgba(0,0,0,0.25);
+}
+.titolo-novita { font-family: var(--font-display); font-size: 1.35rem; font-weight: 600; }
+.blocco-novita { margin-top: 18px; }
+.data-novita {
+  font-size: 0.74rem; text-transform: uppercase; letter-spacing: 0.05em;
+  color: var(--text-light); font-weight: 600;
+}
+.blocco-novita ul { margin: 8px 0 0; padding-left: 20px; }
+.blocco-novita li { margin-bottom: 7px; font-size: 0.9rem; line-height: 1.45; }
+/* La versione in fondo alla barra si clicca per rileggere tutto: una volta
+   chiuso, il pannello non tornerebbe più e quello che c'era scritto sparirebbe. */
+#versione-app { cursor: pointer; }
+#versione-app:hover { color: rgba(255,255,255,0.85); }
 
 /* ── LA LAVAGNA ── */
 /* Non è un calendario: è la lavagna che in ufficio si tiene a matita. A sinistra
@@ -561,6 +590,7 @@ input.vuoto { background: #fffdf5; border-color: #ecdca8; }
     <button class="voce-barra" id="v-listino" onclick="vaiA('listino')"><span>🏷️</span> Listino</button>
     <button class="voce-barra" id="v-impostazioni" onclick="vaiA('impostazioni')"><span>⚙️</span> Impostazioni</button>
     <div id="stato-cartella">Nessuna cartella collegata</div>
+    <div id="versione-app" onclick="mostraNovita(true)" title="Cosa c'è di nuovo"></div>
   </nav>
 
   <main id="contenuto">
@@ -579,6 +609,7 @@ input.vuoto { background: #fffdf5; border-color: #ecdca8; }
 
 <div id="foglio"></div>
 <div id="avviso"></div>
+<div id="novita"></div>
 
 <script src="../rapportino.js"></script>
 <script>
@@ -1944,6 +1975,110 @@ async function ricontrolla() {
   }
   disegna();
   avvisa(ARRIVI.length ? ARRIVI.length + ' da lavorare' : 'Niente di nuovo');
+}
+
+// ── COSA C'È DI NUOVO ──
+// Le modifiche arrivano senza che nessuno le annunci: il service worker aggiorna
+// l'app in sottofondo e al secondo avvio la schermata è diversa. Chi ci lavora se
+// ne accorge inciampandoci, o non se ne accorge affatto — e una cosa che non si
+// sa che c'è è una cosa che non si usa.
+//
+// **Scrivere qui una riga è parte della modifica**, come alzare il numero di
+// CACHE in sw.js: una voce in cima, la data di oggi, e cosa si vede di diverso —
+// non cosa è cambiato nel codice. Chi legge sta per cominciare a lavorare.
+//
+// La più recente per prima. Le righe sono poche e corte apposta: un elenco lungo
+// non si legge, e quello che non si legge tanto vale non scriverlo.
+const NOVITA = [
+  {
+    versione: '2026-10-01b',
+    data: '2026-10-01',
+    titolo: 'I preventivi',
+    righe: [
+      'Dal telefono arrivano i **rilievi**: le misure prese in giardino col cliente davanti. Si trovano in **Preventivi**, e il pallino conta quelli che aspettano ancora un preventivo.',
+      'Da un rilievo nasce un preventivo con i **prezzi di listino già proposti**. Una casella ocra e tratteggiata vuol dire «questo prezzo non l\'ha ancora guardato nessuno»: correggila o confermala col ✓. Finché ne resta una, la stampa si ferma.',
+      'Una riga può stare **fuori dal totale** (il conferimento a discarica, il costo orario) o essere solo un **titolo di sezione**.',
+      '**Soluzioni alternative**: due varianti dello stesso lavoro con due totali che si escludono. Le righe lasciate comuni entrano nel totale di tutte e due.',
+      'Il foglio da stampare ricalca quelli di prima: Spett.le, la frase d\'apertura, TOTALE PREVENTIVO S.E. & O. e le condizioni in fondo, che si scrivono in **Impostazioni**.',
+      'Quando il cliente dice sì, un clic porta il lavoro in coda sulla lavagna, largo le mezze giornate stimate in campo.',
+      'In fondo alla schermata, **dai metri e dal sesto d\'impianto esce il numero di piante**.',
+    ],
+  },
+  {
+    versione: '2026-10-01a',
+    data: '2026-10-01',
+    titolo: 'La lavagna',
+    righe: [
+      'In coda i cartellini stanno **chiusi** e si aprono con un clic: nome, prima riga delle note, settimana e da quanto aspettano.',
+      'I **sopralluoghi** hanno una colonna loro, accanto ai bloccati.',
+      'Sul cartellino già piazzato si scrive **l\'ora detta al cliente**: sposta il lavoro alla mezza giornata giusta e parte con l\'agenda.',
+      'Sotto ogni fascia oraria si legge il **giorno**, oltre a cosa si è fatto in quelle ore.',
+    ],
+  },
+  {
+    versione: '2026-09-30',
+    data: '2026-09-30',
+    titolo: 'Conti e stampa',
+    righe: [
+      'Accanto a ogni «Stampa» c\'è **«Stampa senza intestazione»**, per la carta intestata.',
+      'In archivio **da pagare e pagati sono divisi**, e un conto da pagare si corregge senza passare dagli arrivi.',
+      'Il conto **si salva da solo**: non serve più ricordarsi del bottone.',
+      'Più voci si **uniscono in una, a corpo**, tenendo dentro di cosa è fatta.',
+    ],
+  },
+];
+
+const VERSIONE_APP = NOVITA.length ? NOVITA[0].versione : '';
+
+// Quali novità sono già state lette. Sta in localStorage e non nella cartella
+// perché è una cosa di **questo PC e di questo browser**, non un dato
+// dell'azienda: perderla vuol dire rivedere un pannello, non perdere lavoro.
+const CHIAVE_NOVITA = 'giardino-ufficio-novita-viste';
+
+function novitaViste() {
+  try { return localStorage.getItem(CHIAVE_NOVITA) || ''; }
+  catch (e) { return ''; }   // navigazione privata: pazienza, si rivede
+}
+
+// Quelle da mostrare: tutte quelle successive all'ultima letta. La prima volta
+// in assoluto si mostra **solo l'ultima**: scaricare addosso tutta la storia a
+// chi apre l'app per la prima volta non è un annuncio, è un muro.
+function novitaDaMostrare() {
+  const viste = novitaViste();
+  if (!viste) return NOVITA.slice(0, 1);
+  const quante = NOVITA.findIndex(n => n.versione === viste);
+  // Una versione che non si conosce — un salto indietro, o una voce tolta — non
+  // vuol dire «mostra tutto»: si riparte dall'ultima, come la prima volta.
+  return quante < 0 ? NOVITA.slice(0, 1) : NOVITA.slice(0, quante);
+}
+
+function mostraNovita(tutte) {
+  const elenco = tutte ? NOVITA : novitaDaMostrare();
+  if (!elenco.length) return false;
+  document.getElementById('novita').innerHTML =
+    '<div class="scheda-novita">' +
+      '<div class="titolo-novita">Cosa c\'è di nuovo</div>' +
+      elenco.map(n => '<div class="blocco-novita">' +
+        '<div class="data-novita">' + formattaData(n.data) + ' · ' + perValore(n.titolo) + '</div>' +
+        '<ul>' + n.righe.map(r => '<li>' + grassetto(r) + '</li>').join('') + '</ul>' +
+      '</div>').join('') +
+      '<div class="bottoni"><button class="principale" onclick="chiudiNovita()">Ho capito</button></div>' +
+    '</div>';
+  document.getElementById('novita').classList.add('aperto');
+  return true;
+}
+
+// Il **grassetto** nelle righe: le novità sono testo scritto a mano qui dentro,
+// e una parola in risalto fa trovare la riga che interessa senza rileggerle
+// tutte. Si passa comunque da perValore(): il testo è nostro, ma un giorno
+// potrebbe non esserlo più.
+function grassetto(testo) {
+  return perValore(testo).replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>');
+}
+
+function chiudiNovita() {
+  try { localStorage.setItem(CHIAVE_NOVITA, VERSIONE_APP); } catch (e) { /* pazienza */ }
+  document.getElementById('novita').classList.remove('aperto');
 }
 
 // ── I RILIEVI CHE ARRIVANO DAL CAMPO ──
@@ -4448,6 +4583,11 @@ function anteprimaFoglio() {
 // ── AVVIO ──
 
 async function avvia() {
+  document.getElementById('versione-app').textContent = 'versione ' + VERSIONE_APP;
+  // Prima di tutto il resto: chi apre l'app sta per cominciare a lavorare, e
+  // quello che è cambiato va saputo prima, non dopo averci sbattuto contro. La
+  // cartella si apre comunque dietro al pannello.
+  mostraNovita();
   const maniglia = await maniglieRicordate();
   if (maniglia && (await permessoConcesso(maniglia, false))) {
     await usaCartella(maniglia);

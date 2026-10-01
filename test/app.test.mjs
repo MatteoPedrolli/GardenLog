@@ -1299,6 +1299,69 @@ try {
   await pagU.goto(BASE + 'ufficio/', { waitUntil: 'load' });
   await pagU.waitForTimeout(400);
 
+  // ── COSA C'È DI NUOVO ──
+  // Le modifiche arrivano senza che nessuno le annunci: il service worker
+  // aggiorna in sottofondo e al secondo avvio la schermata è diversa. Il pannello
+  // è l'annuncio, e si vede **una volta sola per versione**.
+  ok('aprendo l\'app la prima volta il pannello delle novità si vede',
+    await pagU.isVisible('#novita.aperto'));
+  const schermoNovita = await pagU.textContent('#novita');
+  ok('e dice cosa c\'è di nuovo, non cosa è cambiato nel codice',
+    schermoNovita.includes('Cosa c\'è di nuovo') && schermoNovita.includes('rilievi'),
+    schermoNovita.slice(0, 120));
+  // La prima volta in assoluto si mostra solo l'ultima: scaricare addosso tutta
+  // la storia a chi apre l'app non è un annuncio, è un muro.
+  ok('la prima volta ne mostra una sola, non tutta la storia',
+    await pagU.evaluate(() => novitaDaMostrare().length) === 1 &&
+    await pagU.evaluate(() => NOVITA.length) > 1,
+    await pagU.evaluate(() => NOVITA.length + ' in tutto'));
+  // Non si chiude cliccando fuori: un pannello che sparisce per un clic
+  // distratto non l'ha letto nessuno.
+  await pagU.mouse.click(5, 5);
+  ok('un clic fuori non lo chiude', await pagU.isVisible('#novita.aperto'));
+  await pagU.click('#novita .principale');
+  await pagU.waitForTimeout(100);
+  ok('«Ho capito» lo chiude', !await pagU.isVisible('#novita.aperto'));
+  ok('e alla stessa versione non torna più',
+    await pagU.evaluate(() => { const c = novitaDaMostrare().length; return c === 0 && !mostraNovita(); }));
+  // Chiuso, quello che c'era scritto sparirebbe per sempre: la versione in fondo
+  // alla barra lo riapre.
+  await pagU.click('#versione-app');
+  await pagU.waitForTimeout(100);
+  ok('e dalla versione in fondo alla barra si rilegge tutto',
+    await pagU.isVisible('#novita.aperto') &&
+    (await pagU.textContent('#novita')).includes('La lavagna'));
+  await pagU.click('#novita .principale');
+  await pagU.waitForTimeout(100);
+  // Una versione che non si conosce — un salto indietro, una voce tolta — non
+  // vuol dire «mostra tutto»: si riparte dall'ultima, come la prima volta.
+  ok('una versione sconosciuta non scatena tutta la storia',
+    await pagU.evaluate(() => {
+      localStorage.setItem(CHIAVE_NOVITA, 'versione-che-non-esiste');
+      const quante = novitaDaMostrare().length;
+      localStorage.setItem(CHIAVE_NOVITA, VERSIONE_APP);
+      return quante;
+    }) === 1);
+  // Saltando una versione se ne vedono due: è il caso di chi apre l'app ogni
+  // tanto, ed è il motivo per cui si tiene un elenco invece di un solo testo.
+  ok('saltandone una, al prossimo avvio se ne vedono due',
+    await pagU.evaluate(() => {
+      localStorage.setItem(CHIAVE_NOVITA, NOVITA[2].versione);
+      const quante = novitaDaMostrare().length;
+      localStorage.setItem(CHIAVE_NOVITA, VERSIONE_APP);
+      return quante;
+    }) === 2);
+  // La versione dell'app è la novità più recente, non un numero a parte: due
+  // numeri da tenere allineati a mano divergono al primo che si dimentica.
+  ok('la versione dell\'app è quella della novità più recente',
+    await pagU.evaluate(() => VERSIONE_APP === NOVITA[0].versione && VERSIONE_APP !== ''));
+  ok('e nessuna versione è ripetuta, o una si mangerebbe l\'altra',
+    await pagU.evaluate(() => new Set(NOVITA.map(n => n.versione)).size === NOVITA.length));
+  ok('le novità sono in ordine, dalla più recente',
+    await pagU.evaluate(() => NOVITA.every((n, i) =>
+      i === 0 || NOVITA[i - 1].data >= n.data)),
+    await pagU.evaluate(() => NOVITA.map(n => n.data).join(' ')));
+
   ok('l\'app dell\'ufficio si apre e chiede la cartella',
     (await pagU.textContent('#pagina-arrivi')).includes('Collega la cartella'));
 

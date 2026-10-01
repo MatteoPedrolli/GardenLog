@@ -910,12 +910,47 @@ corsivo.
 
 ## I preventivi
 
-Non sono ancora costruiti. Quello che si è capito sta in `ufficio/PREVENTIVI.md`:
-i quattro tipi di preventivo e quale ha davvero bisogno di un disegno, perché il
-CAD non si rifà, dove sta il lavoro vero (il passaggio dai numeri al preventivo,
-non la misurazione), e cosa va chiesto alla segretaria prima che vada in pensione.
+Sono costruiti, e come funzionano sta qui sopra — *Il rilievo* e *Il prezzo che
+aspetta di essere guardato*. Il **ragionamento** che c'è dietro sta in
+`ufficio/PREVENTIVI.md`: i quattro tipi e quale ha davvero bisogno di un disegno,
+perché il CAD non si rifà, dove sta il lavoro vero (il passaggio dai numeri al
+preventivo, non la misurazione), cosa dicono i cinque preventivi veri che sono
+stati letti, e cosa manca ancora.
 
 Chi ci mette mano legga prima quello, o rifarà un ragionamento già fatto.
+
+## Cosa c'è di nuovo
+
+Le modifiche arrivano senza che nessuno le annunci: il service worker aggiorna
+l'app in sottofondo e al secondo avvio la schermata è diversa. Chi ci lavora se ne
+accorge inciampandoci, o non se ne accorge affatto — **e una cosa che non si sa
+che c'è è una cosa che non si usa.**
+
+In ufficio, all'avvio, un pannello dice cosa è cambiato. Si vede **una volta sola
+per versione**, e si riapre dalla versione in fondo alla barra: chiuso e basta,
+quello che c'era scritto sparirebbe per sempre.
+
+**Scrivere una riga in `NOVITA` è parte della modifica**, come alzare il numero di
+`CACHE` in `sw.js`. Una voce in cima, la data di oggi, e **cosa si vede di
+diverso** — non cosa è cambiato nel codice: chi legge sta per cominciare a
+lavorare, non a programmare. Le righe sono poche e corte apposta, e il `**grassetto**`
+serve a far trovare quella che interessa senza rileggerle tutte.
+
+`VERSIONE_APP` **è** la novità più recente, non un numero a parte: due numeri da
+tenere allineati a mano divergono al primo che si dimentica.
+
+**La prima volta in assoluto se ne mostra una sola**, e lo stesso vale per una
+versione che non si riconosce — un salto indietro, una voce tolta. Scaricare
+addosso tutta la storia a chi apre l'app non è un annuncio, è un muro. Saltandone
+una, al prossimo avvio se ne vedono due: è il caso di chi apre l'app ogni tanto,
+ed è il motivo per cui si tiene un elenco invece di un solo testo.
+
+Quali novità sono già state lette sta in `localStorage`, non nella cartella: è una
+cosa di **questo PC e di questo browser**, e perderla vuol dire rivedere un
+pannello, non perdere lavoro. In navigazione privata semplicemente si rivede.
+
+Il pannello **non si chiude cliccando fuori**: uno che sparisce per un clic
+distratto non l'ha letto nessuno. Il bottone è uno solo e sta sotto il testo.
 
 ## Richieste in attesa
 
