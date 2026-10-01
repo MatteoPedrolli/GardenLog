@@ -2781,6 +2781,14 @@ function modificaRigaRilievo(i, campo, valore) {
   r[campo] = valore;
 }
 
+// L'unità della riga compare sempre fra le scelte, anche se non è nell'elenco: un
+// menù che non contiene il valore che ha sotto ne mostra un altro, e la riga
+// finisce per dire una cosa diversa da quella che parte. Succede con le voci
+// vecchie e con quelle scritte a mano.
+function unitaPerLaRiga(unita) {
+  return unita && !UNITA_RILIEVO.includes(unita) ? [unita, ...UNITA_RILIEVO] : UNITA_RILIEVO;
+}
+
 function renderRilievoRighe() {
   const el = document.getElementById('ril-righe');
   if (!el) return;
@@ -2800,7 +2808,7 @@ function renderRilievoRighe() {
       <input type="number" step="any" min="0" value="${perValore(r.Quantita)}"
              oninput="modificaRigaRilievo(${i}, 'Quantita', this.value)" aria-label="quantità">
       <select onchange="modificaRigaRilievo(${i}, 'Unita', this.value)" aria-label="unità">
-        ${UNITA_RILIEVO.map(u => `<option value="${perValore(u)}"${u === r.Unita ? ' selected' : ''}>${perValore(u)}</option>`).join('')}
+        ${unitaPerLaRiga(r.Unita).map(u => `<option value="${perValore(u)}"${u === r.Unita ? ' selected' : ''}>${perValore(u)}</option>`).join('')}
       </select>
     </div>
   </div>`).join('');

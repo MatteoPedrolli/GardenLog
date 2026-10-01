@@ -387,10 +387,13 @@ const TIPI_RILIEVO = [
   { id: 'irrigazione',  nome: 'Impianto di irrigazione', disegno: true },
 ];
 
-// Le unità in uso sui preventivi veri, lette da quelli già fatti. Elenco chiuso
-// perché a mano sono scritte in modi diversi — `cad` e `cad.` nello stesso
-// mazzo — e due scritture della stessa unità non si sommano.
-const UNITA_RILIEVO = ['m²', 'ml', 'nr', 'kg', 'h', 'sacchi', 'a corpo'];
+// Elenco chiuso perché sui preventivi scritti a mano la stessa unità compare in
+// modi diversi — `cad` e `cad.` nello stesso mazzo — e due scritture non si
+// sommano. Sono **le unità che usano già le voci di listino** (`h`, `n`, `kg`,
+// `l`, `sacchi`, `m²`) più i metri lineari e l'a corpo: un elenco che non le
+// coprisse farebbe scegliere al menù qualcos'altro, e una riga direbbe m² dove il
+// modello dice n. È già successo.
+const UNITA_RILIEVO = ['m²', 'ml', 'n', 'kg', 'l', 'h', 'sacchi', 'a corpo'];
 
 function tipoRilievo(id) {
   return TIPI_RILIEVO.find(t => t.id === id) || null;

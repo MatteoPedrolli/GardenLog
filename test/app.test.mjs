@@ -548,6 +548,26 @@ try {
     await page.inputValue('#ril-righe .ril-desc') === 'Tappeto erboso');
   ok('e con l\'unità della voce, non da battere a mano',
     await page.evaluate(() => righeRilievo[0].Unita) === 'm²');
+  // Il menù disegnato deve dire l'unità che la riga ha davvero, per **ogni** voce di
+  // listino. Con un elenco che non copriva le unità delle voci, «Piante» (unità `n`)
+  // compariva come m²: il modello diceva una cosa e lo schermo un'altra. Si guarda
+  // il menù, non la funzione che gli passa le scelte, o la prova non vede niente.
+  const unitaMentite = await page.evaluate(() => {
+    const tenute = righeRilievo.slice();
+    const sbagliate = [];
+    DB.voci.filter(v => v.Unita).forEach(v => {
+      righeRilievo = [{ RigaID: 'u', VoceID: v.VoceID, Voce: v.Nome, Descrizione: v.Nome,
+        Unita: v.Unita, Quantita: 1 }];
+      renderRilievoRighe();
+      const sel = document.querySelector('#ril-righe select');
+      if (sel.value !== v.Unita) sbagliate.push(v.Nome + ': ' + v.Unita + ' → ' + sel.value);
+    });
+    righeRilievo = tenute;
+    renderRilievoRighe();
+    return sbagliate;
+  });
+  ok('e il menù dell\'unità mostra quella che la riga ha davvero, per ogni voce',
+    unitaMentite.length === 0, unitaMentite.join(' | ') || 'nessuna');
   await page.fill('#ril-righe .ril-desc', 'Fornitura e posa di tappeto erboso in rotoli');
   await page.fill('#ril-righe .conto-numeri input', '240');
   await page.selectOption('#f-ril-voce', 'smaltimento-verde');
