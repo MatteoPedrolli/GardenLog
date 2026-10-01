@@ -150,8 +150,116 @@ E una cosa che si può fare **solo finché c'è**: darle da controllare i conti 
 l'app produce su lavori che lei ha già fatturato a mano. Se tornano, quella parte
 è convalidata da chi la faceva. Se non tornano, si scopre perché adesso.
 
+## Cosa dicono i preventivi veri
+
+Cinque preventivi già fatti e i due fogli con cui si calcolavano i prezzi a corpo
+sono stati letti prima di scrivere una riga di codice. Quello che segue viene da
+lì: è la forma vera del documento, non una ipotesi.
+
+**I numeri non stanno qui.** Prezzi, tariffe e margini vivono in `listino.json`
+nella cartella di Drive, come tutto il resto del listino, e i dati dei clienti dei
+preventivi non entrano nel repository. Questo file descrive **la forma**.
+
+### Il modello è fisso
+
+Tutti e cinque hanno la stessa ossatura, parola per parola:
+
+```
+  [intestazione azienda, in alto a destra]
+  Spett.le / cliente / indirizzo / telefono / email
+  <Località>, <data per esteso>
+  «A seguito Vostra gentile richiesta, Vi comunichiamo la nostra migliore
+   offerta per la seguente fornitura:»
+
+  Descrizione | UM | Q.tà | Costo un. | Totale
+  …
+  TOTALE PREVENTIVO S.E. & O.
+
+  [condizioni: validità, IVA, caparra, variazioni]
+  [firma]
+```
+
+L'intestazione sta già in `impostazioni.json`: alle condizioni serve un campo
+accanto, non un posto nuovo.
+
+### Un preventivo non è un elenco che si somma
+
+Tre cose che la carta dice e che una semplice lista di righe non sa rappresentare.
+
+**Le soluzioni alternative.** Due varianti dello stesso lavoro — siepe nuda o con
+telo e porfido; prato da semina o in zolla — con **due righe di totale**. Si
+escludono a vicenda: il cliente ne sceglie una. Non sono due righe che si sommano,
+e un preventivo che le sommasse direbbe una cifra che non esiste.
+
+**Le righe a tariffa, fuori dal totale.** «Eventuale conferimento a discarica · al
+q.le · <prezzo>» — prezzo sì, quantità no, e **fuori dal totale**, tanto che il
+totale lo dichiara: *«escluso scarico verde»*. Stessa cosa per il costo orario.
+Dicono quanto costa una cosa che forse servirà, e non si possono né omettere né
+sommare.
+
+**Le sezioni.** Un preventivo può avere più blocchi con un titolo — zone diverse
+dello stesso giardino — ognuno con le sue righe e la sua tariffa oraria ripetuta.
+
+Quindi una riga di preventivo è di **tre tipi**: nel totale, alternativa (con la
+sua variante), o a tariffa (fuori dal totale). Chi ne implementa solo il primo
+rifà un documento che non somiglia a quelli veri.
+
+### Le unità di misura in uso
+
+`a corpo`, `nr`, `mt`, `mq`, `ore`, `costo orario`, `al q.le`, `cad`. Scritte a
+mano e non uniformi: `cad` e `cad.` convivono nello stesso insieme. Un elenco
+chiuso toglie il problema.
+
+### I fogli di calcolo, e perché contano meno di quanto sembri
+
+Due fogli servivano a trovare i prezzi «a corpo»:
+
+- **taglio siepe**: un costo al metro ricavato da una **regressione lineare sul
+  perimetro della sezione** della siepe, poi moltiplicato per i metri, più il
+  verde di risulta a peso e il trasferimento;
+- **siepe nuova**: somma di componenti — piante (numero ricavato da metri e sesto
+  d'impianto), manodopera a ore, porfido, telo, ala gocciolante — diviso i metri
+  per ottenere il prezzo al metro lineare.
+
+**I coefficienti della regressione sono arbitrari, e in fase di preventivo si
+stimano le ore totali.** Vale la pena scriverlo perché è il contrario di quello
+che il foglio lascia credere: quella formula non è il metodo, è un residuo. Il
+metodo vero, per quasi tutto, è **stimare le ore** — e si arrotonda alla mezza
+giornata, che è anche l'unità della lavagna.
+
+Il secondo foglio invece è aritmetica che serve davvero: dai metri e dal sesto
+escono le piante, e da lì il costo. Quello vale la pena averlo dentro.
+
+### Costo e prezzo sono due numeri diversi
+
+Confrontando un foglio di calcolo col preventivo nato da quello stesso lavoro, il
+prezzo esposto al cliente è **sensibilmente più alto** del costo calcolato. Il
+foglio fa il costo, il preventivo espone il prezzo, e in mezzo c'è un margine che
+**non è scritto da nessuna parte**.
+
+È la decisione più importante rimasta: se è una percentuale, l'app la applica; se
+è giudizio caso per caso, l'app calcola il costo, mostra il margine mentre si
+scrive il prezzo, e la scelta resta a chi firma. La seconda sembra più vera, ma va
+confermata.
+
+Lo stesso vale per lo smaltimento del verde: il foglio interno e il prezzo al
+cliente usano due tariffe diverse, e la differenza è il margine.
+
+### Come si identifica e come si accetta
+
+**Niente numerazione.** Nessuno dei cinque preventivi ha un numero: il riferimento
+è il **nome del cliente** più la data. Coerente con il resto — anche i rapportini
+si chiamano per data e cliente.
+
+**L'accettazione oggi è un «ok» a penna sulla stampa.** Non esiste da nessuna
+parte in forma digitale. È l'unico punto in cui il sistema deve aggiungere
+qualcosa che prima non c'era, quindi deve costare un clic: un preventivo accettato
+entra in «Da pianificare» sulla lavagna, ed è il motivo per cui lo stato serve.
+
 ## Domande ancora aperte
 
+- **Il margine fra costo e prezzo**: regola o giudizio. Vedi sopra — è la
+  decisione che blocca il resto.
 - **Chi possiede il preventivo** una volta che lei non c'è più. Finora la suite
   ha dato per scontata una persona sola; il preventivo nasce in ufficio, sul PC,
   come l'archivio — ma va deciso e scritto.
