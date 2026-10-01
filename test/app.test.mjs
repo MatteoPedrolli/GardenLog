@@ -1384,6 +1384,12 @@ try {
   ok('e sotto la fascia cosa si è fatto in quelle ore',
     (await pagU.textContent('#pagina-lavoro')).includes('Potatura siepe lato strada'));
 
+  // Il giorno accanto agli orari: in ufficio si guarda la riga, non la testata.
+  const giornoFascia = await pagU.evaluate(() => ({ atteso: giornoDellaSettimana(LAVORO.doc.data),
+    riga: document.querySelector('#pagina-lavoro table.elenco tr').textContent }));
+  ok('ogni fascia porta il giorno davanti all\'orario',
+    !!giornoFascia.atteso && /^(Lun|Mar|Mer|Gio|Ven|Sab|Dom) \d{2}\/\d{2}\/\d{4}$/.test(giornoFascia.atteso) &&
+    giornoFascia.riga.startsWith(giornoFascia.atteso), JSON.stringify(giornoFascia));
   const conto = await pagU.evaluate(() => totaleConteggio(LAVORO.righe));
   ok('il totale somma le righe complete', conto.totale > 0, JSON.stringify(conto));
   ok('e dice quante ne ha lasciate fuori', conto.escluse >= 1, JSON.stringify(conto));
@@ -1610,6 +1616,10 @@ try {
     !senza.includes('Giardini Prova') && !senza.includes('01234567890'));
   ok('ma il conto, il cliente e il totale sì',
     senza.includes('Conto dei lavori') && senza.includes('Mario Rossi') && senza.includes('IVA inclusa'));
+  ok('anche in archivio le fasce dicono il giorno',
+    await pagU.evaluate(() => { apriArchiviato(ARCHIVIO[0].id);
+      const l = ARCHIVIO[0];
+      return !!l.rapportino && document.body.innerHTML.includes(giornoDellaSettimana(l.rapportino.data || l.data)); }));
   ok('la pagina del lavoro archiviato ha il bottone senza intestazione',
     await pagU.evaluate(() => { apriArchiviato(ARCHIVIO[0].id);
       return document.body.innerHTML.includes('Stampa senza intestazione'); }));
