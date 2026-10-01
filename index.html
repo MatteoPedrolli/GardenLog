@@ -502,6 +502,17 @@ select.form-control { background-image: url("data:image/svg+xml,%3Csvg xmlns='ht
 .conto-numeri input { width: 68px; padding: 8px 6px; text-align: right; font-size: 0.85rem;
   border: 1px solid var(--border); border-radius: 8px; font-family: var(--font-body); background: var(--white); }
 .conto-numeri .unita { font-size: 0.76rem; color: var(--text-light); min-width: 34px; }
+.ril-desc { width: 100%; margin-top: 6px; padding: 8px 10px; font-size: 0.85rem;
+  border: 1px solid var(--border); border-radius: 8px; font-family: var(--font-body);
+  background: var(--white); color: var(--text); }
+.conto-numeri select { padding: 8px 6px; font-size: 0.82rem; border: 1px solid var(--border);
+  border-radius: 8px; font-family: var(--font-body); background: var(--white); color: var(--text); }
+/* La fila −/mezze/+ va a capo invece di sbordare: è la stessa riga che sulla
+   lavagna spingeva le ore sopra il giorno dopo. */
+.larghezza-ril { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; font-size: 0.85rem; }
+.larghezza-ril button { width: 34px; height: 34px; border-radius: 8px; border: 1px solid var(--border);
+  background: var(--white); color: var(--inchiostro); font-size: 1.05rem; cursor: pointer;
+  font-family: var(--font-body); }
 
 .barra-aggiorna {
   position: fixed; left: 0; right: 0; bottom: var(--nav-h);
@@ -635,6 +646,10 @@ select.form-control { background-image: url("data:image/svg+xml,%3Csvg xmlns='ht
             <span class="quick-icon">📅</span>
             <div><div class="quick-label">Prossimi interventi</div><div class="quick-sub">Dall'ufficio e prenotazioni</div></div>
           </div>
+          <div class="quick-card" onclick="navTo('rilievi')">
+            <span class="quick-icon">📐</span>
+            <div><div class="quick-label">Rilievo</div><div class="quick-sub">Misure per un preventivo</div></div>
+          </div>
         </div>
       </div>
       <div class="recent-title">Ultime visite</div>
@@ -671,6 +686,20 @@ select.form-control { background-image: url("data:image/svg+xml,%3Csvg xmlns='ht
 
       <div class="section-title">Prenotati</div>
       <div id="prenotazioni-list"></div>
+    </div>
+
+    <!-- RILIEVI PER I PREVENTIVI -->
+    <div id="page-rilievi" class="page">
+      <div class="section-title">Nuovo rilievo</div>
+      <div class="card" style="padding:14px">
+        <div class="dati-nota">Il taccuino del preventivo: quello che si vede stando lì, scritto
+          col cliente davanti. In ufficio diventa un preventivo con i prezzi. Parte quando c'è
+          rete, come il rapportino.</div>
+        <button class="btn btn-primary" onclick="apriRilievo()">📐 Prendi le misure</button>
+      </div>
+
+      <div class="section-title">Rilevati</div>
+      <div id="rilievi-list"></div>
     </div>
 
     <!-- DATI E BACKUP -->
@@ -802,6 +831,73 @@ select.form-control { background-image: url("data:image/svg+xml,%3Csvg xmlns='ht
       <button class="btn btn-primary" onclick="salvaPrenotazione()">📨 Manda in ufficio</button>
       <div style="height:8px"></div>
       <button class="btn btn-secondary" onclick="closeDrawer('overlay-prenotazione')">Annulla</button>
+    </div>
+  </div>
+</div>
+
+<!-- DRAWER RILIEVO -->
+<div class="overlay" id="overlay-rilievo">
+  <div class="drawer">
+    <div class="drawer-handle"></div>
+    <div class="drawer-title">Rilievo per un preventivo</div>
+
+    <div class="drawer-body">
+      <div class="form-group">
+        <label class="form-label">Cliente</label>
+        <div class="addr-wrapper">
+          <input type="text" class="form-control" id="f-ril-cliente-search" placeholder="Cerca cliente..."
+                 autocomplete="off" oninput="filtraClientiRilievo(this.value)"
+                 onfocus="filtraClientiRilievo(this.value)">
+          <div class="suggestions" id="ril-cliente-suggestions" style="display:none"></div>
+        </div>
+        <input type="hidden" id="f-ril-cliente">
+        <div id="f-ril-cliente-selected" style="display:none; margin-top:6px; padding:8px 12px; background:var(--foglio); border-radius:8px; font-size:0.85rem; font-weight:500; color:var(--inchiostro)">
+          <span id="f-ril-cliente-nome"></span>
+          <button onclick="scollegaClienteRilievo()" style="background:none;border:none;cursor:pointer;color:var(--text-light);font-size:1rem;float:right">✕</button>
+        </div>
+        <div class="dati-nota" style="margin:4px 0 0">Non è ancora cliente? Aggiungilo in anagrafica:
+          anche un preventivo ha bisogno di un nome, e l'ufficio importa i clienti nuovi da qui.</div>
+      </div>
+
+      <div class="form-group">
+        <label class="form-label">Che lavoro è</label>
+        <select class="form-control" id="f-ril-lavoro" onchange="mostraSeServeIlDisegno()"></select>
+        <div id="f-ril-lavoro-eco" class="dati-nota" style="margin:4px 0 0"></div>
+      </div>
+
+      <div class="form-group">
+        <label class="form-label">Quanto ci vuole</label>
+        <div class="larghezza-ril">
+          <button type="button" onclick="cambiaMezzeRilievo(-1)">−</button>
+          <span id="f-ril-mezze-eco">1 mezza giornata</span>
+          <button type="button" onclick="cambiaMezzeRilievo(1)">+</button>
+        </div>
+        <div class="dati-nota" style="margin:6px 0 0">Mezze giornate, come le stimi: una mezza sono
+          8 ore di manodopera, ed è la larghezza che il lavoro avrà sulla lavagna.</div>
+      </div>
+
+      <div class="form-group">
+        <label class="form-label">Cosa c'è da fare, e quanto</label>
+        <div id="ril-righe"></div>
+        <select class="form-control" id="f-ril-voce" style="margin-top:8px"
+                onchange="aggiungiRigaRilievo(this.value); this.value=''"></select>
+        <div style="display:flex; gap:6px; margin-top:6px">
+          <input type="text" class="form-control" id="f-ril-libera" placeholder="…oppure scrivila a mano">
+          <button type="button" class="btn btn-secondary" style="width:auto; padding:0 16px; margin:0"
+                  onclick="aggiungiRigaLiberaRilievo()">＋</button>
+        </div>
+        <div class="dati-nota" style="margin:6px 0 0">Niente prezzi: il listino sta in ufficio, in un
+          posto solo. Qui si dice cosa c'è e quanto ce n'è.</div>
+      </div>
+
+      <div class="form-group">
+        <label class="form-label">Quello che si vede solo stando qui</label>
+        <textarea class="form-control" id="f-ril-note" rows="3" placeholder="Accesso stretto, il camion resta in strada. Rubinetto sul lato nord. Terreno in pendenza..."></textarea>
+      </div>
+
+      <button class="btn btn-primary" onclick="salvaRilievo()">📨 Manda in ufficio</button>
+      <div style="height:8px"></div>
+      <button class="btn btn-secondary" onclick="closeDrawer('overlay-rilievo')">Annulla</button>
     </div>
   </div>
 </div>
@@ -1018,7 +1114,7 @@ const VERSIONE_DATI = 13;
 // piccola, ma è la stessa categoria di dato che il backup deve salvare.
 const IMPOSTAZIONI_DEFAULT = { UrlRapportini: '', NomeMittente: '' };
 
-const COLLEZIONI = ['clienti', 'visite', 'operazioni', 'concimi', 'sementi', 'fitofarmaci', 'fasce', 'tipiOperazione', 'voci', 'coda', 'prenotazioni'];
+const COLLEZIONI = ['clienti', 'visite', 'operazioni', 'concimi', 'sementi', 'fitofarmaci', 'fasce', 'tipiOperazione', 'voci', 'coda', 'prenotazioni', 'rilievi'];
 
 // Fasce di partenza per chi apre l'app la prima volta: numeri da correggere
 // in Archivi, non verità rivelate. Chi arriva da Sheets o da un backup se li
@@ -1286,6 +1382,7 @@ function renderAll() {
   renderClienti();
   renderVisite();
   renderPrenotazioni();
+  renderRilievi();
   renderAgenda();
 }
 
@@ -1334,10 +1431,10 @@ function navTo(page) {
   // la barra resta su quella da cui si è arrivati.
   document.getElementById('nav-'+page)?.classList.add('active');
   currentPage = page;
-  const titles = { home:'GiardinoApp', clienti:'Clienti', visite:'Registro Visite', prossimi:'Prossimi Interventi', dati:'Dati e backup' };
+  const titles = { home:'GiardinoApp', clienti:'Clienti', visite:'Registro Visite', prossimi:'Prossimi Interventi', rilievi:'Rilievi', dati:'Dati e backup' };
   document.getElementById('topbar-title').textContent = titles[page] || 'GiardinoApp';
   document.getElementById('topbar-action-btn').style.display =
-    ['prossimi','dati'].includes(page) ? 'none' : 'flex';
+    ['prossimi','rilievi','dati'].includes(page) ? 'none' : 'flex';
   if (page === 'dati') renderDati();
   // Aprendo la pagina si riprova a scaricare l'agenda, ma non a ogni tocco: in
   // ufficio la lavagna cambia qualche volta al giorno, e una richiesta per ogni
@@ -2551,6 +2648,242 @@ function accodaAppuntamento(prenotazione) {
   return doc;
 }
 
+// ── IL RILIEVO PER UN PREVENTIVO ──
+// Si prende in giardino, col cliente davanti, prima che il lavoro esista. È
+// l'altra metà del rapportino: quello racconta un lavoro finito, questo un
+// lavoro da fare, e tutti e due dicono *cosa* e *quanto* lasciando all'ufficio
+// *quanto vale*. Viaggia nella stessa coda, perché il campo manca nello stesso
+// modo e un preventivo perso è un lavoro che non si fa.
+let righeRilievo = [];
+let mezzeRilievo = 1;
+
+function apriRilievo() {
+  document.getElementById('f-ril-note').value = '';
+  document.getElementById('f-ril-libera').value = '';
+  righeRilievo = [];
+  mezzeRilievo = 1;
+  popolaLavoriRilievo();
+  popolaVociRilievo();
+  renderRilievoRighe();
+  mostraMezzeRilievo();
+  mostraSeServeIlDisegno();
+  scollegaClienteRilievo();
+  document.getElementById('overlay-rilievo').classList.add('open');
+}
+
+function filtraClientiRilievo(q) {
+  const sug = document.getElementById('ril-cliente-suggestions');
+  if (!q || q.length < 1) { sug.style.display = 'none'; return; }
+  const trovati = DB.clienti.filter(c => c.Cliente?.toLowerCase().includes(q.toLowerCase())).slice(0, 6);
+  if (!trovati.length) { sug.style.display = 'none'; return; }
+  sug.innerHTML = trovati.map(c => `<div class="suggestion-item" onclick="scegliClienteRilievo('${perOnclick(c.ClienteID)}', '${perOnclick(c.Cliente)}')">${perValore(c.Cliente)}<span style="float:right;font-size:0.72rem;color:var(--text-light)">${perValore(c.Citta)}</span></div>`).join('');
+  sug.style.display = 'block';
+}
+
+function scegliClienteRilievo(id, nome) {
+  document.getElementById('f-ril-cliente').value = id;
+  document.getElementById('f-ril-cliente-nome').textContent = nome;
+  document.getElementById('f-ril-cliente-selected').style.display = 'block';
+  document.getElementById('f-ril-cliente-search').style.display = 'none';
+  document.getElementById('ril-cliente-suggestions').style.display = 'none';
+}
+
+function scollegaClienteRilievo() {
+  document.getElementById('f-ril-cliente').value = '';
+  document.getElementById('f-ril-cliente-nome').textContent = '';
+  document.getElementById('f-ril-cliente-search').value = '';
+  document.getElementById('f-ril-cliente-search').style.display = 'block';
+  document.getElementById('f-ril-cliente-selected').style.display = 'none';
+  document.getElementById('ril-cliente-suggestions').style.display = 'none';
+}
+
+function popolaLavoriRilievo() {
+  const sel = document.getElementById('f-ril-lavoro');
+  if (!sel) return;
+  sel.innerHTML = TIPI_RILIEVO.map(t => `<option value="${perValore(t.id)}">${perValore(t.nome)}</option>`).join('');
+}
+
+// I quattro tipi non sono tutti uguali: due si prezzano con quello che c'è qui
+// dentro, due aspettano un numero che esce dal CAD. Dirlo mentre si compila
+// evita all'ufficio di aprire un rilievo credendolo completo.
+function mostraSeServeIlDisegno() {
+  const eco = document.getElementById('f-ril-lavoro-eco');
+  if (!eco) return;
+  const t = tipoRilievo(document.getElementById('f-ril-lavoro').value);
+  eco.textContent = t && t.disegno
+    ? 'Questo ha bisogno del disegno: l\'area o lo schema arrivano dal CAD, qui ci va il resto.'
+    : '';
+}
+
+// Le mezze giornate si alzano e si abbassano a mano, come sulla lavagna: è una
+// decisione di chi guarda il lavoro, non un calcolo. Una mezza è il minimo —
+// un preventivo di zero mezze giornate non vuol dire niente.
+function cambiaMezzeRilievo(di) {
+  mezzeRilievo = Math.max(1, mezzeRilievo + di);
+  mostraMezzeRilievo();
+}
+
+function mostraMezzeRilievo() {
+  const eco = document.getElementById('f-ril-mezze-eco');
+  if (!eco) return;
+  const ore = mezzeRilievo * ORE_MEZZA;
+  eco.textContent = `${mezzeRilievo} ${mezzeRilievo === 1 ? 'mezza giornata' : 'mezze giornate'} · ${ore} h`;
+}
+
+function popolaVociRilievo() {
+  const sel = document.getElementById('f-ril-voce');
+  if (!sel) return;
+  // La manodopera non è fra le voci che si aggiungono: la dicono già le mezze
+  // giornate qui sopra. Metterla anche qui vorrebbe dire preventivarla due volte,
+  // che è lo stesso motivo per cui potature e taglio prato non hanno una voce.
+  sel.innerHTML = '<option value="">+ Aggiungi una voce…</option>' +
+    DB.voci.filter(v => v.VoceID !== 'manodopera')
+      .map(v => `<option value="${perValore(v.VoceID)}">${perValore(v.Nome)}</option>`).join('');
+}
+
+function aggiungiRigaRilievo(voceID) {
+  const vo = DB.voci.find(x => x.VoceID === voceID);
+  if (!vo) return;
+  righeRilievo.push({
+    RigaID: 'rr-' + Date.now().toString(36) + '-' + righeRilievo.length,
+    VoceID: vo.VoceID, Voce: vo.Nome,
+    // La descrizione nasce dal nome della voce e si corregge: sul preventivo
+    // quella riga va letta da un cliente, e «Piante» da solo non si capisce.
+    Descrizione: vo.Nome,
+    Unita: isSi(vo.ACorpo) ? 'a corpo' : (vo.Unita || ''),
+    Quantita: isSi(vo.ACorpo) ? 1 : '',
+  });
+  renderRilievoRighe();
+}
+
+function aggiungiRigaLiberaRilievo() {
+  const campo = document.getElementById('f-ril-libera');
+  if (!campo) return;
+  const testo = campo.value.trim();
+  if (!testo) return;
+  righeRilievo.push({
+    RigaID: 'rr-' + Date.now().toString(36) + '-' + righeRilievo.length,
+    VoceID: '', Voce: testo, Descrizione: testo, Unita: '', Quantita: '',
+  });
+  campo.value = '';
+  renderRilievoRighe();
+}
+
+function togliRigaRilievo(i) {
+  righeRilievo.splice(i, 1);
+  renderRilievoRighe();
+}
+
+// Non si ridisegna mentre si scrive: il campo sparirebbe da sotto le dita.
+function modificaRigaRilievo(i, campo, valore) {
+  const r = righeRilievo[i];
+  if (!r) return;
+  r[campo] = valore;
+}
+
+function renderRilievoRighe() {
+  const el = document.getElementById('ril-righe');
+  if (!el) return;
+  if (!righeRilievo.length) {
+    el.innerHTML = '<div class="dati-nota">Ancora niente. Aggiungi quello che hai misurato.</div>';
+    return;
+  }
+  el.innerHTML = righeRilievo.map((r, i) => `<div class="conto-riga">
+    <div class="conto-voce">
+      <span style="flex:1">${perValore(r.Voce)}</span>
+      <button type="button" class="via" onclick="togliRigaRilievo(${i})" title="Togli">✕</button>
+    </div>
+    <input type="text" class="ril-desc" value="${perValore(r.Descrizione)}"
+           oninput="modificaRigaRilievo(${i}, 'Descrizione', this.value)"
+           placeholder="Come va scritta sul preventivo" aria-label="descrizione">
+    <div class="conto-numeri">
+      <input type="number" step="any" min="0" value="${perValore(r.Quantita)}"
+             oninput="modificaRigaRilievo(${i}, 'Quantita', this.value)" aria-label="quantità">
+      <select onchange="modificaRigaRilievo(${i}, 'Unita', this.value)" aria-label="unità">
+        ${UNITA_RILIEVO.map(u => `<option value="${perValore(u)}"${u === r.Unita ? ' selected' : ''}>${perValore(u)}</option>`).join('')}
+      </select>
+    </div>
+  </div>`).join('');
+}
+
+async function salvaRilievo() {
+  if (salvataggioInCorso) return;
+  const cid = document.getElementById('f-ril-cliente').value;
+  if (!cid) { showToast('⚠️ Scegli il cliente'); return; }
+  // Un rilievo senza righe è un foglio bianco: l'ufficio non ci può fare un
+  // preventivo, e chi l'ha mandato non è più davanti al giardino per chiedere.
+  if (!righeRilievo.length) { showToast('⚠️ Aggiungi almeno una riga'); return; }
+
+  const rilievo = {
+    RilievoID: 'ril-' + Date.now().toString(36),
+    ClienteID: cid,
+    Lavoro: document.getElementById('f-ril-lavoro').value,
+    Mezze: mezzeRilievo,
+    Righe: righeRilievo.map(r => ({ ...r })),
+    Note: document.getElementById('f-ril-note').value.trim(),
+    Creato: new Date().toISOString(),
+    Consegnato: '',
+  };
+
+  salvataggioInCorso = true;
+  try {
+    DB.rilievi.push(rilievo);
+    accodaRilievo(rilievo);
+    // Prima si salva, poi si prova a consegnare: come per la prenotazione, una
+    // consegna riuscita su un salvataggio fallito lascerebbe l'ufficio con un
+    // rilievo che qui non esiste più.
+    await salvaDB({ conta: false });
+    closeDrawer('overlay-rilievo');
+    showToast('📤 Rilievo in consegna');
+    renderAll();
+    svuotaCoda({ avvisa: true });
+  } finally {
+    salvataggioInCorso = false;
+  }
+}
+
+function accodaRilievo(rilievo) {
+  const cliente = DB.clienti.find(c => c.ClienteID == rilievo.ClienteID);
+  const doc = costruisciRilievo({ rilievo, cliente, voci: DB.voci });
+  DB.coda = DB.coda.filter(v => v.docID !== doc.id);
+  DB.coda.push({ docID: doc.id, tipo: doc.tipo, doc, creato: new Date().toISOString(), tentativi: 0, errore: '' });
+  return doc;
+}
+
+function renderRilievi() {
+  const el = document.getElementById('rilievi-list');
+  if (!el) return;
+  const elenco = [...(DB.rilievi || [])].sort((a, b) => String(b.Creato).localeCompare(String(a.Creato)));
+  if (!elenco.length) { el.innerHTML = ''; return; }
+  el.innerHTML = elenco.slice(0, 10).map(r => {
+    const c = DB.clienti.find(x => x.ClienteID == r.ClienteID);
+    const t = tipoRilievo(r.Lavoro);
+    const coda = DB.coda || [];
+    const posto = coda.findIndex(v => v.docID === r.RilievoID);
+    const voce = posto < 0 ? null : coda[posto];
+    // Come per le prenotazioni: chi è in fila dietro non ha un errore suo, e
+    // tacerlo vorrebbe dire dire «da consegnare» proprio quando non è colpa sua.
+    const davanti = posto > 0 ? coda.slice(0, posto).find(v => v.errore) : null;
+    const quante = Number(r.Mezze) || 0;
+    return `<div class="card" style="padding:12px">
+      <div style="font-weight:600">${perValore(c ? c.Cliente : 'cliente eliminato')}</div>
+      <div style="font-size:0.85rem; color:var(--text-mid)">${perValore(t ? t.nome : r.Lavoro)} · ${(r.Righe || []).length} ${(r.Righe || []).length === 1 ? 'riga' : 'righe'}</div>
+      <div style="font-size:0.78rem; color:var(--text-light); margin-top:4px">
+        ${quante} ${quante === 1 ? 'mezza giornata' : 'mezze giornate'} · ${voce ? '📤 da consegnare' : '✅ in ufficio'}
+      </div>
+      ${r.Note ? `<div style="font-size:0.8rem; color:var(--text-mid); margin-top:4px; white-space:pre-line">${perValore(r.Note)}</div>` : ''}
+      ${voce && voce.errore ? `<div class="errore-consegna" onclick="svuotaCoda({ avvisa: true })">
+        <div style="font-weight:600">⚠️ Non è partito: ${perValore(voce.errore)}</div>
+        <div style="opacity:0.85; margin-top:2px">${voce.tentativi || 0} ${(voce.tentativi || 0) === 1 ? 'tentativo' : 'tentativi'} · tocca per riprovare adesso</div>
+      </div>` : ''}
+      ${voce && !voce.errore && davanti ? `<div class="errore-consegna" onclick="svuotaCoda({ avvisa: true })">
+        <div style="font-weight:600">⏳ In fila dietro un altro documento</div>
+        <div style="opacity:0.85; margin-top:2px">Non parte finché non parte ${perValore(comeSiChiama(davanti))}: ${perValore(davanti.errore)}</div>
+      </div>` : ''}
+    </div>`;
+  }).join('');
+}
+
 // ── L'AGENDA CHE ARRIVA DALL'UFFICIO ──
 // L'unico documento che viaggia dall'ufficio al telefono. Si scarica quando c'è
 // rete e si tiene nel DB: in giardino il campo spesso non c'è, ed è lì che serve
@@ -2697,8 +3030,10 @@ async function consegnaRapportino(doc) {
   return risposta;
 }
 
+const NOMI_DOCUMENTO = { appuntamento: 'prenotazione', rilievo: 'rilievo' };
+
 function comeSiChiama(voce) {
-  return voce && voce.tipo === 'appuntamento' ? 'prenotazione' : 'rapportino';
+  return (voce && NOMI_DOCUMENTO[voce.tipo]) || 'rapportino';
 }
 
 // Prova a svuotare la coda. Silenziosa di suo: viene chiamata all'avvio, al
@@ -2722,6 +3057,11 @@ async function svuotaCoda({ avvisa = false } = {}) {
         if (prenotazione) {
           prenotazione.Consegnata = new Date().toISOString();
           prenotazione.Revisione = voce.doc.revisione;
+        }
+        const rilievo = (DB.rilievi || []).find(r => r.RilievoID === voce.docID);
+        if (rilievo) {
+          rilievo.Consegnato = new Date().toISOString();
+          rilievo.Revisione = voce.doc.revisione;
         }
         consegnati++;
       } catch (e) {

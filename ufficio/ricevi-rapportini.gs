@@ -30,11 +30,17 @@
 const CARTELLA_RADICE = 'GiardinoApp';
 
 // Ogni tipo di documento ha la sua cartella. Il telefono manda rapportini di
-// fine lavoro e prenotazioni di appuntamenti: sono due cose diverse e in ufficio
-// le guardano due schermate diverse, quindi non stanno nello stesso mucchio.
+// fine lavoro, prenotazioni di appuntamenti e rilievi per i preventivi: sono cose
+// diverse e in ufficio le guardano schermate diverse, quindi non stanno nello
+// stesso mucchio.
+//
+// CHI AGGIUNGE UNA RIGA QUI DEVE RIFARE LA DISTRIBUZIONE, o il servizio continua
+// a girare la versione di prima e respinge il documento nuovo — che resta in coda
+// sul telefono col suo errore.
 const CARTELLE = {
   rapportino: 'rapportini',
   appuntamento: 'appuntamenti',
+  rilievo: 'rilievi',
 };
 
 // E un file solo che il telefono può leggere. L'elenco sta qui e non nella
@@ -75,7 +81,7 @@ function doGet(e) {
   try {
     const quale = (e && e.parameter && e.parameter.documento) || '';
     if (!quale) {
-      return risposta({ status: 'ok', servizio: 'rapportini', versione: 3,
+      return risposta({ status: 'ok', servizio: 'rapportini', versione: 4,
         accetta: Object.keys(CARTELLE), leggibili: Object.keys(LEGGIBILI) });
     }
     // Un nome preso da una lista, non dalla richiesta: così l'indirizzo non

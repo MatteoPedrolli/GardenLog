@@ -504,6 +504,182 @@ try {
       catch (e) { return e.message.includes('versione'); }
     }));
 
+
+  // ── IL RILIEVO: L'ALTRA METÀ DEL RAPPORTINO ──
+  // Il rapportino racconta un lavoro finito, il rilievo un lavoro da fare. Tutti
+  // e due dicono *cosa* e *quanto* e lasciano all'ufficio *quanto vale*: è la
+  // stessa divisione, e il motivo per cui qui non deve comparire un prezzo.
+  await page.click('#nav-home');
+  await page.click('#page-home .quick-card:nth-child(4)');
+  await page.waitForTimeout(150);
+  ok('dalla home si arriva ai rilievi', await page.evaluate(() => currentPage) === 'rilievi');
+  await page.click('#page-rilievi .btn-primary');
+  await page.waitForTimeout(200);
+  ok('il pannello del rilievo si apre', await page.isVisible('#overlay-rilievo .drawer'));
+  // Il margine laterale lo dà .drawer-body, come per la prenotazione: è già
+  // successo che un pannello nuovo se lo dimenticasse.
+  ok('e i campi non arrivano al bordo dello schermo',
+    await page.evaluate(() => {
+      const pannello = document.querySelector('#overlay-rilievo .drawer');
+      const bordo = pannello.getBoundingClientRect();
+      return [...pannello.querySelectorAll('.form-control, .btn')].every(el => {
+        const r = el.getBoundingClientRect();
+        return r.left - bordo.left >= 12 && bordo.right - r.right >= 12;
+      });
+    }));
+  // La manodopera la dicono già le mezze giornate: metterla anche fra le voci
+  // vorrebbe dire preventivarla due volte, come collegare una voce al taglio prato.
+  ok('la manodopera non è fra le voci da aggiungere a mano',
+    await page.evaluate(() => ![...document.getElementById('f-ril-voce').options]
+      .some(o => o.value === 'manodopera')));
+
+  await page.fill('#f-ril-cliente-search', 'Mario');
+  await page.waitForTimeout(200);
+  await page.click('#ril-cliente-suggestions .suggestion-item');
+  await page.selectOption('#f-ril-lavoro', 'prato-rotoli');
+  await page.waitForTimeout(100);
+  // Due dei quattro tipi hanno bisogno di un numero che esce dal CAD: dirlo
+  // mentre si compila evita all'ufficio di aprire un rilievo credendolo finito.
+  ok('un tipo che ha bisogno del disegno lo dice mentre lo scegli',
+    (await page.textContent('#f-ril-lavoro-eco')).includes('CAD'));
+  await page.selectOption('#f-ril-voce', 'tappeto-erboso');
+  await page.waitForTimeout(150);
+  ok('la riga nasce col nome della voce già scritto, da correggere',
+    await page.inputValue('#ril-righe .ril-desc') === 'Tappeto erboso');
+  ok('e con l\'unità della voce, non da battere a mano',
+    await page.evaluate(() => righeRilievo[0].Unita) === 'm²');
+  await page.fill('#ril-righe .ril-desc', 'Fornitura e posa di tappeto erboso in rotoli');
+  await page.fill('#ril-righe .conto-numeri input', '240');
+  await page.selectOption('#f-ril-voce', 'smaltimento-verde');
+  await page.waitForTimeout(150);
+  await page.fill('#ril-righe .conto-riga:nth-child(2) .conto-numeri input', '150');
+  // Le mezze giornate si alzano a mano, come sulla lavagna: è una decisione di
+  // chi guarda il lavoro, non un calcolo sulle ore.
+  await page.click('#overlay-rilievo .larghezza-ril button:last-child');
+  await page.click('#overlay-rilievo .larghezza-ril button:last-child');
+  ok('le mezze giornate si contano a mano e si leggono in ore',
+    (await page.textContent('#f-ril-mezze-eco')).includes('3 mezze giornate') &&
+    (await page.textContent('#f-ril-mezze-eco')).includes('24 h'),
+    await page.textContent('#f-ril-mezze-eco'));
+  ok('e non scendono sotto una: un preventivo di zero mezze non vuol dire niente',
+    await page.evaluate(() => { const prima = mezzeRilievo; cambiaMezzeRilievo(-9);
+      const dopo = mezzeRilievo; mezzeRilievo = prima; mostraMezzeRilievo(); return dopo; }) === 1);
+  await page.fill('#f-ril-note', 'Accesso stretto, il camion resta in strada.\nRubinetto sul lato nord.');
+  await page.click('#overlay-rilievo .btn-primary');
+  await page.waitForTimeout(500);
+
+  ok('il rilievo resta sul telefono', await page.evaluate(() => DB.rilievi.length) === 1);
+  // La collezione assente vuol dire «nessun rilievo», che è il valore giusto:
+  // non c'è niente da convertire, quindi non alza VERSIONE_DATI.
+  ok('e una collezione che non c\'era nasce vuota, senza chiedere una migrazione',
+    await page.evaluate(() => Array.isArray(normalizzaDB({}).rilievi) &&
+      normalizzaDB({}).rilievi.length === 0 && VERSIONE_DATI === 13));
+
+  const docRilievo = await page.evaluate(() => {
+    const r = DB.rilievi[0];
+    return costruisciRilievo({ rilievo: r, cliente: DB.clienti.find(c => c.ClienteID == r.ClienteID), voci: DB.voci });
+  });
+  ok('il documento è un rilievo, con la sua versione',
+    docRilievo.tipo === 'rilievo' && docRilievo.versione === 1,
+    docRilievo.tipo + ' v' + docRilievo.versione);
+  // Sul telefono non ci sono prezzi, e in un documento che nasce lì non devono
+  // comparire: il listino sta in ufficio, in un posto solo.
+  ok('e non porta nessun prezzo: il listino sta in ufficio',
+    !/prezzo|importo|euro/i.test(JSON.stringify(docRilievo)),
+    JSON.stringify(docRilievo).slice(0, 120));
+  ok('porta le righe con descrizione, quantità e unità',
+    docRilievo.righe.length === 2 && docRilievo.righe[0].quantita === 240 &&
+    docRilievo.righe[0].unita === 'm²' &&
+    docRilievo.righe[0].descrizione === 'Fornitura e posa di tappeto erboso in rotoli',
+    JSON.stringify(docRilievo.righe[0]));
+  // Denormalizzato come il rapportino: l'ufficio ha il suo listino, ma un
+  // rilievo si deve leggere da solo anche fra due anni.
+  ok('e il nome della voce viaggia col suo identificativo',
+    docRilievo.righe[0].voceID === 'tappeto-erboso' && docRilievo.righe[0].voce === 'Tappeto erboso');
+  ok('porta le mezze giornate stimate, che sono anche la larghezza sulla lavagna',
+    docRilievo.mezze === 3, String(docRilievo.mezze));
+  ok('e le note, che sono quello che si vede solo stando lì',
+    docRilievo.note.includes('Accesso stretto') && docRilievo.note.includes('Rubinetto'));
+  ok('il nome del file resta leggibile a occhio',
+    await page.evaluate(d => /-mario-rossi-ril-/.test(nomeFileRilievo(d)), docRilievo),
+    await page.evaluate(d => nomeFileRilievo(d), docRilievo));
+  // La solita regola della modalità costruzione: o è di questa versione, o si
+  // rifiuta. Un rilievo letto a metà diventa un preventivo sbagliato, e un
+  // preventivo sbagliato si firma.
+  ok('un rilievo di un\'altra versione viene rifiutato',
+    await page.evaluate(() => {
+      try { leggiRilievo({ tipo: 'rilievo', versione: 99, id: 'x' }); return false; }
+      catch (e) { return e.message.includes('versione'); }
+    }));
+  ok('e un file che non è un rilievo nemmeno si prova a leggerlo',
+    await page.evaluate(() => {
+      try { leggiRilievo({ tipo: 'listaspesa' }); return false; }
+      catch (e) { return e.message.includes('non è un rilievo'); }
+    }));
+  ok('il rilievo è partito dalla stessa coda del rapportino',
+    await page.evaluate(() => DB.rilievi[0].Consegnato !== ''));
+
+  // Un rilievo senza righe è un foglio bianco: l'ufficio non ci può fare un
+  // preventivo, e chi l'ha mandato non è più davanti al giardino per chiedere.
+  ok('senza nemmeno una riga non si manda',
+    await page.evaluate(async () => {
+      const quanti = DB.rilievi.length;
+      apriRilievo();
+      document.getElementById('f-ril-cliente').value = DB.clienti[0].ClienteID;
+      await salvaRilievo();
+      const fermato = DB.rilievi.length === quanti &&
+        document.getElementById('overlay-rilievo').classList.contains('open');
+      closeDrawer('overlay-rilievo');
+      return fermato;
+    }));
+  ok('e senza cliente nemmeno: un preventivo ha bisogno di un nome',
+    await page.evaluate(async () => {
+      const quanti = DB.rilievi.length;
+      apriRilievo();
+      aggiungiRigaRilievo('piante');
+      await salvaRilievo();
+      const fermato = DB.rilievi.length === quanti &&
+        document.getElementById('overlay-rilievo').classList.contains('open');
+      closeDrawer('overlay-rilievo');
+      return fermato;
+    }));
+
+  // Come per le prenotazioni: l'errore si legge accanto al documento che non è
+  // partito, non solo sul banner in home. E chi è in fila dietro non ha un
+  // errore suo — tacerlo vorrebbe dire dargli la colpa.
+  const rilievoFermo = await page.evaluate(() => {
+    const r = DB.rilievi[0];
+    DB.coda.push({ docID: 'r-davanti', tipo: 'rapportino',
+      doc: { tipo: 'rapportino', id: 'r-davanti', revisione: 1 },
+      creato: new Date().toISOString(), tentativi: 2, errore: 'Il servizio non risponde' });
+    DB.coda.push({ docID: r.RilievoID, tipo: 'rilievo',
+      doc: { tipo: 'rilievo', id: r.RilievoID, revisione: 1 },
+      creato: new Date().toISOString(), tentativi: 0, errore: '' });
+    renderRilievi();
+    const inFila = document.getElementById('rilievi-list').innerHTML;
+    DB.coda[1].errore = 'Il servizio ha risposto con un errore, non con una conferma';
+    DB.coda.shift();
+    renderRilievi();
+    const suo = document.getElementById('rilievi-list').innerHTML;
+    aggiornaAvvisoCoda();
+    const banner = document.getElementById('avviso-coda').innerHTML;
+    DB.coda = [];
+    renderRilievi();
+    return { inFila, suo, banner };
+  });
+  ok('un rilievo bloccato dietro un altro documento lo dice',
+    rilievoFermo.inFila.includes('In fila dietro un altro documento') &&
+    rilievoFermo.inFila.includes('rapportino'), rilievoFermo.inFila.slice(0, 160));
+  ok('e quando l\'errore è suo lo dice sulla sua scheda',
+    rilievoFermo.suo.includes('Non è partito') &&
+    rilievoFermo.suo.includes('non con una conferma'), rilievoFermo.suo.slice(0, 160));
+  // Chiamare «rapportino» un rilievo manda a cercare nel posto sbagliato.
+  ok('e il banner della coda lo chiama rilievo, non rapportino',
+    rilievoFermo.banner.includes('rilievo') && !rilievoFermo.banner.includes('rapportino'),
+    rilievoFermo.banner.slice(0, 160));
+  ok('la pagina mostra il rilievo con il tipo di lavoro e le mezze giornate',
+    (await page.textContent('#rilievi-list')).includes('Prato in rotoli') &&
+    (await page.textContent('#rilievi-list')).includes('3 mezze giornate'));
   await page.evaluate(() => { DB.visite[0].Consegnato = ''; return salvaDB({ conta: false }); });
   await ctx.unroute(CONSEGNA);
 
@@ -951,7 +1127,7 @@ try {
     };
   });
 
-  await pagU.evaluate(async d => {
+  await pagU.evaluate(async ([d, ril]) => {
     window.RADICE = window.creaCartellaFinta('GiardinoApp');
     const arrivi = await window.RADICE.getDirectoryHandle('rapportini', { create: true });
     await scriviTesto(arrivi, nomeFileRapportino(d), JSON.stringify(d));
@@ -959,14 +1135,20 @@ try {
     // finirci dentro qualcosa che non è un rapportino.
     await scriviTesto(arrivi, 'a-troncato.json', '{"tipo":"rapportino","id":"abc"');
     await scriviTesto(arrivi, 'b-altro.json', '{"tipo":"listaspesa"}');
+    // E il rilievo, che è quello vero prodotto dal telefono qualche riga sopra:
+    // se le due app non si capiscono su questo documento, si vede qui.
+    const rilievi = await window.RADICE.getDirectoryHandle('rilievi', { create: true });
+    await scriviTesto(rilievi, nomeFileRilievo(ril), JSON.stringify(ril));
+    await scriviTesto(rilievi, 'z-troncato.json', '{"tipo":"rilievo","id":"xyz"');
     await usaCartella(window.RADICE);
-  }, doc);
+  }, [doc, docRilievo]);
   await pagU.waitForTimeout(200);
 
   ok('il rapportino del cantiere arriva in ufficio',
     await pagU.evaluate(() => ARRIVI.length) === 1);
   ok('i file illeggibili si vedono invece di sparire',
-    await pagU.evaluate(() => ILLEGGIBILI.length) === 2);
+    await pagU.evaluate(() => ILLEGGIBILI.length) === 3,
+    await pagU.evaluate(() => ILLEGGIBILI.map(f => f.nome).join(', ')));
   ok('l\'elenco in arrivo li dice a schermo',
     (await pagU.textContent('#pagina-arrivi')).includes('non leggibili'));
   ok('il cliente si legge senza avere l\'anagrafica',
@@ -1908,6 +2090,70 @@ try {
     await page.evaluate(async () => {
       const esito = await scaricaAgenda();
       return esito === false && DB.agenda?.appuntamenti.length === 6;
+    }));
+
+  // ── IL RILIEVO ARRIVA IN UFFICIO ──
+  // Il giro completo del quarto documento: il telefono l'ha scritto in giardino,
+  // il servizio l'ha depositato, l'ufficio lo legge. Qui si legge e non si tocca
+  // — un file, un solo autore, come i rapportini.
+  ok('il rilievo del cantiere arriva in ufficio',
+    await pagU.evaluate(() => RILIEVI.length) === 1,
+    await pagU.evaluate(() => RILIEVI.length + ' letti'));
+  await pagU.click('#v-rilievi');
+  await pagU.waitForTimeout(200);
+  const schermoRilievi = await pagU.textContent('#pagina-rilievi');
+  ok('la schermata mostra il cliente e il tipo di lavoro',
+    schermoRilievi.includes('Mario Rossi') && schermoRilievi.includes('Prato in rotoli'),
+    schermoRilievi.slice(0, 160));
+  ok('e le righe come le ha scritte il campo, con quantità e unità',
+    schermoRilievi.includes('Fornitura e posa di tappeto erboso in rotoli') &&
+    schermoRilievi.includes('240') && schermoRilievi.includes('m²'));
+  // Una mezza giornata sono otto ore, e la definizione sta in rapportino.js:
+  // due idee diverse di quanto dura una mezza giornata sarebbero peggio di nessuna.
+  ok('le mezze giornate si leggono anche in ore, con lo stesso conto della lavagna',
+    schermoRilievi.includes('3 mezze giornate') && schermoRilievi.includes('24,00 h'),
+    schermoRilievi.slice(0, 200));
+  ok('le note del campo si leggono come sono state scritte',
+    schermoRilievi.includes('Accesso stretto') && schermoRilievi.includes('Rubinetto sul lato nord'));
+  // Il prato in rotoli ha bisogno dell'area, che esce dal CAD: un rilievo di quel
+  // tipo è incompleto per costruzione, e aprirlo credendolo finito costa un giro.
+  ok('e dice che quel tipo aspetta ancora il disegno', schermoRilievi.includes('aspetta il disegno'));
+  // Chi ha telefono e mail lo sa solo l'anagrafica dell'ufficio, ed è quello che
+  // serve per richiamare e mandare il preventivo: un rilievo di qualcuno che lì
+  // non c'è va segnalato, uno di un cliente noto no. Mario Rossi a questo punto
+  // è già stato aggiunto, quindi i due casi si guardano entrambi.
+  ok('un cliente già in anagrafica non viene segnalato',
+    !schermoRilievi.includes('non in anagrafica'),
+    await pagU.evaluate(() => CLIENTI.map(c => c.nome).join(', ')));
+  ok('ma uno che non c\'è sì', await pagU.evaluate(() => {
+    const tenuti = CLIENTI;
+    CLIENTI = [];
+    disegnaRilievi();
+    const html = document.getElementById('pagina-rilievi').innerHTML;
+    CLIENTI = tenuti;
+    disegnaRilievi();
+    return html.includes('non in anagrafica');
+  }));
+  // Un rilievo troncato è un preventivo che non si fa: non può stare nascosto in
+  // una console, e chi lo cerca sta su questa pagina, non su «In arrivo».
+  ok('un rilievo illeggibile si vede sulla sua pagina, non solo su quella dei rapportini',
+    schermoRilievi.includes('non leggibili') && schermoRilievi.includes('rilievi/z-troncato.json'),
+    schermoRilievi.slice(0, 200));
+  // Il preventivo non si scrive ancora qui, e la pagina lo dice invece di
+  // lasciare credere che manchi un bottone.
+  ok('e la pagina dice perché il preventivo non si fa ancora qui',
+    schermoRilievi.includes('margine'));
+  // Il pallino conta quello che la pagina mostra, o uno dei due mente.
+  ok('il pallino nella barra conta i rilievi arrivati',
+    await pagU.textContent('#pallino-rilievi') === '1');
+  // L'ufficio non scrive in rilievi/ nemmeno per segnare che ha guardato: il
+  // file resta dov'è, com'era.
+  ok('l\'ufficio non ha toccato la cartella dei rilievi',
+    await pagU.evaluate(async () => {
+      const c = await window.RADICE.getDirectoryHandle('rilievi');
+      const nomi = [];
+      for await (const v of c.values()) nomi.push(v.name);
+      return nomi.length === 2;
     }));
 
   ok('nessun errore JavaScript nell\'app dell\'ufficio', erroriU.length === 0, erroriU.join(' | '));

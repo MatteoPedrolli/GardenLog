@@ -148,6 +148,10 @@ table.elenco tr:last-child td { border-bottom: none; }
 table.elenco td.num, table.elenco th.num { text-align: right; padding-right: 0; }
 /* Nella scheda cliente le due colonne vanno larghe uguali: lasciate libere, le
    celle si dimensionano sul contenuto e il telefono esce stretto come il numero. */
+/* Le note del rilievo si leggono come sono state scritte in giardino: gli a capo
+   sono informazione, e su una riga sola diventano un muro. */
+.nota-rilievo { margin-top: 10px; padding: 10px 12px; background: var(--foglio);
+  border-radius: 8px; font-size: 0.88rem; white-space: pre-line; }
 table.scheda-cliente { table-layout: fixed; }
 table.scheda-cliente td { width: 50%; padding-right: 10px; }
 table.scheda-cliente td:last-child { padding-right: 0; }
@@ -449,6 +453,9 @@ input.vuoto { background: #fffdf5; border-color: #ecdca8; }
     <button class="voce-barra attiva" id="v-arrivi" onclick="vaiA('arrivi')">
       <span>📥</span> In arrivo <span class="pallino" id="pallino-arrivi">0</span>
     </button>
+    <button class="voce-barra" id="v-rilievi" onclick="vaiA('rilievi')">
+      <span>📐</span> Rilievi <span class="pallino" id="pallino-rilievi">0</span>
+    </button>
     <button class="voce-barra" id="v-lavagna" onclick="vaiA('lavagna')">
       <span>📋</span> Lavagna <span class="pallino" id="pallino-lavagna">0</span>
     </button>
@@ -462,6 +469,7 @@ input.vuoto { background: #fffdf5; border-color: #ecdca8; }
   <main id="contenuto">
     <div class="pagina attiva" id="pagina-arrivi"></div>
     <div class="pagina" id="pagina-lavoro"></div>
+    <div class="pagina" id="pagina-rilievi"></div>
     <div class="pagina" id="pagina-lavagna"></div>
     <div class="pagina" id="pagina-clienti"></div>
     <div class="pagina" id="pagina-archivio"></div>
@@ -491,6 +499,7 @@ input.vuoto { background: #fffdf5; border-color: #ecdca8; }
 const VERSIONE_LAVORO = 1;
 const CARTELLA_ARRIVI = 'rapportini';
 const CARTELLA_APPUNTAMENTI = 'appuntamenti';
+const CARTELLA_RILIEVI = 'rilievi';
 const CARTELLA_ARCHIVIO = 'archivio';
 const FILE_LISTINO = 'listino.json';
 const FILE_IMPOSTAZIONI = 'impostazioni.json';
@@ -503,10 +512,9 @@ const FILE_CLIENTI = 'clienti.json';
 const FILE_ANAGRAFICA = 'anagrafica-dal-telefono.json';
 const FILE_PRODOTTI = 'prodotti-dal-telefono.json';
 
-// Una mezza giornata sono otto ore di manodopera: quattro d'orologio in due. Serve
-// a sapere quante mezze giornate occupa un lavoro lungo, non a dichiarare piena una
-// giornata — quello lo decide chi pianifica.
-const ORE_MEZZA = 8;
+// ORE_MEZZA — quante ore di manodopera stanno in una mezza giornata — sta in
+// rapportino.js: la usano tutte e due le app, la lavagna per la larghezza di un
+// lavoro e il rilievo del cantiere per dire quanto ci vuole.
 const NOMI_GIORNI = ['Lunedì', 'Martedì', 'Mercoledì', 'Giovedì', 'Venerdì', 'Sabato'];
 const MEZZE = ['mattina', 'pomeriggio'];
 
@@ -534,6 +542,7 @@ let SETTIMANA = null;   // il lunedì della settimana mostrata
 let TRASCINATO = null;
 let MOSTRA_FUTURI = false;
 let ARRIVI = [];
+let RILIEVI = [];
 let ILLEGGIBILI = [];
 let ARCHIVIO = [];
 let LAVORO = null;
@@ -695,8 +704,8 @@ async function scriviTesto(cartella, nome, testo) {
 async function ricarica() {
   if (!CARTELLA) return;
   // L'elenco dei file illeggibili si azzera qui, una volta, e lo riempiono le
-  // due letture che seguono. Azzerarlo dopo cancellerebbe quello che la prima
-  // delle due ha trovato — e un file illeggibile che non si vede non esiste.
+  // letture che seguono. Azzerarlo dopo cancellerebbe quello che la prima di
+  // esse ha trovato — e un file illeggibile che non si vede non esiste.
   ILLEGGIBILI = [];
   IMPOSTAZIONI = await caricaImpostazioni();
   CLIENTI = await caricaClienti();
@@ -704,6 +713,7 @@ async function ricarica() {
   LISTINO = await caricaListino();
   ARCHIVIO = await caricaArchivio();
   ARRIVI = await caricaArrivi();
+  RILIEVI = await caricaRilievi();
   await assorbiAppuntamenti();
 }
 
@@ -1464,7 +1474,11 @@ function disegna() {
   const pallinoL = document.getElementById('pallino-lavagna');
   pallinoL.textContent = daPianificare;
   pallinoL.classList.toggle('visibile', daPianificare > 0);
+  const pallinoR = document.getElementById('pallino-rilievi');
+  pallinoR.textContent = RILIEVI.length;
+  pallinoR.classList.toggle('visibile', RILIEVI.length > 0);
   if (PAGINA === 'arrivi') disegnaArrivi();
+  if (PAGINA === 'rilievi') disegnaRilievi();
   if (PAGINA === 'lavoro') disegnaLavoro();
   if (PAGINA === 'lavagna') disegnaLavagna();
   if (PAGINA === 'clienti') disegnaClienti();
@@ -1483,11 +1497,7 @@ function disegnaArrivi() {
   let html = '<h2 class="titolo-pagina">In arrivo</h2>';
   html += '<p class="sottotitolo">Rapportini depositati dal telefono e non ancora archiviati</p>';
 
-  if (ILLEGGIBILI.length) {
-    html += '<div class="allarme"><strong>' + ILLEGGIBILI.length + ' file non leggibili.</strong><br>' +
-      ILLEGGIBILI.map(f => perValore(f.nome) + ' — ' + perValore(f.motivo)).join('<br>') +
-      '<br><br>Se Drive era a metà sincronizzazione, riprova fra un minuto con Ricontrolla.</div>';
-  }
+  html += bloccoIlleggibili();
 
   if (!ARRIVI.length) {
     html += '<div class="scheda"><div class="vuoto-elenco">Nessun rapportino da lavorare.</div></div>';
@@ -1513,6 +1523,17 @@ function disegnaArrivi() {
 
   html += '<div class="bottoni"><button class="secondaria" onclick="ricontrolla()">Ricontrolla la cartella</button></div>';
   c.innerHTML = html;
+}
+
+// L'avviso dei file illeggibili sta in un posto solo e compare su tutte le
+// schermate che leggono dalla cartella, non solo su quella da cui si entra: un
+// rilievo troncato è un preventivo che non si fa, e chi lo cerca sta sulla sua
+// pagina. Il nome porta la cartella davanti, così si sa dove guardare.
+function bloccoIlleggibili() {
+  if (!ILLEGGIBILI.length) return '';
+  return '<div class="allarme"><strong>' + ILLEGGIBILI.length + ' file non leggibili.</strong><br>' +
+    ILLEGGIBILI.map(f => perValore(f.nome) + ' — ' + perValore(f.motivo)).join('<br>') +
+    '<br><br>Se Drive era a metà sincronizzazione, riprova fra un minuto con Ricontrolla.</div>';
 }
 
 function schermataBenvenuto() {
@@ -1545,6 +1566,86 @@ async function ricontrolla() {
   }
   disegna();
   avvisa(ARRIVI.length ? ARRIVI.length + ' da lavorare' : 'Niente di nuovo');
+}
+
+// ── I RILIEVI CHE ARRIVANO DAL CAMPO ──
+// Il taccuino del preventivo, preso in giardino col cliente davanti. Qui si
+// legge e non si tocca: **un file, un solo autore**, come i rapportini. Il
+// telefono deposita in rilievi/ e l'ufficio non scrive lì nemmeno per segnare
+// che ha guardato.
+//
+// Quello che ancora non c'è è il preventivo: prezzare queste righe vuol dire
+// decidere il margine fra il costo che esce dal listino e il prezzo che va al
+// cliente, e quella decisione è di chi firma. Vedi PREVENTIVI.md.
+async function caricaRilievi() {
+  const cartella = await sottocartella(CARTELLA, CARTELLA_RILIEVI, false);
+  if (!cartella) return [];
+  const trovati = [];
+  for (const nome of await elencaFile(cartella)) {
+    try {
+      trovati.push({ nome, doc: leggiRilievo(await leggiTesto(cartella, nome)) });
+    } catch (e) {
+      // Un rilievo che non si riesce a leggere è un preventivo che non si fa, e
+      // non può restare nascosto in una console: Drive a metà sincronizzazione
+      // lascia file troncati, e in quella cartella può finirci altro.
+      ILLEGGIBILI.push({ nome: CARTELLA_RILIEVI + '/' + nome, motivo: e.message });
+    }
+  }
+  return trovati.sort((a, b) => String(b.doc.creato).localeCompare(String(a.doc.creato)));
+}
+
+function disegnaRilievi() {
+  const c = document.getElementById('pagina-rilievi');
+  if (!CARTELLA) { c.innerHTML = schermataBenvenuto(); return; }
+
+  let html = '<h2 class="titolo-pagina">Rilievi</h2>';
+  html += '<p class="sottotitolo">Misure prese in campo, da cui nasce un preventivo</p>';
+  html += bloccoIlleggibili();
+
+  if (!RILIEVI.length) {
+    html += '<div class="scheda"><div class="vuoto-elenco">Nessun rilievo dal campo.</div></div>';
+  } else {
+    RILIEVI.forEach(r => {
+      const d = r.doc;
+      const t = tipoRilievo(d.lavoro);
+      const cliente = CLIENTI.find(x => x.id === d.cliente.id || x.nome === d.cliente.nome);
+      html += '<div class="scheda">' +
+        '<div class="riga-scheda">' +
+          '<span class="nome-cliente">' + perValore(d.cliente.nome || 'senza nome') + '</span>' +
+          '<span class="etichetta nuovo">' + perValore(t ? t.nome : d.lavoro) + '</span>' +
+          '<span class="meta" style="margin-left:auto">' + formattaData(d.creato) + '</span>' +
+        '</div>' +
+        '<div class="meta" style="margin-top:6px">' +
+          d.mezze + (d.mezze === 1 ? ' mezza giornata' : ' mezze giornate') +
+          ' · ' + formattaOre(d.mezze * ORE_MEZZA) +
+          (d.cliente.citta ? ' · ' + perValore(d.cliente.citta) : '') +
+          // Chi ha telefono e mail lo sa solo l'anagrafica dell'ufficio, ed è
+          // quello che serve per richiamare e mandare il preventivo.
+          (cliente ? '' : ' · <strong>non in anagrafica</strong>') +
+        '</div>' +
+        // Il disegno non arriva da qui: per il prato in rotoli e per l'impianto
+        // il numero esce dal CAD, e un rilievo di quel tipo è incompleto per
+        // costruzione. Dirlo evita di aprirlo credendolo finito.
+        (t && t.disegno ? '<div class="meta" style="margin-top:4px">📐 aspetta il disegno: l\'area o lo schema arrivano dal CAD</div>' : '') +
+        '<table class="elenco" style="margin-top:10px"><thead><tr>' +
+          '<th>Descrizione</th><th class="num">Q.tà</th><th>UM</th>' +
+        '</tr></thead><tbody>' +
+        d.righe.map(ri => '<tr>' +
+          '<td>' + perValore(ri.descrizione || ri.voce) + '</td>' +
+          '<td class="num">' + formattaQuantita(ri.quantita) + '</td>' +
+          '<td>' + perValore(ri.unita) + '</td>' +
+        '</tr>').join('') +
+        '</tbody></table>' +
+        (d.note ? '<div class="nota-rilievo">' + perValore(d.note) + '</div>' : '') +
+      '</div>';
+    });
+  }
+
+  html += '<div class="scheda"><p class="sottotitolo" style="margin:0">Il preventivo non si scrive ' +
+    'ancora qui: prezzare queste righe vuol dire decidere il margine fra il costo del listino e il ' +
+    'prezzo che va al cliente, ed è una decisione, non un calcolo.</p></div>';
+  html += '<div class="bottoni"><button class="secondaria" onclick="ricontrolla()">Ricontrolla la cartella</button></div>';
+  c.innerHTML = html;
 }
 
 // ── UN LAVORO ──

@@ -355,11 +355,130 @@ function etichettaMezzaGiornata(giorno, mezza) {
   return `${nomi[d.getDay()]} ${gg}/${mm} ${mezza === 'pomeriggio' ? 'pomeriggio' : 'mattina'}`;
 }
 
+// ── IL RILIEVO COME DOCUMENTO ──
+// Il quarto documento, e il secondo che va dal cantiere all'ufficio. È il
+// taccuino del preventivo: quello che si vede stando lì, scritto col cliente
+// davanti, e che in ufficio diventa un preventivo con i prezzi addosso.
+//
+// **Un rilievo è un conto che si fa prima.** Le righe hanno la stessa forma di
+// quelle del conto — voce, descrizione, quantità, unità — e per la stessa
+// ragione **non hanno prezzi**: il listino sta in ufficio, in un posto solo. Il
+// cantiere dice *cosa* c'è da fare e *quanto* ce n'è, la cosa che solo lui sa.
+//
+// Denormalizzato come il rapportino: il nome della voce viaggia col suo
+// identificativo, perché l'ufficio deve poter leggere un rilievo anche fra due
+// anni, anche se quella voce di listino nel frattempo è stata rinominata.
+// Una mezza giornata sono otto ore di manodopera: quattro d'orologio in due. Sta
+// qui e non in una delle due app perché la usano entrambe — la lavagna per sapere
+// quante mezze giornate occupa un lavoro, il rilievo per dire quanto ci vuole — e
+// due idee diverse di quanto dura una mezza giornata sarebbero peggio di nessuna.
+const ORE_MEZZA = 8;
+
+const VERSIONE_RILIEVO = 1;
+
+// I quattro tipi di preventivo di questa azienda. Non sono una decorazione: uno
+// solo ha bisogno di un disegno che ancora non è arrivato, e l'ufficio deve
+// sapere se sta aspettando dei metri quadri dal CAD o se il rilievo è completo
+// così com'è. Sono gli stessi quattro di ufficio/PREVENTIVI.md.
+const TIPI_RILIEVO = [
+  { id: 'manutenzione', nome: 'Manutenzione', disegno: false },
+  { id: 'siepi-aiole',  nome: 'Siepi e aiuole ex novo', disegno: false },
+  { id: 'prato-rotoli', nome: 'Prato in rotoli', disegno: true },
+  { id: 'irrigazione',  nome: 'Impianto di irrigazione', disegno: true },
+];
+
+// Le unità in uso sui preventivi veri, lette da quelli già fatti. Elenco chiuso
+// perché a mano sono scritte in modi diversi — `cad` e `cad.` nello stesso
+// mazzo — e due scritture della stessa unità non si sommano.
+const UNITA_RILIEVO = ['m²', 'ml', 'nr', 'kg', 'h', 'sacchi', 'a corpo'];
+
+function tipoRilievo(id) {
+  return TIPI_RILIEVO.find(t => t.id === id) || null;
+}
+
+function costruisciRilievo({ rilievo, cliente, voci }) {
+  const perID = {};
+  (voci || []).forEach(v => { perID[v.VoceID] = v; });
+  return {
+    tipo: 'rilievo',
+    versione: VERSIONE_RILIEVO,
+    id: rilievo.RilievoID,
+    revisione: (Number(rilievo.Revisione) || 0) + 1,
+    creato: new Date().toISOString(),
+    cliente: {
+      id: (cliente && cliente.ClienteID) || rilievo.ClienteID || '',
+      nome: (cliente && cliente.Cliente) || rilievo.Cliente || '',
+      indirizzo: (cliente && cliente.Indirizzo) || '',
+      citta: (cliente && cliente.Citta) || '',
+    },
+    lavoro: rilievo.Lavoro || '',
+    // Le mezze giornate stimate per tutto il lavoro, non per riga: è così che si
+    // stima qui («arrotondo alla mezza giornata») ed è anche la larghezza che il
+    // cartellino avrà sulla lavagna. Lo stesso fatto misurato una volta sola.
+    mezze: Number(rilievo.Mezze) || 0,
+    righe: (rilievo.Righe || []).map(r => ({
+      id: r.RigaID || '',
+      voceID: r.VoceID || '',
+      // Il nome della voce viaggia col riferimento: l'ufficio ha il suo listino,
+      // ma un rilievo si deve leggere da solo anche se quella voce cambia nome.
+      voce: r.Voce || (perID[r.VoceID] && perID[r.VoceID].Nome) || '',
+      descrizione: r.Descrizione || '',
+      quantita: Number(r.Quantita) || 0,
+      unita: r.Unita || '',
+    })),
+    note: rilievo.Note || '',
+  };
+}
+
+function leggiRilievo(grezzo) {
+  let doc = grezzo;
+  if (typeof grezzo === 'string') {
+    try { doc = JSON.parse(grezzo); }
+    catch (e) { throw new Error('Il file non è leggibile: non è JSON valido'); }
+  }
+  if (!doc || doc.tipo !== 'rilievo') throw new Error('Questo file non è un rilievo');
+  const versione = Number(doc.versione) || 0;
+  // La solita regola della modalità costruzione: o è di questa versione, o si
+  // rifiuta dicendolo. Un rilievo letto a metà diventa un preventivo sbagliato,
+  // e un preventivo sbagliato si firma.
+  if (versione !== VERSIONE_RILIEVO) {
+    throw new Error(`Rilievo della versione ${versione || '?'}: questa app legge la ${VERSIONE_RILIEVO}`);
+  }
+  if (!doc.id) throw new Error('Rilievo senza identificativo');
+  return {
+    ...doc,
+    versione,
+    revisione: Number(doc.revisione) || 1,
+    cliente: doc.cliente || { id: '', nome: '' },
+    lavoro: doc.lavoro || '',
+    mezze: Number(doc.mezze) || 0,
+    righe: (Array.isArray(doc.righe) ? doc.righe : []).map(r => ({
+      id: r.id || '',
+      voceID: r.voceID || '',
+      voce: r.voce || '',
+      descrizione: r.descrizione || '',
+      quantita: Number(r.quantita) || 0,
+      unita: r.unita || '',
+    })),
+    note: doc.note || '',
+  };
+}
+
+function nomeFileRilievo(doc) {
+  const pulito = s => String(s || '').normalize('NFD').replace(/[̀-ͯ]/g, '')
+    .replace(/[^a-zA-Z0-9]+/g, '-').replace(/^-|-$/g, '').toLowerCase();
+  const quando = (doc.creato || '').slice(0, 10) || 'senza-data';
+  return `${quando}-${pulito(doc.cliente && doc.cliente.nome) || 'cliente'}-${doc.id}.json`;
+}
+
 if (typeof module !== 'undefined' && module.exports) {
   module.exports = {
     VERSIONE_RAPPORTINO, costruisciRapportino, leggiRapportino, nomeFileRapportino,
     VERSIONE_APPUNTAMENTO, costruisciAppuntamento, leggiAppuntamento, nomeFileAppuntamento,
     VERSIONE_AGENDA, APPUNTAMENTI_IN_AGENDA, costruisciAgenda, leggiAgenda, etichettaMezzaGiornata,
+    ORE_MEZZA,
+    VERSIONE_RILIEVO, TIPI_RILIEVO, UNITA_RILIEVO, tipoRilievo,
+    costruisciRilievo, leggiRilievo, nomeFileRilievo,
     dataISO, lunediDellaSettimana, lunediDellaPrimaSettimana, numeroSettimana, etichettaSettimana,
   };
 }
