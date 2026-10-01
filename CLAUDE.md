@@ -336,11 +336,59 @@ In ufficio la pagina Rilievi **legge e non tocca**: un file, un solo autore, com
 `rapportini/`. Dice anche chi non è in anagrafica, perché telefono e mail — quello
 che serve per richiamare e mandare il preventivo — stanno solo lì.
 
-**Il preventivo vero non si scrive ancora.** Prezzare quelle righe vuol dire
-decidere il margine fra il costo che esce dal listino e il prezzo che va al
-cliente, e quella è una decisione di chi firma, non un calcolo: vedi
-`ufficio/PREVENTIVI.md`. La pagina lo dice invece di lasciar credere che manchi un
-bottone.
+## Il prezzo che aspetta di essere guardato
+
+**Il margine fra costo e prezzo non è una regola.** Dipende dal lavoro, dal
+cliente, dalla stagione, da quanto rischio c'è. Quindi l'app non lo calcola:
+propone il **prezzo di listino** e chi firma lo corregge.
+
+Un prezzo proposto resta **segnato** — casella ocra, bordo tratteggiato — finché
+non viene toccato o confermato. È la stessa regola della fascia oraria proposta
+sul telefono, e per la stessa ragione: un numero precompilato che nessuno ha
+guardato è un errore che paga il cliente. Lì blocca il salvataggio della visita,
+qui **blocca la stampa**, perché è la stampa che esce di qui.
+
+Il tratteggio non è decorazione: dice la stessa cosa del colore a chi il colore
+non lo distingue, come la parola accanto ai cartellini della lavagna. E l'ocra è
+l'accento della palette apposta — non verde, non rosso: non è un'approvazione e
+non è un errore.
+
+**Un prezzo che il listino non ha non è una proposta: è un buco**, e resta bianco.
+Segnarlo direbbe che c'è qualcosa da confermare dove invece non c'è ancora niente.
+
+**Toccare è confermare**, e non si ridisegna la tabella mentre si scrive: la
+classe si toglie a mano dall'elemento, come fa il telefono con le fasce. Totale e
+avviso si aggiornano da soli — sono le due cose che devono seguire il numero
+sotto le dita.
+
+**Una riga può essere a tariffa**: un prezzo per una cosa che forse servirà — il
+conferimento a discarica, il costo orario — senza quantità e **fuori dal totale**.
+Sui preventivi veri c'è sempre, e sommarla direbbe una cifra che non esiste. Sul
+foglio sta sotto il totale, in una tabella sua.
+
+**Sul foglio va la descrizione, non la voce di listino.** «Piante» non dice al
+cliente cosa ha comprato; «Fornitura e messa a dimora di lauro 80-100» sì. È per
+questo che la descrizione si scrive in giardino e si corregge in ufficio.
+
+**Il sì del cliente costa un clic** e porta il lavoro in «Da pianificare» sulla
+lavagna, largo le mezze giornate che il campo aveva stimato: lo stesso numero,
+misurato una volta sola. In colonna e **senza un giorno** — quello lo decide chi
+pianifica, e su quella lavagna niente si muove da solo. `visti` vale anche qui:
+riaccettarlo non lo mette in lavagna due volte.
+
+**Un rilievo è «da preventivare» finché non esiste un preventivo per quella
+revisione**, non perché qualcuno l'abbia spostato: è la stessa regola dei
+rapportini in arrivo, e il pallino conta quello. Se dal campo arriva il rilievo
+corretto, il preventivo si rifà su quello **tenendo i prezzi già decisi**: le
+quantità cambiano, il giudizio no.
+
+I preventivi stanno in `preventivi/<anno>/`, scritti dall'ufficio come l'archivio.
+Le **condizioni** in fondo al foglio — validità, caparra, esclusioni — vivono in
+`impostazioni.json` accanto all'intestazione: sono di un'azienda vera.
+
+Quello che manca è in `ufficio/PREVENTIVI.md`, e la cosa grossa sono le
+**soluzioni alternative**: due varianti dello stesso lavoro con due totali che si
+escludono.
 
 ## L'app dell'ufficio
 
@@ -658,6 +706,10 @@ Chi ci mette mano legga prima quello, o rifarà un ragionamento già fatto.
   da zero cancella quello che non vede. È già successo.
 - Le pagine che sono testo nudo, non schede, devono darsi il margine laterale
   da sole: `#content` non ne ha, e gli importi finiscono oltre il bordo.
+- Due colonne attaccate di una tabella si leggono come una parola sola: «Q.tàUM»
+  in testa e «90n» sotto, perché le celle numeriche non hanno margine a destra.
+  Le celle di una tabella **si toccano sempre** — il margine sta dentro — quindi
+  una prova che misura i riquadri non vede niente: va misurato il **testo**.
 - Una colonna della lavagna cresce fino al suo contenuto più largo e sborda su
   quella accanto: è già successo con la fila `−/1 mezza/+`, che non andava a capo
   e spingeva le ore sopra il «MATTINA» del giorno dopo. Si vede solo a occhio, per

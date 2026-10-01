@@ -1897,6 +1897,9 @@ function aggiornaCodaPreventivo() {
   if (!el || !PREVENTIVO) return;
   const n = prezziDaConfermare(PREVENTIVO.doc.righe);
   el.style.display = n ? 'block' : 'none';
+  // Niente da dire, niente scritto: un messaggio nascosto resta nella pagina e
+  // si legge lo stesso da fuori — fosse pure solo da una prova che lo trova lì.
+  if (!n) { el.innerHTML = ''; return; }
   el.innerHTML = n + (n === 1 ? ' prezzo proposto dal listino aspetta una conferma.' :
     ' prezzi proposti dal listino aspettano una conferma.') +
     ' Il margine fra costo e prezzo lo decidi tu: correggi quello che serve, poi conferma. ' +

@@ -289,22 +289,40 @@ vuole deve tenerle **fuori** dal database mirrorato e fuori dal backup, in un
 archivio suo da cui partono e poi si scartano. È un lavoro a sé, non un campo in
 più.
 
-### Cosa manca, e cos'è che lo blocca
+## Il margine: risposto, e come
 
-Dal rilievo al preventivo manca il pezzo che costa: prezzare le righe. Il listino
-sa già farlo per il conto, quindi l'aritmetica c'è. Quello che non c'è è la
-**regola del margine** fra il costo che esce dal listino e il prezzo che va al
-cliente — e senza quella, un preventivo generato sarebbe un numero inventato.
+La domanda che bloccava tutto aveva una risposta che non era né «percentuale» né
+«giudizio puro»: **il rapporto fra costo e prezzo dipende da troppe cose**, quindi
+l'app mette il **prezzo consigliato** — quello di listino — e lo si corregge.
 
-Poi, nell'ordine in cui conviene farli:
+E la casella aspetta: resta di un colore finché qualcuno non l'ha guardata, poi
+torna bianca. È la regola che il sistema aveva già per le fasce orarie del
+telefono, ritrovata da un'altra parte — buon segno che sia quella giusta. Lì una
+fascia proposta blocca il salvataggio della visita; qui un prezzo proposto blocca
+la **stampa**, che è quello che esce.
 
-1. **il margine** (vedi sopra): la risposta decide se il preventivo si genera o si
-   scrive assistiti;
-2. **i tre tipi di riga** — nel totale, alternativa, a tariffa — che sono la forma
-   vera del documento;
-3. **la stampa**, che è il `@media print` che già esiste per il conto;
-4. **l'accettazione**: un clic che porta il lavoro in «Da pianificare» sulla
-   lavagna, largo le mezze giornate del rilievo.
+Il margine quindi non è scritto da nessuna parte nel codice, ed è giusto così: sta
+nella differenza fra quello che il listino propone e quello che chi firma decide,
+una riga alla volta.
+
+### Cosa è costruito adesso
+
+Dal rilievo al preventivo il giro è chiuso: righe prezzate col listino, totale,
+righe a tariffa fuori dal totale, foglio di stampa che ricalca quelli veri
+(intestazione, Spett.le, la frase di apertura, TOTALE PREVENTIVO S.E. & O.,
+condizioni in fondo), salvataggio in `preventivi/<anno>/`, e l'accettazione che
+porta il lavoro sulla lavagna largo le mezze giornate del rilievo.
+
+### Cosa manca
+
+1. **Le soluzioni alternative** — è il pezzo grosso che resta: due varianti dello
+   stesso lavoro, con due totali separati che si escludono a vicenda. Serve
+   raggruppare le righe per variante e stampare un totale per gruppo.
+2. **Le sezioni con un titolo**, per i preventivi divisi per zona del giardino.
+3. **I calcoli che aiutano**: dai metri e dal sesto d'impianto al numero di
+   piante, che è aritmetica che l'app può fare al posto di chi la rifà ogni volta.
+4. **Lo stato «mandato»**: oggi un preventivo è bozza o accettato, e manca il
+   passaggio intermedio con la data di invio.
 
 ## Domande ancora aperte
 
