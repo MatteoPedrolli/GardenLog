@@ -675,7 +675,7 @@ select.form-control { background-image: url("data:image/svg+xml,%3Csvg xmlns='ht
         <button class="btn btn-primary" onclick="apriPrenotazione()">📅 Prenota</button>
       </div>
 
-      <div class="section-title">Prenotati</div>
+      <div class="section-title" id="prenotazioni-titolo" style="display:none">Da consegnare</div>
       <div id="prenotazioni-list"></div>
     </div>
 
@@ -2806,9 +2806,16 @@ function renderAgenda() {
 function renderPrenotazioni() {
   const el = document.getElementById('prenotazioni-list');
   if (!el) return;
-  const elenco = [...(DB.prenotazioni || [])].sort((a, b) => String(b.Creata).localeCompare(String(a.Creata)));
+  // Quelle già arrivate in ufficio non servono qui: si guardano sulla lavagna, e
+  // tornano con l'agenda. Restano solo quelle ancora sul telefono, perché una
+  // prenotazione ferma deve dire accanto a sé perché non è partita.
+  const inCoda = new Set((DB.coda || []).map(v => v.docID));
+  const elenco = [...(DB.prenotazioni || [])].filter(p => inCoda.has(p.PrenotazioneID))
+    .sort((a, b) => String(b.Creata).localeCompare(String(a.Creata)));
+  const titolo = document.getElementById('prenotazioni-titolo');
+  if (titolo) titolo.style.display = elenco.length ? '' : 'none';
   if (!elenco.length) { el.innerHTML = ''; return; }
-  el.innerHTML = elenco.slice(0, 10).map(p => {
+  el.innerHTML = elenco.map(p => {
     const c = DB.clienti.find(x => x.ClienteID == p.ClienteID);
     const coda = DB.coda || [];
     const posto = coda.findIndex(v => v.docID === p.PrenotazioneID);

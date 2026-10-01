@@ -302,11 +302,11 @@ function nomeFileAppuntamento(doc) {
 // in giardino è la cosa che serve di più. Un telefono vecchio semplicemente non
 // la mostra; un'agenda vecchia arriva senza, che vuol dire «ora non fissata».
 //
-// Sei appuntamenti e non tutti: è l'orizzonte che serve in cantiere. Oltre, la
+// Dieci appuntamenti e non tutti: è l'orizzonte che serve in cantiere. Oltre, la
 // pianificazione cambia ancora e una lista lunga sarebbe una lista sbagliata.
 
 const VERSIONE_AGENDA = 1;
-const APPUNTAMENTI_IN_AGENDA = 6;
+const APPUNTAMENTI_IN_AGENDA = 10;
 
 // L'ordine è quello della lavagna letta da sinistra: prima il giorno, poi la
 // mattina e poi il pomeriggio.

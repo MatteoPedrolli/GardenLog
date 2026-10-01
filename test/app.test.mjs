@@ -412,8 +412,17 @@ try {
       return !/\/\d{4}/.test(etichettaSettimana(quest)) &&
         etichettaSettimana(altro).includes('/' + (new Date().getFullYear() + 3));
     }));
+  // Si guarda mentre è ancora sul telefono: quelle consegnate non si mostrano più.
   ok('la schermata mostra la settimana scelta, non la data battuta',
-    (await page.textContent('#prenotazioni-list')).includes('settimana 12'));
+    await page.evaluate(() => {
+      const p = DB.prenotazioni[0];
+      DB.coda.push({ docID: p.PrenotazioneID, tipo: 'appuntamento', doc: {}, creato: '', tentativi: 0, errore: '' });
+      renderPrenotazioni();
+      const testo = document.getElementById('prenotazioni-list').textContent;
+      DB.coda = DB.coda.filter(v => v.docID !== p.PrenotazioneID);
+      renderPrenotazioni();
+      return testo.includes('settimana 12');
+    }));
 
   // ── come si contano le settimane ──
   // La settimana 1 è quella che contiene il 1° gennaio, come sul calendario
@@ -467,8 +476,11 @@ try {
     fermaEvisibile.html.slice(0, 200));
   ok('e dice quanti tentativi ha fatto, con come riprovare',
     fermaEvisibile.html.includes('3 tentativi') && fermaEvisibile.html.includes('riprovare'));
-  ok('quella consegnata non porta nessun errore',
-    !fermaEvisibile.dopo.includes('Non è partita') && fermaEvisibile.dopo.includes('in ufficio'));
+  // Quelle arrivate in ufficio si guardano sulla lavagna e tornano con l'agenda:
+  // qui restano solo quelle ancora da consegnare.
+  ok('quella consegnata non si mostra più, e il titolo se ne va con lei',
+    fermaEvisibile.dopo === '' && await page.evaluate(() =>
+      document.getElementById('prenotazioni-titolo').style.display === 'none'));
 
   // E il caso peggiore: svuotaCoda() si ferma quando il servizio non risponde,
   // quindi la prenotazione dietro non viene nemmeno provata e non ha un errore
@@ -2309,7 +2321,7 @@ try {
       sistemaLavoro({ cliente: 'Mattina', giorno: window.GIORNI.presto, mezza: 'mattina', stato: 'matita' }),
       sistemaLavoro({ cliente: 'In coda', settimana: window.GIORNI.presto, stato: 'lista' }),
     ];
-    for (let i = 1; i <= 6; i++) {
+    for (let i = 1; i <= 10; i++) {
       LAVAGNA.lavori.push(sistemaLavoro({ cliente: 'Numero ' + i, giorno: fraGiorni(20 + i), mezza: 'mattina' }));
     }
     await salvaLavagna();
@@ -2323,8 +2335,8 @@ try {
   }));
   ok('la lavagna salvandosi scrive l\'agenda per il cantiere',
     agendaPrima.tipo === 'agenda' && agendaPrima.versione === 1);
-  ok('ci stanno solo i sei appuntamenti più vicini',
-    agendaPrima.appuntamenti.length === 6, String(agendaPrima.appuntamenti.length));
+  ok('ci stanno solo i dieci appuntamenti più vicini',
+    agendaPrima.appuntamenti.length === 10, String(agendaPrima.appuntamenti.length));
   ok('in ordine, prima la mattina e poi il pomeriggio',
     agendaPrima.appuntamenti[0]?.cliente === 'Mattina' && agendaPrima.appuntamenti[1]?.cliente === 'Pomeriggio',
     agendaPrima.appuntamenti.map(a => a.cliente).join(' → '));
@@ -2371,7 +2383,7 @@ try {
       schermo: document.getElementById('agenda-list').innerHTML };
   }, CONSEGNA);
   ok('il telefono scarica l\'agenda scritta dall\'ufficio',
-    scaricata.esito === true && scaricata.quanti === 6, JSON.stringify(scaricata.esito));
+    scaricata.esito === true && scaricata.quanti === 10, JSON.stringify(scaricata.esito));
   ok('e la mostra con giorno, cliente e note',
     scaricata.schermo.includes(scaricata.atteso) &&
     scaricata.schermo.includes('Pomeriggio') &&
@@ -2383,7 +2395,7 @@ try {
   await page.goto(BASE, { waitUntil: 'load' });
   await page.waitForTimeout(600);
   ok('senza rete resta l\'agenda scaricata prima',
-    await page.evaluate(() => { navTo('prossimi'); return DB.agenda?.appuntamenti.length; }) === 6);
+    await page.evaluate(() => { navTo('prossimi'); return DB.agenda?.appuntamenti.length; }) === 10);
   ok('e non finge di aggiornarla',
     await page.evaluate(async () => await scaricaAgenda()) === false);
 
@@ -2395,7 +2407,7 @@ try {
   ok('un\'agenda di un\'altra versione non sostituisce quella buona',
     await page.evaluate(async () => {
       const esito = await scaricaAgenda();
-      return esito === false && DB.agenda?.appuntamenti.length === 6;
+      return esito === false && DB.agenda?.appuntamenti.length === 10;
     }));
   // Senza questo la verifica sopra passerebbe anche se il documento non fosse
   // mai stato chiesto: «false» lo restituisce anche chi si è fermato prima.
@@ -2409,7 +2421,7 @@ try {
   ok('una pagina HTML al posto dell\'agenda non cancella quella che c\'è',
     await page.evaluate(async () => {
       const esito = await scaricaAgenda();
-      return esito === false && DB.agenda?.appuntamenti.length === 6;
+      return esito === false && DB.agenda?.appuntamenti.length === 10;
     }));
 
   // ── il conto si salva da solo, e uno da pagare si corregge dall'archivio ──

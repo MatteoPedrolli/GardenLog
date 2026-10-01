@@ -149,7 +149,11 @@ prenotazioni sono il posto dove sta scritto cosa si era detto di fare.
 
 **La pagina Prossimi guarda in due direzioni.** In cima c'è l'agenda che arriva
 dall'ufficio — dove si va, con le note di chi c'è stato prima — e sotto quello che
-si è prenotato da qui. `DB.agenda` è una copia di quello che l'ufficio ha deciso,
+si è prenotato da qui — ma **solo quello ancora da consegnare**. Le prenotazioni
+arrivate in ufficio non servivano qui: si guardano sulla lavagna e tornano con
+l'agenda. Quelle ferme invece restano, col loro errore accanto, ed è il motivo per
+cui la sezione non è sparita del tutto: una prenotazione che non parte deve dirlo
+lì dove la si cerca. Vuota, la sezione non ha nemmeno il titolo. `DB.agenda` è una copia di quello che l'ufficio ha deciso,
 non un dato nostro: si riscrive intera a ogni scaricamento e non si modifica a mano.
 Sta nel DB perché in giardino il campo spesso non c'è, ed è lì che serve; assente
 vuol dire «non ancora scaricata», che è un valore buono e non chiede una
@@ -318,10 +322,10 @@ Le note sì, e sono il motivo per cui l'agenda vale la pena: sono la cosa che fa
 giro completo. Il cantiere le scrive prenotando, l'ufficio se le tiene sul
 cartellino, e tornano in giardino il giorno del lavoro.
 
-Sei appuntamenti, da oggi in avanti, e solo quelli già piazzati su una mezza
+Dieci appuntamenti, da oggi in avanti, e solo quelli già piazzati su una mezza
 giornata: un lavoro ancora in colonna non ha un momento suo, e metterlo in agenda
-vorrebbe dire prometterlo. Oltre i sei la pianificazione cambia ancora, e una lista
-lunga sarebbe una lista sbagliata.
+vorrebbe dire prometterlo. Erano sei, e in giardino non bastavano; oltre i dieci la
+pianificazione cambia ancora, e una lista lunga sarebbe una lista sbagliata.
 
 Entrambi, in modalità costruzione, si leggono **solo alla loro versione corrente**:
 o il documento è di questa versione, o si rifiuta dicendolo. Archiviare un
