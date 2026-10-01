@@ -509,6 +509,9 @@ input.vuoto { background: #fffdf5; border-color: #ecdca8; }
 }
 .voce-stato:hover { border-color: var(--ocra); }
 .voce-stato.attiva { border-color: var(--inchiostro-tenue); background: var(--foglio); }
+/* Le quattro schede dei preventivi stanno in fila, non in colonna come quelle
+   dell'archivio: lì accanto c'è l'elenco, qui sopra. */
+.gruppi-preventivi { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 8px; margin: 6px 0 14px; }
 .stato-nome { font-size: 0.9rem; font-weight: 500; }
 .stato-conta { font-size: 0.8rem; color: var(--text-light); }
 .stato-somma {
@@ -661,6 +664,9 @@ const IMPOSTAZIONI_VUOTE = {
   // caparra, cosa succede se il lavoro cambia. Sono di un'azienda vera, quindi
   // vivono qui e non nel codice, come l'intestazione.
   condizioni: '',
+  // Dopo quanti giorni senza risposta un preventivo mandato passa fra i
+  // rifiutati, come «scaduto». Tenerlo uguale a quello scritto nelle condizioni.
+  validita: '30',
 };
 
 let CARTELLA = null;
@@ -2242,6 +2248,7 @@ function costruisciPreventivo(rilievo, precedente) {
     // Quando è stato mandato, non solo che lo è stato: «l'ho mandato» senza una
     // data non risponde alla domanda che si fa davvero, cioè da quanto aspetta.
     mandato: (precedente && precedente.mandato) || '',
+    rifiutato: (precedente && precedente.rifiutato) || '',
     // Vuoto è il caso normale: quasi tutti i preventivi hanno un totale solo.
     soluzioni: (precedente && Array.isArray(precedente.soluzioni)) ? precedente.soluzioni : [],
     scelta: (precedente && precedente.scelta) || '',
@@ -2273,6 +2280,7 @@ function leggiPreventivo(grezzo) {
     mezze: Number(doc.mezze) || 0,
     stato: doc.stato || 'bozza',
     mandato: doc.mandato || '',
+    rifiutato: doc.rifiutato || '',
     soluzioni: Array.isArray(doc.soluzioni) ? doc.soluzioni : [],
     scelta: doc.scelta || '',
     righe: (Array.isArray(doc.righe) ? doc.righe : []).map(r => ({
@@ -2320,6 +2328,182 @@ function nomeFilePreventivo(doc) {
 function rilieviDaPreventivare() {
   return RILIEVI.filter(r => !PREVENTIVI.some(p => p.doc.id === r.doc.id &&
     p.doc.rilievo >= r.doc.revisione));
+}
+
+// ── DOVE STA UN PREVENTIVO ──
+// Quattro mucchi, come si teneva sulla scrivania: quelli da fare, quelli
+// mandati che aspettano, quelli confermati, quelli andati male. Il mucchio non
+// è un posto: è lo stato scritto nel file, e la cartella resta una sola. Spostare
+// file fra cartelle su Drive che sincronizza è il modo migliore per ritrovarsene
+// due copie.
+const GRUPPI_PREVENTIVI = [
+  { id: 'aperti', nome: 'Aperti' },
+  { id: 'inviati', nome: 'Inviati' },
+  { id: 'confermati', nome: 'Confermati' },
+  { id: 'rifiutati', nome: 'Rifiutati' },
+];
+let GRUPPO_PREVENTIVI = 'aperti';
+
+// Quanti giorni aspetta una risposta prima di passare fra i rifiutati. Sta in
+// Impostazioni accanto alle condizioni, dove di solito c'è scritto «offerta
+// valida 30 giorni»: i due numeri vanno tenuti uguali a mano.
+function giorniValidita() {
+  const n = parseInt(IMPOSTAZIONI.validita, 10);
+  return n > 0 ? n : 30;
+}
+
+// **Scaduto non è rifiutato.** Il cliente non ha detto di no, non ha detto
+// niente: sta coi rifiutati perché non è più da aspettare, ma resta scritto così
+// e si accetta ancora, se un giorno richiama. Lo si calcola dalla data in cui è
+// partito, non lo si scrive nel file: un numero di giorni cambiato in
+// Impostazioni vale anche per quelli già mandati.
+function preventivoScaduto(d) {
+  if (d.stato !== 'mandato' || !d.mandato) return false;
+  const giorni = (Date.now() - new Date(d.mandato).getTime()) / 86400000;
+  return giorni > giorniValidita();
+}
+
+function gruppoPreventivo(d) {
+  if (d.stato === 'accettato') return 'confermati';
+  if (d.stato === 'rifiutato' || preventivoScaduto(d)) return 'rifiutati';
+  if (d.stato === 'mandato') return 'inviati';
+  return 'aperti';
+}
+
+function scegliGruppoPreventivi(id) {
+  GRUPPO_PREVENTIVI = id;
+  disegnaPreventivi();
+}
+
+// Il no del cliente si scrive, con la sua data: quanti se ne perdono e quando è
+// la domanda che oggi non ha risposta da nessuna parte.
+async function rifiutaPreventivo() {
+  if (!PREVENTIVO) return;
+  const d = PREVENTIVO.doc;
+  if (!confirm('Il cliente ha detto di no a questo preventivo?\n\nPassa fra i rifiutati. Se richiama, si accetta lo stesso.')) return;
+  d.stato = 'rifiutato';
+  d.rifiutato = new Date().toISOString();
+  if (await salvaPreventivo()) disegnaPreventivo();
+}
+
+// Un prezzo proposto dal listino e mai guardato non esce di qui, né sulla carta
+// né per mail: è la stessa regola, e sta in un posto solo.
+function prezziGuardati(d, perFare) {
+  const quanti = prezziDaConfermare(d.righe);
+  if (!quanti) return true;
+  avvisa(quanti === 1
+    ? 'Un prezzo aspetta ancora una conferma: guardalo prima di ' + perFare
+    : quanti + ' prezzi aspettano ancora una conferma: guardali prima di ' + perFare, true);
+  return false;
+}
+
+// ── IL PREVENTIVO PER MAIL ──
+// Come il conto: l'app apre la posta già scritta e non manda niente da sola. Si
+// segna *mandato* **prima** di aprirla, e se non si riesce a segnarlo la posta
+// non si apre: una mail partita di cui l'archivio non sa niente è il preventivo
+// che nessuno richiama. Stampare invece non lo segna — l'app non sa se quel
+// foglio è andato al cliente o è una prova — e c'è il bottone apposta.
+async function inviaPreventivo() {
+  if (!PREVENTIVO) return;
+  const d = PREVENTIVO.doc;
+  if (!prezziGuardati(d, 'mandarlo')) return;
+  const noto = clienteDelPreventivo(d);
+  const indirizzo = (d.cliente && d.cliente.email) || (noto && noto.email) || '';
+  if (!indirizzo) {
+    avvisa('Manca la mail di ' + ((d.cliente && d.cliente.nome) || 'questo cliente') +
+      ': la posta si apre lo stesso, il destinatario va scritto a mano', true);
+  }
+  const prima = { stato: d.stato, mandato: d.mandato };
+  d.stato = 'mandato';
+  d.mandato = new Date().toISOString();
+  if (!(await salvaPreventivo())) {
+    d.stato = prima.stato;
+    d.mandato = prima.mandato;
+    return;
+  }
+  apriPosta('mailto:' + encodeURIComponent(indirizzo) +
+    '?subject=' + encodeURIComponent('Preventivo' + (IMPOSTAZIONI.azienda ? ' ' + IMPOSTAZIONI.azienda : '')) +
+    '&body=' + encodeURIComponent(testoPreventivo(d)));
+  disegnaPreventivo();
+}
+
+// Il testo della mail. Niente colonne allineate con gli spazi: le app di posta
+// usano caratteri a larghezza variabile e arrivano storte. Una voce per riga, e
+// le alternative dette a parole, come sul foglio.
+function testoPreventivo(d) {
+  const t = totaliPreventivo(d);
+  const riga = r => {
+    if (r.tipo === 'sezione') return ['', (r.descrizione || '').toUpperCase()];
+    const imp = importoRiga(r);
+    return [(r.descrizione || r.voce) + ': ' +
+      [formattaQuantita(r.quantita), r.unita].filter(x => x).join(' ') +
+      (r.prezzo === '' || r.prezzo == null ? ' — da definire'
+        : ' × ' + formattaEuro(r.prezzo) + ' = ' + (imp == null ? 'da definire' : formattaEuro(imp)))];
+  };
+  const righe = ['Spett.le ' + ((d.cliente && d.cliente.nome) || ''), '',
+    'A seguito Vostra gentile richiesta, Vi comunichiamo la nostra migliore offerta per la seguente fornitura:', ''];
+  d.righe.filter(r => r.tipo !== 'tariffa' && !r.soluzione).forEach(r => righe.push(...riga(r)));
+  if (t.unico) {
+    righe.push('', 'TOTALE PREVENTIVO S.E. & O. (IVA inclusa): ' + formattaEuro(t.unico.totale));
+  } else {
+    righe.push('', 'Le soluzioni qui sotto sono alternative fra loro: il totale di ciascuna comprende le voci sopra.');
+    t.soluzioni.forEach(sol => {
+      righe.push('', sol.nome.toUpperCase());
+      d.righe.filter(r => r.tipo !== 'tariffa' && r.soluzione === sol.id).forEach(r => righe.push(...riga(r)));
+      righe.push('TOTALE ' + sol.nome.toUpperCase() + ' (IVA inclusa): ' + formattaEuro(sol.totale));
+    });
+  }
+  const tariffe = d.righe.filter(r => r.tipo === 'tariffa');
+  if (tariffe.length) {
+    righe.push('', 'Non compreso nel totale:');
+    tariffe.forEach(r => righe.push((r.descrizione || r.voce) + ': ' +
+      (r.prezzo === '' || r.prezzo == null ? 'da definire' : formattaEuro(r.prezzo)) +
+      (r.unita ? ' / ' + r.unita : '')));
+  }
+  if (d.note) righe.push('', d.note);
+  if (IMPOSTAZIONI.condizioni) righe.push('', IMPOSTAZIONI.condizioni);
+  if (IMPOSTAZIONI.azienda) righe.push('', IMPOSTAZIONI.azienda);
+  return righe.join('\n');
+}
+
+// ── DAL PREVENTIVO ALL'ANAGRAFICA ──
+// Telefono e mail arrivano dal campo, col rilievo. Chi non c'è in anagrafica si
+// aggiunge con un clic — il cantiere l'ha già scritto una volta — e a chi c'è si
+// riempie **solo quello che manca**: il numero che l'ufficio ha corretto non lo
+// riscrive un rilievo, come non lo riscrive un'importazione.
+function clienteDelPreventivo(d) {
+  const c = d.cliente || {};
+  return CLIENTI.find(x => (c.id && x.id === c.id) ||
+    (c.nome && x.nome.trim().toLowerCase() === c.nome.trim().toLowerCase())) || null;
+}
+
+const CAMPI_DAL_PREVENTIVO = [
+  ['indirizzo', 'via'], ['citta', 'paese'], ['telefono', 'telefono'], ['email', 'mail'],
+];
+
+function cosaPortaInAnagrafica(d) {
+  const c = d.cliente || {};
+  if (!c.nome) return null;
+  const noto = clienteDelPreventivo(d);
+  if (!noto) return { nuovo: true, campi: [] };
+  const campi = CAMPI_DAL_PREVENTIVO.filter(([k]) => !noto[k] && c[k]).map(([, nome]) => nome);
+  return campi.length ? { nuovo: false, campi } : null;
+}
+
+async function portaInAnagrafica() {
+  if (!PREVENTIVO) return;
+  const c = PREVENTIVO.doc.cliente || {};
+  const noto = clienteDelPreventivo(PREVENTIVO.doc);
+  if (!noto) {
+    CLIENTI.push(sistemaCliente({ id: c.id || '', nome: c.nome, indirizzo: c.indirizzo, citta: c.citta,
+      telefono: c.telefono, email: c.email }));
+  } else {
+    CAMPI_DAL_PREVENTIVO.forEach(([k]) => { if (!noto[k] && c[k]) noto[k] = c[k]; });
+  }
+  CLIENTI_DA_SALVARE = true;
+  if (!(await salvaClienti())) return;
+  avvisa(noto ? 'Anagrafica completata: ' + c.nome : 'In anagrafica: ' + c.nome);
+  disegnaPreventivo();
 }
 
 async function caricaPreventivi() {
@@ -2543,8 +2727,9 @@ function disegnaPreventivo() {
   let html = '<h2 class="titolo-pagina">' + perValore(d.cliente.nome || 'senza nome') + '</h2>';
   html += '<p class="sottotitolo">' + perValore(tipo ? tipo.nome : d.lavoro) +
     ' · ' + d.mezze + (d.mezze === 1 ? ' mezza giornata' : ' mezze giornate') +
-    ' · ' + STATI_PREVENTIVO[d.stato] +
-    (d.mandato ? ' il ' + formattaData(d.mandato) + ' · ' + daQuantoAspetta(d.mandato) : '') + '</p>';
+    ' · ' + (preventivoScaduto(d) ? 'scaduto senza risposta' : STATI_PREVENTIVO[d.stato]) +
+    (d.stato === 'rifiutato' && d.rifiutato ? ' il ' + formattaData(d.rifiutato)
+      : d.mandato ? ' · mandato il ' + formattaData(d.mandato) + ' · ' + daQuantoAspetta(d.mandato) : '') + '</p>';
 
   html += '<div id="da-confermare" class="avvertenza" style="display:none"></div>';
 
@@ -2661,12 +2846,26 @@ function disegnaPreventivo() {
       '<div class="nota-rilievo">' + perValore(d.daRilievo.note) + '</div></div>';
   }
 
+  const inAnagrafica = cosaPortaInAnagrafica(d);
+  if (inAnagrafica) {
+    html += '<div class="avvertenza">' + (inAnagrafica.nuovo
+      ? perValore(d.cliente.nome) + ' non è in anagrafica: dal rilievo arrivano ' +
+        CAMPI_DAL_PREVENTIVO.filter(([k]) => d.cliente[k]).map(([, n]) => n).join(', ') +
+        ' — servono per richiamare e per mandare il preventivo.'
+      : 'Dal rilievo arriva quello che l\'anagrafica non ha: ' + inAnagrafica.campi.join(', ') + '.') +
+      ' <button class="secondaria" onclick="portaInAnagrafica()">' +
+      (inAnagrafica.nuovo ? 'Aggiungi in anagrafica' : 'Completa l\'anagrafica') + '</button></div>';
+  }
+
   html += '<div class="bottoni">' +
     '<button class="principale" onclick="salvaPreventivo()">Salva</button>' +
     '<button class="secondaria" onclick="stampaPreventivo()">Stampa o salva in PDF</button>' +
-    (d.stato === 'bozza' ? '<button class="secondaria" onclick="segnaMandato()">Mandato al cliente</button>' : '') +
+    '<button class="secondaria" onclick="inviaPreventivo()">Manda per mail</button>' +
+    (d.stato === 'bozza' ? '<button class="secondaria" onclick="segnaMandato()">Consegnato a mano</button>' : '') +
     (d.stato === 'accettato' || soluzioni.length ? '' :
       '<button class="secondaria" onclick="accettaPreventivo()">Il cliente ha detto sì</button>') +
+    (d.stato === 'bozza' || d.stato === 'mandato'
+      ? '<button class="secondaria" onclick="rifiutaPreventivo()">Il cliente ha detto no</button>' : '') +
     '<button class="secondaria" onclick="vaiA(\'preventivi\')">Torna all\'elenco</button>' +
     '</div>';
   c.innerHTML = html;
@@ -2689,13 +2888,16 @@ async function salvaPreventivo() {
     // Un salvataggio fallito si dice a chiaro schermo: in console sparirebbe, e
     // con lui il lavoro di mezz'ora passato a decidere i prezzi.
     avvisa('Non ho potuto salvare il preventivo: ' + e.message, true);
-    return;
+    return false;
   }
   PREVENTIVO.file = nome;
   PREVENTIVO.anno = anno;
   await ricarica();
   disegna();
-  avvisa('Preventivo salvato · ' + formattaEuro(totalePreventivo(d.righe).totale));
+  // La forchetta, non la somma di tutte le righe: con due soluzioni alternative
+  // la somma è proprio la cifra che non esiste.
+  avvisa('Preventivo salvato · ' + forchettaPreventivo(d));
+  return true;
 }
 
 function stampaPreventivo() {
@@ -2704,13 +2906,7 @@ function stampaPreventivo() {
   // Un prezzo proposto dal listino e mai guardato non è un prezzo: è quello che
   // il listino sa, e il listino non sa quanto vale questo lavoro. Qui si ferma,
   // come sul telefono si ferma il salvataggio con una fascia oraria proposta.
-  const quanti = prezziDaConfermare(d.righe);
-  if (quanti) {
-    avvisa(quanti === 1
-      ? 'Un prezzo aspetta ancora una conferma: guardalo prima di stampare'
-      : quanti + ' prezzi aspettano ancora una conferma: guardali prima di stampare', true);
-    return;
-  }
+  if (!prezziGuardati(d, 'stampare')) return;
   if (!String(IMPOSTAZIONI.azienda || '').trim()) {
     if (!confirm('Manca l\'intestazione con i dati dell\'azienda: si compila in Impostazioni.\n\nStampare comunque?')) return;
   }
@@ -2731,8 +2927,7 @@ async function segnaMandato() {
   if (!PREVENTIVO) return;
   PREVENTIVO.doc.stato = 'mandato';
   PREVENTIVO.doc.mandato = new Date().toISOString();
-  await salvaPreventivo();
-  disegnaPreventivo();
+  if (await salvaPreventivo()) disegnaPreventivo();
 }
 
 // Il sì del cliente: oggi è un «ok» a penna sulla stampa, e da nessuna parte in
@@ -2885,19 +3080,31 @@ function disegnaPreventivi() {
   const c = document.getElementById('pagina-preventivi');
   if (!CARTELLA) { c.innerHTML = schermataBenvenuto(); return; }
 
-  let html = '<h2 class="titolo-pagina">Preventivi</h2>';
-  html += '<p class="sottotitolo">I rilievi che arrivano dal campo, e i preventivi che ne nascono</p>';
+  let html = '<p class="sottotitolo">I rilievi che arrivano dal campo, e i preventivi che ne nascono</p>';
   html += bloccoIlleggibili();
 
   const daFare = rilieviDaPreventivare();
-  html += '<div class="titolo-sezione">Da preventivare</div>';
-  if (!daFare.length) {
-    html += '<div class="scheda"><div class="vuoto-elenco">Nessun rilievo in attesa.</div></div>';
-  } else {
+  const per = {};
+  GRUPPI_PREVENTIVI.forEach(g => { per[g.id] = []; });
+  PREVENTIVI.forEach(p => per[gruppoPreventivo(p.doc)].push(p));
+  // I rilievi appena arrivati sono «aperti» anche loro: un preventivo da fare,
+  // solo non ancora cominciato. Contarli a parte farebbe sembrare vuota la
+  // scheda proprio quando c'è più lavoro.
+  const quanti = id => per[id].length + (id === 'aperti' ? daFare.length : 0);
+
+  html += '<div class="gruppi-preventivi">' + GRUPPI_PREVENTIVI.map(g =>
+    '<button class="voce-stato' + (GRUPPO_PREVENTIVI === g.id ? ' attiva' : '') +
+      '" onclick="scegliGruppoPreventivi(\'' + g.id + '\')">' +
+      '<span class="stato-nome">' + g.nome + '</span>' +
+      '<span class="stato-conta">' + quanti(g.id) + '</span>' +
+    '</button>').join('') + '</div>';
+
+  if (GRUPPO_PREVENTIVI === 'aperti') {
+    if (daFare.length) html += '<div class="titolo-sezione">Rilievi da preventivare</div>';
     daFare.forEach(r => {
       const d = r.doc;
       const tipo = tipoRilievo(d.lavoro);
-      const cliente = CLIENTI.find(x => x.id === d.cliente.id || x.nome === d.cliente.nome);
+      const cliente = clienteDelPreventivo(d);
       const rifare = PREVENTIVI.some(p => p.doc.id === d.id);
       html += '<div class="scheda cliccabile" onclick="apriPreventivo(\'' + perOnclick(d.id) + '\')">' +
         '<div class="riga-scheda">' +
@@ -2909,37 +3116,44 @@ function disegnaPreventivi() {
         '<div class="meta" style="margin-top:6px">' +
           d.righe.length + (d.righe.length === 1 ? ' riga' : ' righe') +
           ' · ' + d.mezze + (d.mezze === 1 ? ' mezza giornata' : ' mezze giornate') +
+          (d.sopralluogo ? ' · 📍 dal sopralluogo' : '') +
           (cliente ? '' : ' · <strong>non in anagrafica</strong>') +
           (tipo && tipo.disegno ? ' · 📐 aspetta il disegno' : '') +
         '</div>' +
         (d.note ? '<div class="nota-rilievo">' + perValore(d.note) + '</div>' : '') +
       '</div>';
     });
+    if (daFare.length && per.aperti.length) html += '<div class="titolo-sezione">Bozze</div>';
   }
 
-  html += '<div class="titolo-sezione">Fatti</div>';
-  if (!PREVENTIVI.length) {
-    html += '<div class="scheda"><div class="vuoto-elenco">Nessun preventivo.</div></div>';
-  } else {
-    PREVENTIVI.forEach(p => {
-      const d = p.doc;
-      html += '<div class="scheda cliccabile" onclick="apriPreventivo(\'' + perOnclick(d.id) + '\')">' +
-        '<div class="riga-scheda">' +
-          '<span class="nome-cliente">' + perValore(d.cliente.nome || 'senza nome') + '</span>' +
-          '<span class="etichetta ' + (d.stato === 'accettato' ? 'corretto' : 'nuovo') + '">' +
-            STATI_PREVENTIVO[d.stato] + '</span>' +
-          // Con le alternative il totale è più d'uno: si dice da quanto a quanto,
-          // che è quello che si risponde al telefono prima che il cliente scelga.
-          '<span class="meta" style="margin-left:auto">' + forchettaPreventivo(d) + '</span>' +
-        '</div>' +
-        '<div class="meta" style="margin-top:6px">' + formattaData(d.creato) +
-          ' · ' + d.righe.length + (d.righe.length === 1 ? ' riga' : ' righe') +
-          (d.stato === 'mandato' && d.mandato ? ' · mandato ' + daQuantoAspetta(d.mandato) : '') +
-          (prezziDaConfermare(d.righe) ? ' · <strong>' + prezziDaConfermare(d.righe) + ' da confermare</strong>' : '') +
-        '</div>' +
-      '</div>';
-    });
+  const elenco = per[GRUPPO_PREVENTIVI];
+  if (!elenco.length && !(GRUPPO_PREVENTIVI === 'aperti' && daFare.length)) {
+    const vuoto = { aperti: 'Niente da preventivare.', inviati: 'Nessun preventivo che aspetta una risposta.',
+      confermati: 'Nessun preventivo confermato.', rifiutati: 'Nessun preventivo rifiutato o scaduto.' };
+    html += '<div class="scheda"><div class="vuoto-elenco">' + vuoto[GRUPPO_PREVENTIVI] + '</div></div>';
   }
+  elenco.forEach(p => {
+    const d = p.doc;
+    const scaduto = preventivoScaduto(d);
+    // Fra i rifiutati, scaduto e rifiutato non sono la stessa cosa: uno ha detto
+    // di no, l'altro non ha detto niente — e quello si può ancora richiamare.
+    const etichetta = scaduto ? 'scaduto senza risposta' : STATI_PREVENTIVO[d.stato];
+    html += '<div class="scheda cliccabile" onclick="apriPreventivo(\'' + perOnclick(d.id) + '\')">' +
+      '<div class="riga-scheda">' +
+        '<span class="nome-cliente">' + perValore(d.cliente.nome || 'senza nome') + '</span>' +
+        '<span class="etichetta ' + (d.stato === 'accettato' ? 'corretto' : 'nuovo') + '">' + etichetta + '</span>' +
+        // Con le alternative il totale è più d'uno: si dice da quanto a quanto,
+        // che è quello che si risponde al telefono prima che il cliente scelga.
+        '<span class="meta" style="margin-left:auto">' + forchettaPreventivo(d) + '</span>' +
+      '</div>' +
+      '<div class="meta" style="margin-top:6px">' + formattaData(d.creato) +
+        ' · ' + d.righe.length + (d.righe.length === 1 ? ' riga' : ' righe') +
+        (d.stato === 'mandato' && d.mandato ? ' · mandato ' + daQuantoAspetta(d.mandato) : '') +
+        (d.stato === 'rifiutato' && d.rifiutato ? ' · rifiutato il ' + formattaData(d.rifiutato) : '') +
+        (prezziDaConfermare(d.righe) ? ' · <strong>' + prezziDaConfermare(d.righe) + ' da confermare</strong>' : '') +
+      '</div>' +
+    '</div>';
+  });
 
   html += '<div class="bottoni"><button class="secondaria" onclick="ricontrolla()">Ricontrolla la cartella</button></div>';
   c.innerHTML = html;
@@ -4606,6 +4820,11 @@ function disegnaImpostazioni() {
   html += '<textarea rows="3" oninput="modificaImpostazione(\'condizioni\', this.value)" ' +
     'placeholder="Validità dell\'offerta, caparra, termini di pagamento, esclusioni...">' +
     perValore(IMPOSTAZIONI.condizioni) + '</textarea>';
+  html += '<div class="titolo-sezione" style="margin-top:18px">Giorni di validità del preventivo</div>';
+  html += '<input type="text" inputmode="numeric" class="stretto" value="' + perValore(IMPOSTAZIONI.validita) +
+    '" oninput="modificaImpostazione(\'validita\', this.value)">';
+  html += '<div class="meta">Passati questi giorni senza risposta, un preventivo mandato va fra i rifiutati come ' +
+    '«scaduto» — e si può accettare lo stesso. Tienilo uguale a quello che scrivi nelle condizioni.</div>';
   html += '<div class="avvertenza">I prezzi in listino sono IVA inclusa, e il foglio lo scrive nel ' +
     'totale. Se un giorno diventassero al netto, va cambiato lì — non basta correggere i numeri.</div>';
   html += '<div class="bottoni"><button class="principale" onclick="salvaImpostazioni()">Salva</button>' +

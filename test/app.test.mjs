@@ -2975,8 +2975,8 @@ try {
   // Un rilievo è «da preventivare» finché non esiste un preventivo per quella
   // revisione, non perché qualcuno l'abbia spostato: è la stessa regola dei
   // rapportini in arrivo. E il pallino conta quello, non tutti i rilievi.
-  ok('il rilievo compare fra quelli da preventivare',
-    schermoRilievi.includes('Da preventivare'));
+  ok('il rilievo compare fra gli aperti, da preventivare',
+    schermoRilievi.includes('Rilievi da preventivare') && schermoRilievi.includes('Aperti'));
   ok('il pallino conta i rilievi che aspettano un preventivo',
     await pagU.textContent('#pallino-preventivi') === '1');
   // L'ufficio non scrive in rilievi/ nemmeno per segnare che ha guardato: il
@@ -3168,6 +3168,41 @@ try {
   ok('riaccettarlo non lo mette in lavagna una seconda volta',
     await pagU.evaluate(() => LAVAGNA.lavori.length) === lavoriPrima + 1);
 
+  // ── APERTI, INVIATI, CONFERMATI, RIFIUTATI ──
+  // Quattro mucchi, come si teneva sulla scrivania. Il mucchio è lo stato scritto
+  // nel file, non una cartella: spostare file su Drive che sincronizza è il modo
+  // migliore per ritrovarsene due copie.
+  const gruppi = await pagU.evaluate(async () => {
+    const giorno = 86400000;
+    const fai = (id, campi) => ({ ...costruisciPreventivo({ id, revisione: 1, cliente: { nome: 'Cliente ' + id },
+      righe: [], mezze: 1 }, null), ...campi });
+    const docs = [
+      fai('g-bozza', {}),
+      fai('g-mandato', { stato: 'mandato', mandato: new Date(Date.now() - 5 * giorno).toISOString() }),
+      fai('g-vecchio', { stato: 'mandato', mandato: new Date(Date.now() - 45 * giorno).toISOString() }),
+      fai('g-si', { stato: 'accettato' }),
+      fai('g-no', { stato: 'rifiutato', rifiutato: new Date().toISOString() }),
+    ];
+    return { gruppi: docs.map(d => d.id + '=' + gruppoPreventivo(d)).join(' '),
+      scaduto: preventivoScaduto(docs[2]), fresco: preventivoScaduto(docs[1]) };
+  });
+  ok('ogni preventivo sta nel suo mucchio',
+    gruppi.gruppi === 'g-bozza=aperti g-mandato=inviati g-vecchio=rifiutati g-si=confermati g-no=rifiutati',
+    gruppi.gruppi);
+  // Scaduto non è rifiutato: il cliente non ha detto niente. Sta coi rifiutati
+  // perché non è più da aspettare, ma resta scritto così.
+  ok('uno mandato da più giorni della validità passa fra i rifiutati come scaduto',
+    gruppi.scaduto === true && gruppi.fresco === false);
+  ok('e i giorni si cambiano in Impostazioni, anche per quelli già mandati',
+    await pagU.evaluate(() => {
+      const d = { stato: 'mandato', mandato: new Date(Date.now() - 45 * 86400000).toISOString() };
+      const tenuta = IMPOSTAZIONI.validita;
+      IMPOSTAZIONI.validita = '60';
+      const ancoraInviato = gruppoPreventivo(d) === 'inviati';
+      IMPOSTAZIONI.validita = tenuta;
+      return ancoraInviato;
+    }));
+
   // ── SOLUZIONI ALTERNATIVE, SEZIONI, E I CONTI CHE AIUTANO ──
   // «Siepe nuda o con telo e porfido»: due varianti dello stesso lavoro, ognuna
   // col suo totale, che si escludono a vicenda. Un preventivo che le sommasse
@@ -3349,6 +3384,110 @@ try {
     attese.ieri === 'da ieri' && attese.settimana === 'da 7 giorni' && attese.oggi === 'oggi',
     JSON.stringify(attese));
   ok('e una data illeggibile non diventa «da NaN giorni»', attese.rotta === '', attese.rotta);
+  // Il no del cliente si scrive con la sua data, e il preventivo passa fra i
+  // rifiutati. Se richiama, si accetta lo stesso.
+  const rifiutato = await pagU.evaluate(async () => {
+    const id = PREVENTIVI[0].doc.id;
+    apriPreventivo(id);
+    const tenuto = { stato: PREVENTIVO.doc.stato, scelta: PREVENTIVO.doc.scelta };
+    PREVENTIVO.doc.stato = 'mandato';
+    PREVENTIVO.doc.mandato = new Date().toISOString();
+    await rifiutaPreventivo();
+    const letto = PREVENTIVI.find(p => p.doc.id === id).doc;
+    scegliGruppoPreventivi('rifiutati');
+    const html = document.getElementById('pagina-preventivi').innerHTML;
+    // si rimette com'era, per le prove che seguono
+    apriPreventivo(id);
+    Object.assign(PREVENTIVO.doc, tenuto);
+    await salvaPreventivo();
+    scegliGruppoPreventivi('aperti');
+    return { stato: letto.stato, data: !!letto.rifiutato, html };
+  });
+  ok('«ha detto no» lo segna rifiutato, con la data, e lo sposta fra i rifiutati',
+    rifiutato.stato === 'rifiutato' && rifiutato.data && rifiutato.html.includes('rifiutato il'),
+    JSON.stringify({ ...rifiutato, html: rifiutato.html.slice(0, 80) }));
+
+  // Per mail come il conto: si segna mandato **prima** di aprire la posta, e se
+  // non si riesce a segnarlo la posta non si apre.
+  const perMail = await pagU.evaluate(async () => {
+    const id = PREVENTIVI[0].doc.id;
+    apriPreventivo(id);
+    const tenuto = { stato: PREVENTIVO.doc.stato, mandato: PREVENTIVO.doc.mandato };
+    let aperta = '';
+    const vera = window.apriPosta;
+    window.apriPosta = u => { aperta = u; };
+    PREVENTIVO.doc.stato = 'bozza';
+    PREVENTIVO.doc.cliente.email = 'cliente@esempio.it';
+    await inviaPreventivo();
+    const dopo = { stato: PREVENTIVO.doc.stato, mandato: !!PREVENTIVO.doc.mandato };
+    // e se il salvataggio fallisce, la posta resta chiusa
+    aperta = aperta || '';
+    const primaApertura = aperta;
+    aperta = '';
+    const veraScrivi = window.scriviTesto;
+    window.scriviTesto = async () => { throw new Error('Drive non risponde'); };
+    PREVENTIVO.doc.stato = 'bozza';
+    await inviaPreventivo();
+    const statoDopoFallito = PREVENTIVO.doc.stato;
+    window.scriviTesto = veraScrivi;
+    window.apriPosta = vera;
+    Object.assign(PREVENTIVO.doc, tenuto);
+    await salvaPreventivo();
+    return { primaApertura, dopo, apertaDopoFallito: aperta, statoDopoFallito };
+  });
+  ok('«Manda per mail» apre la posta col destinatario e il preventivo già scritto',
+    perMail.primaApertura.startsWith('mailto:cliente%40esempio.it') &&
+    decodeURIComponent(perMail.primaApertura).includes('migliore offerta'),
+    perMail.primaApertura.slice(0, 90));
+  ok('e lo segna mandato', perMail.dopo.stato === 'mandato' && perMail.dopo.mandato);
+  ok('se non si riesce a segnarlo, la posta non si apre e lo stato non cambia',
+    perMail.apertaDopoFallito === '' && perMail.statoDopoFallito === 'bozza',
+    JSON.stringify(perMail));
+  // Con le alternative, la mail le dice a parole come il foglio.
+  ok('nel testo della mail le soluzioni sono dette alternative, e non si sommano',
+    await pagU.evaluate(() => {
+      const d = PREVENTIVI.find(p => (p.doc.soluzioni || []).length)?.doc;
+      if (!d) return false;
+      const t = testoPreventivo(d);
+      return t.includes('alternative fra loro') && !t.includes('TOTALE PREVENTIVO');
+    }));
+
+  // Dal rilievo arrivano telefono e mail: chi non c'è si aggiunge con un clic, a
+  // chi c'è si riempie solo quello che manca.
+  const anagrafe = await pagU.evaluate(async () => {
+    const tenuti = CLIENTI.map(c => ({ ...c }));
+    const d = { cliente: { nome: 'Anna Nuova', citta: 'Lavis', telefono: '333 1234567', email: 'anna@esempio.it' } };
+    const primaNuovo = cosaPortaInAnagrafica(d);
+    CLIENTI.push(sistemaCliente({ nome: 'Anna Nuova', telefono: '0461 999999' }));
+    const giaNota = cosaPortaInAnagrafica(d);
+    CLIENTI = tenuti;
+    return { primaNuovo, giaNota };
+  });
+  ok('chi non è in anagrafica si propone di aggiungerlo', anagrafe.primaNuovo?.nuovo === true,
+    JSON.stringify(anagrafe.primaNuovo));
+  ok('a chi c\'è si porta solo quello che manca, senza toccare il numero già scritto',
+    anagrafe.giaNota && !anagrafe.giaNota.nuovo && anagrafe.giaNota.campi.includes('mail') &&
+    !anagrafe.giaNota.campi.includes('telefono'), JSON.stringify(anagrafe.giaNota));
+  // Con due alternative la somma di tutte le righe è la cifra che non esiste: è
+  // quella che l'avviso dopo il salvataggio mostrava.
+  const avvisoSalvato = await pagU.evaluate(async () => {
+    const p = PREVENTIVI.find(x => (x.doc.soluzioni || []).length);
+    apriPreventivo(p.doc.id);
+    const tenute = JSON.parse(JSON.stringify({ s: PREVENTIVO.doc.soluzioni, r: PREVENTIVO.doc.righe }));
+    PREVENTIVO.doc.soluzioni = [{ id: 'x1', nome: 'Una' }, { id: 'x2', nome: 'Altra' }];
+    PREVENTIVO.doc.righe = [
+      { descrizione: 'a', quantita: 1, prezzo: 100, tipo: 'totale', soluzione: 'x1' },
+      { descrizione: 'b', quantita: 1, prezzo: 300, tipo: 'totale', soluzione: 'x2' }];
+    await salvaPreventivo();
+    const testo = document.getElementById('avviso').textContent;
+    PREVENTIVO.doc.soluzioni = tenute.s;
+    PREVENTIVO.doc.righe = tenute.r;
+    await salvaPreventivo();
+    return testo;
+  });
+  ok('l\'avviso dopo il salvataggio dice la forchetta, non la somma delle alternative',
+    avvisoSalvato.includes('da 100,00') && avvisoSalvato.includes('300,00') && !avvisoSalvato.includes('400,00'),
+    avvisoSalvato);
 
   ok('nessun errore JavaScript nell\'app dell\'ufficio', erroriU.length === 0, erroriU.join(' | '));
   await ctxU.close();
