@@ -25,6 +25,14 @@ deve tornare a dipendere dalla rete per salvare o leggere. L'unica cosa che
 ancora esce verso l'esterno è la ricerca degli indirizzi (Nominatim), che può
 fallire senza conseguenze.
 
+**Niente fotografie nel database.** Sarebbe la cosa più utile da aggiungere a un
+rilievo — una foto della siepe risponde a quello che in ufficio non si può più
+chiedere — ma `salvaDB()` ricopia tutto il database in `localStorage` come seconda
+copia, e lì ci stanno circa 5 MB: due foto e ogni salvataggio comincia a fallire.
+Chi le vuole le tenga **fuori** dal database mirrorato e fuori dal backup, in un
+archivio suo da cui partono e poi si scartano. Non è un dettaglio da scoprire a
+cose fatte.
+
 **Il backup è l'unica rete di sicurezza.** Se l'unica copia dei dati sparisce
 con il telefono, sono persi. Ogni cosa che tocca i dati deve tenerne conto: un
 salvataggio fallito va detto a chiaro schermo, non messo in console; una
@@ -216,11 +224,13 @@ quel concime nel frattempo è stato cancellato.
 essere un rapportino, o venire da una versione futura. In quest'ultimo caso si
 ferma e lo dice, invece di archiviare un documento monco in silenzio.
 
-I documenti sono tre. Il **rapportino** racconta un lavoro finito; l'**appuntamento**
-è una prenotazione fatta dal cantiere, col cliente davanti. Sono cose diverse e in
-ufficio le guardano due schermate diverse, quindi viaggiano separate e finiscono in
-due cartelle: `rapportini/` e `appuntamenti/`. Il terzo è l'**agenda**, e va
-nell'altro verso: la scrive l'ufficio e la legge il telefono.
+I documenti sono quattro. Il **rapportino** racconta un lavoro finito;
+l'**appuntamento** è una prenotazione fatta dal cantiere, col cliente davanti; il
+**rilievo** è il taccuino di un preventivo, preso in giardino prima che il lavoro
+esista. Sono cose diverse e in ufficio le guardano tre schermate diverse, quindi
+viaggiano separate e finiscono in tre cartelle: `rapportini/`, `appuntamenti/` e
+`rilievi/`. Il quarto è l'**agenda**, e va nell'altro verso: la scrive l'ufficio e
+la legge il telefono.
 
 **L'agenda porta quattro campi e non uno di più**: giorno, mezza giornata, cliente,
 note. Non è economia di formato, è la ragione per cui esiste così: è l'unico
@@ -266,7 +276,10 @@ script: veniva respinta, e i rapportini dietro non partivano più. Un lavoro fat
 non può restare sul telefono per colpa di un altro documento.
 
 Il banner della coda dice **di che documento** si tratta: chiamare «rapportino»
-una prenotazione ferma manda a cercare nel posto sbagliato.
+una prenotazione o un rilievo fermi manda a cercare nel posto sbagliato. I nomi
+stanno in `NOMI_DOCUMENTO`, in un posto solo, e un tipo che non c'è dentro si
+chiama «rapportino» — quindi chi aggiunge un documento aggiunge anche la sua riga
+lì.
 
 E l'errore si legge **accanto al documento che non è partito**, non solo sul banner
 in home: chi cerca una prenotazione ferma sta sulla pagina Appuntamenti, e «da
@@ -286,6 +299,48 @@ trappola del vecchio foglio — e un servizio può rispondere JSON valido che no
 conferma nulla. Silenzio non vuol dire consegnato: si accetta solo
 `status: "ok"`. E la richiesta va mandata **senza intestazione Content-Type**,
 o scatta il controllo preventivo CORS che Apps Script non sa gestire.
+
+## Il rilievo: un preventivo è un conto che si fa prima
+
+**Il rapportino racconta un lavoro finito, il rilievo un lavoro da fare.** Tutti e
+due dicono *cosa* e *quanto* e lasciano all'ufficio *quanto vale*: è la stessa
+divisione, ed è il motivo per cui su un rilievo **non c'è un prezzo**. Chi ne
+rimette uno qui rimette anche il problema di tenere allineati due listini.
+
+Le righe hanno la forma di quelle del conto — voce, descrizione, quantità, unità —
+e la **descrizione** nasce dal nome della voce ma si corregge: su un preventivo
+quella riga la legge un cliente, e «Piante» da solo non si capisce.
+
+**Le mezze giornate si contano a mano**, come sulla lavagna, e sono una per
+rilievo e non una per riga: è così che si stima qui, ed è anche la larghezza che
+il cartellino avrà quando il preventivo è accettato. Lo stesso fatto misurato una
+volta sola. Per questo `ORE_MEZZA` sta in `rapportino.js` e non in una delle due
+app: due idee diverse di quanto dura una mezza giornata sarebbero peggio di
+nessuna.
+
+**La manodopera non è fra le voci da aggiungere.** La dicono già le mezze
+giornate. Metterla anche lì vorrebbe dire preventivarla due volte — è la stessa
+ragione per cui potature e taglio prato non hanno una voce collegata.
+
+**I quattro tipi di preventivo viaggiano col documento** (`TIPI_RILIEVO`), perché
+due di loro — prato in rotoli e impianto di irrigazione — aspettano un numero che
+esce dal CAD, e sono **incompleti per costruzione**. Il pannello lo dice mentre si
+compila e l'ufficio lo ripete nell'elenco: senza, un rilievo si apre credendolo
+finito.
+
+Le note sono quello che si vede **solo stando lì** — accesso, dove resta il
+camion, il rubinetto, la pendenza. Sono anche la cosa che non si può più chiedere
+dopo, e quella che l'anagrafica non sa.
+
+In ufficio la pagina Rilievi **legge e non tocca**: un file, un solo autore, come
+`rapportini/`. Dice anche chi non è in anagrafica, perché telefono e mail — quello
+che serve per richiamare e mandare il preventivo — stanno solo lì.
+
+**Il preventivo vero non si scrive ancora.** Prezzare quelle righe vuol dire
+decidere il margine fra il costo che esce dal listino e il prezzo che va al
+cliente, e quella è una decisione di chi firma, non un calcolo: vedi
+`ufficio/PREVENTIVI.md`. La pagina lo dice invece di lasciar credere che manchi un
+bottone.
 
 ## L'app dell'ufficio
 
@@ -328,8 +383,10 @@ dice a chiaro schermo, non in console.
 
 **Un file illeggibile si vede.** Drive a metà sincronizzazione lascia file
 troncati, e nella cartella può finirci dentro qualcosa che non è un rapportino:
-`leggiRapportino()` e `leggiLavoro()` si fermano, e l'elenco in arrivo dice quali e
-perché. Un rapportino che non si riesce a leggere è lavoro fatto che rischia di non
+`leggiRapportino()`, `leggiLavoro()` e `leggiRilievo()` si fermano, e l'avviso lo
+scrive `bloccoIlleggibili()` — in un posto solo, e **su tutte le pagine che leggono
+dalla cartella**, non solo su quella da cui si entra: un rilievo troncato lo cerca
+chi sta sulla pagina Rilievi. Un rapportino che non si riesce a leggere è lavoro fatto che rischia di non
 essere fatturato, e non può stare nascosto in una console.
 
 ## La lavagna non è un calendario

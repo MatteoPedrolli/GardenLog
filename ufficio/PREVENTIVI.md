@@ -256,6 +256,56 @@ parte in forma digitale. È l'unico punto in cui il sistema deve aggiungere
 qualcosa che prima non c'era, quindi deve costare un clic: un preventivo accettato
 entra in «Da pianificare» sulla lavagna, ed è il motivo per cui lo stato serve.
 
+## Cosa è già costruito: il rilievo
+
+La prima metà esiste, ed è quella che si fa in giardino. Il **rilievo** è un
+documento come il rapportino, viaggia nella stessa coda e finisce in `rilievi/`;
+l'ufficio lo legge in una pagina sua. Quello che porta: il cliente, quale dei
+quattro tipi è, le mezze giornate stimate a mano, le righe misurate con
+descrizione, quantità e unità, e le note di quello che si vede solo stando lì.
+
+**Non porta prezzi**, per la stessa ragione per cui non li porta il rapportino: il
+listino sta in ufficio, in un posto solo. Il campo dice *cosa* e *quanto*, la cosa
+che solo lui sa.
+
+Tre cose decise lì che vale la pena non rifare:
+
+- **le mezze giornate sono una per rilievo, non una per riga.** È così che si
+  stima qui, ed è anche la larghezza che il cartellino avrà sulla lavagna: lo
+  stesso fatto misurato una volta sola. `ORE_MEZZA` è passata in `rapportino.js`
+  perché ora la usano entrambe le app;
+- **la manodopera non è una riga da aggiungere**: la dicono già le mezze giornate,
+  e metterla anche lì vorrebbe dire preventivarla due volte;
+- **i due tipi che hanno bisogno del disegno lo dichiarano.** Prato in rotoli e
+  irrigazione sono incompleti per costruzione: il pannello lo dice mentre si
+  compila e l'ufficio lo ripete nell'elenco, o un rilievo si apre credendolo
+  finito.
+
+**Niente fotografie, e non per dimenticanza.** Sarebbero la cosa più utile da
+aggiungere — una foto risponde a quello che alla segretaria si chiedeva a voce —
+ma il telefono ricopia tutto il suo database in `localStorage` come seconda copia,
+e lì ci stanno circa 5 MB: due foto e ogni salvataggio comincia a fallire. Chi le
+vuole deve tenerle **fuori** dal database mirrorato e fuori dal backup, in un
+archivio suo da cui partono e poi si scartano. È un lavoro a sé, non un campo in
+più.
+
+### Cosa manca, e cos'è che lo blocca
+
+Dal rilievo al preventivo manca il pezzo che costa: prezzare le righe. Il listino
+sa già farlo per il conto, quindi l'aritmetica c'è. Quello che non c'è è la
+**regola del margine** fra il costo che esce dal listino e il prezzo che va al
+cliente — e senza quella, un preventivo generato sarebbe un numero inventato.
+
+Poi, nell'ordine in cui conviene farli:
+
+1. **il margine** (vedi sopra): la risposta decide se il preventivo si genera o si
+   scrive assistiti;
+2. **i tre tipi di riga** — nel totale, alternativa, a tariffa — che sono la forma
+   vera del documento;
+3. **la stampa**, che è il `@media print` che già esiste per il conto;
+4. **l'accettazione**: un clic che porta il lavoro in «Da pianificare» sulla
+   lavagna, largo le mezze giornate del rilievo.
+
 ## Domande ancora aperte
 
 - **Il margine fra costo e prezzo**: regola o giudizio. Vedi sopra — è la
