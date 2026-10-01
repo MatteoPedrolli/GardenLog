@@ -2671,12 +2671,62 @@ try {
     spostato && spostato.giorno);
   // Il vincolo che conta: quello che non parte non si può leggere per strada.
   // L'ora detta al cliente sì: è arrivata dopo, ed è la cosa che in giardino serve
-  // di più. La stima delle ore di lavoro no.
+  // di più. La stima delle ore di lavoro no. E un sì/no e un codice per dire se è
+  // un sopralluogo, che non dicono niente di nessuno.
   ok('niente indirizzi, ore, requisiti o prezzi nell\'agenda',
     agenda.appuntamenti.length > 0 &&
-    agenda.appuntamenti.every(a => Object.keys(a).sort().join(',') === 'cliente,giorno,mezza,note,ora') &&
+    agenda.appuntamenti.every(a => Object.keys(a).sort().join(',') === 'cliente,giorno,id,mezza,note,ora,sopralluogo') &&
     !agendaScritta.includes('Tigli') && !agendaScritta.includes('piattaforma'),
     Object.keys(agenda.appuntamenti[0] || {}).join(','));
+
+  // ── I SOPRALLUOGHI: DALLA LAVAGNA AL RILIEVO ──
+  // L'ufficio mette un sopralluogo con via e telefono; in giardino servono —
+  // dove andare, chi chiamare — ma sono dati di persone vere, e l'agenda si legge
+  // con l'indirizzo e basta. Quindi viaggiano in un file a parte, che lo script
+  // consegna solo con la chiave.
+  const conSopralluogo = await pagU.evaluate(async () => {
+    LAVAGNA.lavori.push(sistemaLavoro({ id: 'sop-1', cliente: 'Anna Verdi', luogo: 'Lavis',
+      via: 'Via delle Rose 3', telefono: '333 9876543', email: 'anna@esempio.it',
+      note: 'vuole una siepe sul confine', sopralluogo: true, stato: 'matita',
+      giorno: window.GIORNI.dopo, mezza: 'mattina' }));
+    LAVAGNA.lavori.push(sistemaLavoro({ id: 'sop-coda', cliente: 'Ancora in coda', via: 'Via X 1',
+      telefono: '000', sopralluogo: true, stato: 'lista' }));
+    await salvaLavagna();
+    let sop = '{}';
+    try { sop = await leggiTesto(window.RADICE, 'sopralluoghi.json'); } catch (e) { sop = '{"mancante":true}'; }
+    return { agenda: await window.leggiAgendaScritta(), sop };
+  });
+  ok('salvando la lavagna si scrive anche il file dei sopralluoghi',
+    !conSopralluogo.sop.includes('mancante'), conSopralluogo.sop.slice(0, 80));
+  // Il vincolo che conta: via e telefono non escono per la strada senza chiave.
+  ok('via, telefono e mail di un sopralluogo non finiscono nell\'agenda',
+    !conSopralluogo.agenda.includes('Via delle Rose') && !conSopralluogo.agenda.includes('333 9876543') &&
+    !conSopralluogo.agenda.includes('anna@esempio.it'));
+  ok('ma l\'agenda dice che è un sopralluogo, e quale',
+    JSON.parse(conSopralluogo.agenda).appuntamenti.some(a => a.sopralluogo && a.id === 'sop-1'));
+  const sopScritti = JSON.parse(conSopralluogo.sop);
+  ok('il file dei sopralluoghi porta via, paese, telefono e mail',
+    sopScritti.sopralluoghi?.some(x => x.id === 'sop-1' && x.via === 'Via delle Rose 3' &&
+      x.paese === 'Lavis' && x.telefono === '333 9876543'), JSON.stringify(sopScritti.sopralluoghi));
+  // Uno ancora in coda non ha un momento suo: la stessa regola dell'agenda.
+  ok('e solo quelli piazzati su un giorno, non quelli ancora in coda',
+    !conSopralluogo.sop.includes('Ancora in coda'));
+  ok('i lavori normali nel file dei sopralluoghi non ci sono',
+    sopScritti.sopralluoghi?.every(x => x.id.startsWith('sop')));
+  // Nel modulo i contatti compaiono solo per un sopralluogo: su un lavoro
+  // normale sarebbero tre caselle vuote in più.
+  const moduloContatti = await pagU.evaluate(() => {
+    vaiA('lavagna');
+    apriModuloLavoro();
+    const prima = document.getElementById('n-contatti').style.display;
+    document.getElementById('n-sopralluogo').checked = true;
+    mostraContattiSopralluogo();
+    const dopo = document.getElementById('n-contatti').style.display;
+    chiudiModuloLavoro();
+    return { prima, dopo };
+  });
+  ok('nel modulo i contatti compaiono solo spuntando «sopralluogo»',
+    moduloContatti.prima === 'none' && moduloContatti.dopo === 'block', JSON.stringify(moduloContatti));
 
   // E ora il giro completo: quel file esatto, letto dall'app del cantiere. Se le
   // due app non si capiscono si vede qui, come per il rapportino.
@@ -2700,6 +2750,90 @@ try {
     scaricata.schermo.includes('Pomeriggio') &&
     scaricata.schermo.includes('chiedere della chiave del cancello'),
     scaricata.atteso + ' | ' + scaricata.schermo.slice(0, 160));
+
+  // ── IL TELEFONO LEGGE I SOPRALLUOGHI ──
+  // Con la chiave arrivano completi; senza, si vedono lo stesso dall'agenda col
+  // solo nome, e la pagina dice cosa manca.
+  let chiaviRicevute = [];
+  // Il telefono prende l'agenda nuova, quella col sopralluogo; e la consegna del
+  // rilievo che nasce qui va intercettata, o partirebbe verso la rete vera.
+  agendaDalServizio = conSopralluogo.agenda;
+  await page.evaluate(() => scaricaAgenda());
+  await ctx.route(CONSEGNA, r => r.fulfill({ status: 200, contentType: 'application/json',
+    body: JSON.stringify({ status: 'ok' }) }));
+  await ctx.route(CONSEGNA + '?documento=sopralluoghi*', r => {
+    const chiave = new URL(r.request().url()).searchParams.get('chiave') || '';
+    chiaviRicevute.push(chiave);
+    return r.fulfill({ status: 200, contentType: 'application/json',
+      body: chiave === 'giusta' ? conSopralluogo.sop
+        : JSON.stringify({ status: 'error', msg: 'chiave sbagliata' }) });
+  });
+  const senzaChiave = await page.evaluate(async () => {
+    DB.impostazioni.ChiaveLettura = '';
+    DB.sopralluoghi = null;
+    const esito = await scaricaSopralluoghi();
+    navTo('rilievi');
+    return { esito, html: document.getElementById('sopralluoghi-list').innerHTML };
+  });
+  // Una richiesta che si sa già rifiutata è solo un errore in più da leggere.
+  ok('senza chiave i sopralluoghi non si chiedono nemmeno', senzaChiave.esito === false &&
+    chiaviRicevute.length === 0, String(chiaviRicevute.length));
+  ok('ma si vedono lo stesso, dall\'agenda, col solo nome',
+    senzaChiave.html.includes('Anna Verdi') && !senzaChiave.html.includes('Via delle Rose'),
+    senzaChiave.html.slice(0, 160));
+  ok('e la pagina dice che via e telefono arrivano con la chiave',
+    senzaChiave.html.includes('chiave'));
+  const chiaveSbagliata = await page.evaluate(async () => {
+    DB.impostazioni.ChiaveLettura = 'sbagliata';
+    await scaricaSopralluoghi();
+    return document.getElementById('sopralluoghi-list').innerHTML;
+  });
+  // Una chiave sbagliata non deve sembrare «nessun sopralluogo».
+  ok('una chiave sbagliata si legge sulla pagina, non sembra un elenco vuoto',
+    chiaveSbagliata.includes('chiave sbagliata') && chiaveSbagliata.includes('Anna Verdi'),
+    chiaveSbagliata.slice(0, 160));
+  const conChiave = await page.evaluate(async () => {
+    DB.impostazioni.ChiaveLettura = 'giusta';
+    const esito = await scaricaSopralluoghi();
+    return { esito, html: document.getElementById('sopralluoghi-list').innerHTML };
+  });
+  ok('con la chiave giusta arrivano via e telefono',
+    conChiave.esito === true && conChiave.html.includes('Via delle Rose 3') &&
+    conChiave.html.includes('tel:3339876543'), conChiave.html.slice(0, 200));
+  ok('e restano per quando il campo manca',
+    await page.evaluate(() => normalizzaDB(JSON.parse(JSON.stringify(DB))).sopralluoghi?.sopralluoghi.length) === 1);
+
+  // Al tocco si apre il rilievo con l'anagrafica già scritta, da correggere
+  // invece che da ribattere col cliente davanti.
+  const precompilato = await page.evaluate(() => {
+    apriRilievo('sop-1');
+    const a = anagraficaRilievo();
+    return { a, sop: document.getElementById('f-ril-sopralluogo').value,
+      da: document.getElementById('f-ril-da').textContent };
+  });
+  ok('il rilievo del sopralluogo nasce con nome, via, paese, telefono e mail',
+    precompilato.a.Cliente === 'Anna Verdi' && precompilato.a.Indirizzo === 'Via delle Rose 3' &&
+    precompilato.a.Citta === 'Lavis' && precompilato.a.Telefono === '333 9876543' &&
+    precompilato.a.Email === 'anna@esempio.it', JSON.stringify(precompilato.a));
+  ok('e dice da quale sopralluogo arriva, con le note dell\'ufficio',
+    precompilato.da.includes('Dal sopralluogo') && precompilato.da.includes('siepe sul confine'));
+  const fattoDaSop = await page.evaluate(async () => {
+    aggiungiRigaRilievo('piante');
+    righeRilievo[0].Quantita = 40;
+    await salvaRilievo();
+    const r = DB.rilievi[DB.rilievi.length - 1];
+    const doc = costruisciRilievo({ rilievo: r, cliente: null, voci: DB.voci });
+    renderSopralluoghi();
+    return { sop: doc.sopralluogo, html: document.getElementById('sopralluoghi-list').innerHTML };
+  });
+  ok('il rilievo porta con sé il filo del sopralluogo', fattoDaSop.sop === 'sop-1');
+  ok('e il sopralluogo sulla pagina si segna fatto', fattoDaSop.html.includes('Rilievo mandato'));
+  await page.waitForTimeout(400);
+  // La chiave si toglie — anche dal salvato: una ricarica più avanti nel giro la
+  // ritroverebbe, e chiederebbe i sopralluoghi a un indirizzo che non c'è più.
+  await page.evaluate(async () => { DB.impostazioni.ChiaveLettura = ''; await salvaDB({ conta: false }); });
+  await ctx.unroute(CONSEGNA + '?documento=sopralluoghi*');
+  await ctx.unroute(CONSEGNA);
 
   // In giardino il campo spesso non c'è, ed è lì che l'agenda serve.
   await ctx.setOffline(true);
@@ -3218,6 +3352,58 @@ try {
 
   ok('nessun errore JavaScript nell\'app dell\'ufficio', erroriU.length === 0, erroriU.join(' | '));
   await ctxU.close();
+
+  // ── LO SCRIPT: I SOPRALLUOGHI SOLO CON LA CHIAVE ──
+  // Lo script gira su Google e non qui, ma la sua regola più delicata si prova
+  // lo stesso, con dei servizi finti: via e telefono non escono senza chiave, e
+  // se la chiave sullo script non c'è non escono a nessuno.
+  {
+    const { readFileSync } = await import('node:fs');
+    const vm = await import('node:vm');
+    const sorgente = readFileSync(resolve(RADICE, 'ufficio/ricevi-rapportini.gs'), 'utf8');
+    const provaScript = proprieta => {
+      const file = { 'agenda.json': '{"tipo":"agenda"}', 'sopralluoghi.json': '{"tipo":"sopralluoghi","telefono":"333"}' };
+      const cartella = {
+        getFoldersByName: () => ({ hasNext: () => true, next: () => cartella }),
+        getFilesByName: n => {
+          let dato = false;
+          return { hasNext: () => !dato && n in file,
+            next: () => { dato = true; return { getBlob: () => ({ getDataAsString: () => file[n] }) }; } };
+        },
+      };
+      const c = {
+        DriveApp: { getRootFolder: () => cartella },
+        PropertiesService: { getScriptProperties: () => ({ getProperty: k => proprieta[k] || null }) },
+        ContentService: {
+          MimeType: { JSON: 'json' },
+          createTextOutput: t => ({ testo: t, setMimeType() { return this; } }),
+        },
+      };
+      vm.createContext(c);
+      vm.runInContext(sorgente, c);
+      return parametri => c.doGet({ parameter: parametri }).testo;
+    };
+    const senzaChiaveSulloScript = provaScript({});
+    const conChiave = provaScript({ CHIAVE_LETTURA: 'segreta' });
+    ok('lo script senza chiave impostata non consegna i sopralluoghi a nessuno',
+      !senzaChiaveSulloScript({ documento: 'sopralluoghi', chiave: '' }).includes('333') &&
+      !senzaChiaveSulloScript({ documento: 'sopralluoghi', chiave: 'qualunque' }).includes('333'),
+      senzaChiaveSulloScript({ documento: 'sopralluoghi' }));
+    ok('con la chiave impostata, una chiave sbagliata o mancante non passa',
+      !conChiave({ documento: 'sopralluoghi', chiave: 'altra' }).includes('333') &&
+      !conChiave({ documento: 'sopralluoghi' }).includes('333') &&
+      conChiave({ documento: 'sopralluoghi', chiave: 'altra' }).includes('chiave sbagliata'));
+    ok('e quella giusta sì', conChiave({ documento: 'sopralluoghi', chiave: 'segreta' }).includes('333'));
+    ok('l\'agenda resta leggibile senza chiave, come prima',
+      senzaChiaveSulloScript({ documento: 'agenda' }).includes('"tipo":"agenda"'));
+    // Il nome del file non si prende mai da chi chiama.
+    ok('un nome di file qualunque non si legge, chiave o no',
+      conChiave({ documento: 'listino', chiave: 'segreta' }).includes('non leggibile'));
+    const stato = JSON.parse(conChiave({}));
+    ok('la risposta di controllo dice se la chiave c\'è, mai quale sia',
+      stato.chiave === 'impostata' && !JSON.stringify(stato).includes('segreta') &&
+      JSON.parse(senzaChiaveSulloScript({})).chiave === 'manca', JSON.stringify(stato));
+  }
 
   // ── bilancio ──
   ok('nessun errore JavaScript in tutto il giro', erroriJS.length === 0, erroriJS.join(' | '));

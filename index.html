@@ -706,6 +706,9 @@ select.form-control { background-image: url("data:image/svg+xml,%3Csvg xmlns='ht
 
     <!-- RILIEVI PER I PREVENTIVI -->
     <div id="page-rilievi" class="page">
+      <div class="section-title">Sopralluoghi in programma</div>
+      <div id="sopralluoghi-list"></div>
+
       <div class="section-title">Nuovo rilievo</div>
       <div class="card" style="padding:14px">
         <div class="dati-nota">Il taccuino del preventivo: quello che si vede stando lì, scritto
@@ -742,6 +745,14 @@ select.form-control { background-image: url("data:image/svg+xml,%3Csvg xmlns='ht
           <label class="form-label">Come firmarti</label>
           <input type="text" class="form-control" id="f-imp-firma"
                  oninput="salvaImpostazione('NomeMittente', this.value)">
+        </div>
+        <div class="form-group">
+          <label class="form-label">Chiave dei sopralluoghi</label>
+          <input type="text" class="form-control" id="f-imp-chiave" autocapitalize="off" autocomplete="off"
+                 spellcheck="false" oninput="salvaImpostazione('ChiaveLettura', this.value.trim())">
+          <div class="dati-nota" style="margin:4px 0 0">La stessa scritta nello script, in
+            CHIAVE_LETTURA. Senza, i sopralluoghi arrivano col solo nome: via e telefono
+            non escono dallo script a chi ha solo l'indirizzo.</div>
         </div>
       </div>
 
@@ -1145,7 +1156,7 @@ const VERSIONE_DATI = 13;
 // Le impostazioni stanno dentro DB, non in META, perché così finiscono nel
 // backup: un indirizzo da riscrivere dopo aver cambiato telefono è una seccatura
 // piccola, ma è la stessa categoria di dato che il backup deve salvare.
-const IMPOSTAZIONI_DEFAULT = { UrlRapportini: '', NomeMittente: '' };
+const IMPOSTAZIONI_DEFAULT = { UrlRapportini: '', NomeMittente: '', ChiaveLettura: '' };
 
 const COLLEZIONI = ['clienti', 'visite', 'operazioni', 'concimi', 'sementi', 'fitofarmaci', 'fasce', 'tipiOperazione', 'voci', 'coda', 'prenotazioni', 'rilievi'];
 
@@ -1313,6 +1324,10 @@ function normalizzaDB(grezzo) {
   // dire «non ancora scaricata», che è un valore buono: non c'è niente da
   // convertire, quindi non alza VERSIONE_DATI.
   pulito.agenda = grezzo?.agenda && grezzo.agenda.tipo === 'agenda' ? grezzo.agenda : null;
+  // I sopralluoghi scaricati, come l'agenda: una copia di quello che ha deciso
+  // l'ufficio, tenuta per quando il campo manca. Assente vuol dire «non ancora
+  // scaricati», quindi non alza VERSIONE_DATI.
+  pulito.sopralluoghi = grezzo?.sopralluoghi && grezzo.sopralluoghi.tipo === 'sopralluoghi' ? grezzo.sopralluoghi : null;
   pulito.defaultAggiunti = Array.isArray(grezzo?.defaultAggiunti) ? grezzo.defaultAggiunti : [];
   return pulito;
 }
@@ -1459,6 +1474,7 @@ function renderAll() {
   renderVisite();
   renderPrenotazioni();
   renderRilievi();
+  renderSopralluoghi();
   renderAgenda();
 }
 
@@ -1477,6 +1493,7 @@ async function init() {
   avviaOrologioCoda();
   svuotaCoda();
   scaricaAgenda();
+  scaricaSopralluoghi();
   chiediPersistenza();
   registraServiceWorker();
   armaIndietro();
@@ -1515,6 +1532,12 @@ function navTo(page) {
   // ufficio la lavagna cambia qualche volta al giorno, e una richiesta per ogni
   // occhiata sarebbe traffico per niente.
   if (page === 'prossimi' && Date.now() - agendaScaricataA > 300000) scaricaAgenda();
+  // I sopralluoghi si cercano dalla pagina Rilievi, ed è lì che si riaggiornano.
+  if (page === 'rilievi') {
+    renderSopralluoghi();
+    if (Date.now() - agendaScaricataA > 300000) scaricaAgenda().then(renderSopralluoghi);
+    scaricaSopralluoghi();
+  }
 }
 
 // ── TASTO INDIETRO ──
@@ -3147,6 +3170,127 @@ function renderRilievi() {
   }).join('');
 }
 
+// ── I SOPRALLUOGHI CHE ARRIVANO DALL'UFFICIO ──
+// L'ufficio mette un sopralluogo sulla lavagna, e qui si trova già scritto per
+// chi è e dove: al tocco apre il rilievo con l'anagrafica compilata, da
+// correggere invece che da ribattere col cliente davanti.
+//
+// Via, telefono e mail arrivano in un file a parte, che lo script consegna solo
+// con la chiave: sono dati di persone vere, e l'agenda si legge con l'indirizzo
+// e basta. Senza la chiave i sopralluoghi si vedono lo stesso — dall'agenda, col
+// solo nome — e la pagina dice cosa manca invece di far credere che non ci sia.
+let sopralluoghiInCorso = false;
+let sopralluoghiErrore = '';
+
+function indirizzoSopralluoghi() {
+  const url = (DB.impostazioni?.UrlRapportini || '').trim();
+  const chiave = (DB.impostazioni?.ChiaveLettura || '').trim();
+  if (!url || !chiave) return '';
+  return url + (url.includes('?') ? '&' : '?') + 'documento=sopralluoghi&chiave=' + encodeURIComponent(chiave);
+}
+
+async function scaricaSopralluoghi({ avvisa = false } = {}) {
+  if (sopralluoghiInCorso) return false;
+  const url = indirizzoSopralluoghi();
+  // Senza chiave non si chiede niente: lo script direbbe di no, e una richiesta
+  // che si sa già rifiutata è solo un errore in più da leggere.
+  if (!url) { sopralluoghiErrore = ''; return false; }
+  if (!navigator.onLine) return false;
+  sopralluoghiInCorso = true;
+  try {
+    const r = await fetch(url, { cache: 'no-store' });
+    DB.sopralluoghi = leggiSopralluoghi(await r.text());
+    sopralluoghiErrore = '';
+    await salvaDB({ conta: false });
+    renderSopralluoghi();
+    if (avvisa) showToast('📍 Sopralluoghi aggiornati');
+    return true;
+  } catch (e) {
+    // Come l'agenda: quelli scaricati prima restano, vecchi di un giorno sono
+    // un'informazione. Ma l'errore si legge sulla pagina, accanto a loro — una
+    // chiave sbagliata non deve sembrare «nessun sopralluogo».
+    sopralluoghiErrore = e.message || String(e);
+    renderSopralluoghi();
+    if (avvisa) showToast('⚠️ Sopralluoghi non aggiornati: ' + sopralluoghiErrore);
+    return false;
+  } finally {
+    sopralluoghiInCorso = false;
+  }
+}
+
+// I sopralluoghi da mostrare: quelli completi se ci sono, altrimenti quelli che
+// l'agenda segna come sopralluoghi, col solo nome. Da oggi in avanti: uno di
+// ieri è già passato, e il suo rilievo o c'è o non c'è.
+function elencoSopralluoghi() {
+  const oggi = dataISO(new Date());
+  if (DB.sopralluoghi && Array.isArray(DB.sopralluoghi.sopralluoghi)) {
+    return DB.sopralluoghi.sopralluoghi.filter(x => x.giorno >= oggi)
+      .map(x => ({ ...x, completo: true }));
+  }
+  return ((DB.agenda && DB.agenda.appuntamenti) || [])
+    .filter(a => a.sopralluogo && a.id && a.giorno >= oggi)
+    .map(a => ({ id: a.id, giorno: a.giorno, mezza: a.mezza, ora: a.ora, cliente: a.cliente,
+      note: a.note, paese: '', via: '', telefono: '', email: '', completo: false }));
+}
+
+function renderSopralluoghi() {
+  const el = document.getElementById('sopralluoghi-list');
+  if (!el) return;
+  const elenco = elencoSopralluoghi();
+  const chiave = (DB.impostazioni?.ChiaveLettura || '').trim();
+  let html = '';
+  if (sopralluoghiErrore) {
+    html += `<div class="errore-consegna" onclick="scaricaSopralluoghi({ avvisa: true })">
+      <div style="font-weight:600">⚠️ Sopralluoghi non aggiornati: ${perValore(sopralluoghiErrore)}</div>
+      <div style="opacity:0.85; margin-top:2px">Quelli qui sotto sono gli ultimi scaricati · tocca per riprovare</div>
+    </div>`;
+  }
+  if (!elenco.length) {
+    html += `<div class="card" style="padding:14px"><div class="dati-nota">Nessun sopralluogo in
+      programma. Li mette l'ufficio sulla lavagna, su un giorno: arrivano qui da soli.</div></div>`;
+    el.innerHTML = html;
+    return;
+  }
+  html += elenco.map(x => {
+    const fatto = (DB.rilievi || []).some(r => r.SopralluogoID === x.id);
+    const dove = [x.via, x.paese].filter(v => v).join(', ');
+    return `<div class="card" style="padding:12px">
+      <div style="font-size:0.78rem; color:var(--primary); font-weight:600">${perValore(etichettaMezzaGiornata(x.giorno, x.mezza))}${x.ora ? ' · ore ' + perValore(x.ora) : ''}</div>
+      <div style="font-weight:600">${perValore(x.cliente || 'senza nome')}</div>
+      ${dove ? `<div style="font-size:0.85rem; color:var(--text-mid)">📍 ${perValore(dove)}</div>` : ''}
+      ${x.telefono ? `<div style="font-size:0.85rem"><a href="tel:${perValore(x.telefono.replace(/[^\d+]/g, ''))}">📞 ${perValore(x.telefono)}</a></div>` : ''}
+      ${x.note ? `<div style="font-size:0.82rem; color:var(--text-mid); margin-top:4px; white-space:pre-line">${perValore(x.note)}</div>` : ''}
+      <button class="btn ${fatto ? 'btn-secondary' : 'btn-primary'}" style="margin-top:10px"
+              onclick="navTo('rilievi'); apriRilievo('${perOnclick(x.id)}')">${fatto ? '✅ Rilievo mandato · rifallo' : '📐 Prendi le misure'}</button>
+    </div>`;
+  }).join('');
+  // Dire cosa manca, non solo mostrare meno: un sopralluogo col solo nome
+  // sembra uno di cui l'ufficio non sa l'indirizzo.
+  if (!chiave && elenco.some(x => !x.completo)) {
+    html += `<div class="dati-nota" style="margin:0 18px 10px">Via e telefono arrivano solo con la
+      chiave dei sopralluoghi: si imposta in Impostazioni, ed è la stessa scritta nello script.</div>`;
+  }
+  el.innerHTML = html;
+}
+
+// Il rilievo che nasce da un sopralluogo: anagrafica già scritta, e il filo
+// col sopralluogo, così l'ufficio sa da dove arriva.
+function daSopralluogo(id) {
+  const x = elencoSopralluoghi().find(s => s.id === id);
+  if (!x) return;
+  // Prima il cliente del telefono, se c'è con lo stesso nome — per il filo con
+  // l'anagrafica — poi i dati dell'ufficio sopra, che sono i più freschi.
+  const noto = DB.clienti.find(c => (c.Cliente || '').trim().toLowerCase() === (x.cliente || '').trim().toLowerCase());
+  if (noto) scegliClienteRilievo(noto.ClienteID, noto.Cliente);
+  riempiAnagraficaRilievo({ Cliente: x.cliente, Indirizzo: x.via, Citta: x.paese,
+    Telefono: x.telefono, Email: x.email });
+  document.getElementById('f-ril-sopralluogo').value = id;
+  const da = document.getElementById('f-ril-da');
+  da.innerHTML = '📍 Dal sopralluogo di ' + perValore(etichettaMezzaGiornata(x.giorno, x.mezza)) +
+    (x.note ? '<br><span style="color:var(--text-mid)">' + perValore(x.note) + '</span>' : '');
+  da.style.display = 'block';
+}
+
 // ── L'AGENDA CHE ARRIVA DALL'UFFICIO ──
 // L'unico documento che viaggia dall'ufficio al telefono. Si scarica quando c'è
 // rete e si tiene nel DB: in giardino il campo spesso non c'è, ed è lì che serve
@@ -3397,7 +3541,7 @@ function aggiornaAvvisoCoda() {
 function avviaOrologioCoda() {
   // Alla ripresa della rete e ogni due minuti mentre l'app è aperta: abbastanza
   // spesso da non farti aspettare, abbastanza raro da non scaldare il telefono.
-  window.addEventListener('online', () => { svuotaCoda(); scaricaAgenda(); });
+  window.addEventListener('online', () => { svuotaCoda(); scaricaAgenda(); scaricaSopralluoghi(); });
   clearInterval(orologioCoda);
   orologioCoda = setInterval(() => svuotaCoda(), 120000);
 }
@@ -3707,6 +3851,8 @@ function renderDati() {
   if (url) url.value = imp.UrlRapportini || '';
   const firma = document.getElementById('f-imp-firma');
   if (firma) firma.value = imp.NomeMittente || '';
+  const chiave = document.getElementById('f-imp-chiave');
+  if (chiave) chiave.value = imp.ChiaveLettura || '';
   renderArchivi();
   renderDatiDaParte();
   renderDiagnostica();

@@ -636,6 +636,9 @@ const FILE_LAVAGNA = 'lavagna.json';
 // L'agenda che l'ufficio manda in cantiere: la scrive qui, il telefono la legge
 // passando dal servizio. È l'unico file che esce dall'ufficio verso il telefono.
 const FILE_AGENDA = 'agenda.json';
+// I sopralluoghi con via, telefono e mail: lo script li consegna solo con la
+// chiave, ed è per questo che non stanno nell'agenda.
+const FILE_SOPRALLUOGHI = 'sopralluoghi.json';
 const VERSIONE_LAVAGNA = 2;
 const FILE_CLIENTI = 'clienti.json';
 const FILE_ANAGRAFICA = 'anagrafica-dal-telefono.json';
@@ -1085,6 +1088,13 @@ function sistemaLavoro(l) {
     // coda perché in mezzo agli altri non si distingueva, e chi pianifica lo
     // tratta diverso — mezz'ora, spesso col titolare, e da lì nasce un preventivo.
     sopralluogo: !!l.sopralluogo,
+    // Come raggiungere e chiamare chi ha chiesto il sopralluogo. Stanno qui, nella
+    // lavagna che è un file privato dell'ufficio, e partono verso il telefono
+    // solo in sopralluoghi.json — mai nell'agenda, che si legge senza chiave.
+    // Arrivati dopo, senza alzare versioni: un lavoro che non li ha non li ha.
+    via: l.via || '',
+    telefono: l.telefono || '',
+    email: l.email || '',
     stato: l.stato === 'matita' || l.stato === 'confermato' ? l.stato : 'lista',
     // Fatto è un interruttore, non un terzo stato: così togliendo la spunta il
     // lavoro ritrova da sé se era a matita o confermato, senza che nessuno debba
@@ -1137,6 +1147,11 @@ async function salvaAgenda() {
   try {
     await scriviTesto(CARTELLA, FILE_AGENDA,
       JSON.stringify(costruisciAgenda(LAVAGNA.lavori), null, 2));
+    // Insieme all'agenda e per la stessa ragione: chi pianifica sposta un
+    // sopralluogo e passa al successivo, e un file da aggiornare a mano è un file
+    // che in giardino dice il giorno sbagliato.
+    await scriviTesto(CARTELLA, FILE_SOPRALLUOGHI,
+      JSON.stringify(costruisciSopralluoghi(LAVAGNA.lavori), null, 2));
     return true;
   } catch (e) {
     // Non blocca la pianificazione — la lavagna è già salvata — ma non si tace:
@@ -4251,7 +4266,12 @@ function apriModuloLavoro(id) {
   c.innerHTML = '<div class="scheda" style="margin-top:10px">' +
     '<div class="titolo-sezione">' + (l ? 'Correggi il lavoro' : 'Un lavoro nuovo') + '</div>' +
     '<input type="hidden" id="n-id" value="' + perValore(id || '') + '">' +
-    '<input type="text" id="n-cliente" placeholder="Cliente" value="' + v('cliente') + '" style="margin-bottom:6px">' +
+    // Il nome si sceglie fra quelli dell'anagrafica, se c'è: via, paese, telefono
+    // e mail arrivano da lì invece di essere ribattuti. Chi non c'è si scrive.
+    '<input type="text" id="n-cliente" placeholder="Cliente" value="' + v('cliente') + '" style="margin-bottom:6px"' +
+      ' list="n-clienti-noti" onchange="riempiDaAnagrafica()">' +
+    '<datalist id="n-clienti-noti">' +
+      CLIENTI.map(x => '<option value="' + perValore(x.nome) + '">').join('') + '</datalist>' +
     '<input type="text" id="n-luogo" placeholder="Dove" value="' + v('luogo') + '" style="margin-bottom:6px">' +
     '<input type="text" id="n-ore" placeholder="Stima ore" value="' +
       perValore(l && l.ore ? formattaQuantita(l.ore) : '') + '" style="margin-bottom:6px">' +
@@ -4262,7 +4282,16 @@ function apriModuloLavoro(id) {
     '<input type="text" id="n-requisito" placeholder="Manca qualcosa? (blocca il lavoro)" value="' +
       perValore(l && l.requisiti.length ? l.requisiti.join(', ') : '') + '" style="margin-bottom:6px">' +
     '<label class="meta" style="display:flex; align-items:center; gap:6px; margin-bottom:6px">' +
-      '<input type="checkbox" id="n-sopralluogo"' + (l && l.sopralluogo ? ' checked' : '') + '> È un sopralluogo</label>' +
+      '<input type="checkbox" id="n-sopralluogo"' + (l && l.sopralluogo ? ' checked' : '') +
+      ' onchange="mostraContattiSopralluogo()"> È un sopralluogo</label>' +
+    // I contatti servono solo a un sopralluogo: lì si va da qualcuno che spesso
+    // non è ancora cliente, e in giardino serve sapere dove e chi chiamare.
+    // Su un lavoro normale sarebbero tre caselle vuote in più.
+    '<div id="n-contatti" style="display:' + (l && l.sopralluogo ? 'block' : 'none') + '">' +
+      '<input type="text" id="n-via" placeholder="Via e numero" value="' + v('via') + '" style="margin-bottom:6px">' +
+      '<input type="text" id="n-telefono" placeholder="Telefono" value="' + v('telefono') + '" style="margin-bottom:6px">' +
+      '<input type="text" id="n-email" placeholder="Email" value="' + v('email') + '" style="margin-bottom:6px">' +
+    '</div>' +
     '<textarea id="n-note" rows="3" placeholder="Cosa c\'è da fare, e cosa ricordare — torna in giardino con l\'agenda">' +
       perValore(l ? l.note : '') + '</textarea>' +
     '<div class="bottoni">' +
@@ -4271,6 +4300,24 @@ function apriModuloLavoro(id) {
       '<button class="secondaria piccola" onclick="chiudiModuloLavoro()">Annulla</button>' +
     '</div></div>';
   document.getElementById('n-cliente').focus();
+}
+
+function mostraContattiSopralluogo() {
+  const c = document.getElementById('n-contatti');
+  if (c) c.style.display = document.getElementById('n-sopralluogo').checked ? 'block' : 'none';
+}
+
+// Riempie solo i campi vuoti: quello che si è già scritto a mano — un numero
+// nuovo detto al telefono — non si sovrascrive con quello vecchio dell'anagrafica.
+function riempiDaAnagrafica() {
+  const nome = (document.getElementById('n-cliente') || {}).value || '';
+  const c = CLIENTI.find(x => x.nome === nome.trim());
+  if (!c) return;
+  [['n-luogo', c.citta], ['n-via', c.indirizzo], ['n-telefono', c.telefono], ['n-email', c.email]]
+    .forEach(([id, val]) => {
+      const el = document.getElementById(id);
+      if (el && !el.value && val) el.value = val;
+    });
 }
 
 // Si sceglie un giorno qualunque e conta la sua settimana. Sotto al campo
@@ -4298,6 +4345,9 @@ async function salvaModuloLavoro() {
     settimana: lunediDellaSettimana(valore('n-settimana')),
     requisiti,
     sopralluogo: !!(document.getElementById('n-sopralluogo') || {}).checked,
+    via: valore('n-via').trim(),
+    telefono: valore('n-telefono').trim(),
+    email: valore('n-email').trim(),
     note: valore('n-note').trim(),
   };
 

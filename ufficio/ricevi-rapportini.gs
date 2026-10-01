@@ -18,9 +18,14 @@
  * PERCHÉ "CHIUNQUE": l'app sul telefono non è collegata a un account Google, e
  * non può autenticarsi. Chi conosce l'indirizzo può depositare un file in questa
  * cartella e leggere l'agenda — nient'altro: non l'archivio, non il listino, non
- * l'anagrafica. Se l'indirizzo dovesse girare, si rifà la distribuzione e cambia.
+ * l'anagrafica, e i sopralluoghi solo se ha anche la chiave. Se l'indirizzo
+ * dovesse girare, si rifà la distribuzione e cambia; se gira la chiave, si cambia
+ * la proprietà e la si riscrive sul telefono.
  *
- * L'AGENDA È L'UNICA COSA CHE SI LEGGE, ed è il motivo per cui contiene solo
+ * I SOPRALLUOGHI SI LEGGONO SOLO CON LA CHIAVE (vedi RISERVATI): portano via e
+ * telefono, e senza la proprietà CHIAVE_LETTURA non escono a nessuno.
+ *
+ * L'AGENDA SI LEGGE SENZA CHIAVE, ed è il motivo per cui contiene solo
  * giorno, mezza giornata, cliente e note: chi la scrive (l'app dell'ufficio) tiene
  * indirizzi, telefoni, ore e prezzi fuori dal file proprio perché questo
  * indirizzo è pubblico per chi lo conosce. Chi aggiungesse un campo lì lo
@@ -43,11 +48,24 @@ const CARTELLE = {
   rilievo: 'rilievi',
 };
 
-// E un file solo che il telefono può leggere. L'elenco sta qui e non nella
-// richiesta: il nome del file non si prende mai da chi chiama, o l'indirizzo
-// diventerebbe un modo per leggersi il listino o l'anagrafica.
+// I file che il telefono può leggere. L'elenco sta qui e non nella richiesta: il
+// nome del file non si prende mai da chi chiama, o l'indirizzo diventerebbe un
+// modo per leggersi il listino o l'anagrafica.
 const LEGGIBILI = {
   agenda: 'agenda.json',
+};
+
+// E quelli che si leggono **solo con la chiave**, perché portano via, telefono e
+// mail di persone vere. La chiave non sta nel codice — questo file è pubblico —
+// ma nelle proprietà dello script (Impostazioni progetto → Proprietà script →
+// CHIAVE_LETTURA), e sul telefono in Dati.
+//
+// Se la proprietà non c'è, questi file non escono a nessuno. È voluto: chiuso
+// finché qualcuno non lo apre apposta, non aperto finché qualcuno non se ne
+// accorge. L'ufficio scrive sopralluoghi.json comunque, e senza questa regola
+// basterebbe l'indirizzo per leggerlo.
+const RISERVATI = {
+  sopralluoghi: 'sopralluoghi.json',
 };
 
 function doPost(e) {
@@ -80,13 +98,22 @@ function doPost(e) {
 function doGet(e) {
   try {
     const quale = (e && e.parameter && e.parameter.documento) || '';
+    const chiave = PropertiesService.getScriptProperties().getProperty('CHIAVE_LETTURA') || '';
     if (!quale) {
-      return risposta({ status: 'ok', servizio: 'rapportini', versione: 4,
-        accetta: Object.keys(CARTELLE), leggibili: Object.keys(LEGGIBILI) });
+      // Dice se la chiave c'è, mai quale sia: serve a verificare da un browser
+      // che la distribuzione sia quella giusta e la chiave impostata.
+      return risposta({ status: 'ok', servizio: 'rapportini', versione: 5,
+        accetta: Object.keys(CARTELLE), leggibili: Object.keys(LEGGIBILI),
+        riservati: Object.keys(RISERVATI), chiave: chiave ? 'impostata' : 'manca' });
     }
     // Un nome preso da una lista, non dalla richiesta: così l'indirizzo non
     // diventa un modo per leggere il listino o l'anagrafica.
-    const nome = LEGGIBILI[quale];
+    let nome = LEGGIBILI[quale];
+    if (!nome && RISERVATI[quale]) {
+      if (!chiave) throw new Error('manca la chiave sul servizio: i ' + quale + ' non si leggono senza');
+      if ((e.parameter.chiave || '') !== chiave) throw new Error('chiave sbagliata');
+      nome = RISERVATI[quale];
+    }
     if (!nome) throw new Error('documento non leggibile: ' + quale);
 
     const radice = sottocartella(DriveApp.getRootFolder(), CARTELLA_RADICE);

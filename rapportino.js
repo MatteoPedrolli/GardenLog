@@ -330,6 +330,11 @@ function costruisciAgenda(lavori, oggi) {
       ora: /^\d{2}:\d{2}$/.test(l.ora || '') ? l.ora : '',
       cliente: l.cliente || '',
       note: l.note || '',
+      // Se è un sopralluogo, e quale. Non dicono niente di nessuno — un sì/no e
+      // un codice — e servono al telefono per elencare i sopralluoghi anche
+      // senza la chiave. Arrivati dopo, senza alzare VERSIONE_AGENDA.
+      sopralluogo: !!l.sopralluogo,
+      id: l.sopralluogo ? (l.id || '') : '',
     }));
   return {
     tipo: 'agenda',
@@ -366,6 +371,83 @@ function leggiAgenda(grezzo) {
         ora: /^\d{2}:\d{2}$/.test(a.ora || '') ? a.ora : '',
         cliente: a.cliente || '',
         note: a.note || '',
+        sopralluogo: !!a.sopralluogo,
+        id: a.id || '',
+      })),
+  };
+}
+
+// ── I SOPRALLUOGHI COME DOCUMENTO ──
+// Il secondo documento che va dall'ufficio al telefono, ed è l'unico che porta
+// **dati di contatto**: via, telefono, mail di chi ha chiesto un sopralluogo.
+// In giardino servono — dove andare, chi chiamare se il cancello è chiuso — e
+// il cliente spesso non è ancora in nessuna anagrafica del telefono.
+//
+// Per questo **non sta nell'agenda**, che si legge con l'indirizzo dello script
+// e basta. Sta in un file suo che lo script consegna **solo con la chiave**, e
+// se la chiave sullo script non c'è non lo consegna a nessuno: chiuso finché
+// qualcuno non lo apre apposta, non aperto finché qualcuno non se ne accorge.
+//
+// Solo i sopralluoghi già piazzati su una mezza giornata, da oggi in avanti:
+// la stessa regola dell'agenda, e per la stessa ragione — uno ancora in colonna
+// non ha un momento suo.
+const VERSIONE_SOPRALLUOGHI = 1;
+
+function costruisciSopralluoghi(lavori, oggi) {
+  const da = oggi ? dataISO(oggi) : dataISO(new Date());
+  return {
+    tipo: 'sopralluoghi',
+    versione: VERSIONE_SOPRALLUOGHI,
+    aggiornato: new Date().toISOString(),
+    da,
+    sopralluoghi: (lavori || [])
+      .filter(l => l && l.sopralluogo && l.giorno && l.giorno >= da)
+      .sort((a, b) => (a.giorno + primaLaMattina(a.mezza) + (a.ora || '')).localeCompare(
+        b.giorno + primaLaMattina(b.mezza) + (b.ora || '')))
+      .slice(0, APPUNTAMENTI_IN_AGENDA)
+      .map(l => ({
+        id: l.id || '',
+        giorno: l.giorno,
+        mezza: l.mezza === 'pomeriggio' ? 'pomeriggio' : 'mattina',
+        ora: /^\d{2}:\d{2}$/.test(l.ora || '') ? l.ora : '',
+        cliente: l.cliente || '',
+        paese: l.luogo || '',
+        via: l.via || '',
+        telefono: l.telefono || '',
+        email: l.email || '',
+        note: l.note || '',
+      })),
+  };
+}
+
+function leggiSopralluoghi(grezzo) {
+  let doc = grezzo;
+  if (typeof grezzo === 'string') {
+    try { doc = JSON.parse(grezzo); }
+    catch (e) { throw new Error('Il file non è leggibile: non è JSON valido'); }
+  }
+  // Lo script, quando rifiuta, risponde con un suo JSON d'errore: quel messaggio
+  // — «chiave sbagliata», «manca la chiave» — è proprio quello da far leggere.
+  if (doc && doc.status === 'error') throw new Error(doc.msg || 'il servizio ha rifiutato');
+  if (!doc || doc.tipo !== 'sopralluoghi') throw new Error('Questo file non è un elenco di sopralluoghi');
+  const versione = Number(doc.versione) || 0;
+  if (versione !== VERSIONE_SOPRALLUOGHI) {
+    throw new Error(`Sopralluoghi della versione ${versione || '?'}: questa app legge la ${VERSIONE_SOPRALLUOGHI}`);
+  }
+  return {
+    tipo: 'sopralluoghi',
+    versione,
+    aggiornato: doc.aggiornato || '',
+    da: doc.da || '',
+    sopralluoghi: (Array.isArray(doc.sopralluoghi) ? doc.sopralluoghi : [])
+      .filter(x => x && x.id && x.giorno)
+      .map(x => ({
+        id: String(x.id),
+        giorno: String(x.giorno).slice(0, 10),
+        mezza: x.mezza === 'pomeriggio' ? 'pomeriggio' : 'mattina',
+        ora: /^\d{2}:\d{2}$/.test(x.ora || '') ? x.ora : '',
+        cliente: x.cliente || '', paese: x.paese || '', via: x.via || '',
+        telefono: x.telefono || '', email: x.email || '', note: x.note || '',
       })),
   };
 }
@@ -520,6 +602,7 @@ if (typeof module !== 'undefined' && module.exports) {
     VERSIONE_APPUNTAMENTO, costruisciAppuntamento, leggiAppuntamento, nomeFileAppuntamento,
     VERSIONE_AGENDA, APPUNTAMENTI_IN_AGENDA, costruisciAgenda, leggiAgenda, etichettaMezzaGiornata,
     ORE_MEZZA,
+    VERSIONE_SOPRALLUOGHI, costruisciSopralluoghi, leggiSopralluoghi,
     VERSIONE_RILIEVO, TIPI_RILIEVO, UNITA_RILIEVO, tipoRilievo,
     costruisciRilievo, leggiRilievo, nomeFileRilievo,
     dataISO, lunediDellaSettimana, lunediDellaPrimaSettimana, numeroSettimana, etichettaSettimana,
