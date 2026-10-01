@@ -2931,6 +2931,169 @@ try {
   ok('riaccettarlo non lo mette in lavagna una seconda volta',
     await pagU.evaluate(() => LAVAGNA.lavori.length) === lavoriPrima + 1);
 
+  // ── SOLUZIONI ALTERNATIVE, SEZIONI, E I CONTI CHE AIUTANO ──
+  // «Siepe nuda o con telo e porfido»: due varianti dello stesso lavoro, ognuna
+  // col suo totale, che si escludono a vicenda. Un preventivo che le sommasse
+  // direbbe una cifra che non esiste.
+  const conSoluzioni = await pagU.evaluate(() => {
+    aggiungiSoluzione();
+    aggiungiSoluzione();
+    const [a, b] = PREVENTIVO.doc.soluzioni;
+    rinominaSoluzione(a.id, 'Siepe nuda');
+    rinominaSoluzione(b.id, 'Con telo e porfido');
+    // Una riga comune, una per variante: la comune entra nel totale di tutte.
+    aggiungiRigaPreventivo('');
+    const comune = PREVENTIVO.doc.righe[PREVENTIVO.doc.righe.length - 1];
+    comune.descrizione = 'Preparazione del terreno'; comune.quantita = 1; comune.prezzo = 100;
+    comune.proposto = false;
+    aggiungiRigaPreventivo('');
+    const r1 = PREVENTIVO.doc.righe[PREVENTIVO.doc.righe.length - 1];
+    r1.descrizione = 'Siepe nuda'; r1.quantita = 1; r1.prezzo = 500; r1.proposto = false;
+    r1.soluzione = a.id;
+    aggiungiRigaPreventivo('');
+    const r2 = PREVENTIVO.doc.righe[PREVENTIVO.doc.righe.length - 1];
+    r2.descrizione = 'Telo e porfido'; r2.quantita = 1; r2.prezzo = 900; r2.proposto = false;
+    r2.soluzione = b.id;
+    disegnaPreventivo();
+    return { totali: totaliPreventivo(PREVENTIVO.doc), forchetta: forchettaPreventivo(PREVENTIVO.doc),
+      a: a.id, b: b.id };
+  });
+  ok('con due soluzioni non c\'è più un totale solo',
+    conSoluzioni.totali.unico === null && conSoluzioni.totali.soluzioni.length === 2,
+    JSON.stringify(conSoluzioni.totali));
+  // Il totale di una soluzione comprende la parte comune: è quello che il cliente
+  // pagherebbe scegliendo quella, e lasciarla fuori sarebbe un prezzo che non esiste.
+  ok('ogni soluzione porta dentro le righe comuni',
+    conSoluzioni.totali.soluzioni[0].totale === 4920 &&
+    conSoluzioni.totali.soluzioni[1].totale === 5320,
+    conSoluzioni.totali.soluzioni.map(x => x.nome + '=' + x.totale).join(' '));
+  // È quello che si risponde al telefono prima che il cliente scelga.
+  ok('e l\'elenco dice da quanto a quanto',
+    conSoluzioni.forchetta.includes('da') && conSoluzioni.forchetta.includes('4.920') &&
+    conSoluzioni.forchetta.includes('5.320'), conSoluzioni.forchetta);
+
+  const foglioSol = await pagU.evaluate(() => {
+    confermaTuttiIPrezzi();
+    return costruisciFoglioPreventivo(PREVENTIVO.doc);
+  });
+  ok('il foglio stampa un totale per soluzione, col suo nome',
+    foglioSol.includes('TOTALE SIEPE NUDA') && foglioSol.includes('TOTALE CON TELO E PORFIDO'),
+    foglioSol.slice(foglioSol.indexOf('TOTALE'), foglioSol.indexOf('TOTALE') + 120));
+  // Due totali uno sotto l'altro, senza dirlo, si leggono come una somma da fare.
+  ok('e dice a parole che si escludono',
+    foglioSol.includes('alternative fra loro'));
+  ok('la riga comune non si ripete in ogni soluzione',
+    (foglioSol.match(/Preparazione del terreno/g) || []).length === 1);
+
+  // Togliere una soluzione non butta via le sue righe: tornano comuni. Buttarle
+  // vorrebbe dire perdere lavoro per un clic.
+  const dopoAverTolto = await pagU.evaluate(id => {
+    const prima = PREVENTIVO.doc.righe.length;
+    togliSoluzione(id);
+    return { soluzioni: PREVENTIVO.doc.soluzioni.length,
+      orfane: PREVENTIVO.doc.righe.filter(r => r.soluzione === id).length,
+      perse: prima - PREVENTIVO.doc.righe.length };
+  }, conSoluzioni.a);
+  ok('togliendo una soluzione le sue righe tornano comuni, non spariscono',
+    dopoAverTolto.soluzioni === 1 && dopoAverTolto.orfane === 0 && dopoAverTolto.perse === 0,
+    JSON.stringify(dopoAverTolto));
+
+  // Una sezione è un titolo: niente da sommare, e non è una riga senza prezzo.
+  const conSezione = await pagU.evaluate(() => {
+    const prima = totaliPreventivo(PREVENTIVO.doc).soluzioni[0];
+    aggiungiSezionePreventivo();
+    PREVENTIVO.doc.righe[PREVENTIVO.doc.righe.length - 1].descrizione = 'Zona davanti casa';
+    const dopo = totaliPreventivo(PREVENTIVO.doc).soluzioni[0];
+    return { prima: prima.totale, dopo: dopo.totale, escluse: dopo.escluse,
+      daConfermare: prezziDaConfermare(PREVENTIVO.doc.righe),
+      foglio: costruisciFoglioPreventivo(PREVENTIVO.doc) };
+  });
+  ok('una sezione non cambia il totale e non conta come riga senza prezzo',
+    conSezione.prima === conSezione.dopo && conSezione.escluse === 0 &&
+    conSezione.daConfermare === 0, JSON.stringify({ ...conSezione, foglio: undefined }));
+  ok('e sul foglio è un titolo, non una riga di numeri',
+    conSezione.foglio.includes('sezione-foglio') && conSezione.foglio.includes('Zona davanti casa'));
+
+  // Con le alternative «ha accettato» non basta: va saputo quale, o il lavoro
+  // entra in lavagna senza che si sappia cosa si è venduto.
+  const senzaScelta = await pagU.evaluate(async () => {
+    const quanti = LAVAGNA.lavori.length;
+    await accettaPreventivo();
+    return { quanti: LAVAGNA.lavori.length === quanti,
+      detto: document.getElementById('avviso').textContent };
+  });
+  ok('con due soluzioni il sì generico non passa, e dice cosa manca',
+    senzaScelta.quanti && senzaScelta.detto.includes('Quale soluzione'), JSON.stringify(senzaScelta));
+  const sceltaFatta = await pagU.evaluate(async id => {
+    await accettaPreventivo(id);
+    return { stato: PREVENTIVO.doc.stato, scelta: PREVENTIVO.doc.scelta };
+  }, conSoluzioni.b);
+  ok('scegliendo la soluzione il preventivo si accetta e ricorda quale',
+    sceltaFatta.stato === 'accettato' && sceltaFatta.scelta === conSoluzioni.b,
+    JSON.stringify(sceltaFatta));
+
+  // Dai metri e dal sesto d'impianto al numero di piante: è la formula del foglio
+  // della segretaria, col «più uno» della pianta di testa.
+  const pianteSesto = await pagU.evaluate(() => ({
+    siepe: pianteDaSesto(24, 0.4),
+    virgola: pianteDaSesto('24', '0,4'),
+    vuoto: pianteDaSesto('', 0.4),
+    zero: pianteDaSesto(24, 0),
+  }));
+  ok('24 metri a sesto 0,40 fanno 61 piante, non 60: ce n\'è una a ogni estremo',
+    pianteSesto.siepe === 61, JSON.stringify(pianteSesto));
+  ok('e la virgola si scrive come viene naturale', pianteSesto.virgola === 61);
+  ok('senza i numeri non inventa un risultato',
+    pianteSesto.vuoto === null && pianteSesto.zero === null, JSON.stringify(pianteSesto));
+  const rigaPiante = await pagU.evaluate(() => {
+    document.getElementById('sesto-metri').value = '36';
+    document.getElementById('sesto-passo').value = '0,4';
+    mostraPianteDaSesto();
+    const detto = document.getElementById('piante-calcolate').textContent;
+    aggiungiPianteDaSesto();
+    const r = PREVENTIVO.doc.righe[PREVENTIVO.doc.righe.length - 1];
+    return { detto, quantita: r.quantita, descrizione: r.descrizione };
+  });
+  ok('il conto si legge prima di metterlo in una riga', rigaPiante.detto === '91 piante', rigaPiante.detto);
+  // Fra sei mesi «91 piante» da solo non dice se il sesto era 0,40 o 0,50.
+  ok('e la riga si porta dietro da dove esce quel numero',
+    rigaPiante.quantita === 91 && rigaPiante.descrizione.includes('36') &&
+    rigaPiante.descrizione.includes('0,4'), JSON.stringify(rigaPiante));
+
+  // La virgola è come si scrivono i decimali qui. Un `type="number"` la rifiuta e
+  // lascia la casella vuota: «0,4» diventa niente e il conto non si fa. Il listino
+  // usava già campi di testo apposta, questi no — e si vedeva solo provando a
+  // scrivere un prezzo come lo si scrive davvero.
+  const virgole = await pagU.evaluate(() => {
+    const campi = [...document.querySelectorAll('#pagina-preventivo input.stretto, ' +
+      '#sesto-metri, #sesto-passo')];
+    const numerici = campi.filter(c => c.type === 'number').length;
+    // E la prova vera: scriverci dentro una virgola e vedere se arriva al modello.
+    const prezzo = document.querySelector('#pagina-preventivo input.prezzo');
+    prezzo.value = '12,50';
+    prezzo.dispatchEvent(new Event('input'));
+    const riga = PREVENTIVO.doc.righe[0];
+    return { numerici, quanti: campi.length, prezzo: riga.prezzo };
+  });
+  ok('nessun campo decimale rifiuta la virgola',
+    virgole.numerici === 0 && virgole.quanti > 0, JSON.stringify(virgole));
+  ok('e un prezzo scritto con la virgola arriva al modello come numero',
+    virgole.prezzo === 12.5, String(virgole.prezzo));
+
+  // Mandato non vuol dire accettato, e nemmeno «partito»: l'app sa di averlo
+  // messo in posta, non sa cosa ne è stato. La data serve perché la domanda vera
+  // è da quanto aspetta una risposta.
+  const attese = await pagU.evaluate(() => {
+    const ieri = new Date(Date.now() - 86400000).toISOString();
+    const settimana = new Date(Date.now() - 7 * 86400000).toISOString();
+    return { oggi: daQuantoAspetta(new Date().toISOString()), ieri: daQuantoAspetta(ieri),
+      settimana: daQuantoAspetta(settimana), rotta: daQuantoAspetta('boh') };
+  });
+  ok('un preventivo mandato dice da quanto aspetta, non solo la data',
+    attese.ieri === 'da ieri' && attese.settimana === 'da 7 giorni' && attese.oggi === 'oggi',
+    JSON.stringify(attese));
+  ok('e una data illeggibile non diventa «da NaN giorni»', attese.rotta === '', attese.rotta);
+
   ok('nessun errore JavaScript nell\'app dell\'ufficio', erroriU.length === 0, erroriU.join(' | '));
   await ctxU.close();
 

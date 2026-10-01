@@ -186,6 +186,14 @@ select.tipo-riga:hover, select.tipo-riga:focus { border-color: var(--border); ba
 table.elenco td.via-col { padding-left: 10px; width: 34px; }
 /* Una tariffa non entra nel totale: si vede che è di un'altra natura. */
 tr.riga-tariffa td { background: var(--foglio); }
+/* Una sezione è un titolo, non una riga da prezzare: niente colonne, e il testo
+   si legge come un titolo anche dentro il campo in cui si scrive. */
+tr.riga-sezione input[type=text] { font-weight: 600; font-size: 0.95rem; border-color: transparent;
+  background: transparent; }
+tr.riga-sezione input[type=text]:hover, tr.riga-sezione input[type=text]:focus {
+  border-color: var(--border); background: var(--white); }
+#foglio tr.sezione-foglio td { font-weight: 700; padding-top: 16px; border-bottom: none; }
+#foglio .titolo-soluzione { font-size: 1rem; margin: 22px 0 6px; }
 #foglio .apertura { margin: 18px 0; font-size: 0.95rem; }
 #foglio table.tariffe { margin-top: 18px; font-size: 0.88rem; }
 table.scheda-cliente { table-layout: fixed; }
@@ -1729,6 +1737,17 @@ function stampaConto(origine, id, senzaIntestazione) {
 // ma un preventivo arriva alle migliaia, e «4320,00 €» su un foglio che va a un
 // cliente si legge peggio di «4.320,00 €». Lo zero in più o in meno lì è una
 // cifra sbagliata letta ad alta voce al telefono.
+// Da quanti giorni un preventivo aspetta una risposta. È la domanda che si fa in
+// ufficio guardando l'elenco, e «15/09» da solo obbliga a farsi il conto.
+function daQuantoAspetta(iso) {
+  const d = new Date(iso);
+  if (isNaN(d)) return '';
+  const giorni = Math.floor((Date.now() - d.getTime()) / 86400000);
+  if (giorni <= 0) return 'oggi';
+  if (giorni === 1) return 'da ieri';
+  return 'da ' + giorni + ' giorni';
+}
+
 function formattaEuro(n) {
   const v = parseFloat(n);
   if (isNaN(v)) return '';
@@ -1950,7 +1969,54 @@ const CARTELLA_PREVENTIVI = 'preventivi';
 const TIPI_RIGA_PREVENTIVO = [
   { id: 'totale',  nome: 'Nel totale' },
   { id: 'tariffa', nome: 'Tariffa, fuori dal totale' },
+  // Un titolo e basta: i preventivi veri sono divisi per zona del giardino, e
+  // una sezione è una riga che non ha quantità né prezzo.
+  { id: 'sezione', nome: 'Titolo di sezione' },
 ];
+
+// ── LE SOLUZIONI ALTERNATIVE ──
+// «Siepe nuda o con telo e porfido», «prato da semina o in zolla»: due varianti
+// dello stesso lavoro, ognuna col suo totale, e **si escludono a vicenda**. Un
+// preventivo che le sommasse direbbe una cifra che non esiste.
+//
+// Una riga senza soluzione è **comune**: entra nel totale di tutte. È quello che
+// permette di scrivere la parte uguale una volta sola invece di ribatterla in
+// ogni variante — e ribattendola, di sbagliarne una.
+function soluzioniDi(d) {
+  return Array.isArray(d.soluzioni) ? d.soluzioni : [];
+}
+
+// Il totale di una soluzione comprende le righe comuni: è quello che il cliente
+// pagherebbe scegliendo quella, e un totale che lasciasse fuori la parte comune
+// sarebbe un prezzo che non esiste.
+function totaleSoluzione(d, soluzioneID) {
+  return totalePreventivo((d.righe || []).filter(r =>
+    !r.soluzione || r.soluzione === soluzioneID));
+}
+
+// Tutti i totali in un colpo: quello base (o l'unico, quando non ci sono
+// alternative) e uno per soluzione.
+function totaliPreventivo(d) {
+  const soluzioni = soluzioniDi(d);
+  if (!soluzioni.length) {
+    return { unico: totalePreventivo(d.righe), soluzioni: [] };
+  }
+  return {
+    unico: null,
+    soluzioni: soluzioni.map(sol => ({ ...sol, ...totaleSoluzione(d, sol.id) })),
+  };
+}
+
+// Da quanto a quanto può venire a costare: è quello che si dice al telefono
+// quando il cliente chiede «ma quanto viene?» prima di aver scelto.
+function forchettaPreventivo(d) {
+  const t = totaliPreventivo(d);
+  if (t.unico) return formattaEuro(t.unico.totale);
+  if (!t.soluzioni.length) return formattaEuro(0);
+  const importi = t.soluzioni.map(x => x.totale);
+  const min = Math.min(...importi), max = Math.max(...importi);
+  return min === max ? formattaEuro(min) : 'da ' + formattaEuro(min) + ' a ' + formattaEuro(max);
+}
 
 function righePreventivo(rilievo, vecchie) {
   const prima = Array.isArray(vecchie) ? vecchie : [];
@@ -1976,6 +2042,9 @@ function righePreventivo(rilievo, vecchie) {
       // quello che il listino ha proposto aspetta una conferma.
       proposto: dalListino !== '',
       tipo: 'totale',
+      // Comune: entra nel totale di tutte le soluzioni. Chi la vuole in una sola
+      // la sposta, ed è la scelta rara.
+      soluzione: '',
     };
   });
   // Le righe aggiunte in ufficio non nascono dal rilievo e restano dove sono.
@@ -1998,6 +2067,12 @@ function costruisciPreventivo(rilievo, precedente) {
     lavoro: rilievo.lavoro || '',
     mezze: Number(rilievo.mezze) || 0,
     stato: (precedente && precedente.stato) || 'bozza',
+    // Quando è stato mandato, non solo che lo è stato: «l'ho mandato» senza una
+    // data non risponde alla domanda che si fa davvero, cioè da quanto aspetta.
+    mandato: (precedente && precedente.mandato) || '',
+    // Vuoto è il caso normale: quasi tutti i preventivi hanno un totale solo.
+    soluzioni: (precedente && Array.isArray(precedente.soluzioni)) ? precedente.soluzioni : [],
+    scelta: (precedente && precedente.scelta) || '',
     righe: righePreventivo(rilievo, precedente ? precedente.righe : null),
     note: (precedente && precedente.note) || '',
     // Il rilievo ci viaggia dentro per intero: fra due anni questo file deve
@@ -2025,12 +2100,16 @@ function leggiPreventivo(grezzo) {
     rilievo: Number(doc.rilievo) || 1,
     mezze: Number(doc.mezze) || 0,
     stato: doc.stato || 'bozza',
+    mandato: doc.mandato || '',
+    soluzioni: Array.isArray(doc.soluzioni) ? doc.soluzioni : [],
+    scelta: doc.scelta || '',
     righe: (Array.isArray(doc.righe) ? doc.righe : []).map(r => ({
       ...r,
       quantita: r.quantita === '' || r.quantita == null ? '' : Number(r.quantita),
       prezzo: r.prezzo === '' || r.prezzo == null ? '' : Number(r.prezzo),
       proposto: !!r.proposto,
-      tipo: r.tipo === 'tariffa' ? 'tariffa' : 'totale',
+      tipo: ['tariffa', 'sezione'].includes(r.tipo) ? r.tipo : 'totale',
+      soluzione: r.soluzione || '',
     })),
   };
 }
@@ -2041,6 +2120,9 @@ function leggiPreventivo(grezzo) {
 function totalePreventivo(righe) {
   let totale = 0, escluse = 0, tariffe = 0;
   (righe || []).forEach(r => {
+    // Una sezione è un titolo: non ha niente da sommare e non è una riga che
+    // manca di prezzo, quindi non va contata nemmeno fra le escluse.
+    if (r.tipo === 'sezione') return;
     if (r.tipo === 'tariffa') { tariffe++; return; }
     const i = importoRiga(r);
     if (i == null) escluse++; else totale += i;
@@ -2049,7 +2131,7 @@ function totalePreventivo(righe) {
 }
 
 function prezziDaConfermare(righe) {
-  return (righe || []).filter(r => r.proposto).length;
+  return (righe || []).filter(r => r.proposto && r.tipo !== 'sezione').length;
 }
 
 function nomeFilePreventivo(doc) {
@@ -2105,7 +2187,7 @@ function apriPreventivo(id) {
 function modificaPrezzoRiga(i, valore, elemento) {
   const r = PREVENTIVO.doc.righe[i];
   if (!r) return;
-  r.prezzo = valore === '' ? '' : Number(String(valore).replace(',', '.'));
+  r.prezzo = numeroScritto(valore);
   if (r.proposto) {
     r.proposto = false;
     if (elemento) elemento.classList.remove('proposto');
@@ -2128,10 +2210,19 @@ function confermaTuttiIPrezzi() {
   disegnaPreventivo();
 }
 
+// La virgola è come si scrivono i decimali qui, e i campi sono di testo apposta:
+// un `type="number"` la rifiuta e restituisce una casella vuota — «0,4» diventa
+// niente, e il conto non si fa. Il listino era già così, questi no.
+function numeroScritto(valore) {
+  if (valore === '' || valore == null) return '';
+  const n = Number(String(valore).replace(',', '.'));
+  return isNaN(n) ? '' : n;
+}
+
 function modificaRigaPreventivo(i, campo, valore) {
   const r = PREVENTIVO.doc.righe[i];
   if (!r) return;
-  r[campo] = campo === 'quantita' ? (valore === '' ? '' : Number(valore)) : valore;
+  r[campo] = campo === 'quantita' ? numeroScritto(valore) : valore;
   if (campo === 'quantita') aggiornaTotalePreventivo();
 }
 
@@ -2139,6 +2230,77 @@ function cambiaTipoRiga(i, tipo) {
   const r = PREVENTIVO.doc.righe[i];
   if (!r) return;
   r.tipo = tipo === 'tariffa' ? 'tariffa' : 'totale';
+  disegnaPreventivo();
+}
+
+// ── DAI METRI ALLE PIANTE ──
+// La formula è quella del foglio di calcolo della segretaria: metri diviso il
+// sesto d'impianto, **più uno**, arrotondato per difetto. Il più uno è la pianta
+// di testa: una siepe di 24 m a sesto 0,40 ne vuole 61, non 60, perché ce n'è una
+// a ogni estremo. Rifarlo a mano ogni volta era aritmetica che l'app può fare.
+function pianteDaSesto(metri, sesto) {
+  const m = parseFloat(String(metri).replace(',', '.'));
+  const s = parseFloat(String(sesto).replace(',', '.'));
+  if (isNaN(m) || isNaN(s) || m <= 0 || s <= 0) return null;
+  return Math.floor(m / s + 1);
+}
+
+function mostraPianteDaSesto() {
+  const el = document.getElementById('piante-calcolate');
+  if (!el) return;
+  const n = pianteDaSesto(document.getElementById('sesto-metri').value,
+                          document.getElementById('sesto-passo').value);
+  el.textContent = n == null ? '' : n + (n === 1 ? ' pianta' : ' piante');
+  const b = document.getElementById('sesto-bottone');
+  if (b) b.disabled = n == null;
+}
+
+function aggiungiPianteDaSesto() {
+  const n = pianteDaSesto(document.getElementById('sesto-metri').value,
+                          document.getElementById('sesto-passo').value);
+  if (n == null) return;
+  const metri = document.getElementById('sesto-metri').value;
+  const passo = document.getElementById('sesto-passo').value;
+  aggiungiRigaPreventivo('piante');
+  const r = PREVENTIVO.doc.righe[PREVENTIVO.doc.righe.length - 1];
+  r.quantita = n;
+  r.unita = r.unita || 'n';
+  // Da dove esce quel numero resta scritto: fra sei mesi «61 piante» da solo non
+  // dice se il sesto era 0,40 o 0,50, e il cliente lo chiede.
+  r.descrizione = 'Fornitura e messa a dimora — ' + metri + ' ml a sesto ' + passo;
+  disegnaPreventivo();
+}
+
+function aggiungiSoluzione() {
+  const n = soluzioniDi(PREVENTIVO.doc).length + 1;
+  if (!Array.isArray(PREVENTIVO.doc.soluzioni)) PREVENTIVO.doc.soluzioni = [];
+  PREVENTIVO.doc.soluzioni.push({ id: 'sol' + Date.now().toString(36) + n, nome: 'Soluzione ' + n });
+  disegnaPreventivo();
+}
+
+function rinominaSoluzione(id, nome) {
+  const sol = soluzioniDi(PREVENTIVO.doc).find(x => x.id === id);
+  if (sol) sol.nome = nome;
+}
+
+// Togliendo una soluzione le sue righe non spariscono: tornano comuni. Buttarle
+// vorrebbe dire perdere lavoro per un clic, e una riga comune si vede e si
+// sposta — una riga cancellata no.
+function togliSoluzione(id) {
+  const sol = soluzioniDi(PREVENTIVO.doc).find(x => x.id === id);
+  const quante = (PREVENTIVO.doc.righe || []).filter(r => r.soluzione === id).length;
+  if (quante && !confirm('«' + (sol ? sol.nome : '') + '» ha ' + quante +
+      (quante === 1 ? ' riga' : ' righe') + '.\n\nTogliendola tornano comuni a tutte le soluzioni.')) return;
+  PREVENTIVO.doc.soluzioni = soluzioniDi(PREVENTIVO.doc).filter(x => x.id !== id);
+  (PREVENTIVO.doc.righe || []).forEach(r => { if (r.soluzione === id) r.soluzione = ''; });
+  if (PREVENTIVO.doc.scelta === id) PREVENTIVO.doc.scelta = '';
+  disegnaPreventivo();
+}
+
+function cambiaSoluzioneRiga(i, soluzione) {
+  const r = PREVENTIVO.doc.righe[i];
+  if (!r) return;
+  r.soluzione = soluzione || '';
   disegnaPreventivo();
 }
 
@@ -2150,7 +2312,14 @@ function aggiungiRigaPreventivo(voceID) {
     prezzo: v && v.prezzo !== '' && v.prezzo != null ? Number(v.prezzo) : '',
     proposto: !!(v && v.prezzo !== '' && v.prezzo != null),
     tipo: 'totale',
+    soluzione: '',
   });
+  disegnaPreventivo();
+}
+
+function aggiungiSezionePreventivo() {
+  PREVENTIVO.doc.righe.push({ chiave: '', voceID: '', voce: '', descrizione: 'Titolo della sezione',
+    quantita: '', unita: '', prezzo: '', proposto: false, tipo: 'sezione', soluzione: '' });
   disegnaPreventivo();
 }
 
@@ -2162,13 +2331,20 @@ function togliRigaPreventivo(i) {
 // Totale e coda si aggiornano da soli mentre si scrive, senza ridisegnare: sono
 // le due cose che devono seguire il numero sotto le dita.
 function aggiornaTotalePreventivo() {
-  const el = document.getElementById('totale-preventivo');
-  if (!el || !PREVENTIVO) return;
-  const t = totalePreventivo(PREVENTIVO.doc.righe);
-  el.textContent = formattaEuro(t.totale);
+  if (!PREVENTIVO) return;
+  const t = totaliPreventivo(PREVENTIVO.doc);
+  const uno = document.getElementById('totale-preventivo');
+  if (uno && t.unico) uno.textContent = formattaEuro(t.unico.totale);
+  // Con le alternative i totali sono più d'uno e stanno ognuno sulla sua riga.
+  t.soluzioni.forEach(sol => {
+    const el = document.getElementById('totale-' + sol.id);
+    if (el) el.textContent = formattaEuro(sol.totale);
+  });
+  const senza = t.unico ? t.unico.escluse
+    : t.soluzioni.reduce((m, x) => Math.max(m, x.escluse), 0);
   const fuori = document.getElementById('fuori-totale');
-  if (fuori) fuori.textContent = t.escluse
-    ? t.escluse + (t.escluse === 1 ? ' riga senza prezzo' : ' righe senza prezzo') : '';
+  if (fuori) fuori.textContent = senza
+    ? senza + (senza === 1 ? ' riga senza prezzo' : ' righe senza prezzo') : '';
 }
 
 function aggiornaCodaPreventivo() {
@@ -2189,52 +2365,118 @@ function disegnaPreventivo() {
   const c = document.getElementById('pagina-preventivo');
   if (!PREVENTIVO) { c.innerHTML = '<div class="vuoto-elenco">Nessun preventivo aperto.</div>'; return; }
   const d = PREVENTIVO.doc;
-  const t = totalePreventivo(d.righe);
+  const t = totaliPreventivo(d);
   const tipo = tipoRilievo(d.lavoro);
 
   let html = '<h2 class="titolo-pagina">' + perValore(d.cliente.nome || 'senza nome') + '</h2>';
   html += '<p class="sottotitolo">' + perValore(tipo ? tipo.nome : d.lavoro) +
     ' · ' + d.mezze + (d.mezze === 1 ? ' mezza giornata' : ' mezze giornate') +
-    ' · ' + STATI_PREVENTIVO[d.stato] + '</p>';
+    ' · ' + STATI_PREVENTIVO[d.stato] +
+    (d.mandato ? ' il ' + formattaData(d.mandato) + ' · ' + daQuantoAspetta(d.mandato) : '') + '</p>';
 
   html += '<div id="da-confermare" class="avvertenza" style="display:none"></div>';
 
   html += '<div class="scheda"><table class="elenco"><thead><tr>' +
     '<th>Descrizione</th><th class="num">Q.tà</th><th>UM</th><th class="num">Prezzo</th>' +
     '<th class="num">Importo</th><th></th></tr></thead><tbody>';
+  const soluzioni = soluzioniDi(d);
   d.righe.forEach((r, i) => {
-    const imp = r.tipo === 'tariffa' ? null : importoRiga(r);
-    html += '<tr' + (r.tipo === 'tariffa' ? ' class="riga-tariffa"' : '') + '>' +
-      '<td><input type="text" value="' + perValore(r.descrizione) + '" ' +
+    const imp = r.tipo === 'totale' ? importoRiga(r) : null;
+    const sezione = r.tipo === 'sezione';
+    html += '<tr class="' + (r.tipo === 'tariffa' ? 'riga-tariffa' : '') +
+        (sezione ? ' riga-sezione' : '') + '">' +
+      '<td' + (sezione ? ' colspan="5"' : '') + '><input type="text" value="' + perValore(r.descrizione) + '" ' +
         'oninput="modificaRigaPreventivo(' + i + ', \'descrizione\', this.value)">' +
         '<select class="tipo-riga" onchange="cambiaTipoRiga(' + i + ', this.value)">' +
         TIPI_RIGA_PREVENTIVO.map(x => '<option value="' + x.id + '"' +
           (x.id === r.tipo ? ' selected' : '') + '>' + x.nome + '</option>').join('') +
-        '</select></td>' +
-      '<td class="num">' + (r.tipo === 'tariffa' ? '<span class="meta">—</span>' :
-        '<input type="number" step="any" class="stretto" value="' + perValore(r.quantita) + '" ' +
-        'oninput="modificaRigaPreventivo(' + i + ', \'quantita\', this.value)">') + '</td>' +
-      '<td>' + perValore(r.unita) + '</td>' +
-      '<td class="num"><input type="number" step="any" class="stretto prezzo' +
-        (r.proposto ? ' proposto' : '') + '" value="' + perValore(r.prezzo) + '" ' +
-        'oninput="modificaPrezzoRiga(' + i + ', this.value, this)">' +
-        (r.proposto ? '<button class="conferma" onclick="confermaPrezzo(' + i + ')" ' +
-          'title="Va bene così">✓</button>' : '') + '</td>' +
-      '<td class="num">' + (r.tipo === 'tariffa' ? '<span class="meta">fuori totale</span>' :
-        (imp == null ? '<span class="meta">—</span>' : formattaEuro(imp))) + '</td>' +
+        '</select>' +
+        // Il menù della soluzione compare solo quando ci sono alternative: finché
+        // il preventivo ha un totale solo sarebbe una scelta che non si fa mai.
+        (soluzioni.length && !sezione ? '<select class="tipo-riga" ' +
+          'onchange="cambiaSoluzioneRiga(' + i + ', this.value)">' +
+          '<option value="">Comune a tutte</option>' +
+          soluzioni.map(sol => '<option value="' + perValore(sol.id) + '"' +
+            (sol.id === r.soluzione ? ' selected' : '') + '>Solo in ' + perValore(sol.nome) + '</option>').join('') +
+          '</select>' : '') +
+        '</td>' +
+      (sezione ? '' :
+        '<td class="num">' + (r.tipo === 'tariffa' ? '<span class="meta">—</span>' :
+          '<input type="text" inputmode="decimal" class="stretto" value="' +
+          perValore(formattaQuantita(r.quantita)) + '" ' +
+          'oninput="modificaRigaPreventivo(' + i + ', \'quantita\', this.value)">') + '</td>' +
+        '<td>' + perValore(r.unita) + '</td>' +
+        '<td class="num"><input type="text" inputmode="decimal" class="stretto prezzo' +
+          (r.proposto ? ' proposto' : '') + '" value="' + perValore(formattaQuantita(r.prezzo)) + '" ' +
+          'oninput="modificaPrezzoRiga(' + i + ', this.value, this)">' +
+          (r.proposto ? '<button class="conferma" onclick="confermaPrezzo(' + i + ')" ' +
+            'title="Va bene così">✓</button>' : '') + '</td>' +
+        '<td class="num">' + (r.tipo === 'tariffa' ? '<span class="meta">fuori totale</span>' :
+          (imp == null ? '<span class="meta">—</span>' : formattaEuro(imp))) + '</td>') +
       '<td class="via-col"><button class="via" onclick="togliRigaPreventivo(' + i + ')" title="Togli">✕</button></td>' +
     '</tr>';
   });
-  html += '<tr class="riga-totale"><td colspan="4">Totale (IVA inclusa)</td>' +
-    '<td class="num" id="totale-preventivo">' + formattaEuro(t.totale) + '</td><td></td></tr>';
+  if (t.unico) {
+    html += '<tr class="riga-totale"><td colspan="4">Totale (IVA inclusa)</td>' +
+      '<td class="num" id="totale-preventivo">' + formattaEuro(t.unico.totale) + '</td><td></td></tr>';
+  } else {
+    // Un totale per soluzione, e si escludono: il cliente ne sceglie una sola.
+    t.soluzioni.forEach(sol => {
+      html += '<tr class="riga-totale"><td colspan="4">' + perValore(sol.nome) +
+        ' <span class="meta">· comprese le voci comuni</span>' +
+        (d.stato === 'accettato' ? (d.scelta === sol.id ? ' <strong>— scelta</strong>' : '') :
+          ' <button class="secondaria" onclick="accettaPreventivo(\'' + perOnclick(sol.id) +
+          '\')">Il cliente ha scelto questa</button>') + '</td>' +
+        '<td class="num" id="totale-' + perValore(sol.id) + '">' + formattaEuro(sol.totale) + '</td><td></td></tr>';
+    });
+  }
   html += '</tbody></table>';
-  html += '<div class="meta" id="fuori-totale">' + (t.escluse
-    ? t.escluse + (t.escluse === 1 ? ' riga senza prezzo' : ' righe senza prezzo') : '') + '</div>';
+  const senzaPrezzo = t.unico ? t.unico.escluse : t.soluzioni.reduce((m, x) => Math.max(m, x.escluse), 0);
+  html += '<div class="meta" id="fuori-totale">' + (senzaPrezzo
+    ? senzaPrezzo + (senzaPrezzo === 1 ? ' riga senza prezzo' : ' righe senza prezzo') : '') + '</div>';
   html += '<select onchange="aggiungiRigaPreventivo(this.value); this.value=\'\'" style="margin-top:10px">' +
     '<option value="">+ Aggiungi una voce di listino…</option>' +
     LISTINO.voci.map(v => '<option value="' + perValore(v.voceID) + '">' + perValore(v.voce) + '</option>').join('') +
     '</select>';
+  html += ' <button class="secondaria" onclick="aggiungiSezionePreventivo()">+ Titolo di sezione</button>';
   html += '</div>';
+
+  // «Siepe nuda o con telo e porfido»: due varianti dello stesso lavoro con due
+  // totali che si escludono. Quasi nessun preventivo ne ha, quindi il bottone
+  // resta e il resto compare solo quando servono.
+  html += '<div class="scheda"><div class="titolo-sezione">Soluzioni alternative</div>';
+  if (!soluzioni.length) {
+    html += '<p class="sottotitolo" style="margin:0 0 10px">Due varianti dello stesso lavoro, ' +
+      'ognuna col suo totale: il cliente ne sceglie una. Le righe che restano comuni entrano ' +
+      'nel totale di tutte.</p>';
+  } else {
+    html += '<table class="elenco"><tbody>';
+    soluzioni.forEach(sol => {
+      const quante = d.righe.filter(r => r.soluzione === sol.id).length;
+      html += '<tr><td><input type="text" value="' + perValore(sol.nome) + '" ' +
+          'oninput="rinominaSoluzione(\'' + perOnclick(sol.id) + '\', this.value)"></td>' +
+        '<td class="meta">' + quante + (quante === 1 ? ' riga sua' : ' righe sue') + '</td>' +
+        '<td class="via-col"><button class="via" onclick="togliSoluzione(\'' + perOnclick(sol.id) + '\')" ' +
+          'title="Togli">✕</button></td></tr>';
+    });
+    html += '</tbody></table>';
+  }
+  html += '<button class="secondaria" onclick="aggiungiSoluzione()">+ Aggiungi una soluzione</button>';
+  html += '</div>';
+
+  html += '<div class="scheda"><div class="titolo-sezione">Dai metri alle piante</div>' +
+    '<p class="sottotitolo" style="margin:0 0 10px">Metri di siepe e sesto d\'impianto: ' +
+    'il numero di piante è aritmetica, e rifarla a mano ogni volta è un errore che aspetta.</p>' +
+    '<table class="elenco"><tbody><tr>' +
+      '<td style="width:150px">Metri</td><td><input type="text" inputmode="decimal" id="sesto-metri" ' +
+        'class="stretto" oninput="mostraPianteDaSesto()"></td></tr>' +
+      '<tr><td>Sesto d\'impianto (m)</td><td><input type="text" inputmode="decimal" id="sesto-passo" ' +
+        'class="stretto" oninput="mostraPianteDaSesto()"></td></tr>' +
+    '</tbody></table>' +
+    '<div class="titolo-sezione" id="piante-calcolate" style="margin-top:10px"></div>' +
+    '<button class="secondaria" id="sesto-bottone" disabled onclick="aggiungiPianteDaSesto()">' +
+      'Mettilo in una riga</button>' +
+    '</div>';
 
   html += '<div class="scheda"><div class="titolo-sezione">Note sul preventivo</div>' +
     '<textarea rows="3" oninput="PREVENTIVO.doc.note = this.value">' + perValore(d.note) + '</textarea>' +
@@ -2250,7 +2492,8 @@ function disegnaPreventivo() {
   html += '<div class="bottoni">' +
     '<button class="principale" onclick="salvaPreventivo()">Salva</button>' +
     '<button class="secondaria" onclick="stampaPreventivo()">Stampa o salva in PDF</button>' +
-    (d.stato === 'accettato' ? '' :
+    (d.stato === 'bozza' ? '<button class="secondaria" onclick="segnaMandato()">Mandato al cliente</button>' : '') +
+    (d.stato === 'accettato' || soluzioni.length ? '' :
       '<button class="secondaria" onclick="accettaPreventivo()">Il cliente ha detto sì</button>') +
     '<button class="secondaria" onclick="vaiA(\'preventivi\')">Torna all\'elenco</button>' +
     '</div>';
@@ -2308,15 +2551,37 @@ function stampaPreventivo() {
   window.print();
 }
 
+// Mandato non vuol dire accettato, e nemmeno «partito»: l'app sa di averlo
+// stampato o messo in posta, non sa cosa ne è stato. È la stessa distinzione del
+// conto in archivio, che si segna *in posta* e non *inviato*. La data serve
+// perché la domanda vera è da quanto aspetta una risposta.
+async function segnaMandato() {
+  if (!PREVENTIVO) return;
+  PREVENTIVO.doc.stato = 'mandato';
+  PREVENTIVO.doc.mandato = new Date().toISOString();
+  await salvaPreventivo();
+  disegnaPreventivo();
+}
+
 // Il sì del cliente: oggi è un «ok» a penna sulla stampa, e da nessuna parte in
 // forma digitale. Qui costa un clic, e porta il lavoro sulla lavagna largo le
 // mezze giornate che il campo aveva stimato — lo stesso numero, misurato una
 // volta sola. Non si piazza su un giorno: quello lo decide chi pianifica.
-async function accettaPreventivo() {
+async function accettaPreventivo(soluzioneID) {
   if (!PREVENTIVO) return;
   const d = PREVENTIVO.doc;
-  if (!confirm('Il cliente ha accettato questo preventivo?\n\nIl lavoro entra in «Da pianificare» sulla lavagna.')) return;
+  const soluzioni = soluzioniDi(d);
+  // Con due alternative «ha accettato» non basta: va saputo quale, o il lavoro
+  // entra in lavagna senza che si sappia cosa si è venduto.
+  if (soluzioni.length && !soluzioneID) {
+    avvisa('Quale soluzione ha scelto? Il sì si dà sulla riga della soluzione', true);
+    return;
+  }
+  const scelta = soluzioni.find(x => x.id === soluzioneID);
+  if (!confirm('Il cliente ha accettato' + (scelta ? ' «' + scelta.nome + '»' : ' questo preventivo') +
+      '?\n\nIl lavoro entra in «Da pianificare» sulla lavagna.')) return;
   d.stato = 'accettato';
+  d.scelta = scelta ? scelta.id : '';
   if (!LAVAGNA.visti.includes('prev-' + d.id)) {
     LAVAGNA.visti.push('prev-' + d.id);
     LAVAGNA.lavori.push(sistemaLavoro({
@@ -2335,7 +2600,7 @@ async function accettaPreventivo() {
 }
 
 function costruisciFoglioPreventivo(d) {
-  const t = totalePreventivo(d.righe);
+  const t = totaliPreventivo(d);
   const sede = [IMPOSTAZIONI.indirizzo, IMPOSTAZIONI.citta].filter(x => x).join(' · ');
   const contatti = [
     IMPOSTAZIONI.piva ? 'P.IVA ' + IMPOSTAZIONI.piva : '',
@@ -2363,23 +2628,53 @@ function costruisciFoglioPreventivo(d) {
   html += '<p class="apertura">A seguito Vostra gentile richiesta, Vi comunichiamo la nostra ' +
     'migliore offerta per la seguente fornitura:</p>';
 
-  html += '<table><thead><tr><th>Descrizione</th><th class="num">Q.tà</th>' +
-    '<th>UM</th><th class="num">Costo un.</th><th class="num">Totale</th></tr></thead><tbody>';
-  d.righe.filter(r => r.tipo !== 'tariffa').forEach(r => {
+  // Una riga come la stampa il foglio del cliente. Sul foglio va la descrizione,
+  // non la voce di listino: «Piante» non si capisce, «Fornitura e messa a dimora
+  // di lauro 80-100» sì.
+  const rigaStampata = r => {
+    if (r.tipo === 'sezione') {
+      return '<tr class="sezione-foglio"><td colspan="5">' +
+        perValore(r.descrizione || r.voce) + '</td></tr>';
+    }
     const imp = importoRiga(r);
-    html += '<tr>' +
-      // Sul foglio va la descrizione, non la voce di listino: «Piante» non si
-      // capisce, «Fornitura e messa a dimora di lauro 80-100» sì.
+    return '<tr>' +
       '<td>' + perValore(r.descrizione || r.voce) + '</td>' +
       '<td class="num">' + perValore(formattaQuantita(r.quantita)) + '</td>' +
       '<td>' + perValore(r.unita) + '</td>' +
       '<td class="num">' + (r.prezzo === '' || r.prezzo == null ? '' : formattaEuro(r.prezzo)) + '</td>' +
       '<td class="num">' + (imp == null ? '<span class="da-definire">da definire</span>' : formattaEuro(imp)) + '</td>' +
     '</tr>';
-  });
-  html += '<tr class="riga-totale"><td colspan="4">TOTALE PREVENTIVO S.E. &amp; O. (IVA inclusa)</td>' +
-    '<td class="num">' + formattaEuro(t.totale) + '</td></tr>';
+  };
+  const intestazioneTabella = '<table><thead><tr><th>Descrizione</th><th class="num">Q.tà</th>' +
+    '<th>UM</th><th class="num">Costo un.</th><th class="num">Totale</th></tr></thead><tbody>';
+  const soluzioni = soluzioniDi(d);
+  const comuni = d.righe.filter(r => r.tipo !== 'tariffa' && !r.soluzione);
+
+  html += intestazioneTabella;
+  comuni.forEach(r => { html += rigaStampata(r); });
+  if (!soluzioni.length) {
+    html += '<tr class="riga-totale"><td colspan="4">TOTALE PREVENTIVO S.E. &amp; O. (IVA inclusa)</td>' +
+      '<td class="num">' + formattaEuro(t.unico.totale) + '</td></tr>';
+  }
   html += '</tbody></table>';
+
+  // Le soluzioni alternative: ognuna con le sue righe e il suo totale, e detto a
+  // parole che si escludono — due totali uno sotto l'altro, senza quella riga,
+  // si leggono come una somma da fare.
+  if (soluzioni.length) {
+    html += '<p class="apertura">Le soluzioni qui sotto sono <strong>alternative fra loro</strong>: ' +
+      'il totale di ciascuna comprende le voci sopra elencate.</p>';
+    t.soluzioni.forEach(sol => {
+      html += '<h2 class="titolo-soluzione">' + perValore(sol.nome) + '</h2>';
+      html += intestazioneTabella;
+      d.righe.filter(r => r.tipo !== 'tariffa' && r.soluzione === sol.id)
+        .forEach(r => { html += rigaStampata(r); });
+      html += '<tr class="riga-totale"><td colspan="4">TOTALE ' +
+        perValore(sol.nome).toUpperCase() + ' S.E. &amp; O. (IVA inclusa)</td>' +
+        '<td class="num">' + formattaEuro(sol.totale) + '</td></tr>';
+      html += '</tbody></table>';
+    });
+  }
 
   // Le tariffe stanno sotto il totale e fuori da esso: dicono quanto costa una
   // cosa che forse servirà, e sommarle direbbe una cifra che non esiste.
@@ -2395,9 +2690,10 @@ function costruisciFoglioPreventivo(d) {
     html += '</tbody></table>';
   }
 
-  if (t.escluse) {
-    html += '<div class="incompleto">' + t.escluse +
-      (t.escluse === 1 ? ' voce resta da valutare e non è compresa' : ' voci restano da valutare e non sono comprese') +
+  const senza = t.unico ? t.unico.escluse : t.soluzioni.reduce((m, x) => Math.max(m, x.escluse), 0);
+  if (senza) {
+    html += '<div class="incompleto">' + senza +
+      (senza === 1 ? ' voce resta da valutare e non è compresa' : ' voci restano da valutare e non sono comprese') +
       ' nel totale qui sopra.</div>';
   }
   if (d.note) html += '<div class="nota-sotto">' + perValore(d.note) + '</div>';
@@ -2449,16 +2745,18 @@ function disegnaPreventivi() {
   } else {
     PREVENTIVI.forEach(p => {
       const d = p.doc;
-      const t = totalePreventivo(d.righe);
       html += '<div class="scheda cliccabile" onclick="apriPreventivo(\'' + perOnclick(d.id) + '\')">' +
         '<div class="riga-scheda">' +
           '<span class="nome-cliente">' + perValore(d.cliente.nome || 'senza nome') + '</span>' +
           '<span class="etichetta ' + (d.stato === 'accettato' ? 'corretto' : 'nuovo') + '">' +
             STATI_PREVENTIVO[d.stato] + '</span>' +
-          '<span class="meta" style="margin-left:auto">' + formattaEuro(t.totale) + '</span>' +
+          // Con le alternative il totale è più d'uno: si dice da quanto a quanto,
+          // che è quello che si risponde al telefono prima che il cliente scelga.
+          '<span class="meta" style="margin-left:auto">' + forchettaPreventivo(d) + '</span>' +
         '</div>' +
         '<div class="meta" style="margin-top:6px">' + formattaData(d.creato) +
           ' · ' + d.righe.length + (d.righe.length === 1 ? ' riga' : ' righe') +
+          (d.stato === 'mandato' && d.mandato ? ' · mandato ' + daQuantoAspetta(d.mandato) : '') +
           (prezziDaConfermare(d.righe) ? ' · <strong>' + prezziDaConfermare(d.righe) + ' da confermare</strong>' : '') +
         '</div>' +
       '</div>';
