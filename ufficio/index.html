@@ -255,12 +255,13 @@ input.vuoto { background: #fffdf5; border-color: #ecdca8; }
 .tavolo-lavagna { flex-direction: column; align-items: stretch; }
 .tavolo-lavagna .giorni { width: 100%; }
 .coda-sotto { width: auto; margin-top: 18px; }
-.griglia-coda { display: grid; grid-template-columns: minmax(0, 3fr) minmax(0, 1fr); gap: 10px; align-items: start; }
+.griglia-coda { display: grid; grid-template-columns: minmax(0, 3fr) minmax(0, 1fr) minmax(0, 1fr); gap: 10px; align-items: start; }
 /* Da sinistra a destra, poi a capo: la griglia si legge come una pagina, ed è
-   l'ordine di priorità. Tre colonne perché la quarta è dei bloccati. */
+   l'ordine di priorità. Tre colonne perché le ultime due sono dei sopralluoghi e
+   dei bloccati. */
 .coda-lista.pronti { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); align-items: start; }
 .coda-lista.pronti > .vuoto-mezza { grid-column: 1 / -1; }
-.coda-lista.fermi { min-height: 160px; }
+.coda-lista.fermi, .coda-lista.sopralluoghi { min-height: 160px; }
 .coda-sotto #nuovo-lavoro { max-width: 480px; }
 @media (max-width: 900px) {
   .coda-lista.pronti { grid-template-columns: repeat(2, minmax(0, 1fr)); }
@@ -335,6 +336,13 @@ input.vuoto { background: #fffdf5; border-color: #ecdca8; }
   min-width: 0; overflow-wrap: anywhere;
 }
 .cartellino:active { cursor: grabbing; }
+/* In coda, chiuso: il nome, la prima riga delle note, settimana e inserimento.
+   Il resto al clic. */
+.cartellino.chiuso { padding: 6px 8px; gap: 1px; }
+.cartellino.chiuso .cliente-cart { font-size: 0.82rem; }
+.cartellino.chiuso .riga-cart { gap: 4px; margin-top: 1px; }
+.cosa-cart.una-riga { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; overflow-wrap: normal; }
+.cartellino.aperto { box-shadow: 0 1px 4px rgba(0,0,0,0.08); }
 /* ── I TRE STATI ──
    Grigio previsto, verde confermato, blu fatto. Il colore non basta da solo — si
    perde a chi distingue male verde e grigio, e sulla carta — quindi ogni
@@ -384,6 +392,13 @@ input.vuoto { background: #fffdf5; border-color: #ecdca8; }
   background: var(--foglio); padding: 1px 7px; border-radius: 999px;
 }
 .quando-cart, .origine-cart { font-size: 0.68rem; color: var(--text-light); }
+.ora-cart { font-weight: 700; color: var(--inchiostro); }
+/* Né grigio né verde né blu: quelli sono gli stati. Lo dice la parola. */
+.sopralluogo-cart {
+  font-size: 0.64rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.04em;
+  color: var(--inchiostro-tenue); border: 1px solid var(--ocra); background: var(--foglio);
+  padding: 0 6px; border-radius: 999px;
+}
 .requisito-cart {
   font-size: 0.68rem; color: var(--earth); background: var(--earth-light);
   border: 1px solid var(--earth); padding: 0 5px; border-radius: 999px;
@@ -789,6 +804,7 @@ async function assorbiAppuntamenti() {
       settimana: doc.settimana || '',
       origine: 'prenotato dal cantiere',
       requisiti: doc.requisiti,
+      sopralluogo: doc.sopralluogo,
       stato: 'lista',
       da: doc.id,
       inserito,
@@ -937,6 +953,21 @@ async function caricaLavagna() {
   }
 }
 
+// «8», «8.30», «8:30», «830» → «08:30». Quello che non è un'ora torna vuoto: un
+// orario sbagliato su un appuntamento confermato è peggio di nessun orario.
+function leggiOra(testo) {
+  const m = String(testo || '').trim().match(/^(\d{1,2})(?:[:.,h]?(\d{2}))?$/);
+  if (!m) return '';
+  const h = Number(m[1]), min = Number(m[2] || 0);
+  if (h > 23 || min > 59) return '';
+  return String(h).padStart(2, '0') + ':' + String(min).padStart(2, '0');
+}
+
+// Dall'una in poi è pomeriggio. L'ora e la mezza giornata non possono dire due
+// cose diverse: è la mezza giornata che si adegua, perché l'ora è quella che si
+// è detta al cliente.
+const mezzaDellOra = ora => Number(ora.slice(0, 2)) >= 13 ? 'pomeriggio' : 'mattina';
+
 function sistemaLavoro(l) {
   return {
     id: l.id || 'l' + Math.random().toString(36).slice(2),
@@ -955,6 +986,10 @@ function sistemaLavoro(l) {
     // la scrive prenotando e torna in giardino con l'agenda.
     note: l.note || '',
     rimandato: !!l.rimandato,
+    // Un sopralluogo è un'andata a guardare, non un lavoro: ha la sua colonna in
+    // coda perché in mezzo agli altri non si distingueva, e chi pianifica lo
+    // tratta diverso — mezz'ora, spesso col titolare, e da lì nasce un preventivo.
+    sopralluogo: !!l.sopralluogo,
     stato: l.stato === 'matita' || l.stato === 'confermato' ? l.stato : 'lista',
     // Fatto è un interruttore, non un terzo stato: così togliendo la spunta il
     // lavoro ritrova da sé se era a matita o confermato, senza che nessuno debba
@@ -965,6 +1000,9 @@ function sistemaLavoro(l) {
     // e niente su questa lavagna si muove da solo.
     giorno: l.giorno || '',
     mezza: l.mezza === 'pomeriggio' ? 'pomeriggio' : (l.mezza === 'mattina' ? 'mattina' : ''),
+    // L'ora detta al cliente, «08:30». Facoltativa e solo per chi ha già una
+    // mezza giornata: un lavoro in coda non ha un giorno, quindi non ha un'ora.
+    ora: leggiOra(l.ora),
     // Quante mezze giornate occupa. Si allarga e si stringe a mano, un passo per
     // volta: dedurle dalla stima ore legava la pianificazione a un numero messo
     // a occhio, e chi pianifica sa cose che la stima non sa. I lavori salvati
@@ -2742,13 +2780,54 @@ function etichettaStato(l) {
   return l.stato === 'confermato' ? 'confermato' : 'a matita';
 }
 
+// I cartellini in coda sono chiusi: con la coda piena erano un muro, e chi la
+// guarda cerca un nome. Aperti si leggono interi.
+const CODA_APERTI = new Set();
+
+function apriChiudiCartellino(id) {
+  if (CODA_APERTI.has(id)) CODA_APERTI.delete(id); else CODA_APERTI.add(id);
+  disegnaLavagna();
+}
+
+const giornoMese = iso => iso.slice(8, 10) + '/' + iso.slice(5, 7);
+
+// Chiuso porta quello che serve a scegliere: chi, che cosa (la prima riga delle
+// note), per quando e da quando aspetta. Si era chiesto apposta che dalla coda si
+// vedesse cosa c'è da fare e quando è entrato: chiudere non vuol dire toglierlo.
+function cartellinoChiuso(l) {
+  const id = perOnclick(l.id);
+  const classi = ['cartellino', 'chiuso'];
+  if (bloccato(l)) classi.push('bloccato');
+  const primaRiga = String(l.note || '').split('\n').find(r => r.trim()) || '';
+  return '<article class="' + classi.join(' ') + '" draggable="true"' +
+      ' ondragstart="iniziaTrascino(event, \'' + id + '\')"' +
+      ' onclick="apriChiudiCartellino(\'' + id + '\')"' +
+      ' title="Un clic per i dettagli · trascinalo in una mezza giornata">' +
+    '<div class="testa-cart"><div class="cliente-cart testo-cart">' + perValore(l.cliente || 'senza nome') + '</div>' +
+      '<span class="stato-cart">' + etichettaStato(l) + '</span></div>' +
+    (primaRiga ? '<div class="cosa-cart una-riga">' + perValore(primaRiga) + '</div>' : '') +
+    '<div class="riga-cart">' +
+      (l.sopralluogo ? '<span class="sopralluogo-cart">sopralluogo</span>' : '') +
+      (l.rimandato ? '<span class="rimandato-cart">slittato</span>' : '') +
+      // Di un bloccato la cosa da sapere è cosa manca: «bloccato» da solo no.
+      l.requisiti.map(r => '<span class="requisito-cart">⚠ ' + perValore(r) + '</span>').join('') +
+      (l.settimana ? '<span class="quando-cart">' + perValore(etichettaSettimana(l.settimana)) + '</span>' : '') +
+      (l.ore ? '<span class="ore-cart">~' + formattaQuantita(l.ore) + ' h</span>' : '') +
+      (l.origine || l.inserito ? '<span class="origine-cart">' + perValore(l.origine || 'inserito') +
+        (l.inserito ? ' il ' + perValore(giornoMese(l.inserito)) : '') + '</span>' : '') +
+    '</div>' +
+  '</article>';
+}
+
 function cartellino(l) {
+  if (!piazzato(l) && !CODA_APERTI.has(l.id)) return cartellinoChiuso(l);
   const classi = ['cartellino'];
   if (piazzato(l)) classi.push(l.stato);
   // Il blu sta sopra gli altri due: quando è fatto, è quello che si vede.
   if (l.fatto) classi.push('fatto');
   if (bloccato(l)) classi.push('bloccato');
   const inLista = !piazzato(l);
+  if (inLista) classi.push('aperto');
   const mezze = mezzeOccupate(l);
   const c = copertura(l);
   const ultimoGiorno = c.length ? c[c.length - 1].giorno : '';
@@ -2760,11 +2839,13 @@ function cartellino(l) {
   return '<article class="' + classi.join(' ') + '" draggable="' + (l.fatto ? 'false' : 'true') + '"' +
       (l.fatto ? '' : ' ondragstart="iniziaTrascino(event, \'' + id + '\')"') +
       (piazzato(l) && !l.fatto ? ' onclick="cambiaPenna(\'' + id + '\')"' : '') +
+      (inLista ? ' onclick="apriChiudiCartellino(\'' + id + '\')"' : '') +
       ' title="' + (l.fatto ? 'Fatto: togli la spunta per rimetterlo in gioco'
-        : piazzato(l) ? 'Un clic per confermare o tornare a matita' : 'Trascinalo in una mezza giornata') + '">' +
+        : piazzato(l) ? 'Un clic per confermare o tornare a matita' : 'Un clic per richiuderlo · trascinalo in una mezza giornata') + '">' +
     '<div class="testa-cart">' +
       '<div class="testo-cart">' +
-        '<div class="cliente-cart">' + perValore(l.cliente || 'senza nome') + '</div>' +
+        '<div class="cliente-cart">' + (piazzato(l) && l.ora ? '<span class="ora-cart">' + l.ora + '</span> ' : '') +
+          perValore(l.cliente || 'senza nome') + '</div>' +
         (l.luogo ? '<div class="luogo-cart">' + perValore(l.luogo) + '</div>' : '') +
       '</div>' +
       // La spunta è un comando suo: il clic sul cartellino continua a fare
@@ -2776,6 +2857,11 @@ function cartellino(l) {
     (l.note ? '<div class="cosa-cart">' + perValore(l.note) + '</div>' : '') +
     '<div class="riga-cart">' +
       '<span class="stato-cart">' + etichettaStato(l) + '</span>' +
+      (l.sopralluogo ? '<span class="sopralluogo-cart">sopralluogo</span>' : '') +
+      (piazzato(l) && !l.fatto ? '<button type="button" class="bottone-cart' + (l.ora ? ' acceso' : '') + '"' +
+        ' onclick="event.stopPropagation(); scriviOra(\'' + id + '\')"' +
+        ' title="' + (l.ora ? 'Cambia o togli l\'ora' : 'Scrivi l\'ora detta al cliente') + '">🕘' +
+        (l.ora ? '' : ' ora') + '</button>' : '') +
       (l.ore ? '<span class="ore-cart">~' + formattaQuantita(l.ore) + ' h</span>' : '') +
       (l.rimandato && inLista ? '<span class="rimandato-cart">slittato</span>' : '') +
       (inLista && l.settimana ? '<span class="quando-cart">' + perValore(etichettaSettimana(l.settimana)) + '</span>' : '') +
@@ -2788,9 +2874,9 @@ function cartellino(l) {
           ' title="Allarga alla mezza giornata successiva">+</button>' +
         '</span>' : '') +
       (inLista && l.origine ? '<span class="origine-cart">' + perValore(l.origine) +
-        (l.inserito ? ' il ' + perValore(l.inserito.slice(8, 10) + '/' + l.inserito.slice(5, 7)) : '') + '</span>'
+        (l.inserito ? ' il ' + perValore(giornoMese(l.inserito)) : '') + '</span>'
         : inLista && l.inserito ? '<span class="origine-cart">inserito il ' +
-          perValore(l.inserito.slice(8, 10) + '/' + l.inserito.slice(5, 7)) + '</span>' : '') +
+          perValore(giornoMese(l.inserito)) + '</span>' : '') +
       (inLista ? '<button type="button" class="bottone-cart" style="margin-left:auto"' +
         ' onclick="event.stopPropagation(); apriModuloLavoro(\'' + id + '\')" title="Modifica">✎</button>' +
         '<button type="button" class="bottone-cart"' +
@@ -2846,17 +2932,24 @@ function disegnaLavagna() {
       (rimasti === 1 ? ' lavoro è slittato' : ' lavori sono slittati') +
       ' e aspettano<button class="bottone-cart" style="margin-left:auto" onclick="hoVisto()">Ho visto</button></div>';
   }
-  // Tutte e due le liste riportano in coda: in quale delle due finisca un lavoro lo
-  // decide il lavoro, non il punto dove lo lasci. Bloccato vuol dire che ha un
-  // requisito scritto, e lasciarlo cadere a destra non lo scrive.
+  // Tutte le liste riportano in coda: in quale finisca un lavoro lo decide il
+  // lavoro, non il punto dove lo lasci. Bloccato vuol dire che ha un requisito
+  // scritto, e lasciarlo cadere a destra non lo scrive. Un sopralluogo bloccato
+  // sta coi bloccati: anche lui non si può ancora fare, ed è la cosa da sapere.
   const zonaCoda = cls => '<div class="coda-lista ' + cls + '" ondragover="sopraZona(event, this)"' +
     ' ondragleave="fuoriZona(this)" ondrop="rilascia(event, this, \'\', \'\')">';
-  const pronti = inCoda.filter(l => !bloccato(l));
+  const pronti = inCoda.filter(l => !bloccato(l) && !l.sopralluogo);
+  const sopralluoghi = inCoda.filter(l => !bloccato(l) && l.sopralluogo);
   const fermi = inCoda.filter(bloccato);
   coda += '<div class="griglia-coda"><div><h3 class="titolo-colonna">Da pianificare</h3>' +
     zonaCoda('pronti') +
       (pronti.length ? pronti.map(cartellino).join('')
         : '<div class="vuoto-mezza">Niente in attesa.<br>Quello che arriva dai rapportini compare qui.</div>') +
+    '</div></div>' +
+    '<div><h3 class="titolo-colonna">Sopralluoghi</h3>' +
+    zonaCoda('sopralluoghi') +
+      (sopralluoghi.length ? sopralluoghi.map(cartellino).join('')
+        : '<div class="vuoto-mezza">Nessun sopralluogo.</div>') +
     '</div></div>' +
     '<div><h3 class="titolo-colonna">Bloccati</h3>' +
     zonaCoda('fermi') +
@@ -2921,7 +3014,8 @@ function disegnaLavagna() {
     '<span><i class="campione penna"></i><b>Confermato</b> — il cliente sa che arrivate</span>' +
     '<span><i class="campione fatto"></i><b>Fatto</b> — spuntato, è storia</span>' +
     '<span><i class="campione bloccato"></i><b>Bloccato</b> — manca qualcosa per poterlo fare</span>' +
-    '<span>Un clic sul cartellino conferma · la <b>✓</b> segna che è fatto · <b>+</b> e <b>−</b> allargano il lavoro di mezza giornata</span>' +
+    '<span><span class="sopralluogo-cart">sopralluogo</span> si va a guardare, non a lavorare</span>' +
+    '<span>In coda un clic apre i dettagli · sulla settimana un clic sul cartellino conferma · <b>🕘</b> scrive l\'ora · la <b>✓</b> segna che è fatto · <b>+</b> e <b>−</b> allargano il lavoro di mezza giornata</span>' +
   '</div>';
 
   c.innerHTML = html;
@@ -2955,10 +3049,13 @@ async function spostaLavoro(id, giorno, mezza) {
       'Se ' + cosa + ' bisogna avvisarlo. Procedere?')) return;
   }
   if (!giorno) {
-    l.stato = 'lista'; l.giorno = ''; l.mezza = ''; l.mezze = 1;
+    l.stato = 'lista'; l.giorno = ''; l.mezza = ''; l.mezze = 1; l.ora = '';
     l.rimandato = true;   // era già stato programmato: torna in cima alla coda
   } else {
     if (l.giorno === giorno && l.mezza === mezza) return;
+    // Un'ora della mattina su un pomeriggio direbbe due cose diverse: passando
+    // all'altra mezza giornata si toglie, e la si riscrive quando la si sa.
+    if (l.mezza !== mezza) l.ora = '';
     l.giorno = giorno; l.mezza = mezza;
     if (l.stato === 'lista') l.stato = 'matita';
     l.rimandato = false;
@@ -2985,6 +3082,27 @@ async function spuntaFatto(id) {
   const l = LAVAGNA.lavori.find(x => x.id === id);
   if (!l || !piazzato(l)) return;   // fatto vuol dire in un giorno, non in coda
   l.fatto = !l.fatto;
+  await salvaLavagna();
+  disegnaLavagna();
+}
+
+// Un prompt e non un campo sul cartellino: un campo da compilare dentro una
+// cosa che si trascina e si clicca per confermare sarebbe il quarto comando
+// sullo stesso rettangolo.
+async function scriviOra(id) {
+  const l = LAVAGNA.lavori.find(x => x.id === id);
+  if (!l || !piazzato(l) || l.fatto) return;
+  const scritto = prompt('A che ora, per ' + (l.cliente || 'questo lavoro') + '?\n' +
+    'Per esempio 8:30. Lascia vuoto per toglierla.', l.ora || '');
+  if (scritto === null) return;
+  const ora = leggiOra(scritto);
+  if (scritto.trim() && !ora) { avvisa('«' + scritto + '» non è un\'ora: scrivila come 8:30', true); return; }
+  if (ora === l.ora) return;
+  // Come per lo spostamento: il cliente confermato sa a che ora arrivate.
+  if (l.stato === 'confermato' && !confirm(l.cliente + ' è confermato: il cliente sa che arrivate.\n\n' +
+    'Se cambi l\'ora bisogna avvisarlo. Procedere?')) return;
+  l.ora = ora;
+  if (ora) l.mezza = mezzaDellOra(ora);
   await salvaLavagna();
   disegnaLavagna();
 }
@@ -3051,6 +3169,8 @@ function apriModuloLavoro(id) {
       perValore(etichettaSettimana(l ? l.settimana : '')) + '</div>' +
     '<input type="text" id="n-requisito" placeholder="Manca qualcosa? (blocca il lavoro)" value="' +
       perValore(l && l.requisiti.length ? l.requisiti.join(', ') : '') + '" style="margin-bottom:6px">' +
+    '<label class="meta" style="display:flex; align-items:center; gap:6px; margin-bottom:6px">' +
+      '<input type="checkbox" id="n-sopralluogo"' + (l && l.sopralluogo ? ' checked' : '') + '> È un sopralluogo</label>' +
     '<textarea id="n-note" rows="3" placeholder="Cosa c\'è da fare, e cosa ricordare — torna in giardino con l\'agenda">' +
       perValore(l ? l.note : '') + '</textarea>' +
     '<div class="bottoni">' +
@@ -3085,6 +3205,7 @@ async function salvaModuloLavoro() {
     ore: Number(valore('n-ore').replace(',', '.')) || 0,
     settimana: lunediDellaSettimana(valore('n-settimana')),
     requisiti,
+    sopralluogo: !!(document.getElementById('n-sopralluogo') || {}).checked,
     note: valore('n-note').trim(),
   };
 

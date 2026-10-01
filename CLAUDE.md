@@ -305,11 +305,14 @@ ufficio le guardano due schermate diverse, quindi viaggiano separate e finiscono
 due cartelle: `rapportini/` e `appuntamenti/`. Il terzo è l'**agenda**, e va
 nell'altro verso: la scrive l'ufficio e la legge il telefono.
 
-**L'agenda porta quattro campi e non uno di più**: giorno, mezza giornata, cliente,
-note. Non è economia di formato, è la ragione per cui esiste così: è l'unico
+**L'agenda porta cinque campi e non uno di più**: giorno, mezza giornata, ora,
+cliente, note. Non è economia di formato, è la ragione per cui esiste così: è l'unico
 documento che si *legge* dall'indirizzo dello script, che è pubblico per chi lo
-conosce. Indirizzi, telefoni, ore, requisiti e prezzi restano in ufficio, e chi
-aggiunge un campo a `costruisciAgenda()` lo pubblica là.
+conosce. Indirizzi, telefoni, stime ore, requisiti e prezzi restano in ufficio, e chi
+aggiunge un campo a `costruisciAgenda()` lo pubblica là. L'ora è arrivata dopo,
+senza alzare `VERSIONE_AGENDA`: è quella detta al cliente, non dice niente di
+riservato, e in giardino è la cosa che serve di più. Un telefono non aggiornato la
+ignora, un'agenda vecchia arriva senza — che vuol dire «ora non fissata».
 
 Le note sì, e sono il motivo per cui l'agenda vale la pena: sono la cosa che fa il
 giro completo. Il cantiere le scrive prenotando, l'ufficio se le tiene sul
@@ -521,9 +524,30 @@ da sinistra a destra, riga dopo riga, **in ordine di priorità** — chi scade p
 poi chi non ha settimana. Uno slittato non passa davanti per il fatto di essere
 slittato: lo dicono l'avviso e l'etichetta, ma salire in cima falsava la priorità.
 
-**I bloccati hanno la quarta colonna**, a destra: hanno un requisito aperto e non
-si possono ancora fare. Un lavoro si rimette in coda lasciandolo su una qualsiasi
-delle due: dove finisce lo decide il requisito, non il punto dove lo lasci.
+**I sopralluoghi e i bloccati hanno una colonna ciascuno**, a destra. Un
+sopralluogo (`sopralluogo`, una casella sul lavoro e sulla prenotazione del
+telefono) è un'andata a guardare, non un lavoro, e in mezzo agli altri non si
+distingueva; un bloccato ha un requisito aperto e non si può ancora fare. Un
+sopralluogo bloccato sta **coi bloccati**: anche lui non si può fare, ed è la cosa
+da sapere. Un lavoro si rimette in coda lasciandolo su una qualsiasi delle colonne:
+dove finisce lo decide il lavoro, non il punto dove lo lasci. Sulla settimana il
+sopralluogo si riconosce dalla parola, non dal colore: grigio, verde e blu sono
+già degli stati. Il campo è arrivato dopo, senza alzare versioni: chi non ce l'ha
+non è un sopralluogo, ed è quello che erano tutti prima.
+
+**In coda i cartellini stanno chiusi**, sempre, e si aprono con un clic: con la coda
+piena erano un muro. Chiusi portano però quello che serve a scegliere — nome, la
+prima riga delle note, settimana, da quando aspetta, e per un bloccato cosa manca
+— perché si era chiesto apposta che dalla coda si vedesse cosa c'è da fare e
+quando è entrato. Sui giorni restano aperti: lì sono pochi, e si guardano interi.
+
+**L'ora è quella detta al cliente**, e si scrive col 🕘 sul cartellino già piazzato:
+in coda un lavoro non ha un giorno, quindi non ha un'ora. Ora e mezza giornata non
+possono dire due cose diverse: scrivendo le 14:30 il cartellino passa al
+pomeriggio, perché è l'ora che si è promessa; trascinandolo all'altra mezza
+giornata l'ora si toglie, e si riscrive quando la si sa. Cambiare l'ora di un
+confermato chiede conferma, come spostarlo. Dentro la mezza giornata l'ora **non
+riordina** i cartellini: l'ordine lì resta di chi pianifica.
 
 Dentro i giorni non si ordina niente: lì l'ordine lo dà chi pianifica.
 

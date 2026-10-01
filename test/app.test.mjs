@@ -671,9 +671,18 @@ try {
     window.svuotaCoda = () => {};
     scegliClientePrenotazione(DB.visite[0].ClienteID, 'Mario Rossi');
     document.getElementById('f-pren-note').value = 'Rifilare la siepe';
+    document.getElementById('f-pren-sopralluogo').checked = true;
     await salvaPrenotazione();
     window.svuotaCoda = svuotaVera;
+    const ultima = DB.prenotazioni[DB.prenotazioni.length - 1];
+    const inCoda = DB.coda.find(v => v.docID === ultima.PrenotazioneID);
+    apriPrenotazione();
+    const ripulita = !document.getElementById('f-pren-sopralluogo').checked;
+    closeDrawer('overlay-prenotazione');
     const r = {
+      sopralluogo: ultima.Sopralluogo === 'Sì' && inCoda.doc.sopralluogo === true &&
+        leggiAppuntamento(JSON.stringify(inCoda.doc)).sopralluogo === true,
+      ripulita,
       salvata: DB.prenotazioni.length === quante + 1,
       prenotazioneChiusa: !document.getElementById('overlay-prenotazione').classList.contains('open'),
       visitaAperta: document.getElementById('overlay-visita').classList.contains('open'),
@@ -687,6 +696,8 @@ try {
   });
   ok('inviata la prenotazione, la visita è ancora lì',
     dopoPrenota.salvata && dopoPrenota.prenotazioneChiusa && dopoPrenota.visitaAperta, JSON.stringify(dopoPrenota));
+  ok('una prenotazione segnata sopralluogo parte come sopralluogo', dopoPrenota.sopralluogo);
+  ok('e la prenotazione dopo riparte senza la spunta', dopoPrenota.ripulita);
   ok('con le modifiche non ancora salvate', dopoPrenota.nota === 'Correzione non ancora salvata', dopoPrenota.nota);
   // Col tasto indietro, con due pannelli aperti, si chiude quello sopra.
   await page.evaluate(() => apriPrenotazione());
@@ -1696,6 +1707,95 @@ try {
   ok('e quello che non si può fare sta in fondo, anche se scade domani',
     ordine[ordine.length - 1] === 'Bloccato', JSON.stringify(ordine));
 
+  // ── la coda chiusa, i sopralluoghi, l'ora ──
+  const chiusi = await pagU.evaluate(async () => {
+    const l = LAVAGNA.lavori.find(x => x.cliente === 'Scade prima');
+    l.note = 'Potatura siepe\nchiedere la chiave del cancello';
+    l.inserito = '2026-09-02';
+    disegnaLavagna();
+    const cart = () => [...document.querySelectorAll('#pagina-lavagna .coda-lista.pronti .cartellino')]
+      .find(c => c.textContent.includes('Scade prima'));
+    const prima = { chiuso: cart().classList.contains('chiuso'), testo: cart().textContent,
+      bottoni: cart().querySelectorAll('button').length };
+    cart().click();
+    const aperto = { aperto: cart().classList.contains('aperto'), testo: cart().textContent,
+      bottoni: cart().querySelectorAll('button').length };
+    cart().click();
+    return { prima, aperto, richiuso: cart().classList.contains('chiuso') };
+  });
+  ok('in coda i cartellini stanno chiusi', chiusi.prima.chiuso && chiusi.prima.bottoni === 0, JSON.stringify(chiusi.prima));
+  // Si era chiesto apposta: dalla coda si vede cosa c'è da fare e da quando aspetta.
+  ok('ma chiusi dicono lo stesso cosa c\'è da fare e quando è entrato',
+    chiusi.prima.testo.includes('Potatura siepe') && chiusi.prima.testo.includes('il 02/09') &&
+    !chiusi.prima.testo.includes('chiave del cancello'), chiusi.prima.testo);
+  ok('e lo stato a parole', chiusi.prima.testo.includes('in attesa'));
+  ok('un clic lo apre, con le note intere e i comandi',
+    chiusi.aperto.aperto && chiusi.aperto.testo.includes('chiave del cancello') && chiusi.aperto.bottoni === 2,
+    JSON.stringify(chiusi.aperto));
+  ok('e un altro lo richiude', chiusi.richiuso);
+
+  const sopra = await pagU.evaluate(async () => {
+    apriModuloLavoro();
+    document.getElementById('n-cliente').value = 'Da guardare';
+    document.getElementById('n-note').value = 'Misurare il prato dietro casa';
+    document.getElementById('n-sopralluogo').checked = true;
+    await salvaModuloLavoro();
+    LAVAGNA.lavori.push(sistemaLavoro({ cliente: 'Da guardare ma bloccato', sopralluogo: true,
+      requisiti: ['manca il numero del cliente'], stato: 'lista' }));
+    disegnaLavagna();
+    const nomi = sel => [...document.querySelectorAll('#pagina-lavagna ' + sel + ' .cliente-cart')].map(e => e.textContent);
+    const r = { sopralluoghi: nomi('.coda-lista.sopralluoghi'), pronti: nomi('.coda-lista.pronti'),
+      fermi: nomi('.coda-lista.fermi'), segnato: LAVAGNA.lavori.find(l => l.cliente === 'Da guardare').sopralluogo,
+      parola: document.querySelector('#pagina-lavagna .coda-lista.sopralluoghi').textContent.includes('sopralluogo') };
+    LAVAGNA.lavori = LAVAGNA.lavori.filter(l => l.cliente !== 'Da guardare ma bloccato');
+    await salvaLavagna();
+    return r;
+  });
+  ok('un sopralluogo aggiunto a mano sta nella colonna sua',
+    sopra.segnato === true && JSON.stringify(sopra.sopralluoghi) === '["Da guardare"]' &&
+    !sopra.pronti.includes('Da guardare'), JSON.stringify(sopra));
+  ok('e il cartellino lo dice a parole, non col colore', sopra.parola);
+  ok('e un bloccato, chiuso, dice cosa manca',
+    await pagU.evaluate(() => [...document.querySelectorAll('#pagina-lavagna .coda-lista.fermi .cartellino.chiuso')]
+      .some(c => c.textContent.includes('serve la piattaforma'))));
+  ok('un sopralluogo bloccato sta coi bloccati', sopra.fermi.includes('Da guardare ma bloccato'), JSON.stringify(sopra.fermi));
+
+  const ora = await pagU.evaluate(async () => {
+    const l = LAVAGNA.lavori.find(x => x.cliente === 'Da guardare');
+    await spostaLavoro(l.id, '2026-09-22', 'mattina');
+    const risposte = ['14.30'];
+    const prompt0 = window.prompt;
+    window.prompt = () => risposte.shift();
+    await scriviOra(l.id);
+    const dopo = { ora: l.ora, mezza: l.mezza, schermo: document.getElementById('pagina-lavagna').innerHTML.includes('14:30') };
+    const suFile = JSON.parse(await leggiTesto(window.RADICE, 'lavagna.json')).lavori.find(x => x.id === l.id).ora;
+    const agenda = costruisciAgenda(LAVAGNA.lavori, new Date('2026-09-21T12:00:00'))
+      .appuntamenti.find(a => a.cliente === 'Da guardare');
+    risposte.push('alle otto');
+    await scriviOra(l.id);
+    const sbagliata = l.ora;
+    await spostaLavoro(l.id, '2026-09-23', 'mattina');
+    const spostato = l.ora;
+    await spostaLavoro(l.id, '', '');
+    window.prompt = prompt0;
+    return { dopo, suFile, agenda, sbagliata, spostato, inCoda: l.ora,
+      letture: [leggiOra('8'), leggiOra('830'), leggiOra('8:30'), leggiOra('25:00'), leggiOra('')] };
+  });
+  ok('l\'ora si scrive sul cartellino e si legge davanti al nome', ora.dopo.ora === '14:30' && ora.dopo.schermo, JSON.stringify(ora.dopo));
+  // L'ora è quella detta al cliente: è la mezza giornata che si adegua.
+  ok('e un\'ora del pomeriggio sposta il cartellino al pomeriggio', ora.dopo.mezza === 'pomeriggio');
+  ok('si salva sul file della lavagna', ora.suFile === '14:30');
+  ok('e parte con l\'agenda', ora.agenda && ora.agenda.ora === '14:30', JSON.stringify(ora.agenda));
+  ok('un\'ora che non è un\'ora non si scrive', ora.sbagliata === '14:30');
+  ok('passando all\'altra mezza giornata l\'ora si toglie, o direbbe il contrario', ora.spostato === '');
+  ok('e tornando in coda non resta appesa', ora.inCoda === '');
+  ok('8, 830 e 8:30 sono la stessa ora; 25:00 non è un\'ora',
+    JSON.stringify(ora.letture) === '["08:00","08:30","08:30","",""]', JSON.stringify(ora.letture));
+  await pagU.evaluate(async () => {
+    LAVAGNA.lavori = LAVAGNA.lavori.filter(l => l.cliente !== 'Da guardare');
+    await salvaLavagna(); disegnaLavagna();
+  });
+
   ok('un lavoro aggiunto a mano si rilegge dal file',
     await pagU.evaluate(async () => { await ricarica(); return LAVAGNA.lavori.length; }) === 4);
   ok('con la sua data di inserimento, che non va persa salvando',
@@ -2247,9 +2347,11 @@ try {
     !!spostato && spostato.giorno === await pagU.evaluate(() => window.GIORNI.dopo),
     spostato && spostato.giorno);
   // Il vincolo che conta: quello che non parte non si può leggere per strada.
+  // L'ora detta al cliente sì: è arrivata dopo, ed è la cosa che in giardino serve
+  // di più. La stima delle ore di lavoro no.
   ok('niente indirizzi, ore, requisiti o prezzi nell\'agenda',
     agenda.appuntamenti.length > 0 &&
-    agenda.appuntamenti.every(a => Object.keys(a).sort().join(',') === 'cliente,giorno,mezza,note') &&
+    agenda.appuntamenti.every(a => Object.keys(a).sort().join(',') === 'cliente,giorno,mezza,note,ora') &&
     !agendaScritta.includes('Tigli') && !agendaScritta.includes('piattaforma'),
     Object.keys(agenda.appuntamenti[0] || {}).join(','));
 

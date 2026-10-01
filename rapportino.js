@@ -248,6 +248,9 @@ function costruisciAppuntamento({ prenotazione, cliente }) {
     // ancora, e fingere di saperlo vorrebbe dire spostarlo tre volte.
     settimana: prenotazione.Settimana ? lunediDellaSettimana(prenotazione.Settimana) : '',
     requisiti: String(prenotazione.Requisiti || '').split(',').map(r => r.trim()).filter(r => r),
+    // Arrivato dopo, senza alzare la versione: un appuntamento che non lo porta
+    // non è un sopralluogo, ed è quello che erano tutti prima.
+    sopralluogo: prenotazione.Sopralluogo === 'Sì' || prenotazione.Sopralluogo === true,
     note: prenotazione.Note || '',
   };
 }
@@ -274,6 +277,7 @@ function leggiAppuntamento(grezzo) {
     ore: Number(doc.ore) || 0,
     settimana: doc.settimana || '',
     requisiti: Array.isArray(doc.requisiti) ? doc.requisiti : [],
+    sopralluogo: !!doc.sopralluogo,
   };
 }
 
@@ -289,11 +293,14 @@ function nomeFileAppuntamento(doc) {
 // giornate già pianificate, così chi è in giardino sa dove si va domani senza
 // telefonare in ufficio.
 //
-// Porta **solo** giorno, mezza giornata, nome del cliente e note. Non indirizzi,
-// non telefoni, non ore, non prezzi: viaggia per un indirizzo che è pubblico per
+// Porta **solo** giorno, mezza giornata, ora, nome del cliente e note. Non
+// indirizzi, non telefoni, non stime ore, non prezzi: viaggia per un indirizzo che è pubblico per
 // chi lo conosce, e quello che non parte non si può perdere per strada. Le note
 // sono lì perché sono l'unica cosa che fa il giro completo — il cantiere le
 // scrive prenotando, l'ufficio le tiene sul cartellino, e tornano in giardino.
+// L'ora è arrivata dopo, senza alzare la versione: è quella detta al cliente, e
+// in giardino è la cosa che serve di più. Un telefono vecchio semplicemente non
+// la mostra; un'agenda vecchia arriva senza, che vuol dire «ora non fissata».
 //
 // Sei appuntamenti e non tutti: è l'orizzonte che serve in cantiere. Oltre, la
 // pianificazione cambia ancora e una lista lunga sarebbe una lista sbagliata.
@@ -314,11 +321,13 @@ function costruisciAgenda(lavori, oggi) {
   const da = oggi ? dataISO(oggi) : dataISO(new Date());
   const voci = (lavori || [])
     .filter(l => l && l.giorno && l.giorno >= da)
-    .sort((a, b) => (a.giorno + primaLaMattina(a.mezza)).localeCompare(b.giorno + primaLaMattina(b.mezza)))
+    .sort((a, b) => (a.giorno + primaLaMattina(a.mezza) + (a.ora || '')).localeCompare(
+      b.giorno + primaLaMattina(b.mezza) + (b.ora || '')))
     .slice(0, APPUNTAMENTI_IN_AGENDA)
     .map(l => ({
       giorno: l.giorno,
       mezza: l.mezza === 'pomeriggio' ? 'pomeriggio' : 'mattina',
+      ora: /^\d{2}:\d{2}$/.test(l.ora || '') ? l.ora : '',
       cliente: l.cliente || '',
       note: l.note || '',
     }));
@@ -354,6 +363,7 @@ function leggiAgenda(grezzo) {
       .map(a => ({
         giorno: String(a.giorno).slice(0, 10),
         mezza: a.mezza === 'pomeriggio' ? 'pomeriggio' : 'mattina',
+        ora: /^\d{2}:\d{2}$/.test(a.ora || '') ? a.ora : '',
         cliente: a.cliente || '',
         note: a.note || '',
       })),

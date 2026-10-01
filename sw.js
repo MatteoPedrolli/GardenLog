@@ -2,7 +2,7 @@
 // Da quando i dati stanno sul dispositivo e non su un server, l'unica cosa che
 // ancora richiede la rete è il caricamento della pagina: senza questo file
 // l'app aperta in giardino senza campo non partirebbe nemmeno.
-const CACHE = 'giardinolog-v36';
+const CACHE = 'giardinolog-v37';
 
 const GUSCIO = [
   './',

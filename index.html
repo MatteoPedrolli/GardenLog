@@ -798,6 +798,11 @@ select.form-control { background-image: url("data:image/svg+xml,%3Csvg xmlns='ht
         <input type="text" class="form-control" id="f-pren-requisiti" placeholder="Es. serve la piattaforma">
       </div>
 
+      <label class="form-group" style="display:flex; align-items:center; gap:8px">
+        <input type="checkbox" id="f-pren-sopralluogo" style="width:20px; height:20px">
+        <span class="form-label" style="margin:0">È un sopralluogo, si va a guardare</span>
+      </label>
+
       <div class="form-group">
         <label class="form-label">Cosa c'è da fare, e cosa ricordare</label>
         <textarea class="form-control" id="f-pren-note" rows="3" placeholder="Potatura siepe di lauro. Il cliente preferisce il mattino, chiedere della chiave del cancello..."></textarea>
@@ -2639,6 +2644,7 @@ function prenotaDaVisita() {
 function apriPrenotazione() {
   ['f-pren-ore', 'f-pren-settimana', 'f-pren-requisiti', 'f-pren-note']
     .forEach(id => document.getElementById(id).value = '');
+  document.getElementById('f-pren-sopralluogo').checked = false;
   mostraSettimanaScelta();
   scollegaClientePrenotazione();
   document.getElementById('overlay-prenotazione').classList.add('open');
@@ -2696,6 +2702,7 @@ async function salvaPrenotazione() {
     Ore: document.getElementById('f-pren-ore').value,
     Settimana: lunediDellaSettimana(document.getElementById('f-pren-settimana').value),
     Requisiti: document.getElementById('f-pren-requisiti').value.trim(),
+    Sopralluogo: document.getElementById('f-pren-sopralluogo').checked ? 'Sì' : '',
     Note: note,
     Creata: new Date().toISOString(),
     Consegnata: '',
@@ -2790,7 +2797,7 @@ function renderAgenda() {
     return;
   }
   el.innerHTML = agenda.appuntamenti.map(a => `<div class="card" style="padding:12px">
-    <div style="font-size:0.78rem; color:var(--primary); font-weight:600">${perValore(etichettaMezzaGiornata(a.giorno, a.mezza))}</div>
+    <div style="font-size:0.78rem; color:var(--primary); font-weight:600">${perValore(etichettaMezzaGiornata(a.giorno, a.mezza))}${a.ora ? ' · ore ' + perValore(a.ora) : ''}</div>
     <div style="font-weight:600">${perValore(a.cliente || 'senza cliente')}</div>
     ${a.note ? `<div style="font-size:0.82rem; color:var(--text-mid); margin-top:4px">${perValore(a.note)}</div>` : ''}
   </div>`).join('');
@@ -2812,7 +2819,7 @@ function renderPrenotazioni() {
     // proprio il caso in cui non è colpa sua.
     const davanti = posto > 0 ? coda.slice(0, posto).find(v => v.errore) : null;
     return `<div class="card" style="padding:12px">
-      <div style="font-weight:600">${perValore(c ? c.Cliente : 'cliente eliminato')}</div>
+      <div style="font-weight:600">${perValore(c ? c.Cliente : 'cliente eliminato')}${isSi(p.Sopralluogo) ? ' <span style="font-size:0.7rem; font-weight:600; color:var(--text-light)">· sopralluogo</span>' : ''}</div>
       <div style="font-size:0.85rem; color:var(--text-mid); white-space:pre-line">${perValore(p.Note)}</div>
       <div style="font-size:0.78rem; color:var(--text-light); margin-top:4px">
         ${p.Ore ? formattaQuantita(p.Ore) + ' h · ' : ''}${p.Settimana ? etichettaSettimana(p.Settimana) + ' · ' : ''}${voce ? '📤 da consegnare' : '✅ in ufficio'}
