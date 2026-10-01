@@ -2012,6 +2012,20 @@ async function ricontrolla() {
 // non si legge, e quello che non si legge tanto vale non scriverlo.
 const NOVITA = [
   {
+    versione: '2026-10-02',
+    data: '2026-10-02',
+    titolo: 'Dal sopralluogo al preventivo',
+    righe: [
+      'Sulla lavagna, spuntando **«È un sopralluogo»**, compaiono via, telefono e mail. Scrivendo un nome già in anagrafica si riempiono da soli.',
+      'I sopralluoghi piazzati su un giorno arrivano sul telefono, nella pagina Rilievi: al tocco il rilievo si apre **con l\'anagrafica già scritta**.',
+      'Via e telefono partono solo con la **chiave dei sopralluoghi**, scritta nello script e sul telefono: senza, il telefono vede il solo nome.',
+      'I preventivi stanno in quattro schede: **Aperti, Inviati, Confermati, Rifiutati**. Fra gli aperti ci sono anche i rilievi appena arrivati.',
+      '**«Il cliente ha detto no»** lo sposta fra i rifiutati. Uno mandato e senza risposta dopo i **giorni di validità** (in Impostazioni) ci va da solo come «scaduto», e si può accettare lo stesso.',
+      '**«Manda per mail»** apre la posta col preventivo già scritto e lo segna inviato. Se l\'hai stampato e consegnato, c\'è «Consegnato a mano».',
+      'Se il cliente non è in anagrafica, o dal rilievo arriva un telefono che lì manca, un bottone lo **porta in anagrafica** senza toccare quello che c\'è già.',
+    ],
+  },
+  {
     versione: '2026-10-01b',
     data: '2026-10-01',
     titolo: 'I preventivi',
@@ -2731,6 +2745,33 @@ function disegnaPreventivo() {
     (d.stato === 'rifiutato' && d.rifiutato ? ' il ' + formattaData(d.rifiutato)
       : d.mandato ? ' · mandato il ' + formattaData(d.mandato) + ' · ' + daQuantoAspetta(d.mandato) : '') + '</p>';
 
+  // Chi è e come raggiungerlo, subito sotto il nome: con un preventivo in mano
+  // la prima cosa che si fa in ufficio è richiamare. Dal rilievo o, se manca lì,
+  // dall'anagrafica.
+  const noto = clienteDelPreventivo(d);
+  const cc = d.cliente || {};
+  const contatti = [
+    [cc.indirizzo || (noto && noto.indirizzo), cc.citta || (noto && noto.citta)].filter(x => x).join(', '),
+    cc.telefono || (noto && noto.telefono),
+    cc.email || (noto && noto.email),
+  ].filter(x => x);
+  if (contatti.length || d.daRilievo?.sopralluogo) {
+    html += '<p class="meta" style="margin-top:-6px">' + contatti.map(perValore).join(' · ') +
+      (d.daRilievo?.sopralluogo ? (contatti.length ? ' · ' : '') + '📍 dal sopralluogo' : '') + '</p>';
+  }
+  const inAnagrafica = cosaPortaInAnagrafica(d);
+  if (inAnagrafica) {
+    html += '<div class="avvertenza">' + (inAnagrafica.nuovo
+      ? perValore(cc.nome) + ' non è in anagrafica' +
+        (CAMPI_DAL_PREVENTIVO.some(([k]) => cc[k])
+          ? ': dal rilievo arrivano ' + CAMPI_DAL_PREVENTIVO.filter(([k]) => cc[k]).map(([, n]) => n).join(', ') +
+            ' — servono per richiamare e per mandare il preventivo.'
+          : '.')
+      : 'Dal rilievo arriva quello che l\'anagrafica non ha: ' + inAnagrafica.campi.join(', ') + '.') +
+      ' <button class="secondaria" onclick="portaInAnagrafica()">' +
+      (inAnagrafica.nuovo ? 'Aggiungi in anagrafica' : 'Completa l\'anagrafica') + '</button></div>';
+  }
+
   html += '<div id="da-confermare" class="avvertenza" style="display:none"></div>';
 
   html += '<div class="scheda"><table class="elenco"><thead><tr>' +
@@ -2844,17 +2885,6 @@ function disegnaPreventivo() {
   if (d.daRilievo && d.daRilievo.note) {
     html += '<div class="scheda"><div class="titolo-sezione">Dal rilievo</div>' +
       '<div class="nota-rilievo">' + perValore(d.daRilievo.note) + '</div></div>';
-  }
-
-  const inAnagrafica = cosaPortaInAnagrafica(d);
-  if (inAnagrafica) {
-    html += '<div class="avvertenza">' + (inAnagrafica.nuovo
-      ? perValore(d.cliente.nome) + ' non è in anagrafica: dal rilievo arrivano ' +
-        CAMPI_DAL_PREVENTIVO.filter(([k]) => d.cliente[k]).map(([, n]) => n).join(', ') +
-        ' — servono per richiamare e per mandare il preventivo.'
-      : 'Dal rilievo arriva quello che l\'anagrafica non ha: ' + inAnagrafica.campi.join(', ') + '.') +
-      ' <button class="secondaria" onclick="portaInAnagrafica()">' +
-      (inAnagrafica.nuovo ? 'Aggiungi in anagrafica' : 'Completa l\'anagrafica') + '</button></div>';
   }
 
   html += '<div class="bottoni">' +

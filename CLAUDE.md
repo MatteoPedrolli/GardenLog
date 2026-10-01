@@ -323,8 +323,10 @@ viaggiano separate e finiscono in tre cartelle: `rapportini/`, `appuntamenti/` e
 `rilievi/`. Il quarto è l'**agenda**, e va nell'altro verso: la scrive l'ufficio e
 la legge il telefono.
 
-**L'agenda porta cinque campi e non uno di più**: giorno, mezza giornata, ora,
-cliente, note. Non è economia di formato, è la ragione per cui esiste così: è l'unico
+**L'agenda porta cinque campi che dicono qualcosa e non uno di più**: giorno,
+mezza giornata, ora, cliente, note. Più due che non dicono niente di nessuno — se è
+un sopralluogo, e il suo codice — perché il telefono sappia elencarli anche senza
+la chiave. Non è economia di formato, è la ragione per cui esiste così: è l'unico
 documento che si *legge* dall'indirizzo dello script, che è pubblico per chi lo
 conosce. Indirizzi, telefoni, stime ore, requisiti e prezzi restano in ufficio, e chi
 aggiunge un campo a `costruisciAgenda()` lo pubblica là. L'ora è arrivata dopo,
@@ -352,10 +354,46 @@ riga a `CARTELLE` **e rifare la distribuzione**, o continua a girare la versione
 prima. Un file, un solo autore — il telefono deposita, l'ufficio legge, e l'agenda
 è l'unico file dove i ruoli si scambiano.
 
-**In lettura lo script sa nominare un file solo.** `doGet` prende il nome da
-`LEGGIBILI`, non dalla richiesta: un nome che arriva da chi chiama farebbe di quel
-`?documento=` un modo per leggersi il listino o l'anagrafica. La lista è di due
-righe e va tenuta corta per la stessa ragione.
+**In lettura lo script sa nominare pochi file.** `doGet` prende il nome da
+`LEGGIBILI` e da `RISERVATI`, non dalla richiesta: un nome che arriva da chi chiama
+farebbe di quel `?documento=` un modo per leggersi il listino o l'anagrafica. Le
+liste sono corte e vanno tenute così.
+
+## I sopralluoghi: i contatti solo con la chiave
+
+Il giro è questo: l'ufficio mette un sopralluogo sulla lavagna — spuntando «È un
+sopralluogo» compaiono **via, telefono e mail** — lo piazza su un giorno, e il
+telefono lo trova nella pagina Rilievi; al tocco il rilievo si apre con
+l'anagrafica già scritta e il filo col sopralluogo (`SopralluogoID` →
+`sopralluogo` nel documento), e torna in ufficio fra i preventivi aperti.
+
+**Via e telefono non viaggiano nell'agenda**, perché l'agenda si legge con
+l'indirizzo dello script e basta: era la regola chiesta fin dall'inizio, e un
+numero di telefono di un privato è esattamente quello che non deve stare lì.
+Viaggiano in `sopralluoghi.json`, che l'ufficio scrive insieme all'agenda dentro
+`salvaLavagna()` e che lo script consegna **solo con la chiave**: la proprietà
+`CHIAVE_LETTURA` dello script (Impostazioni progetto → Proprietà script), uguale a
+quella scritta sul telefono in Impostazioni.
+
+**Se la chiave sullo script non c'è, quel file non esce a nessuno.** Non è un
+dettaglio: senza quel controllo uno script senza chiave e un telefono senza chiave
+sarebbero «uguali», e il file uscirebbe a chiunque abbia l'indirizzo. L'ufficio non
+sa se la chiave è impostata, quindi il file lo scrive sempre — è lo script che
+decide, chiuso finché qualcuno non lo apre apposta. La prova del giro carica lo
+script con dei servizi Google finti e controlla proprio questo, rompendolo apposta.
+
+La chiave non sta nel codice: il repository è pubblico. La risposta di controllo
+dello script dice se c'è («impostata»/«manca»), mai quale sia.
+
+**Senza chiave i sopralluoghi si vedono lo stesso**, dall'agenda, col solo nome, e
+la pagina dice che via e telefono arrivano con la chiave: mostrare meno senza
+dirlo farebbe credere che l'ufficio non li sappia. **Con la chiave sbagliata**
+l'errore si legge sulla pagina, accanto agli ultimi scaricati — non sembra un
+elenco vuoto. Come l'agenda, quelli scaricati restano per quando il campo manca
+(`DB.sopralluoghi`, assente = non ancora scaricati, nessuna versione alzata).
+
+Solo quelli **piazzati su una mezza giornata**, da oggi in avanti: la regola
+dell'agenda, e per la stessa ragione.
 
 **La consegna passa da una coda.** Il rapportino si salva sempre in locale e
 parte quando c'è rete: in giardino il campo spesso non c'è, e se l'invio fosse
@@ -400,6 +438,14 @@ o scatta il controllo preventivo CORS che Apps Script non sa gestire.
 due dicono *cosa* e *quanto* e lasciano all'ufficio *quanto vale*: è la stessa
 divisione, ed è il motivo per cui su un rilievo **non c'è un prezzo**. Chi ne
 rimette uno qui rimette anche il problema di tenere allineati due listini.
+
+**Il rilievo ha un'anagrafica sua**: nome, via, paese, telefono, mail, sempre
+modificabili. Un preventivo si fa spesso per chi non è ancora cliente, e farlo
+prima aggiungere all'anagrafica del telefono era una schermata in più col cliente
+davanti: basta il nome. La ricerca fra i clienti del telefono resta, ma solo per
+riempire i campi; quello scritto sul rilievo vince, perché è quello visto stando
+lì. Telefono e mail **il telefono non li tiene**: viaggiano col rilievo verso
+l'ufficio, che è dove servono. Sono arrivati senza alzare `VERSIONE_RILIEVO`.
 
 Le righe hanno la forma di quelle del conto — voce, descrizione, quantità, unità —
 e la **descrizione** nasce dal nome della voce ma si corregge: su un preventivo
@@ -511,6 +557,28 @@ metri / sesto + 1, arrotondato per difetto. Il **più uno** è la pianta di test
 24 m a sesto 0,40 ne vogliono 61, non 60, perché ce n'è una a ogni estremo. La
 riga che ne esce si porta dietro i metri e il sesto: fra sei mesi «91 piante» da
 solo non dice da dove viene.
+
+**Quattro mucchi: aperti, inviati, confermati, rifiutati.** Il mucchio è lo stato
+scritto nel file (`gruppoPreventivo()`), non una cartella: spostare file su Drive
+che sincronizza è il modo migliore per ritrovarsene due copie. Fra gli **aperti**
+ci sono anche i rilievi appena arrivati — il rilievo compilato «torna in aperti»,
+come si era detto — e il pallino conta quelli.
+
+**Scaduto non è rifiutato.** Un preventivo mandato e senza risposta dopo i giorni
+di validità (Impostazioni, da tenere uguali a quelli scritti nelle condizioni) sta
+fra i rifiutati come «scaduto senza risposta», e si accetta ancora se il cliente
+richiama. È **calcolato**, non scritto: cambiare i giorni vale anche per quelli già
+mandati. Il «no» del cliente invece si scrive, con la sua data.
+
+**«Manda per mail» come il conto**: apre la posta col preventivo scritto, una voce
+per riga e le alternative dette a parole; si segna mandato **prima** di aprirla, e
+se il segno non riesce la posta non si apre. Stampare non lo segna — l'app non sa
+se quel foglio è andato al cliente — e c'è «Consegnato a mano».
+
+**Dal preventivo all'anagrafica**: chi non c'è si aggiunge con un clic, a chi c'è
+si riempie **solo quello che manca**. Il numero corretto in ufficio non lo riscrive
+un rilievo, come non lo riscrive un'importazione. Il riquadro sta in cima, coi
+contatti: con un preventivo in mano, la prima cosa che si fa è richiamare.
 
 Quello che manca è in `ufficio/PREVENTIVI.md`.
 
@@ -995,6 +1063,9 @@ lì: può darsi che sia già stato ragionato.
   da zero cancella quello che non vede. È già successo.
 - Le pagine che sono testo nudo, non schede, devono darsi il margine laterale
   da sole: `#content` non ne ha, e gli importi finiscono oltre il bordo.
+- Il pacchetto è dichiarato `"type": "module"`: da riga di comando un
+  `require('./rapportino.js')` non esporta niente, senza errori. Per provarlo fuori
+  dal browser lo si carica con `vm`, come fa il giro di prova con lo script `.gs`.
 - `<input type="number">` **rifiuta la virgola**, e la virgola è come si scrivono
   i decimali qui: «0,4» diventa una casella vuota e il conto non si fa. I campi
   dei numeri sono `type="text" inputmode="decimal"`, e il valore passa da

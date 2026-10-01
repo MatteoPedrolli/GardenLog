@@ -325,6 +325,29 @@ sesto 0,4 → 60 piante». Il foglio dice `ROUNDDOWN(metri/distanza + 1)`, quind
 **61**: il più uno è la pianta di testa, perché ce n'è una a ogni estremo. Vale la
 pena saperlo perché su una siepe lunga l'errore si moltiplica.
 
+### Il giro dal sopralluogo
+
+Il percorso pensato in azienda, e com'è costruito:
+
+```
+  lavagna: sopralluogo (nome, paese, via, telefono, mail) su un giorno
+    → telefono, pagina Rilievi: i prossimi sopralluoghi
+    → al tocco, il rilievo con l'anagrafica già scritta e modificabile
+    → ufficio, Preventivi › Aperti
+    → prezzi, poi «Manda per mail» o stampa e «Consegnato a mano» → Inviati
+    → «ha detto sì» → Confermati, e il lavoro in coda sulla lavagna
+    → «ha detto no», o scaduto senza risposta → Rifiutati
+```
+
+Una correzione al percorso come era stato detto: via e telefono **non possono
+viaggiare con l'agenda**, che si legge con l'indirizzo dello script e basta. Vanno
+in un file a parte che lo script consegna solo con una chiave, e senza chiave il
+telefono vede il solo nome. Il perché sta nel CLAUDE.md.
+
+E una distinzione che il percorso non aveva: **scaduto non è rifiutato**. Sta fra
+i rifiutati perché non è più da aspettare, ma resta scritto così e si accetta
+ancora — sono i preventivi da richiamare, non quelli persi.
+
 ### Cosa manca
 
 1. **Il consuntivo contro il preventivo.** È la cosa che la segretaria faceva e

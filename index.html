@@ -523,6 +523,9 @@ select.form-control { background-image: url("data:image/svg+xml,%3Csvg xmlns='ht
 /* La fila −/mezze/+ va a capo invece di sbordare: è la stessa riga che sulla
    lavagna spingeva le ore sopra il giorno dopo. */
 .ril-campo { margin-top: 6px; }
+/* Il numero si tocca per chiamare: si vede che è un collegamento dal peso, non
+   dal blu del browser, che con la palette non c'entra. */
+.tel-sopr { color: var(--inchiostro); font-weight: 600; text-decoration: none; }
 /* Da dove arriva quello che c'è già scritto: un sopralluogo dell'ufficio o un
    cliente dell'anagrafica. Si vede prima dei campi, o si crede di averli
    battuti a mano. */
@@ -714,7 +717,7 @@ select.form-control { background-image: url("data:image/svg+xml,%3Csvg xmlns='ht
         <div class="dati-nota">Il taccuino del preventivo: quello che si vede stando lì, scritto
           col cliente davanti. In ufficio diventa un preventivo con i prezzi. Parte quando c'è
           rete, come il rapportino.</div>
-        <button class="btn btn-primary" onclick="apriRilievo()">📐 Prendi le misure</button>
+        <button class="btn btn-primary" id="ril-nuovo-btn" onclick="apriRilievo()">📐 Prendi le misure</button>
       </div>
 
       <div class="section-title" id="rilievi-titolo" style="display:none">Da consegnare</div>
@@ -3238,6 +3241,10 @@ function renderSopralluoghi() {
   if (!el) return;
   const elenco = elencoSopralluoghi();
   const chiave = (DB.impostazioni?.ChiaveLettura || '').trim();
+  // Con dei sopralluoghi in programma, il rilievo «libero» passa in seconda
+  // fila: tre bottoni uguali non dicono quale si usa di solito.
+  const libero = document.getElementById('ril-nuovo-btn');
+  if (libero) libero.className = 'btn ' + (elenco.length ? 'btn-secondary' : 'btn-primary');
   let html = '';
   if (sopralluoghiErrore) {
     html += `<div class="errore-consegna" onclick="scaricaSopralluoghi({ avvisa: true })">
@@ -3258,7 +3265,7 @@ function renderSopralluoghi() {
       <div style="font-size:0.78rem; color:var(--primary); font-weight:600">${perValore(etichettaMezzaGiornata(x.giorno, x.mezza))}${x.ora ? ' · ore ' + perValore(x.ora) : ''}</div>
       <div style="font-weight:600">${perValore(x.cliente || 'senza nome')}</div>
       ${dove ? `<div style="font-size:0.85rem; color:var(--text-mid)">📍 ${perValore(dove)}</div>` : ''}
-      ${x.telefono ? `<div style="font-size:0.85rem"><a href="tel:${perValore(x.telefono.replace(/[^\d+]/g, ''))}">📞 ${perValore(x.telefono)}</a></div>` : ''}
+      ${x.telefono ? `<div style="font-size:0.85rem"><a class="tel-sopr" href="tel:${perValore(x.telefono.replace(/[^\d+]/g, ''))}">📞 ${perValore(x.telefono)}</a></div>` : ''}
       ${x.note ? `<div style="font-size:0.82rem; color:var(--text-mid); margin-top:4px; white-space:pre-line">${perValore(x.note)}</div>` : ''}
       <button class="btn ${fatto ? 'btn-secondary' : 'btn-primary'}" style="margin-top:10px"
               onclick="navTo('rilievi'); apriRilievo('${perOnclick(x.id)}')">${fatto ? '✅ Rilievo mandato · rifallo' : '📐 Prendi le misure'}</button>
@@ -3285,6 +3292,9 @@ function daSopralluogo(id) {
   riempiAnagraficaRilievo({ Cliente: x.cliente, Indirizzo: x.via, Citta: x.paese,
     Telefono: x.telefono, Email: x.email });
   document.getElementById('f-ril-sopralluogo').value = id;
+  // La persona l'ha già decisa l'ufficio: cercare fra i clienti qui sarebbe una
+  // casella in più che invita a cambiarla.
+  document.getElementById('f-ril-cliente-search').style.display = 'none';
   const da = document.getElementById('f-ril-da');
   da.innerHTML = '📍 Dal sopralluogo di ' + perValore(etichettaMezzaGiornata(x.giorno, x.mezza)) +
     (x.note ? '<br><span style="color:var(--text-mid)">' + perValore(x.note) + '</span>' : '');
