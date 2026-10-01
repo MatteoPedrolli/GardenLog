@@ -476,9 +476,39 @@ I preventivi stanno in `preventivi/<anno>/`, scritti dall'ufficio come l'archivi
 Le **condizioni** in fondo al foglio — validità, caparra, esclusioni — vivono in
 `impostazioni.json` accanto all'intestazione: sono di un'azienda vera.
 
-Quello che manca è in `ufficio/PREVENTIVI.md`, e la cosa grossa sono le
-**soluzioni alternative**: due varianti dello stesso lavoro con due totali che si
-escludono.
+**Un preventivo non è sempre un elenco che si somma.** Tre cose lo dicono, e sono
+quelle che i preventivi veri hanno e una lista di righe non sa rappresentare:
+
+- **Le soluzioni alternative.** «Siepe nuda o con telo e porfido»: due varianti
+  con due totali, che **si escludono**. Una riga **senza soluzione è comune** ed
+  entra nel totale di tutte — così la parte uguale si scrive una volta sola
+  invece di ribatterla in ogni variante e sbagliarne una. Sul foglio ogni
+  soluzione ha il suo totale col suo nome, e sopra c'è scritto a parole che sono
+  alternative: due totali uno sotto l'altro, senza quella riga, si leggono come
+  una somma da fare. Una soluzione **senza righe sue** è il lavoro comune e basta,
+  e lo dice invece di stampare l'intestazione di una tabella sopra il vuoto.
+  Togliendone una le sue righe **tornano comuni**, non spariscono: perdere lavoro
+  per un clic è il modo peggiore di aiutare.
+- **Le righe a tariffa**, fuori dal totale (sopra).
+- **Le sezioni**: una riga che è solo un titolo, per i preventivi divisi per zona
+  del giardino. Non ha niente da sommare, e **non conta come riga senza prezzo**.
+
+**Con due alternative «ha accettato» non basta**: il sì si dà sulla riga della
+soluzione, e il preventivo ricorda quale. Senza, il lavoro entrerebbe in lavagna
+senza che si sappia cosa si è venduto.
+
+**«Mandato» porta la sua data**, e l'elenco dice **da quanto aspetta** una
+risposta: «15/09» da solo obbliga a farsi il conto. Mandato non vuol dire
+accettato e nemmeno partito — l'app sa di averlo messo in posta, come il conto in
+archivio.
+
+**Dai metri al numero di piante** è la formula del foglio della segretaria:
+metri / sesto + 1, arrotondato per difetto. Il **più uno** è la pianta di testa —
+24 m a sesto 0,40 ne vogliono 61, non 60, perché ce n'è una a ogni estremo. La
+riga che ne esce si porta dietro i metri e il sesto: fra sei mesi «91 piante» da
+solo non dice da dove viene.
+
+Quello che manca è in `ufficio/PREVENTIVI.md`.
 
 ## L'app dell'ufficio
 
@@ -919,6 +949,11 @@ lì: può darsi che sia già stato ragionato.
   da zero cancella quello che non vede. È già successo.
 - Le pagine che sono testo nudo, non schede, devono darsi il margine laterale
   da sole: `#content` non ne ha, e gli importi finiscono oltre il bordo.
+- `<input type="number">` **rifiuta la virgola**, e la virgola è come si scrivono
+  i decimali qui: «0,4» diventa una casella vuota e il conto non si fa. I campi
+  dei numeri sono `type="text" inputmode="decimal"`, e il valore passa da
+  `numeroScritto()`. Il listino era già così; il preventivo no, finché un test non
+  ha provato a scriverci dentro per davvero.
 - Due colonne attaccate di una tabella si leggono come una parola sola: «Q.tàUM»
   in testa e «90n» sotto, perché le celle numeriche non hanno margine a destra.
   Le celle di una tabella **si toccano sempre** — il margine sta dentro — quindi

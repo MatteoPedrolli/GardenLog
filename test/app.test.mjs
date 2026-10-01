@@ -2984,6 +2984,25 @@ try {
     foglioSol.includes('alternative fra loro'));
   ok('la riga comune non si ripete in ogni soluzione',
     (foglioSol.match(/Preparazione del terreno/g) || []).length === 1);
+  // Una soluzione senza righe sue è il lavoro comune e basta: stampare
+  // l'intestazione di una tabella sopra il vuoto sembra un foglio rotto.
+  const solaComune = await pagU.evaluate(() => {
+    const id = PREVENTIVO.doc.soluzioni[0].id;
+    const righe = PREVENTIVO.doc.righe.filter(r => r.soluzione === id);
+    const tenute = righe.map(r => r.soluzione);
+    righe.forEach(r => { r.soluzione = ''; });
+    const dopo = costruisciFoglioPreventivo(PREVENTIVO.doc);
+    righe.forEach((r, i) => { r.soluzione = tenute[i]; });
+    const prima = costruisciFoglioPreventivo(PREVENTIVO.doc);
+    // Non il numero di intestazioni — ce n'è una anche per le tariffe — ma
+    // **quante se ne perdono** svuotando una soluzione: esattamente la sua.
+    const conta = h => (h.match(/<thead>/g) || []).length;
+    return { tolte: conta(prima) - conta(dopo),
+      detto: dopo.includes('sole lavorazioni elencate sopra'),
+      prima: conta(prima), dopo: conta(dopo) };
+  });
+  ok('una soluzione senza righe sue non stampa una tabella vuota, lo dice a parole',
+    solaComune.tolte === 1 && solaComune.detto, JSON.stringify(solaComune));
 
   // Togliere una soluzione non butta via le sue righe: tornano comuni. Buttarle
   // vorrebbe dire perdere lavoro per un clic.

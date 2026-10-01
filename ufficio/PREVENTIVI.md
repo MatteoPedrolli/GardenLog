@@ -313,16 +313,32 @@ righe a tariffa fuori dal totale, foglio di stampa che ricalca quelli veri
 condizioni in fondo), salvataggio in `preventivi/<anno>/`, e l'accettazione che
 porta il lavoro sulla lavagna largo le mezze giornate del rilievo.
 
+Ci sono anche i tre tipi di riga che i preventivi veri hanno — nel totale,
+**a tariffa** (fuori dal totale) e **sezione** (solo un titolo) — e le
+**soluzioni alternative**, con le righe comuni che entrano nel totale di tutte.
+Lo stato **mandato** porta la sua data e l'elenco dice da quanto aspetta. E dai
+metri e dal sesto d'impianto esce il numero di piante, con la formula del foglio
+della segretaria.
+
+Una correzione a quanto scritto più sopra: in questo file si leggeva «24 m a
+sesto 0,4 → 60 piante». Il foglio dice `ROUNDDOWN(metri/distanza + 1)`, quindi
+**61**: il più uno è la pianta di testa, perché ce n'è una a ogni estremo. Vale la
+pena saperlo perché su una siepe lunga l'errore si moltiplica.
+
 ### Cosa manca
 
-1. **Le soluzioni alternative** — è il pezzo grosso che resta: due varianti dello
-   stesso lavoro, con due totali separati che si escludono a vicenda. Serve
-   raggruppare le righe per variante e stampare un totale per gruppo.
-2. **Le sezioni con un titolo**, per i preventivi divisi per zona del giardino.
-3. **I calcoli che aiutano**: dai metri e dal sesto d'impianto al numero di
-   piante, che è aritmetica che l'app può fare al posto di chi la rifà ogni volta.
-4. **Lo stato «mandato»**: oggi un preventivo è bozza o accettato, e manca il
-   passaggio intermedio con la data di invio.
+1. **Il consuntivo contro il preventivo.** È la cosa che la segretaria faceva e
+   che ancora non si fa: a lavoro finito, confrontare il conto dell'archivio con
+   il preventivo accettato. I due documenti hanno la stessa forma e lo stesso
+   cliente, quindi il confronto è a portata — ed è la domanda «ci abbiamo
+   guadagnato?», che nessun altro pezzo del sistema risponde.
+2. **Il preventivo che non nasce da un rilievo**: una telefonata, un lavoro che si
+   conosce a memoria. Oggi serve per forza un rilievo dal campo.
+3. **Rifiutato**: lo stato c'è nel modello e non ha ancora un bottone. Serve a
+   sapere quanti se ne perdono e perché, che è un'informazione che oggi non esiste
+   da nessuna parte.
+4. **Le taglie delle piante** (80-100, 100-125…) come dato invece che come testo
+   dentro la descrizione: è il secondo pezzo del prezzo al metro, dopo il sesto.
 
 ## Domande ancora aperte
 

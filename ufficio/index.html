@@ -2665,10 +2665,16 @@ function costruisciFoglioPreventivo(d) {
     html += '<p class="apertura">Le soluzioni qui sotto sono <strong>alternative fra loro</strong>: ' +
       'il totale di ciascuna comprende le voci sopra elencate.</p>';
     t.soluzioni.forEach(sol => {
+      const sue = d.righe.filter(r => r.tipo !== 'tariffa' && r.soluzione === sol.id);
       html += '<h2 class="titolo-soluzione">' + perValore(sol.nome) + '</h2>';
-      html += intestazioneTabella;
-      d.righe.filter(r => r.tipo !== 'tariffa' && r.soluzione === sol.id)
-        .forEach(r => { html += rigaStampata(r); });
+      // Una soluzione può non avere righe sue: è il lavoro comune e basta — la
+      // siepe nuda, il prato da semina. Stampare l'intestazione di una tabella
+      // sopra il vuoto sembra un foglio rotto, quindi si dice a parole.
+      if (!sue.length) {
+        html += '<p class="apertura" style="margin:6px 0">Le sole lavorazioni elencate sopra.</p>';
+      }
+      html += (sue.length ? intestazioneTabella : '<table><tbody>');
+      sue.forEach(r => { html += rigaStampata(r); });
       html += '<tr class="riga-totale"><td colspan="4">TOTALE ' +
         perValore(sol.nome).toUpperCase() + ' S.E. &amp; O. (IVA inclusa)</td>' +
         '<td class="num">' + formattaEuro(sol.totale) + '</td></tr>';
