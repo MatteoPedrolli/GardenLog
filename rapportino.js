@@ -483,17 +483,6 @@ const ORE_MEZZA = 8;
 
 const VERSIONE_RILIEVO = 1;
 
-// I quattro tipi di preventivo di questa azienda. Non sono una decorazione: uno
-// solo ha bisogno di un disegno che ancora non è arrivato, e l'ufficio deve
-// sapere se sta aspettando dei metri quadri dal CAD o se il rilievo è completo
-// così com'è. Sono gli stessi quattro di ufficio/PREVENTIVI.md.
-const TIPI_RILIEVO = [
-  { id: 'manutenzione', nome: 'Manutenzione', disegno: false },
-  { id: 'siepi-aiole',  nome: 'Siepi e aiuole ex novo', disegno: false },
-  { id: 'prato-rotoli', nome: 'Prato in rotoli', disegno: true },
-  { id: 'irrigazione',  nome: 'Impianto di irrigazione', disegno: true },
-];
-
 // Elenco chiuso perché sui preventivi scritti a mano la stessa unità compare in
 // modi diversi — `cad` e `cad.` nello stesso mazzo — e due scritture non si
 // sommano. Sono **le unità che usano già le voci di listino** (`h`, `n`, `kg`,
@@ -501,10 +490,6 @@ const TIPI_RILIEVO = [
 // coprisse farebbe scegliere al menù qualcos'altro, e una riga direbbe m² dove il
 // modello dice n. È già successo.
 const UNITA_RILIEVO = ['m²', 'ml', 'n', 'kg', 'l', 'h', 'sacchi', 'a corpo'];
-
-function tipoRilievo(id) {
-  return TIPI_RILIEVO.find(t => t.id === id) || null;
-}
 
 function costruisciRilievo({ rilievo, cliente, voci }) {
   const perID = {};
@@ -532,7 +517,10 @@ function costruisciRilievo({ rilievo, cliente, voci }) {
     })(),
     // Il sopralluogo della lavagna da cui nasce, se nasce da uno.
     sopralluogo: rilievo.SopralluogoID || '',
-    lavoro: rilievo.Lavoro || '',
+    // Il rilievo aspetta un numero che esce dal CAD — l'area del prato, lo schema
+    // degli irrigatori — e finché non arriva non è finito. Era tutto quello che
+    // diceva il «tipo di lavoro» che c'era prima, ed è l'unica cosa rimasta.
+    disegno: !!rilievo.Disegno,
     // Le mezze giornate stimate per tutto il lavoro, non per riga: è così che si
     // stima qui («arrotondo alla mezza giornata») ed è anche la larghezza che il
     // cartellino avrà sulla lavagna. Lo stesso fatto misurato una volta sola.
@@ -575,7 +563,10 @@ function leggiRilievo(grezzo) {
       ...(doc.cliente || {}),
     },
     sopralluogo: doc.sopralluogo || '',
-    lavoro: doc.lavoro || '',
+    // I rilievi mandati prima portano il vecchio «lavoro» invece di «disegno»: due
+    // dei quattro tipi aspettavano il CAD, e si leggono ancora così. Senza alzare
+    // VERSIONE_RILIEVO — un campo in meno da guardare, non un formato diverso.
+    disegno: !!doc.disegno || ['prato-rotoli', 'irrigazione'].includes(doc.lavoro),
     mezze: Number(doc.mezze) || 0,
     righe: (Array.isArray(doc.righe) ? doc.righe : []).map(r => ({
       id: r.id || '',
@@ -603,7 +594,7 @@ if (typeof module !== 'undefined' && module.exports) {
     VERSIONE_AGENDA, APPUNTAMENTI_IN_AGENDA, costruisciAgenda, leggiAgenda, etichettaMezzaGiornata,
     ORE_MEZZA,
     VERSIONE_SOPRALLUOGHI, costruisciSopralluoghi, leggiSopralluoghi,
-    VERSIONE_RILIEVO, TIPI_RILIEVO, UNITA_RILIEVO, tipoRilievo,
+    VERSIONE_RILIEVO, UNITA_RILIEVO,
     costruisciRilievo, leggiRilievo, nomeFileRilievo,
     dataISO, lunediDellaSettimana, lunediDellaPrimaSettimana, numeroSettimana, etichettaSettimana,
   };

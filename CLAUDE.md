@@ -469,11 +469,25 @@ nessuna.
 giornate. Metterla anche lì vorrebbe dire preventivarla due volte — è la stessa
 ragione per cui potature e taglio prato non hanno una voce collegata.
 
-**I quattro tipi di preventivo viaggiano col documento** (`TIPI_RILIEVO`), perché
-due di loro — prato in rotoli e impianto di irrigazione — aspettano un numero che
-esce dal CAD, e sono **incompleti per costruzione**. Il pannello lo dice mentre si
-compila e l'ufficio lo ripete nell'elenco: senza, un rilievo si apre credendolo
-finito.
+**Non c'è un «tipo di lavoro».** C'era: quattro tipi da scegliere (manutenzione,
+siepi e aiuole, prato in rotoli, irrigazione), presi dai quattro *modi di arrivare
+al prezzo* raccontati in `ufficio/PREVENTIVI.md`. Come ragionamento servivano, come
+campo no: non cambiavano righe, foglio, mail né accettazione — un'etichetta e un
+avviso — ed erano **una scelta sola per lavori che stanno insieme**: un giardino
+nuovo è siepe, prato e irrigazione. Neanche la dicitura giustificava il campo: nei
+preventivi veri la frase d'apertura è la stessa per tutti.
+
+È rimasto l'unico fatto che contava, in una casella: **«Aspetta il disegno dal
+CAD»** (`disegno`), per il rilievo incompleto finché non arriva l'area o lo schema
+degli irrigatori. I rilievi mandati prima portano ancora `lavoro`, e
+`leggiRilievo()` li legge così: prato in rotoli e irrigazione aspettavano il
+disegno. Nessuna versione alzata.
+
+**Le lavorazioni collegate sono gli insiemi**, gli stessi della visita: fra le voci
+del rilievo c'è «Aiuola», e sceglierla aggiunge una riga per ogni voce dei suoi
+tipi, da correggere o togliere come le altre. Li crea chi usa l'app da Archivi:
+le lavorazioni che vanno insieme le decide chi lavora, non una lista scritta da chi
+programma. Un tipo senza voce è manodopera, e resta fuori.
 
 Le note sono quello che si vede **solo stando lì** — accesso, dove resta il
 camion, il rubinetto, la pendenza. Sono anche la cosa che non si può più chiedere

@@ -325,6 +325,17 @@ sesto 0,4 → 60 piante». Il foglio dice `ROUNDDOWN(metri/distanza + 1)`, quind
 **61**: il più uno è la pianta di testa, perché ce n'è una a ogni estremo. Vale la
 pena saperlo perché su una siepe lunga l'errore si moltiplica.
 
+### I quattro tipi non sono un campo
+
+I quattro animali qui sopra sono **modi di arrivare al prezzo**, ed è lì che
+servono: a capire cosa costruire. Per un po' sono stati anche un campo da scegliere
+sul rilievo, e non funzionava: un'etichetta e un avviso, nient'altro, e una scelta
+sola per lavori che nella realtà stanno insieme. Del campo è rimasto solo «aspetta
+il disegno dal CAD»; le lavorazioni collegate le portano gli **insiemi** (come
+«Aiuola»), che si creano da Archivi. Se un giorno servisse un modello di preventivo
+più grande — un giardino nuovo con siepe, prato e irrigazione già impostati — si
+costruisce con lo stesso meccanismo, solo con un insieme più grande.
+
 ### Il giro dal sopralluogo
 
 Il percorso pensato in azienda, e com'è costruito:

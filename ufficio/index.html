@@ -2015,6 +2015,16 @@ async function ricontrolla() {
 // non si legge, e quello che non si legge tanto vale non scriverlo.
 const NOVITA = [
   {
+    versione: '2026-10-02b',
+    data: '2026-10-02',
+    titolo: 'Il rilievo senza «tipo di lavoro»',
+    righe: [
+      'I rilievi non dicono più «manutenzione», «prato in rotoli» e così via: era una scelta sola per lavori che spesso stanno insieme, e non cambiava niente del preventivo.',
+      'Resta quello che contava: **«aspetta il disegno»** quando l\'area o lo schema degli irrigatori arrivano dopo, dal CAD.',
+      'In giardino, fra le voci del rilievo si possono scegliere gli **insiemi** — come «Aiuola» — che portano tutte le loro righe in un colpo.',
+    ],
+  },
+  {
     versione: '2026-10-02.2',
     data: '2026-10-02',
     titolo: 'Le piante non chiedono il listino',
@@ -2267,7 +2277,7 @@ function costruisciPreventivo(rilievo, precedente) {
     creato: (precedente && precedente.creato) || new Date().toISOString(),
     aggiornato: new Date().toISOString(),
     cliente: rilievo.cliente,
-    lavoro: rilievo.lavoro || '',
+    disegno: !!rilievo.disegno,
     mezze: Number(rilievo.mezze) || 0,
     stato: (precedente && precedente.stato) || 'bozza',
     // Quando è stato mandato, non solo che lo è stato: «l'ho mandato» senza una
@@ -2747,11 +2757,11 @@ function disegnaPreventivo() {
   if (!PREVENTIVO) { c.innerHTML = '<div class="vuoto-elenco">Nessun preventivo aperto.</div>'; return; }
   const d = PREVENTIVO.doc;
   const t = totaliPreventivo(d);
-  const tipo = tipoRilievo(d.lavoro);
 
   let html = '<h2 class="titolo-pagina">' + perValore(d.cliente.nome || 'senza nome') + '</h2>';
-  html += '<p class="sottotitolo">' + perValore(tipo ? tipo.nome : d.lavoro) +
-    ' · ' + d.mezze + (d.mezze === 1 ? ' mezza giornata' : ' mezze giornate') +
+  html += '<p class="sottotitolo">' +
+    d.mezze + (d.mezze === 1 ? ' mezza giornata' : ' mezze giornate') +
+    (d.disegno || d.daRilievo?.disegno ? ' · 📐 aspetta il disegno' : '') +
     ' · ' + (preventivoScaduto(d) ? 'scaduto senza risposta' : STATI_PREVENTIVO[d.stato]) +
     (d.stato === 'rifiutato' && d.rifiutato ? ' il ' + formattaData(d.rifiutato)
       : d.mandato ? ' · mandato il ' + formattaData(d.mandato) + ' · ' + daQuantoAspetta(d.mandato) : '') + '</p>';
@@ -3144,14 +3154,13 @@ function disegnaPreventivi() {
     if (daFare.length) html += '<div class="titolo-sezione">Rilievi da preventivare</div>';
     daFare.forEach(r => {
       const d = r.doc;
-      const tipo = tipoRilievo(d.lavoro);
       const cliente = clienteDelPreventivo(d);
       const rifare = PREVENTIVI.some(p => p.doc.id === d.id);
       html += '<div class="scheda cliccabile" onclick="apriPreventivo(\'' + perOnclick(d.id) + '\')">' +
         '<div class="riga-scheda">' +
           '<span class="nome-cliente">' + perValore(d.cliente.nome || 'senza nome') + '</span>' +
           (rifare ? '<span class="etichetta corretto">corretto dal campo · rev ' + d.revisione + '</span>'
-                  : '<span class="etichetta nuovo">' + perValore(tipo ? tipo.nome : d.lavoro) + '</span>') +
+                  : '<span class="etichetta nuovo">nuovo</span>') +
           '<span class="meta" style="margin-left:auto">' + formattaData(d.creato) + '</span>' +
         '</div>' +
         '<div class="meta" style="margin-top:6px">' +
@@ -3159,7 +3168,7 @@ function disegnaPreventivi() {
           ' · ' + d.mezze + (d.mezze === 1 ? ' mezza giornata' : ' mezze giornate') +
           (d.sopralluogo ? ' · 📍 dal sopralluogo' : '') +
           (cliente ? '' : ' · <strong>non in anagrafica</strong>') +
-          (tipo && tipo.disegno ? ' · 📐 aspetta il disegno' : '') +
+          (d.disegno ? ' · 📐 aspetta il disegno' : '') +
         '</div>' +
         (d.note ? '<div class="nota-rilievo">' + perValore(d.note) + '</div>' : '') +
       '</div>';

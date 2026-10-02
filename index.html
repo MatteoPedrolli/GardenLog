@@ -529,6 +529,8 @@ select.form-control { background-image: url("data:image/svg+xml,%3Csvg xmlns='ht
 /* La fila −/mezze/+ va a capo invece di sbordare: è la stessa riga che sulla
    lavagna spingeva le ore sopra il giorno dopo. */
 .ril-campo { margin-top: 6px; }
+.ril-spunta { display: flex; align-items: center; gap: 8px; font-size: 0.9rem; color: var(--inchiostro); }
+.ril-spunta input { width: 20px; height: 20px; accent-color: var(--inchiostro); }
 /* Il numero si tocca per chiamare: si vede che è un collegamento dal peso, non
    dal blu del browser, che con la palette non c'entra. */
 .tel-sopr { color: var(--inchiostro); font-weight: 600; text-decoration: none; }
@@ -912,9 +914,11 @@ select.form-control { background-image: url("data:image/svg+xml,%3Csvg xmlns='ht
       </div>
 
       <div class="form-group">
-        <label class="form-label">Che lavoro è</label>
-        <select class="form-control" id="f-ril-lavoro" onchange="mostraSeServeIlDisegno()"></select>
-        <div id="f-ril-lavoro-eco" class="dati-nota" style="margin:4px 0 0"></div>
+        <label class="ril-spunta">
+          <input type="checkbox" id="f-ril-disegno"> Aspetta il disegno dal CAD
+        </label>
+        <div class="dati-nota" style="margin:4px 0 0">Quando l'area o lo schema degli irrigatori
+          arrivano dopo, dal disegno: l'ufficio lo vede e non lo prende per finito.</div>
       </div>
 
       <div class="form-group">
@@ -932,7 +936,7 @@ select.form-control { background-image: url("data:image/svg+xml,%3Csvg xmlns='ht
         <label class="form-label">Cosa c'è da fare, e quanto</label>
         <div id="ril-righe"></div>
         <select class="form-control" id="f-ril-voce" style="margin-top:8px"
-                onchange="aggiungiRigaRilievo(this.value); this.value=''"></select>
+                onchange="scegliDaElencoRilievo(this.value); this.value=''"></select>
         <div style="display:flex; gap:6px; margin-top:6px">
           <input type="text" class="form-control" id="f-ril-libera" placeholder="…oppure scrivila a mano">
           <button type="button" class="btn btn-secondary" style="width:auto; padding:0 16px; margin:0"
@@ -2945,11 +2949,10 @@ function apriRilievo(sopralluogoID) {
   document.getElementById('f-ril-libera').value = '';
   righeRilievo = [];
   mezzeRilievo = 1;
-  popolaLavoriRilievo();
+  document.getElementById('f-ril-disegno').checked = false;
   popolaVociRilievo();
   renderRilievoRighe();
   mostraMezzeRilievo();
-  mostraSeServeIlDisegno();
   scollegaClienteRilievo();
   if (sopralluogoID) daSopralluogo(sopralluogoID);
   document.getElementById('overlay-rilievo').classList.add('open');
@@ -2986,24 +2989,6 @@ function scollegaClienteRilievo() {
   document.getElementById('ril-cliente-suggestions').style.display = 'none';
 }
 
-function popolaLavoriRilievo() {
-  const sel = document.getElementById('f-ril-lavoro');
-  if (!sel) return;
-  sel.innerHTML = TIPI_RILIEVO.map(t => `<option value="${perValore(t.id)}">${perValore(t.nome)}</option>`).join('');
-}
-
-// I quattro tipi non sono tutti uguali: due si prezzano con quello che c'è qui
-// dentro, due aspettano un numero che esce dal CAD. Dirlo mentre si compila
-// evita all'ufficio di aprire un rilievo credendolo completo.
-function mostraSeServeIlDisegno() {
-  const eco = document.getElementById('f-ril-lavoro-eco');
-  if (!eco) return;
-  const t = tipoRilievo(document.getElementById('f-ril-lavoro').value);
-  eco.textContent = t && t.disegno
-    ? 'Questo ha bisogno del disegno: l\'area o lo schema arrivano dal CAD, qui ci va il resto.'
-    : '';
-}
-
 // Le mezze giornate si alzano e si abbassano a mano, come sulla lavagna: è una
 // decisione di chi guarda il lavoro, non un calcolo. Una mezza è il minimo —
 // un preventivo di zero mezze giornate non vuol dire niente.
@@ -3025,9 +3010,45 @@ function popolaVociRilievo() {
   // La manodopera non è fra le voci che si aggiungono: la dicono già le mezze
   // giornate qui sopra. Metterla anche qui vorrebbe dire preventivarla due volte,
   // che è lo stesso motivo per cui potature e taglio prato non hanno una voce.
+  const insiemi = insiemiPerRilievo();
   sel.innerHTML = '<option value="">+ Aggiungi una voce…</option>' +
+    (insiemi.length ? '<optgroup label="Insiemi">' +
+      insiemi.map(t => `<option value="insieme:${perValore(t.TipoID)}">${perValore(t.Nome)} · ${t.voci.length} voci</option>`).join('') +
+      '</optgroup><optgroup label="Voci">' : '') +
     DB.voci.filter(v => v.VoceID !== 'manodopera')
-      .map(v => `<option value="${perValore(v.VoceID)}">${perValore(v.Nome)}</option>`).join('');
+      .map(v => `<option value="${perValore(v.VoceID)}">${perValore(v.Nome)}</option>`).join('') +
+    (insiemi.length ? '</optgroup>' : '');
+}
+
+// Gli insiemi della visita servono anche qui: un'aiuola chiede sempre piante,
+// pacciamatura, ala gocciolante e telo, in un preventivo come in un lavoro
+// finito. Sono gli stessi, creati da Archivi senza toccare il codice — così le
+// lavorazioni collegate sono quelle che si decidono qui, non una lista scritta
+// da chi programma. Di un insieme si prende la voce di ogni suo tipo: un tipo
+// senza voce è manodopera, e la manodopera la dicono le mezze giornate.
+function insiemiPerRilievo() {
+  return (DB.tipiOperazione || [])
+    .filter(t => t.dettaglio === 'insieme' && t.Insieme)
+    .map(t => ({
+      ...t,
+      voci: String(t.Insieme).split(',').map(x => x.trim()).filter(x => x)
+        .map(id => (DB.tipiOperazione || []).find(o => o.TipoID === id))
+        .map(o => o && o.VoceID)
+        .filter(v => v && v !== 'manodopera' && DB.voci.some(x => x.VoceID === v)),
+    }))
+    .filter(t => t.voci.length);
+}
+
+function scegliDaElencoRilievo(valore) {
+  if (!valore) return;
+  if (valore.startsWith('insieme:')) {
+    const t = insiemiPerRilievo().find(x => x.TipoID === valore.slice(8));
+    // Una riga per voce, da correggere o togliere come le altre: l'insieme è
+    // una scorciatoia per scriverle, non un blocco che poi non si tocca.
+    if (t) t.voci.forEach(v => aggiungiRigaRilievo(v));
+    return;
+  }
+  aggiungiRigaRilievo(valore);
 }
 
 function aggiungiRigaRilievo(voceID) {
@@ -3123,7 +3144,11 @@ async function salvaRilievo() {
     // Da quale sopralluogo della lavagna nasce, se nasce da uno: è il filo che
     // l'ufficio segue per sapere che quel sopralluogo ha dato un rilievo.
     SopralluogoID: document.getElementById('f-ril-sopralluogo').value,
-    Lavoro: document.getElementById('f-ril-lavoro').value,
+    // C'era un «che lavoro è» da scegliere fra quattro, e non diceva niente:
+    // un'etichetta e questo avviso. Era anche una scelta sola per cose che stanno
+    // insieme — un giardino nuovo è siepe, prato e irrigazione. Resta l'unico
+    // fatto che contava: il rilievo è incompleto finché non arriva il disegno.
+    Disegno: document.getElementById('f-ril-disegno').checked,
     Mezze: mezzeRilievo,
     Righe: righeRilievo.map(r => ({ ...r })),
     Note: document.getElementById('f-ril-note').value.trim(),
@@ -3172,7 +3197,6 @@ function renderRilievi() {
   el.innerHTML = elenco.map(r => {
     const c = DB.clienti.find(x => x.ClienteID == r.ClienteID);
     const nome = (r.Anagrafica && r.Anagrafica.Cliente) || (c && c.Cliente) || 'senza nome';
-    const t = tipoRilievo(r.Lavoro);
     const coda = DB.coda || [];
     const posto = coda.findIndex(v => v.docID === r.RilievoID);
     const voce = posto < 0 ? null : coda[posto];
@@ -3182,7 +3206,7 @@ function renderRilievi() {
     const quante = Number(r.Mezze) || 0;
     return `<div class="card" style="padding:12px">
       <div style="font-weight:600">${perValore(nome)}</div>
-      <div style="font-size:0.85rem; color:var(--text-mid)">${perValore(t ? t.nome : r.Lavoro)} · ${(r.Righe || []).length} ${(r.Righe || []).length === 1 ? 'riga' : 'righe'}</div>
+      <div style="font-size:0.85rem; color:var(--text-mid)">${(r.Righe || []).length} ${(r.Righe || []).length === 1 ? 'riga' : 'righe'}${r.Disegno ? ' · 📐 aspetta il disegno' : ''}</div>
       <div style="font-size:0.78rem; color:var(--text-light); margin-top:4px">
         ${quante} ${quante === 1 ? 'mezza giornata' : 'mezze giornate'} · 📤 da consegnare
       </div>

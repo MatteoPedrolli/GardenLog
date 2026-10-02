@@ -587,12 +587,32 @@ try {
   await page.fill('#f-ril-telefono', '0461 000000');
   await page.fill('#f-ril-email', 'mario@esempio.it');
   await page.fill('#f-ril-via', 'Via dei Prati 14');
-  await page.selectOption('#f-ril-lavoro', 'prato-rotoli');
-  await page.waitForTimeout(100);
-  // Due dei quattro tipi hanno bisogno di un numero che esce dal CAD: dirlo
-  // mentre si compila evita all'ufficio di aprire un rilievo credendolo finito.
-  ok('un tipo che ha bisogno del disegno lo dice mentre lo scegli',
-    (await page.textContent('#f-ril-lavoro-eco')).includes('CAD'));
+  // C'era un «che lavoro è» fra quattro, che non diceva niente se non «aspetta il
+  // disegno» per due di loro — ed era una scelta sola per cose che stanno
+  // insieme. Resta l'unico fatto che contava, in una casella.
+  ok('non c\'è più da scegliere «che lavoro è»',
+    await page.evaluate(() => !document.getElementById('f-ril-lavoro')));
+  await page.check('#f-ril-disegno');
+  // Gli insiemi della visita servono anche qui: un'aiuola chiede sempre le
+  // stesse cose, in un preventivo come in un lavoro finito. Una riga per voce,
+  // e la manodopera no — la dicono le mezze giornate.
+  const daInsieme = await page.evaluate(() => {
+    const opzioni = [...document.querySelectorAll('#f-ril-voce optgroup[label="Insiemi"] option')]
+      .map(o => o.value + '=' + o.textContent);
+    const prima = righeRilievo.length;
+    scegliDaElencoRilievo('insieme:aiuola');
+    const aggiunte = righeRilievo.slice(prima).map(r => r.VoceID);
+    righeRilievo.splice(prima);
+    renderRilievoRighe();
+    return { opzioni, aggiunte };
+  });
+  ok('fra le voci del rilievo ci sono gli insiemi, come «Aiuola»',
+    daInsieme.opzioni.some(o => o.startsWith('insieme:aiuola=Aiuola')), daInsieme.opzioni.join(' | '));
+  ok('e un insieme aggiunge una riga per ogni sua voce',
+    daInsieme.aggiunte.join(',') === 'piante,pacciamatura,ala-gocciolante,telo-pacciamante',
+    daInsieme.aggiunte.join(','));
+  ok('senza manodopera, che la dicono le mezze giornate',
+    !daInsieme.aggiunte.includes('manodopera'));
   await page.selectOption('#f-ril-voce', 'tappeto-erboso');
   await page.waitForTimeout(150);
   ok('la riga nasce col nome della voce già scritto, da correggere',
@@ -687,6 +707,16 @@ try {
   // rilievo si deve leggere da solo anche fra due anni.
   ok('e il nome della voce viaggia col suo identificativo',
     docRilievo.righe[0].voceID === 'tappeto-erboso' && docRilievo.righe[0].voce === 'Tappeto erboso');
+  ok('il rilievo dice che aspetta il disegno, non che tipo di lavoro è',
+    docRilievo.disegno === true && !('lavoro' in docRilievo), JSON.stringify({ d: docRilievo.disegno, l: docRilievo.lavoro }));
+  // I rilievi mandati prima portano il vecchio «lavoro»: prato in rotoli e
+  // irrigazione aspettavano il CAD, e si leggono ancora così.
+  ok('un rilievo col vecchio tipo di lavoro si legge ancora, disegno compreso',
+    await page.evaluate(() => {
+      const vecchio = leggiRilievo({ tipo: 'rilievo', versione: 1, id: 'v', lavoro: 'prato-rotoli', righe: [] });
+      const altro = leggiRilievo({ tipo: 'rilievo', versione: 1, id: 'w', lavoro: 'manutenzione', righe: [] });
+      return vecchio.disegno === true && altro.disegno === false;
+    }));
   ok('porta le mezze giornate stimate, che sono anche la larghezza sulla lavagna',
     docRilievo.mezze === 3, String(docRilievo.mezze));
   ok('e le note, che sono quello che si vede solo stando lì',
@@ -773,8 +803,8 @@ try {
   // Finché è in coda la scheda dice di che lavoro si tratta e quanto è grosso;
   // una volta in ufficio sparisce, come le prenotazioni consegnate: là diventa un
   // preventivo, e ripeterlo qui vorrebbe dire due elenchi da tenere allineati.
-  ok('finché è da consegnare la scheda dice il tipo di lavoro e le mezze giornate',
-    rilievoFermo.suo.includes('Prato in rotoli') && rilievoFermo.suo.includes('3 mezze giornate'),
+  ok('finché è da consegnare la scheda dice se aspetta il disegno, e le mezze giornate',
+    rilievoFermo.suo.includes('aspetta il disegno') && rilievoFermo.suo.includes('3 mezze giornate'),
     rilievoFermo.suo.slice(0, 160));
   ok('consegnato sparisce dall\'elenco, e con lui il titolo della sezione',
     (await page.textContent('#rilievi-list')).trim() === '' &&
@@ -2973,7 +3003,7 @@ try {
   await pagU.waitForTimeout(200);
   const schermoRilievi = await pagU.textContent('#pagina-preventivi');
   ok('la schermata mostra il cliente e il tipo di lavoro',
-    schermoRilievi.includes('Mario Rossi') && schermoRilievi.includes('Prato in rotoli'),
+    schermoRilievi.includes('Mario Rossi') && schermoRilievi.includes('nuovo'),
     schermoRilievi.slice(0, 160));
   // Le righe non stanno nell'elenco ma nella schermata del preventivo, dove si
   // prezzano: qui basta quanto lavoro è, per decidere da quale cominciare.
@@ -2984,7 +3014,7 @@ try {
     schermoRilievi.includes('Accesso stretto') && schermoRilievi.includes('Rubinetto sul lato nord'));
   // Il prato in rotoli ha bisogno dell'area, che esce dal CAD: un rilievo di quel
   // tipo è incompleto per costruzione, e aprirlo credendolo finito costa un giro.
-  ok('e dice che quel tipo aspetta ancora il disegno', schermoRilievi.includes('aspetta il disegno'));
+  ok('e dice che aspetta ancora il disegno', schermoRilievi.includes('aspetta il disegno'));
   // Chi ha telefono e mail lo sa solo l'anagrafica dell'ufficio, ed è quello che
   // serve per richiamare e mandare il preventivo: un rilievo di qualcuno che lì
   // non c'è va segnalato, uno di un cliente noto no. Mario Rossi a questo punto
