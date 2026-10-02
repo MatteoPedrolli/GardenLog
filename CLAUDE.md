@@ -458,16 +458,28 @@ Le righe hanno la forma di quelle del conto — voce, descrizione, quantità, un
 e la **descrizione** nasce dal nome della voce ma si corregge: su un preventivo
 quella riga la legge un cliente, e «Piante» da solo non si capisce.
 
-**Le mezze giornate si contano a mano**, come sulla lavagna, e sono una per
-rilievo e non una per riga: è così che si stima qui, ed è anche la larghezza che
-il cartellino avrà quando il preventivo è accettato. Lo stesso fatto misurato una
-volta sola. Per questo `ORE_MEZZA` sta in `rapportino.js` e non in una delle due
-app: due idee diverse di quanto dura una mezza giornata sarebbero peggio di
-nessuna.
+**Le mezze giornate escono dalle ore.** C'era un −/+ per contarle a mano, e le
+righe dicevano cosa c'era da fare senza dire quanto lavoro costava: le ore stavano
+dentro una stima che nessuno vedeva scomposta. Adesso la **manodopera è una riga**,
+in ore: ogni insieme porta la sua («Manodopera – Aiuola», in testa alle sue voci,
+perché si stima guardando l'aiuola intera), e il lavoro che non sta in nessun
+insieme — una potatura, una pulizia — è una riga di manodopera a sé. Le mezze
+giornate sono **la somma di quelle ore**, `ORE_MEZZA` per mezza, arrotondata **per
+eccesso** (`mezzeDaOre()`): una mezza giornata cominciata è occupata. Il conto sta
+in `rapportino.js`, `oreManodopera()`, e lo fanno tutte e due le app: due idee
+diverse di quanto dura una mezza giornata sarebbero peggio di nessuna.
 
-**La manodopera non è fra le voci da aggiungere.** La dicono già le mezze
-giornate. Metterla anche lì vorrebbe dire preventivarla due volte — è la stessa
-ragione per cui potature e taglio prato non hanno una voce collegata.
+Conta solo la voce `manodopera`, non l'unità: un noleggio a ore è in ore ma non è
+lavoro nostro, e non occupa la lavagna. La riga delle ore non ha il menù
+dell'unità. Una riga di ore **lasciata vuota ferma il rilievo**: le mezze verrebbero
+più corte del lavoro, e in lavagna il pomeriggio sembrerebbe libero. Un rilievo
+senza manodopera (sola fornitura) parte, lo dice, e in lavagna va largo il minimo.
+
+Non è contare due volte: prima la manodopera stava fuori dalle righe *perché* la
+dicevano le mezze giornate. Ora le mezze giornate la leggono dalle righe, e il
+preventivo la prezza col listino come le altre. Il documento porta `ore` e `mezze`
+già calcolate, senza alzare `VERSIONE_RILIEVO`; un rilievo di prima ha solo
+`mezze`, contate a mano, e valgono ancora.
 
 **Non c'è un «tipo di lavoro».** C'era: quattro tipi da scegliere (manutenzione,
 siepi e aiuole, prato in rotoli, irrigazione), presi dai quattro *modi di arrivare
@@ -485,9 +497,10 @@ disegno. Nessuna versione alzata.
 
 **Le lavorazioni collegate sono gli insiemi**, gli stessi della visita: fra le voci
 del rilievo c'è «Aiuola», e sceglierla aggiunge una riga per ogni voce dei suoi
-tipi, da correggere o togliere come le altre. Li crea chi usa l'app da Archivi:
-le lavorazioni che vanno insieme le decide chi lavora, non una lista scritta da chi
-programma. Un tipo senza voce è manodopera, e resta fuori.
+tipi, da correggere o togliere come le altre, più la riga delle sue ore. Li crea
+chi usa l'app da Archivi: le lavorazioni che vanno insieme le decide chi lavora, non
+una lista scritta da chi programma. Un tipo senza voce è manodopera, ed è già
+dentro quella riga di ore.
 
 Le note sono quello che si vede **solo stando lì** — accesso, dove resta il
 camion, il rubinetto, la pendenza. Sono anche la cosa che non si può più chiedere
@@ -532,8 +545,13 @@ cliente cosa ha comprato; «Fornitura e messa a dimora di lauro 80-100» sì. È
 questo che la descrizione si scrive in giardino e si corregge in ufficio.
 
 **Il sì del cliente costa un clic** e porta il lavoro in «Da pianificare» sulla
-lavagna, largo le mezze giornate che il campo aveva stimato: lo stesso numero,
-misurato una volta sola. In colonna e **senza un giorno** — quello lo decide chi
+lavagna, largo le mezze giornate che escono dalle ore del preventivo: lo stesso
+numero, misurato una volta sola. Le mezze si rifanno dalle righe e non si leggono
+dal rilievo (`mezzePreventivo()`), così le ore corrette in ufficio spostano la
+larghezza — e si aggiornano mentre si scrive, come il totale. Contano le righe nel
+totale (una tariffa a ore è un «se servirà») e, con le alternative, quelle della
+soluzione scelta più le comuni: siepe nuda e siepe con telo non durano uguale.
+In colonna e **senza un giorno** — quello lo decide chi
 pianifica, e su quella lavagna niente si muove da solo. `visti` vale anche qui:
 riaccettarlo non lo mette in lavagna due volte.
 

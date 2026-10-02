@@ -260,9 +260,9 @@ entra in «Da pianificare» sulla lavagna, ed è il motivo per cui lo stato serv
 
 La prima metà esiste, ed è quella che si fa in giardino. Il **rilievo** è un
 documento come il rapportino, viaggia nella stessa coda e finisce in `rilievi/`;
-l'ufficio lo legge in una pagina sua. Quello che porta: il cliente, quale dei
-quattro tipi è, le mezze giornate stimate a mano, le righe misurate con
-descrizione, quantità e unità, e le note di quello che si vede solo stando lì.
+l'ufficio lo legge in una pagina sua. Quello che porta: il cliente, se aspetta il
+disegno dal CAD, le righe misurate con descrizione, quantità e unità — le ore di
+manodopera comprese — e le note di quello che si vede solo stando lì.
 
 **Non porta prezzi**, per la stessa ragione per cui non li porta il rapportino: il
 listino sta in ufficio, in un posto solo. Il campo dice *cosa* e *quanto*, la cosa
@@ -270,16 +270,17 @@ che solo lui sa.
 
 Tre cose decise lì che vale la pena non rifare:
 
-- **le mezze giornate sono una per rilievo, non una per riga.** È così che si
-  stima qui, ed è anche la larghezza che il cartellino avrà sulla lavagna: lo
-  stesso fatto misurato una volta sola. `ORE_MEZZA` è passata in `rapportino.js`
-  perché ora la usano entrambe le app;
-- **la manodopera non è una riga da aggiungere**: la dicono già le mezze giornate,
-  e metterla anche lì vorrebbe dire preventivarla due volte;
-- **i due tipi che hanno bisogno del disegno lo dichiarano.** Prato in rotoli e
-  irrigazione sono incompleti per costruzione: il pannello lo dice mentre si
-  compila e l'ufficio lo ripete nell'elenco, o un rilievo si apre credendolo
-  finito.
+- **le mezze giornate escono dalle ore.** Erano contate a mano, una per rilievo;
+  ora la manodopera è una riga in ore — una per insieme, o a sé — e le mezze sono
+  la loro somma diviso `ORE_MEZZA`, per eccesso. È anche la larghezza che il
+  cartellino avrà sulla lavagna: lo stesso fatto misurato una volta sola, e il
+  conto sta in `rapportino.js` perché lo fanno entrambe le app;
+- **la manodopera ha il suo prezzo come le altre righe.** Prima stava fuori dalle
+  righe perché la dicevano le mezze giornate; adesso le mezze la leggono dalle
+  righe, e non si conta due volte;
+- **il rilievo che aspetta il disegno lo dichiara**, con una casella: l'ufficio lo
+  ripete nell'elenco, o un rilievo si apre credendolo finito. Erano due dei
+  quattro tipi di lavoro, che non ci sono più.
 
 **Niente fotografie, e non per dimenticanza.** Sarebbero la cosa più utile da
 aggiungere — una foto risponde a quello che alla segretaria si chiedeva a voce —
@@ -311,7 +312,7 @@ Dal rilievo al preventivo il giro è chiuso: righe prezzate col listino, totale,
 righe a tariffa fuori dal totale, foglio di stampa che ricalca quelli veri
 (intestazione, Spett.le, la frase di apertura, TOTALE PREVENTIVO S.E. & O.,
 condizioni in fondo), salvataggio in `preventivi/<anno>/`, e l'accettazione che
-porta il lavoro sulla lavagna largo le mezze giornate del rilievo.
+porta il lavoro sulla lavagna largo le mezze giornate che escono dalle ore.
 
 Ci sono anche i tre tipi di riga che i preventivi veri hanno — nel totale,
 **a tariffa** (fuori dal totale) e **sezione** (solo un titolo) — e le

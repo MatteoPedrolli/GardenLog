@@ -2015,6 +2015,16 @@ async function ricontrolla() {
 // non si legge, e quello che non si legge tanto vale non scriverlo.
 const NOVITA = [
   {
+    versione: '2026-10-02c',
+    data: '2026-10-02',
+    titolo: 'Le mezze giornate escono dalle ore',
+    righe: [
+      'I rilievi portano le **ore di manodopera** come righe: una per ogni insieme («Manodopera – Aiuola») e, se serve, altre a sé.',
+      'Le **mezze giornate** sono la somma di quelle ore, 8 per mezza giornata, arrotondata per eccesso: non si contano più a mano.',
+      'Nel preventivo le ore hanno il loro prezzo di listino come le altre righe, e correggendole cambiano anche le mezze giornate. Con le alternative, accettando, il lavoro entra in lavagna largo quanto la soluzione scelta.',
+    ],
+  },
+  {
     versione: '2026-10-02b',
     data: '2026-10-02',
     titolo: 'Il rilievo senza «tipo di lavoro»',
@@ -2205,6 +2215,36 @@ function soluzioniDi(d) {
 function totaleSoluzione(d, soluzioneID) {
   return totalePreventivo((d.righe || []).filter(r =>
     !r.soluzione || r.soluzione === soluzioneID));
+}
+
+// Le mezze giornate di un preventivo sono le sue ore di manodopera, sommate e
+// arrotondate per eccesso (`mezzeDaOre()`, la stessa regola del telefono). Si
+// rifanno dalle righe e non si leggono dal rilievo: se in ufficio le ore di
+// un'aiuola si correggono, la larghezza in lavagna deve seguirle. Contano le
+// righe che entrano nel totale — una tariffa a ore è un «se servirà», non lavoro
+// promesso — e, con le alternative, quelle della soluzione più le comuni: siepe
+// nuda e siepe con telo non durano uguale. Un rilievo di prima delle ore sulle
+// righe non ha manodopera da sommare, e tiene le mezze contate a mano.
+function mezzePreventivo(d, soluzioneID) {
+  const righe = (d.righe || []).filter(r => r.tipo !== 'tariffa' && r.tipo !== 'sezione' &&
+    (soluzioneID == null || !r.soluzione || r.soluzione === soluzioneID));
+  const ore = oreManodopera(righe);
+  return ore > 0 ? { ore, mezze: mezzeDaOre(ore) } : { ore: 0, mezze: Number(d.mezze) || 0 };
+}
+
+function etichettaMezze(n) {
+  return n + (n === 1 ? ' mezza giornata' : ' mezze giornate');
+}
+
+function etichettaMezzePreventivo(d) {
+  const soluzioni = soluzioniDi(d);
+  const conti = soluzioni.length ? soluzioni.map(x => mezzePreventivo(d, x.id)) : [mezzePreventivo(d)];
+  const mezze = conti.map(x => x.mezze);
+  const min = Math.min(...mezze), max = Math.max(...mezze);
+  if (!max) return 'senza ore di manodopera';
+  if (min !== max) return 'da ' + min + ' a ' + etichettaMezze(max);
+  const ore = conti[0].ore;
+  return etichettaMezze(max) + (ore ? ' · ' + String(ore).replace('.', ',') + ' h' : '');
 }
 
 // Tutti i totali in un colpo: quello base (o l'unico, quando non ci sono
@@ -2736,6 +2776,9 @@ function aggiornaTotalePreventivo() {
   const fuori = document.getElementById('fuori-totale');
   if (fuori) fuori.textContent = senza
     ? senza + (senza === 1 ? ' riga senza prezzo' : ' righe senza prezzo') : '';
+  // Anche le mezze giornate seguono il numero: le ore sono una riga come le altre.
+  const mezze = document.getElementById('mezze-preventivo');
+  if (mezze) mezze.textContent = etichettaMezzePreventivo(PREVENTIVO.doc);
 }
 
 function aggiornaCodaPreventivo() {
@@ -2760,7 +2803,7 @@ function disegnaPreventivo() {
 
   let html = '<h2 class="titolo-pagina">' + perValore(d.cliente.nome || 'senza nome') + '</h2>';
   html += '<p class="sottotitolo">' +
-    d.mezze + (d.mezze === 1 ? ' mezza giornata' : ' mezze giornate') +
+    '<span id="mezze-preventivo">' + etichettaMezzePreventivo(d) + '</span>' +
     (d.disegno || d.daRilievo?.disegno ? ' · 📐 aspetta il disegno' : '') +
     ' · ' + (preventivoScaduto(d) ? 'scaduto senza risposta' : STATI_PREVENTIVO[d.stato]) +
     (d.stato === 'rifiutato' && d.rifiutato ? ' il ' + formattaData(d.rifiutato)
@@ -2983,8 +3026,8 @@ async function segnaMandato() {
 
 // Il sì del cliente: oggi è un «ok» a penna sulla stampa, e da nessuna parte in
 // forma digitale. Qui costa un clic, e porta il lavoro sulla lavagna largo le
-// mezze giornate che il campo aveva stimato — lo stesso numero, misurato una
-// volta sola. Non si piazza su un giorno: quello lo decide chi pianifica.
+// mezze giornate che escono dalle ore del preventivo — della soluzione scelta,
+// se sono più d'una. Non si piazza su un giorno: quello lo decide chi pianifica.
 async function accettaPreventivo(soluzioneID) {
   if (!PREVENTIVO) return;
   const d = PREVENTIVO.doc;
@@ -3000,13 +3043,17 @@ async function accettaPreventivo(soluzioneID) {
       '?\n\nIl lavoro entra in «Da pianificare» sulla lavagna.')) return;
   d.stato = 'accettato';
   d.scelta = scelta ? scelta.id : '';
+  // Senza ore il minimo è una mezza giornata: un cartellino largo zero non si
+  // piazza da nessuna parte.
+  const larghezza = mezzePreventivo(d, scelta ? scelta.id : undefined);
+  const mezze = larghezza.mezze || 1;
   if (!LAVAGNA.visti.includes('prev-' + d.id)) {
     LAVAGNA.visti.push('prev-' + d.id);
     LAVAGNA.lavori.push(sistemaLavoro({
       cliente: (d.cliente && d.cliente.nome) || '',
       luogo: (d.cliente && d.cliente.citta) || '',
-      ore: (Number(d.mezze) || 1) * ORE_MEZZA,
-      mezze: Number(d.mezze) || 1,
+      ore: larghezza.ore || mezze * ORE_MEZZA,
+      mezze,
       note: d.note || (d.daRilievo && d.daRilievo.note) || '',
       origine: 'preventivo accettato',
       stato: 'lista',
@@ -3165,7 +3212,7 @@ function disegnaPreventivi() {
         '</div>' +
         '<div class="meta" style="margin-top:6px">' +
           d.righe.length + (d.righe.length === 1 ? ' riga' : ' righe') +
-          ' · ' + d.mezze + (d.mezze === 1 ? ' mezza giornata' : ' mezze giornate') +
+          ' · ' + (d.mezze ? etichettaMezze(d.mezze) : 'senza ore') +
           (d.sopralluogo ? ' · 📍 dal sopralluogo' : '') +
           (cliente ? '' : ' · <strong>non in anagrafica</strong>') +
           (d.disegno ? ' · 📐 aspetta il disegno' : '') +

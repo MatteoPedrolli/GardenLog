@@ -526,8 +526,6 @@ select.form-control { background-image: url("data:image/svg+xml,%3Csvg xmlns='ht
   background: var(--white); color: var(--text); }
 .conto-numeri select { padding: 8px 6px; font-size: 0.82rem; border: 1px solid var(--border);
   border-radius: 8px; font-family: var(--font-body); background: var(--white); color: var(--text); }
-/* La fila −/mezze/+ va a capo invece di sbordare: è la stessa riga che sulla
-   lavagna spingeva le ore sopra il giorno dopo. */
 .ril-campo { margin-top: 6px; }
 .ril-spunta { display: flex; align-items: center; gap: 8px; font-size: 0.9rem; color: var(--inchiostro); }
 .ril-spunta input { width: 20px; height: 20px; accent-color: var(--inchiostro); }
@@ -543,10 +541,11 @@ select.form-control { background-image: url("data:image/svg+xml,%3Csvg xmlns='ht
 }
 .ril-collegato button { margin-left: auto; background: none; border: none; cursor: pointer;
   color: var(--text-light); font-size: 1rem; }
-.larghezza-ril { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; font-size: 0.85rem; }
-.larghezza-ril button { width: 34px; height: 34px; border-radius: 8px; border: 1px solid var(--border);
-  background: var(--white); color: var(--inchiostro); font-size: 1.05rem; cursor: pointer;
-  font-family: var(--font-body); }
+/* Le ore sommate e le mezze giornate che ne escono, sotto le righe da cui
+   nascono: è un risultato, non un campo, e si legge come tale. */
+.ore-ril { margin: 8px 0 0; padding: 10px 12px; background: var(--foglio); border-radius: 8px;
+  font-size: 0.88rem; color: var(--inchiostro); font-weight: 600; }
+.ore-ril .meno { font-weight: 400; color: var(--text-mid); font-size: 0.8rem; margin-top: 2px; }
 
 .barra-aggiorna {
   position: fixed; left: 0; right: 0; bottom: calc(var(--nav-h) + env(safe-area-inset-bottom, 0px));
@@ -922,17 +921,6 @@ select.form-control { background-image: url("data:image/svg+xml,%3Csvg xmlns='ht
       </div>
 
       <div class="form-group">
-        <label class="form-label">Quanto ci vuole</label>
-        <div class="larghezza-ril">
-          <button type="button" onclick="cambiaMezzeRilievo(-1)">−</button>
-          <span id="f-ril-mezze-eco">1 mezza giornata</span>
-          <button type="button" onclick="cambiaMezzeRilievo(1)">+</button>
-        </div>
-        <div class="dati-nota" style="margin:6px 0 0">Mezze giornate, come le stimi: una mezza sono
-          8 ore di manodopera, ed è la larghezza che il lavoro avrà sulla lavagna.</div>
-      </div>
-
-      <div class="form-group">
         <label class="form-label">Cosa c'è da fare, e quanto</label>
         <div id="ril-righe"></div>
         <select class="form-control" id="f-ril-voce" style="margin-top:8px"
@@ -944,6 +932,10 @@ select.form-control { background-image: url("data:image/svg+xml,%3Csvg xmlns='ht
         </div>
         <div class="dati-nota" style="margin:6px 0 0">Niente prezzi: il listino sta in ufficio, in un
           posto solo. Qui si dice cosa c'è e quanto ce n'è.</div>
+        <div class="ore-ril" id="f-ril-mezze-eco"></div>
+        <div class="dati-nota" style="margin:6px 0 0">Le ore di manodopera, per ogni insieme o come
+          voce a sé: ogni 8 ore (4 d'orologio in due) una mezza giornata, arrotondando per
+          eccesso. È la larghezza che il lavoro avrà sulla lavagna.</div>
       </div>
 
       <div class="form-group">
@@ -2916,7 +2908,6 @@ function accodaAppuntamento(prenotazione) {
 // *quanto vale*. Viaggia nella stessa coda, perché il campo manca nello stesso
 // modo e un preventivo perso è un lavoro che non si fa.
 let righeRilievo = [];
-let mezzeRilievo = 1;
 
 // I campi dell'anagrafica del rilievo, in un posto solo: li riempie la ricerca
 // fra i clienti, li riempie un sopralluogo, li legge il salvataggio.
@@ -2948,11 +2939,9 @@ function apriRilievo(sopralluogoID) {
   document.getElementById('f-ril-note').value = '';
   document.getElementById('f-ril-libera').value = '';
   righeRilievo = [];
-  mezzeRilievo = 1;
   document.getElementById('f-ril-disegno').checked = false;
   popolaVociRilievo();
   renderRilievoRighe();
-  mostraMezzeRilievo();
   scollegaClienteRilievo();
   if (sopralluogoID) daSopralluogo(sopralluogoID);
   document.getElementById('overlay-rilievo').classList.add('open');
@@ -2989,33 +2978,53 @@ function scollegaClienteRilievo() {
   document.getElementById('ril-cliente-suggestions').style.display = 'none';
 }
 
-// Le mezze giornate si alzano e si abbassano a mano, come sulla lavagna: è una
-// decisione di chi guarda il lavoro, non un calcolo. Una mezza è il minimo —
-// un preventivo di zero mezze giornate non vuol dire niente.
-function cambiaMezzeRilievo(di) {
-  mezzeRilievo = Math.max(1, mezzeRilievo + di);
-  mostraMezzeRilievo();
-}
+// Le righe del rilievo nella forma del documento, quella che `oreManodopera()`
+// sa leggere: il conto delle ore è uno solo, qui e in ufficio.
+const righeRilievoComeDoc = () => righeRilievo.map(r => ({ voceID: r.VoceID, quantita: r.Quantita }));
 
+// Le mezze giornate non si contano più a mano col −/+: sono le ore di manodopera
+// delle righe, sommate e arrotondate per eccesso. Si aggiornano mentre si scrive,
+// senza ridisegnare le righe — il campo sparirebbe da sotto le dita.
 function mostraMezzeRilievo() {
   const eco = document.getElementById('f-ril-mezze-eco');
   if (!eco) return;
-  const ore = mezzeRilievo * ORE_MEZZA;
-  eco.textContent = `${mezzeRilievo} ${mezzeRilievo === 1 ? 'mezza giornata' : 'mezze giornate'} · ${ore} h`;
+  const ore = oreManodopera(righeRilievoComeDoc());
+  const mezze = mezzeDaOre(ore);
+  const scritte = String(ore).replace('.', ',');
+  eco.innerHTML = ore > 0
+    ? `${scritte} h di manodopera · ${mezze} ${mezze === 1 ? 'mezza giornata' : 'mezze giornate'}`
+    // Senza ore il lavoro arriva in lavagna largo una mezza giornata, che è il
+    // minimo: va detto, o un preventivo di sola fornitura sembra stimato.
+    : 'Nessuna ora di manodopera<div class="meno">In lavagna andrà largo una mezza giornata, il minimo.</div>';
+}
+
+// Una riga di manodopera si scrive anche se la voce non c'è più nell'archivio:
+// è quella da cui escono le mezze giornate, e senza la lavagna non saprebbe
+// quanto è largo il lavoro.
+function rigaManodoperaRilievo(descrizione) {
+  const vo = DB.voci.find(x => x.VoceID === VOCE_MANODOPERA);
+  return {
+    RigaID: 'rr-' + Date.now().toString(36) + '-' + righeRilievo.length,
+    VoceID: VOCE_MANODOPERA, Voce: (vo && vo.Nome) || 'Manodopera',
+    Descrizione: descrizione || (vo && vo.Nome) || 'Manodopera',
+    Unita: 'h', Quantita: '',
+  };
 }
 
 function popolaVociRilievo() {
   const sel = document.getElementById('f-ril-voce');
   if (!sel) return;
-  // La manodopera non è fra le voci che si aggiungono: la dicono già le mezze
-  // giornate qui sopra. Metterla anche qui vorrebbe dire preventivarla due volte,
-  // che è lo stesso motivo per cui potature e taglio prato non hanno una voce.
+  // La manodopera è una voce come le altre, in testa: è il lavoro che non sta in
+  // nessun insieme — una potatura, una pulizia — e le sue ore contano per le
+  // mezze giornate come quelle degli insiemi.
   const insiemi = insiemiPerRilievo();
+  const manodopera = `<option value="${VOCE_MANODOPERA}">Manodopera (ore)</option>`;
   sel.innerHTML = '<option value="">+ Aggiungi una voce…</option>' +
     (insiemi.length ? '<optgroup label="Insiemi">' +
-      insiemi.map(t => `<option value="insieme:${perValore(t.TipoID)}">${perValore(t.Nome)} · ${t.voci.length} voci</option>`).join('') +
+      insiemi.map(t => `<option value="insieme:${perValore(t.TipoID)}">${perValore(t.Nome)} · ore e ${t.voci.length} ${t.voci.length === 1 ? 'voce' : 'voci'}</option>`).join('') +
       '</optgroup><optgroup label="Voci">' : '') +
-    DB.voci.filter(v => v.VoceID !== 'manodopera')
+    manodopera +
+    DB.voci.filter(v => v.VoceID !== VOCE_MANODOPERA)
       .map(v => `<option value="${perValore(v.VoceID)}">${perValore(v.Nome)}</option>`).join('') +
     (insiemi.length ? '</optgroup>' : '');
 }
@@ -3025,7 +3034,7 @@ function popolaVociRilievo() {
 // finito. Sono gli stessi, creati da Archivi senza toccare il codice — così le
 // lavorazioni collegate sono quelle che si decidono qui, non una lista scritta
 // da chi programma. Di un insieme si prende la voce di ogni suo tipo: un tipo
-// senza voce è manodopera, e la manodopera la dicono le mezze giornate.
+// senza voce è manodopera, e la manodopera dell'insieme è la sua riga di ore.
 function insiemiPerRilievo() {
   return (DB.tipiOperazione || [])
     .filter(t => t.dettaglio === 'insieme' && t.Insieme)
@@ -3034,24 +3043,33 @@ function insiemiPerRilievo() {
       voci: String(t.Insieme).split(',').map(x => x.trim()).filter(x => x)
         .map(id => (DB.tipiOperazione || []).find(o => o.TipoID === id))
         .map(o => o && o.VoceID)
-        .filter(v => v && v !== 'manodopera' && DB.voci.some(x => x.VoceID === v)),
-    }))
-    .filter(t => t.voci.length);
+        .filter(v => v && v !== VOCE_MANODOPERA && DB.voci.some(x => x.VoceID === v)),
+    }));
 }
 
 function scegliDaElencoRilievo(valore) {
   if (!valore) return;
   if (valore.startsWith('insieme:')) {
     const t = insiemiPerRilievo().find(x => x.TipoID === valore.slice(8));
-    // Una riga per voce, da correggere o togliere come le altre: l'insieme è
-    // una scorciatoia per scriverle, non un blocco che poi non si tocca.
-    if (t) t.voci.forEach(v => aggiungiRigaRilievo(v));
+    if (!t) return;
+    // Prima le ore, col nome dell'insieme: sono quelle che si stimano guardando
+    // l'aiuola intera, non voce per voce. Poi una riga per voce, da correggere o
+    // togliere come le altre: l'insieme è una scorciatoia per scriverle, non un
+    // blocco che poi non si tocca.
+    righeRilievo.push(rigaManodoperaRilievo('Manodopera – ' + t.Nome));
+    t.voci.forEach(v => aggiungiRigaRilievo(v, { senzaDisegno: true }));
+    renderRilievoRighe();
+    return;
+  }
+  if (valore === VOCE_MANODOPERA) {
+    righeRilievo.push(rigaManodoperaRilievo());
+    renderRilievoRighe();
     return;
   }
   aggiungiRigaRilievo(valore);
 }
 
-function aggiungiRigaRilievo(voceID) {
+function aggiungiRigaRilievo(voceID, { senzaDisegno } = {}) {
   const vo = DB.voci.find(x => x.VoceID === voceID);
   if (!vo) return;
   righeRilievo.push({
@@ -3063,7 +3081,7 @@ function aggiungiRigaRilievo(voceID) {
     Unita: isSi(vo.ACorpo) ? 'a corpo' : (vo.Unita || ''),
     Quantita: isSi(vo.ACorpo) ? 1 : '',
   });
-  renderRilievoRighe();
+  if (!senzaDisegno) renderRilievoRighe();
 }
 
 function aggiungiRigaLiberaRilievo() {
@@ -3084,11 +3102,13 @@ function togliRigaRilievo(i) {
   renderRilievoRighe();
 }
 
-// Non si ridisegna mentre si scrive: il campo sparirebbe da sotto le dita.
+// Non si ridisegna mentre si scrive: il campo sparirebbe da sotto le dita. Si
+// aggiorna solo il conto delle ore, che deve seguire il numero.
 function modificaRigaRilievo(i, campo, valore) {
   const r = righeRilievo[i];
   if (!r) return;
   r[campo] = valore;
+  if (campo === 'Quantita') mostraMezzeRilievo();
 }
 
 // L'unità della riga compare sempre fra le scelte, anche se non è nell'elenco: un
@@ -3102,6 +3122,7 @@ function unitaPerLaRiga(unita) {
 function renderRilievoRighe() {
   const el = document.getElementById('ril-righe');
   if (!el) return;
+  mostraMezzeRilievo();
   if (!righeRilievo.length) {
     el.innerHTML = '<div class="dati-nota">Ancora niente. Aggiungi quello che hai misurato.</div>';
     return;
@@ -3115,11 +3136,15 @@ function renderRilievoRighe() {
            oninput="modificaRigaRilievo(${i}, 'Descrizione', this.value)"
            placeholder="Come va scritta sul preventivo" aria-label="descrizione">
     <div class="conto-numeri">
-      <input type="number" step="any" min="0" value="${perValore(r.Quantita)}"
+      <input type="text" inputmode="decimal" value="${perValore(r.Quantita)}"
              oninput="modificaRigaRilievo(${i}, 'Quantita', this.value)" aria-label="quantità">
-      <select onchange="modificaRigaRilievo(${i}, 'Unita', this.value)" aria-label="unità">
+      ${r.VoceID === VOCE_MANODOPERA
+        // Le ore sono ore: cambiare l'unità della manodopera vorrebbe dire contare
+        // nelle mezze giornate dei metri quadri.
+        ? '<span class="unita">h</span>'
+        : `<select onchange="modificaRigaRilievo(${i}, 'Unita', this.value)" aria-label="unità">
         ${unitaPerLaRiga(r.Unita).map(u => `<option value="${perValore(u)}"${u === r.Unita ? ' selected' : ''}>${perValore(u)}</option>`).join('')}
-      </select>
+      </select>`}
     </div>
   </div>`).join('');
 }
@@ -3133,6 +3158,11 @@ async function salvaRilievo() {
   // Un rilievo senza righe è un foglio bianco: l'ufficio non ci può fare un
   // preventivo, e chi l'ha mandato non è più davanti al giardino per chiedere.
   if (!righeRilievo.length) { showToast('⚠️ Aggiungi almeno una riga'); return; }
+  // Una riga di ore lasciata vuota è un'aiuola senza stima: le mezze giornate
+  // verrebbero più corte del lavoro, e in lavagna il pomeriggio sembrerebbe
+  // libero. O si scrivono, o la riga si toglie.
+  const senzaOre = righeRilievo.find(r => r.VoceID === VOCE_MANODOPERA && !(numeroDaTesto(r.Quantita) > 0));
+  if (senzaOre) { showToast(`⚠️ Scrivi le ore di «${senzaOre.Descrizione || 'Manodopera'}», o togli la riga`); return; }
 
   const rilievo = {
     RilievoID: 'ril-' + Date.now().toString(36),
@@ -3149,7 +3179,9 @@ async function salvaRilievo() {
     // insieme — un giardino nuovo è siepe, prato e irrigazione. Resta l'unico
     // fatto che contava: il rilievo è incompleto finché non arriva il disegno.
     Disegno: document.getElementById('f-ril-disegno').checked,
-    Mezze: mezzeRilievo,
+    // Scritte per la scheda di qui sotto, finché è da consegnare: il documento
+    // le rifà dalle righe, e sono le stesse.
+    Mezze: mezzeDaOre(oreManodopera(righeRilievoComeDoc())),
     Righe: righeRilievo.map(r => ({ ...r })),
     Note: document.getElementById('f-ril-note').value.trim(),
     Creato: new Date().toISOString(),
@@ -3208,7 +3240,7 @@ function renderRilievi() {
       <div style="font-weight:600">${perValore(nome)}</div>
       <div style="font-size:0.85rem; color:var(--text-mid)">${(r.Righe || []).length} ${(r.Righe || []).length === 1 ? 'riga' : 'righe'}${r.Disegno ? ' · 📐 aspetta il disegno' : ''}</div>
       <div style="font-size:0.78rem; color:var(--text-light); margin-top:4px">
-        ${quante} ${quante === 1 ? 'mezza giornata' : 'mezze giornate'} · 📤 da consegnare
+        ${quante ? `${quante} ${quante === 1 ? 'mezza giornata' : 'mezze giornate'}` : 'senza ore'} · 📤 da consegnare
       </div>
       ${r.Note ? `<div style="font-size:0.8rem; color:var(--text-mid); margin-top:4px; white-space:pre-line">${perValore(r.Note)}</div>` : ''}
       ${voce && voce.errore ? `<div class="errore-consegna" onclick="svuotaCoda({ avvisa: true })">

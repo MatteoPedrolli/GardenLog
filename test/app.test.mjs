@@ -570,11 +570,12 @@ try {
         return r.left - bordo.left >= 12 && bordo.right - r.right >= 12;
       });
     }));
-  // La manodopera la dicono già le mezze giornate: metterla anche fra le voci
-  // vorrebbe dire preventivarla due volte, come collegare una voce al taglio prato.
-  ok('la manodopera non è fra le voci da aggiungere a mano',
-    await page.evaluate(() => ![...document.getElementById('f-ril-voce').options]
-      .some(o => o.value === 'manodopera')));
+  // Le mezze giornate non si contano più a mano: escono dalle ore di
+  // manodopera, che quindi si scrivono come righe — per insieme o a sé.
+  ok('la manodopera è fra le voci, e il −/+ delle mezze giornate non c\'è più',
+    await page.evaluate(() => [...document.getElementById('f-ril-voce').options]
+      .some(o => o.value === 'manodopera') &&
+      !document.querySelector('#overlay-rilievo .larghezza-ril') && typeof cambiaMezzeRilievo === 'undefined'));
 
   await page.fill('#f-ril-cliente-search', 'Mario');
   await page.waitForTimeout(200);
@@ -595,24 +596,32 @@ try {
   await page.check('#f-ril-disegno');
   // Gli insiemi della visita servono anche qui: un'aiuola chiede sempre le
   // stesse cose, in un preventivo come in un lavoro finito. Una riga per voce,
-  // e la manodopera no — la dicono le mezze giornate.
+  // e in testa le sue ore, col suo nome: si stimano guardando l'aiuola intera.
   const daInsieme = await page.evaluate(() => {
     const opzioni = [...document.querySelectorAll('#f-ril-voce optgroup[label="Insiemi"] option')]
       .map(o => o.value + '=' + o.textContent);
     const prima = righeRilievo.length;
     scegliDaElencoRilievo('insieme:aiuola');
     const aggiunte = righeRilievo.slice(prima).map(r => r.VoceID);
+    const ore = righeRilievo[prima];
+    const disegnate = document.querySelectorAll('#ril-righe .conto-riga').length;
+    // La riga delle ore non ha un menù dell'unità: le ore sono ore.
+    const primaRiga = document.querySelector('#ril-righe .conto-riga');
+    const unitaOre = { menu: !!primaRiga.querySelector('select'),
+      scritta: (primaRiga.querySelector('.unita') || {}).textContent };
     righeRilievo.splice(prima);
     renderRilievoRighe();
-    return { opzioni, aggiunte };
+    return { opzioni, aggiunte, descrizioneOre: ore && ore.Descrizione, unitaOre, disegnate };
   });
   ok('fra le voci del rilievo ci sono gli insiemi, come «Aiuola»',
     daInsieme.opzioni.some(o => o.startsWith('insieme:aiuola=Aiuola')), daInsieme.opzioni.join(' | '));
-  ok('e un insieme aggiunge una riga per ogni sua voce',
-    daInsieme.aggiunte.join(',') === 'piante,pacciamatura,ala-gocciolante,telo-pacciamante',
-    daInsieme.aggiunte.join(','));
-  ok('senza manodopera, che la dicono le mezze giornate',
-    !daInsieme.aggiunte.includes('manodopera'));
+  ok('e un insieme aggiunge le sue ore e una riga per ogni sua voce',
+    daInsieme.aggiunte.join(',') === 'manodopera,piante,pacciamatura,ala-gocciolante,telo-pacciamante' &&
+    daInsieme.disegnate === 5, daInsieme.aggiunte.join(',') + ' / ' + daInsieme.disegnate);
+  ok('le ore portano il nome dell\'insieme',
+    daInsieme.descrizioneOre === 'Manodopera – Aiuola', daInsieme.descrizioneOre);
+  ok('e la loro unità è h, senza menù per cambiarla',
+    !daInsieme.unitaOre.menu && daInsieme.unitaOre.scritta === 'h', JSON.stringify(daInsieme.unitaOre));
   await page.selectOption('#f-ril-voce', 'tappeto-erboso');
   await page.waitForTimeout(150);
   ok('la riga nasce col nome della voce già scritto, da correggere',
@@ -626,7 +635,8 @@ try {
   const unitaMentite = await page.evaluate(() => {
     const tenute = righeRilievo.slice();
     const sbagliate = [];
-    DB.voci.filter(v => v.Unita).forEach(v => {
+    // La manodopera è in ore e basta, e non ha menù: lo guarda la prova sopra.
+    DB.voci.filter(v => v.Unita && v.VoceID !== 'manodopera').forEach(v => {
       righeRilievo = [{ RigaID: 'u', VoceID: v.VoceID, Voce: v.Nome, Descrizione: v.Nome,
         Unita: v.Unita, Quantita: 1 }];
       renderRilievoRighe();
@@ -644,18 +654,31 @@ try {
   await page.selectOption('#f-ril-voce', 'smaltimento-verde');
   await page.waitForTimeout(150);
   await page.fill('#ril-righe .conto-riga:nth-child(2) .conto-numeri input', '150');
-  // Le mezze giornate si alzano a mano, come sulla lavagna: è una decisione di
-  // chi guarda il lavoro, non un calcolo sulle ore.
-  await page.click('#overlay-rilievo .larghezza-ril button:last-child');
-  await page.click('#overlay-rilievo .larghezza-ril button:last-child');
-  ok('le mezze giornate si contano a mano e si leggono in ore',
-    (await page.textContent('#f-ril-mezze-eco')).includes('3 mezze giornate') &&
-    (await page.textContent('#f-ril-mezze-eco')).includes('24 h'),
+  ok('senza ore il rilievo dice che il lavoro andrà largo il minimo',
+    (await page.textContent('#f-ril-mezze-eco')).includes('Nessuna ora'),
     await page.textContent('#f-ril-mezze-eco'));
-  ok('e non scendono sotto una: un preventivo di zero mezze non vuol dire niente',
-    await page.evaluate(() => { const prima = mezzeRilievo; cambiaMezzeRilievo(-9);
-      const dopo = mezzeRilievo; mezzeRilievo = prima; mostraMezzeRilievo(); return dopo; }) === 1);
+  // Le mezze giornate sono le ore di manodopera, 8 per mezza, per eccesso: 17,5
+  // ore ne fanno 3, non 2. E la virgola è come si scrivono i decimali qui.
+  await page.selectOption('#f-ril-voce', 'manodopera');
+  await page.waitForTimeout(150);
+  // Una riga di ore lasciata vuota non parte: le mezze verrebbero più corte del
+  // lavoro, e in lavagna il pomeriggio sembrerebbe libero.
   await page.fill('#f-ril-note', 'Accesso stretto, il camion resta in strada.\nRubinetto sul lato nord.');
+  await page.click('#overlay-rilievo .btn-primary');
+  await page.waitForTimeout(300);
+  ok('una riga di ore lasciata vuota ferma il rilievo, e dice quale',
+    await page.evaluate(() => DB.rilievi.length) === 0 &&
+    (await page.textContent('#toast')).includes('ore di «Manodopera»'),
+    await page.textContent('#toast'));
+  await page.fill('#ril-righe .conto-riga:nth-child(3) .conto-numeri input', '17,5');
+  ok('le mezze giornate escono dalle ore, arrotondate per eccesso, mentre si scrive',
+    (await page.textContent('#f-ril-mezze-eco')).includes('17,5 h') &&
+    (await page.textContent('#f-ril-mezze-eco')).includes('3 mezze giornate'),
+    await page.textContent('#f-ril-mezze-eco'));
+  ok('il conto è uno solo, e le mezze cominciate contano intere',
+    await page.evaluate(() => mezzeDaOre(8) === 1 && mezzeDaOre(8.5) === 2 && mezzeDaOre(0) === 0 &&
+      oreManodopera([0.1, 0.2, 7.7].map(q => ({ voceID: 'manodopera', quantita: q }))) === 8 &&
+      oreManodopera([{ voceID: 'noleggio', quantita: 5, unita: 'h' }]) === 0));
   await page.click('#overlay-rilievo .btn-primary');
   await page.waitForTimeout(500);
 
@@ -699,7 +722,7 @@ try {
     sconosciuto.nome === 'Anna Nuova' && sconosciuto.id === '' && sconosciuto.telefono === '333 1234567',
     JSON.stringify(sconosciuto));
   ok('porta le righe con descrizione, quantità e unità',
-    docRilievo.righe.length === 2 && docRilievo.righe[0].quantita === 240 &&
+    docRilievo.righe.length === 3 && docRilievo.righe[0].quantita === 240 &&
     docRilievo.righe[0].unita === 'm²' &&
     docRilievo.righe[0].descrizione === 'Fornitura e posa di tappeto erboso in rotoli',
     JSON.stringify(docRilievo.righe[0]));
@@ -717,8 +740,16 @@ try {
       const altro = leggiRilievo({ tipo: 'rilievo', versione: 1, id: 'w', lavoro: 'manutenzione', righe: [] });
       return vecchio.disegno === true && altro.disegno === false;
     }));
-  ok('porta le mezze giornate stimate, che sono anche la larghezza sulla lavagna',
-    docRilievo.mezze === 3, String(docRilievo.mezze));
+  ok('porta le ore e le mezze giornate che ne escono, che sono la larghezza sulla lavagna',
+    docRilievo.ore === 17.5 && docRilievo.mezze === 3 && docRilievo.righe[2].quantita === 17.5,
+    docRilievo.ore + ' h · ' + docRilievo.mezze);
+  // I rilievi mandati prima delle ore sulle righe portano solo le mezze contate a
+  // mano: valgono ancora, senza alzare la versione.
+  ok('un rilievo di prima, senza ore, tiene le sue mezze giornate',
+    await page.evaluate(() => {
+      const r = leggiRilievo({ tipo: 'rilievo', versione: 1, id: 'm', mezze: 4, righe: [] });
+      return r.mezze === 4 && r.ore === 0;
+    }));
   ok('e le note, che sono quello che si vede solo stando lì',
     docRilievo.note.includes('Accesso stretto') && docRilievo.note.includes('Rubinetto'));
   ok('il nome del file resta leggibile a occhio',
@@ -3008,7 +3039,7 @@ try {
   // Le righe non stanno nell'elenco ma nella schermata del preventivo, dove si
   // prezzano: qui basta quanto lavoro è, per decidere da quale cominciare.
   ok('l\'elenco dice quante righe e quante mezze giornate, non le righe stesse',
-    schermoRilievi.includes('2 righe') && schermoRilievi.includes('3 mezze giornate'),
+    schermoRilievi.includes('3 righe') && schermoRilievi.includes('3 mezze giornate'),
     schermoRilievi.slice(0, 200));
   ok('le note del campo si leggono come sono state scritte',
     schermoRilievi.includes('Accesso stretto') && schermoRilievi.includes('Rubinetto sul lato nord'));
@@ -3075,8 +3106,15 @@ try {
   ok('il preventivo porta le righe del rilievo, con quantità e prezzo',
     campiPrev.includes('240') && schermoPrev.includes('m²'),
     campiPrev + ' § ' + schermoPrev.slice(0, 120));
-  ok('e le mezze giornate stimate dal campo',
-    schermoPrev.includes('3 mezze giornate'), schermoPrev.slice(0, 160));
+  ok('e le mezze giornate che escono dalle ore del campo',
+    schermoPrev.includes('3 mezze giornate · 17,5 h'), schermoPrev.slice(0, 160));
+  // Le ore sono una riga come le altre: col prezzo di listino della manodopera,
+  // proposto, da guardare come gli altri.
+  ok('le ore arrivano come riga, col prezzo della manodopera proposto',
+    await pagU.evaluate(() => {
+      const r = PREVENTIVO.doc.righe.find(x => x.voceID === 'manodopera');
+      return !!r && r.quantita === 17.5 && r.unita === 'h' && r.prezzo === 35 && r.proposto;
+    }));
   ok('la descrizione è quella scritta in giardino, non la voce di listino',
     await pagU.evaluate(() => PREVENTIVO.doc.righe[0].descrizione) ===
       'Fornitura e posa di tappeto erboso in rotoli');
@@ -3091,7 +3129,7 @@ try {
   ok('la casella del prezzo proposto si vede che aspetta',
     await pagU.evaluate(() => !!document.querySelector('#pagina-preventivo input.prezzo.proposto')));
   ok('e la schermata dice quanti aspettano, e che il margine lo decidi tu',
-    schermoPrev.includes('aspetta una conferma') && schermoPrev.includes('margine'),
+    /aspett(a|ano) una conferma/.test(schermoPrev) && schermoPrev.includes('margine'),
     schermoPrev.slice(0, 200));
 
   // Qui si ferma: è la stampa che esce di qui, come sul telefono si ferma il
@@ -3115,16 +3153,17 @@ try {
   ok('scrivendoci dentro il prezzo diventa una decisione e la casella torna bianca',
     await pagU.evaluate(() => PREVENTIVO.doc.righe[0].prezzo) === 18 &&
     await pagU.evaluate(() => PREVENTIVO.doc.righe[0].proposto) === false &&
-    await pagU.evaluate(() => !document.querySelector('#pagina-preventivo input.prezzo.proposto')));
+    await pagU.evaluate(() => !document.querySelector('#pagina-preventivo input.prezzo').classList.contains('proposto')));
+  // 240 m² a 18 € e 17,5 h di manodopera a 35 €.
   ok('e il totale segue senza che si ricarichi la pagina',
-    (await pagU.textContent('#totale-preventivo')).includes('4.320'),
+    (await pagU.textContent('#totale-preventivo')).includes('4.932,50'),
     await pagU.textContent('#totale-preventivo'));
 
   // Una tariffa dice quanto costa una cosa che forse servirà — il conferimento a
   // discarica, il costo orario — e **non entra nel totale**: sommarla direbbe
   // una cifra che non esiste. Sui preventivi veri c'è sempre.
   await pagU.evaluate(() => {
-    const i = PREVENTIVO.doc.righe.length - 1;
+    const i = PREVENTIVO.doc.righe.findIndex(r => r.voceID === 'smaltimento-verde');
     modificaRigaPreventivo(i, 'descrizione', 'Eventuale conferimento a discarica');
     modificaPrezzoRiga(i, '0,22');
     cambiaTipoRiga(i, 'tariffa');
@@ -3132,7 +3171,41 @@ try {
   await pagU.waitForTimeout(150);
   const conTariffa = await pagU.evaluate(() => totalePreventivo(PREVENTIVO.doc.righe));
   ok('una riga a tariffa resta fuori dal totale',
-    conTariffa.totale === 4320 && conTariffa.tariffe === 1, JSON.stringify(conTariffa));
+    conTariffa.totale === 4932.5 && conTariffa.tariffe === 1, JSON.stringify(conTariffa));
+
+  // Le ore corrette in ufficio cambiano la larghezza in lavagna: le mezze
+  // giornate si rifanno dalle righe, non si leggono dal rilievo. E si aggiornano
+  // mentre si scrive, come il totale.
+  const oreCorrette = await pagU.evaluate(() => {
+    const i = PREVENTIVO.doc.righe.findIndex(r => r.voceID === 'manodopera');
+    const sotto = [];
+    modificaRigaPreventivo(i, 'quantita', '30');
+    sotto.push(document.getElementById('mezze-preventivo').textContent);
+    modificaRigaPreventivo(i, 'quantita', '17,5');
+    sotto.push(document.getElementById('mezze-preventivo').textContent);
+    return sotto;
+  });
+  ok('correggendo le ore in ufficio le mezze giornate seguono, senza ridisegnare',
+    oreCorrette[0] === '4 mezze giornate · 30 h' && oreCorrette[1] === '3 mezze giornate · 17,5 h',
+    oreCorrette.join(' / '));
+  ok('una tariffa a ore non occupa la lavagna, e un rilievo di prima tiene le sue mezze',
+    await pagU.evaluate(() => {
+      const tariffa = mezzePreventivo({ mezze: 0, righe: [
+        { voceID: 'manodopera', quantita: 12, tipo: 'tariffa' }] });
+      const vecchio = mezzePreventivo({ mezze: 4, righe: [{ voceID: 'piante', quantita: 3, tipo: 'totale' }] });
+      return tariffa.mezze === 0 && vecchio.mezze === 4 && vecchio.ore === 0;
+    }));
+  // Siepe nuda e siepe con telo non durano uguale: ogni soluzione conta le sue
+  // ore più quelle comuni, e l'elenco dice da quanto a quanto.
+  ok('con le alternative le mezze giornate sono quelle della soluzione, più le comuni',
+    await pagU.evaluate(() => {
+      const d = { mezze: 0, soluzioni: [{ id: 'a', nome: 'Nuda' }, { id: 'b', nome: 'Con telo' }], righe: [
+        { voceID: 'manodopera', quantita: 6, tipo: 'totale', soluzione: '' },
+        { voceID: 'manodopera', quantita: 2, tipo: 'totale', soluzione: 'a' },
+        { voceID: 'manodopera', quantita: 12, tipo: 'totale', soluzione: 'b' }] };
+      return mezzePreventivo(d, 'a').mezze === 1 && mezzePreventivo(d, 'b').mezze === 3 &&
+        etichettaMezzePreventivo(d) === 'da 1 a 3 mezze giornate';
+    }));
 
   // Confermati tutti, la stampa passa — e sul foglio va la descrizione, non la
   // voce di listino: «Tappeto erboso» non dice al cliente cosa ha comprato.
@@ -3154,7 +3227,7 @@ try {
     foglioPrev.html.includes('Non compreso nel totale') &&
     foglioPrev.html.includes('Eventuale conferimento a discarica'));
   ok('il totale dichiara che è IVA inclusa, come il conto',
-    foglioPrev.html.includes('IVA inclusa') && foglioPrev.html.includes('4.320'));
+    foglioPrev.html.includes('IVA inclusa') && foglioPrev.html.includes('4.932,50'));
   // La quantità e la sua unità sono due colonne attaccate: senza un margine si
   // leggono come una parola sola — «Q.tàUM» in testa, «90n» sotto. Si vede solo
   // a occhio, quindi qui si **misura**, come lo sbordo delle colonne in lavagna.
@@ -3217,12 +3290,13 @@ try {
   const accettato = await pagU.evaluate(() => {
     const l = LAVAGNA.lavori[LAVAGNA.lavori.length - 1];
     return { quanti: LAVAGNA.lavori.length, stato: PREVENTIVO.doc.stato,
-      cliente: l.cliente, mezze: l.mezze, giorno: l.giorno, colonna: l.stato, origine: l.origine };
+      cliente: l.cliente, mezze: l.mezze, ore: l.ore, giorno: l.giorno, colonna: l.stato, origine: l.origine };
   });
   ok('accettato, il lavoro entra sulla lavagna',
     accettato.quanti === lavoriPrima + 1 && accettato.cliente === 'Mario Rossi',
     JSON.stringify(accettato));
-  ok('largo le mezze giornate che il campo aveva stimato', accettato.mezze === 3);
+  ok('largo le mezze giornate che escono dalle ore, e con quelle ore',
+    accettato.mezze === 3 && accettato.ore === 17.5, accettato.mezze + ' · ' + accettato.ore + ' h');
   ok('in colonna e senza un giorno: quello lo decide chi pianifica',
     accettato.giorno === '' && accettato.colonna === 'lista');
   ok('e il preventivo si segna accettato', accettato.stato === 'accettato');
@@ -3300,13 +3374,13 @@ try {
   // Il totale di una soluzione comprende la parte comune: è quello che il cliente
   // pagherebbe scegliendo quella, e lasciarla fuori sarebbe un prezzo che non esiste.
   ok('ogni soluzione porta dentro le righe comuni',
-    conSoluzioni.totali.soluzioni[0].totale === 4920 &&
-    conSoluzioni.totali.soluzioni[1].totale === 5320,
+    conSoluzioni.totali.soluzioni[0].totale === 5532.5 &&
+    conSoluzioni.totali.soluzioni[1].totale === 5932.5,
     conSoluzioni.totali.soluzioni.map(x => x.nome + '=' + x.totale).join(' '));
   // È quello che si risponde al telefono prima che il cliente scelga.
   ok('e l\'elenco dice da quanto a quanto',
-    conSoluzioni.forchetta.includes('da') && conSoluzioni.forchetta.includes('4.920') &&
-    conSoluzioni.forchetta.includes('5.320'), conSoluzioni.forchetta);
+    conSoluzioni.forchetta.includes('da') && conSoluzioni.forchetta.includes('5.532,50') &&
+    conSoluzioni.forchetta.includes('5.932,50'), conSoluzioni.forchetta);
 
   const foglioSol = await pagU.evaluate(() => {
     confermaTuttiIPrezzi();

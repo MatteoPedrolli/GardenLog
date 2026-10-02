@@ -481,6 +481,39 @@ function etichettaMezzaGiornata(giorno, mezza) {
 // due idee diverse di quanto dura una mezza giornata sarebbero peggio di nessuna.
 const ORE_MEZZA = 8;
 
+// Le mezze giornate di un preventivo **non si stimano a parte**: sono le ore di
+// manodopera delle sue righe, sommate e arrotondate per eccesso. Erano un numero
+// col suo −/+, e le righe dicevano cosa c'era da fare senza dire quanto lavoro
+// costava: le ore stavano solo dentro una stima che nessuno vedeva scomposta.
+// Adesso le ore stanno sulla riga — per ogni insieme, o come voce a sé — e la
+// lavagna ne riceve la somma. Per eccesso perché una mezza giornata cominciata
+// è occupata: con 9 ore non si comincia un altro lavoro nel pomeriggio.
+const VOCE_MANODOPERA = 'manodopera';
+
+// Il numero scritto con la virgola, com'è scritto qui: «2,5» sono due ore e mezza,
+// non una casella vuota.
+function numeroDaTesto(valore) {
+  if (valore === '' || valore == null) return 0;
+  const n = Number(String(valore).replace(',', '.'));
+  return isNaN(n) ? 0 : n;
+}
+
+// Le righe di un documento (rilievo o preventivo): conta la voce manodopera e
+// basta. Un noleggio a ore è in ore ma non è lavoro nostro, e non occupa la
+// lavagna. Si arrotonda al centesimo prima di dividere: tre righe da 0,1 non
+// devono fare 0,30000000000000004 e saltare alla mezza dopo.
+function oreManodopera(righe) {
+  const somma = (righe || [])
+    .filter(r => r && r.voceID === VOCE_MANODOPERA)
+    .reduce((t, r) => t + numeroDaTesto(r.quantita), 0);
+  return Math.round(somma * 100) / 100;
+}
+
+function mezzeDaOre(ore) {
+  const n = Number(ore) || 0;
+  return n > 0 ? Math.ceil(n / ORE_MEZZA) : 0;
+}
+
 const VERSIONE_RILIEVO = 1;
 
 // Elenco chiuso perché sui preventivi scritti a mano la stessa unità compare in
@@ -494,7 +527,7 @@ const UNITA_RILIEVO = ['m²', 'ml', 'n', 'kg', 'l', 'h', 'sacchi', 'a corpo'];
 function costruisciRilievo({ rilievo, cliente, voci }) {
   const perID = {};
   (voci || []).forEach(v => { perID[v.VoceID] = v; });
-  return {
+  const doc = {
     tipo: 'rilievo',
     versione: VERSIONE_RILIEVO,
     id: rilievo.RilievoID,
@@ -521,10 +554,6 @@ function costruisciRilievo({ rilievo, cliente, voci }) {
     // degli irrigatori — e finché non arriva non è finito. Era tutto quello che
     // diceva il «tipo di lavoro» che c'era prima, ed è l'unica cosa rimasta.
     disegno: !!rilievo.Disegno,
-    // Le mezze giornate stimate per tutto il lavoro, non per riga: è così che si
-    // stima qui («arrotondo alla mezza giornata») ed è anche la larghezza che il
-    // cartellino avrà sulla lavagna. Lo stesso fatto misurato una volta sola.
-    mezze: Number(rilievo.Mezze) || 0,
     righe: (rilievo.Righe || []).map(r => ({
       id: r.RigaID || '',
       voceID: r.VoceID || '',
@@ -532,11 +561,17 @@ function costruisciRilievo({ rilievo, cliente, voci }) {
       // ma un rilievo si deve leggere da solo anche se quella voce cambia nome.
       voce: r.Voce || (perID[r.VoceID] && perID[r.VoceID].Nome) || '',
       descrizione: r.Descrizione || '',
-      quantita: Number(r.Quantita) || 0,
+      quantita: numeroDaTesto(r.Quantita),
       unita: r.Unita || '',
     })),
     note: rilievo.Note || '',
   };
+  // Le ore e le mezze giornate escono dalle righe, non da un campo a parte: lo
+  // stesso fatto misurato una volta sola. Viaggiano scritte lo stesso, perché un
+  // ufficio che le legge non deve rifare il conto, e `mezze` c'era già.
+  doc.ore = oreManodopera(doc.righe);
+  doc.mezze = mezzeDaOre(doc.ore);
+  return doc;
 }
 
 function leggiRilievo(grezzo) {
@@ -567,6 +602,9 @@ function leggiRilievo(grezzo) {
     // dei quattro tipi aspettavano il CAD, e si leggono ancora così. Senza alzare
     // VERSIONE_RILIEVO — un campo in meno da guardare, non un formato diverso.
     disegno: !!doc.disegno || ['prato-rotoli', 'irrigazione'].includes(doc.lavoro),
+    // I rilievi mandati prima delle ore sulle righe portano solo le mezze
+    // giornate contate a mano: valgono ancora, e `ore` assente vuol dire questo.
+    ore: Number(doc.ore) || 0,
     mezze: Number(doc.mezze) || 0,
     righe: (Array.isArray(doc.righe) ? doc.righe : []).map(r => ({
       id: r.id || '',
@@ -592,7 +630,7 @@ if (typeof module !== 'undefined' && module.exports) {
     VERSIONE_RAPPORTINO, costruisciRapportino, leggiRapportino, nomeFileRapportino,
     VERSIONE_APPUNTAMENTO, costruisciAppuntamento, leggiAppuntamento, nomeFileAppuntamento,
     VERSIONE_AGENDA, APPUNTAMENTI_IN_AGENDA, costruisciAgenda, leggiAgenda, etichettaMezzaGiornata,
-    ORE_MEZZA,
+    ORE_MEZZA, VOCE_MANODOPERA, numeroDaTesto, oreManodopera, mezzeDaOre,
     VERSIONE_SOPRALLUOGHI, costruisciSopralluoghi, leggiSopralluoghi,
     VERSIONE_RILIEVO, UNITA_RILIEVO,
     costruisciRilievo, leggiRilievo, nomeFileRilievo,
