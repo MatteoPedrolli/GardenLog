@@ -454,32 +454,47 @@ riempire i campi; quello scritto sul rilievo vince, perché è quello visto stan
 lì. Telefono e mail **il telefono non li tiene**: viaggiano col rilievo verso
 l'ufficio, che è dove servono. Sono arrivati senza alzare `VERSIONE_RILIEVO`.
 
-Le righe hanno la forma di quelle del conto — voce, descrizione, quantità, unità —
-e la **descrizione** nasce dal nome della voce ma si corregge: su un preventivo
-quella riga la legge un cliente, e «Piante» da solo non si capisce.
+**Dal giardino partono lavorazioni, non righe di preventivo.** Una lavorazione è
+un fatto misurato: «Siepe nuova · 24 m · lauro 80-100 · sesto 0,40 · 10 h». Le
+righe erano quelle del conto — voce, descrizione, quantità, unità — e sul telefono
+si vedeva «Piante» e sotto una casella con scritto di nuovo «Piante»: la
+descrizione per il cliente, da scrivere in giardino. Era il posto sbagliato. **Dal
+campo partono meno cose ma chiare**; il testo per il cliente, le quantità dei
+materiali e i prezzi li fa l'ufficio.
 
-**Le mezze giornate escono dalle ore.** C'era un −/+ per contarle a mano, e le
-righe dicevano cosa c'era da fare senza dire quanto lavoro costava: le ore stavano
-dentro una stima che nessuno vedeva scomposta. Adesso la **manodopera è una riga**,
-in ore: ogni insieme porta la sua («Manodopera – Aiuola», in testa alle sue voci,
-perché si stima guardando l'aiuola intera), e il lavoro che non sta in nessun
-insieme — una potatura, una pulizia — è una riga di manodopera a sé. Le mezze
-giornate sono **la somma di quelle ore**, `ORE_MEZZA` per mezza, arrotondata **per
+I generi sono quattro (`GENERI_LAVORAZIONE`): un **insieme** (siepe, aiuola: si
+misura una volta e i materiali li conta l'ufficio), una **voce** a misura (il verde
+da smaltire), la **manodopera** (solo ore, con un nome: una potatura), e una
+**libera** scritta a mano. Ogni insieme sa come si misura dal suo campo Unità in
+Archivi — la siepe a metri, l'aiuola a m² — e se dentro ha la piantumazione chiede
+la pianta e il **sesto** (a metri: dal sesto escono le piante, e il telefono le
+conta mentre si scrive) o il **numero di piante** (a m²: lì il sesto non dice quante
+file ci stanno). Sesto e pianta si decidono **in giardino**: li sceglie chi vede il
+posto. «Siepe nuova» è fra gli insiemi di partenza, arrivata con
+`DEFAULT_ARRIVATI_DOPO`.
+
+La composizione dell'insieme **viaggia con la lavorazione**: in ufficio gli insiemi
+non si definiscono, e un rilievo si deve leggere anche se l'insieme poi cambia.
+I rilievi di prima portano `righe`, e `leggiRilievo()` li legge come lavorazioni —
+la manodopera come ore, il resto come voci a misura, e la descrizione scritta allora
+resta. Nessuna versione alzata.
+
+**Le mezze giornate escono dalle ore.** C'era un −/+ per contarle a mano, e il
+lavoro non diceva quanto costava. Adesso le **ore stanno sulla lavorazione**, e le
+mezze giornate sono **la loro somma**, `ORE_MEZZA` per mezza, arrotondata **per
 eccesso** (`mezzeDaOre()`): una mezza giornata cominciata è occupata. Il conto sta
-in `rapportino.js`, `oreManodopera()`, e lo fanno tutte e due le app: due idee
-diverse di quanto dura una mezza giornata sarebbero peggio di nessuna.
+in `rapportino.js` e lo fanno tutte e due le app: due idee diverse di quanto dura
+una mezza giornata sarebbero peggio di nessuna. In ufficio le ore diventano il
+componente manodopera della riga a corpo, e `oreManodopera()` le conta anche lì
+dentro; conta la voce `manodopera`, non l'unità: un noleggio a ore non occupa la
+lavagna.
 
-Conta solo la voce `manodopera`, non l'unità: un noleggio a ore è in ore ma non è
-lavoro nostro, e non occupa la lavagna. La riga delle ore non ha il menù
-dell'unità. Una riga di ore **lasciata vuota ferma il rilievo**: le mezze verrebbero
-più corte del lavoro, e in lavagna il pomeriggio sembrerebbe libero. Un rilievo
-senza manodopera (sola fornitura) parte, lo dice, e in lavagna va largo il minimo.
-
-Non è contare due volte: prima la manodopera stava fuori dalle righe *perché* la
-dicevano le mezze giornate. Ora le mezze giornate la leggono dalle righe, e il
-preventivo la prezza col listino come le altre. Il documento porta `ore` e `mezze`
-già calcolate, senza alzare `VERSIONE_RILIEVO`; un rilievo di prima ha solo
-`mezze`, contate a mano, e valgono ancora.
+Una lavorazione **incompleta ferma il rilievo** e dice cosa manca
+(`cosaMancaLavorazione()`): un insieme senza misura, senza sesto o senza ore, una
+manodopera senza nome. In ufficio non si può più chiedere, e in lavagna il
+pomeriggio sembrerebbe libero. Un rilievo senza ore (sola fornitura) parte, lo
+dice, e in lavagna va largo il minimo. Il documento porta `ore` e `mezze` già
+calcolate; un rilievo di prima ha solo `mezze`, contate a mano, e valgono ancora.
 
 **Non c'è un «tipo di lavoro».** C'era: quattro tipi da scegliere (manutenzione,
 siepi e aiuole, prato in rotoli, irrigazione), presi dai quattro *modi di arrivare
@@ -495,12 +510,10 @@ degli irrigatori. I rilievi mandati prima portano ancora `lavoro`, e
 `leggiRilievo()` li legge così: prato in rotoli e irrigazione aspettavano il
 disegno. Nessuna versione alzata.
 
-**Le lavorazioni collegate sono gli insiemi**, gli stessi della visita: fra le voci
-del rilievo c'è «Aiuola», e sceglierla aggiunge una riga per ogni voce dei suoi
-tipi, da correggere o togliere come le altre, più la riga delle sue ore. Li crea
-chi usa l'app da Archivi: le lavorazioni che vanno insieme le decide chi lavora, non
-una lista scritta da chi programma. Un tipo senza voce è manodopera, ed è già
-dentro quella riga di ore.
+**Le lavorazioni collegate sono gli insiemi**, gli stessi della visita. Li crea chi
+usa l'app da Archivi: le lavorazioni che vanno insieme le decide chi lavora, non una
+lista scritta da chi programma. Un tipo senza voce è manodopera, ed è già nelle ore
+della lavorazione.
 
 Le note sono quello che si vede **solo stando lì** — accesso, dove resta il
 camion, il rubinetto, la pendenza. Sono anche la cosa che non si può più chiedere
@@ -541,8 +554,42 @@ Sui preventivi veri c'è sempre, e sommarla direbbe una cifra che non esiste. Su
 foglio sta sotto il totale, in una tabella sua.
 
 **Sul foglio va la descrizione, non la voce di listino.** «Piante» non dice al
-cliente cosa ha comprato; «Fornitura e messa a dimora di lauro 80-100» sì. È per
-questo che la descrizione si scrive in giardino e si corregge in ufficio.
+cliente cosa ha comprato; «Fornitura e messa a dimora di lauro 80-100» sì. La
+descrizione **la scrive l'ufficio**: nasce dal nome della lavorazione, con la
+pianta e la misura, e accanto c'è «dal campo: …» con quello che il giardino ha
+misurato.
+
+**Una lavorazione è una riga a corpo.** Al cliente arriva un prezzo solo per la
+siepe, come sui preventivi veri; dentro la riga stanno i **componenti**
+(`componentiLavorazione()`): le piante contate dal sesto, i materiali dalla
+**ricetta** del listino, le ore. Sono il conto dietro il prezzo, si vedono sotto la
+riga in piccolo, si correggono lì, e al cliente non arrivano — come le fasce di un
+rapportino. Il prezzo a corpo **proposto è la somma dei componenti** a listino e la
+segue finché nessuno l'ha guardato; deciso, resta, e la somma gli sta accanto con
+«Usa la somma». Una voce a misura senza ore — il verde da smaltire — resta una riga
+a misura col suo prezzo unitario: spesso diventa una tariffa.
+
+Ogni componente dice **da dove esce la sua quantità** («24 m a sesto 0,4», «1,2 m²
+per m», «ore stimate in giardino»): fra sei mesi «61» da solo non dice niente. Una
+quantità ritoccata o un prezzo deciso in ufficio (`quantitaMano`, `prezzoMano`)
+restano quando il campo rimanda il rilievo, come i prezzi delle righe.
+
+**Le ricette stanno nel listino** (`LISTINO.ricette`, Listino › Lavorazioni): quanto
+telo, ala, pacciamatura per ogni metro o m² di un insieme. Sono un dato dell'azienda
+come i prezzi, e si decidono in un posto solo invece che a ogni preventivo. Gli
+insiemi elencati sono quelli che il campo ha usato. Senza ricetta il componente
+resta senza quantità e lo dice: un buco, non una proposta. Le piante non hanno
+ricetta — escono dal sesto — e le ore nemmeno.
+
+**La scheda di cantiere** (`costruisciSchedaCantiere()`) è l'altro foglio che esce
+dal preventivo, e va a chi lavora: per ogni lavorazione misura, sesto, piante,
+materiali, ore, le note del campo; in fondo i **materiali da ordinare**, sommati fra
+le lavorazioni (due aiuole col telo sono un ordine solo), e le note del sopralluogo.
+**Niente prezzi**: gira in cantiere, e un prezzo lì sopra finisce dove non deve. Per
+la stessa ragione non aspetta i prezzi confermati — si stampa anche da un preventivo
+aperto, per ordinare. Con le alternative vale la soluzione scelta, se c'è. Per ora
+si stampa o si salva in PDF; portarla dentro l'app del telefono vorrebbe un file
+riservato come `sopralluoghi.json`.
 
 **Il sì del cliente costa un clic** e porta il lavoro in «Da pianificare» sulla
 lavagna, largo le mezze giornate che escono dalle ore del preventivo: lo stesso

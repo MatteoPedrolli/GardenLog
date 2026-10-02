@@ -594,83 +594,82 @@ try {
   ok('non c\'è più da scegliere «che lavoro è»',
     await page.evaluate(() => !document.getElementById('f-ril-lavoro')));
   await page.check('#f-ril-disegno');
-  // Gli insiemi della visita servono anche qui: un'aiuola chiede sempre le
-  // stesse cose, in un preventivo come in un lavoro finito. Una riga per voce,
-  // e in testa le sue ore, col suo nome: si stimano guardando l'aiuola intera.
-  const daInsieme = await page.evaluate(() => {
-    const opzioni = [...document.querySelectorAll('#f-ril-voce optgroup[label="Insiemi"] option')]
-      .map(o => o.value + '=' + o.textContent);
-    const prima = righeRilievo.length;
-    scegliDaElencoRilievo('insieme:aiuola');
-    const aggiunte = righeRilievo.slice(prima).map(r => r.VoceID);
-    const ore = righeRilievo[prima];
-    const disegnate = document.querySelectorAll('#ril-righe .conto-riga').length;
-    // La riga delle ore non ha un menù dell'unità: le ore sono ore.
-    const primaRiga = document.querySelector('#ril-righe .conto-riga');
-    const unitaOre = { menu: !!primaRiga.querySelector('select'),
-      scritta: (primaRiga.querySelector('.unita') || {}).textContent };
-    righeRilievo.splice(prima);
-    renderRilievoRighe();
-    return { opzioni, aggiunte, descrizioneOre: ore && ore.Descrizione, unitaOre, disegnate };
+  // Dal giardino partono **lavorazioni**, non righe di preventivo: un fatto
+  // misurato per cosa da fare. Il testo per il cliente e i materiali li fa
+  // l'ufficio — scriverli qui era la voce, e sotto la stessa parola un'altra volta.
+  const opzioniRil = await page.evaluate(() =>
+    [...document.querySelectorAll('#f-ril-voce optgroup[label="Insiemi"] option')].map(o => o.value + '=' + o.textContent));
+  ok('fra le lavorazioni ci sono gli insiemi, con la misura che chiedono',
+    opzioniRil.some(o => o.startsWith('insieme:aiuola=Aiuola · a m²')) &&
+    opzioniRil.some(o => o.startsWith('insieme:siepe-nuova=Siepe nuova · a m')), opzioniRil.join(' | '));
+  ok('e la siepe nuova c\'è anche su un telefono che aveva già il suo archivio',
+    await page.evaluate(() => DEFAULT_ARRIVATI_DOPO.tipiOperazione.includes('siepe-nuova') &&
+      DB.tipiOperazione.some(t => t.TipoID === 'siepe-nuova')));
+  await page.selectOption('#f-ril-voce', 'insieme:siepe-nuova');
+  await page.waitForTimeout(150);
+  // Una siepe si misura in metri, e dal sesto escono le piante mentre si scrive:
+  // 24 m a sesto 0,40 ne vogliono 61, non 60 — c'è la pianta di testa.
+  await page.fill('#ril-righe .lav-riga:nth-child(1) [aria-label="Misura"]', '24');
+  await page.fill('#ril-righe .lav-riga:nth-child(1) [aria-label="Pianta"]', 'lauro 80-100');
+  await page.fill('#ril-righe .lav-riga:nth-child(1) [aria-label="Sesto"]', '0,40');
+  ok('la siepe chiede misura, pianta e sesto, e conta le piante mentre si scrive',
+    (await page.textContent('#lav-piante-0')).includes('61 piante'), await page.textContent('#lav-piante-0'));
+  const cartaSiepe = await page.evaluate(() => {
+    const carta = document.querySelector('#ril-righe .lav-riga');
+    return { testo: carta.textContent,
+      // La voce non si ripete in una casella di testo sotto di sé: è il doppione
+      // che c'era, e la descrizione per il cliente la scrive l'ufficio.
+      doppione: [...carta.querySelectorAll('input')].some(i => i.value === 'Siepe nuova') };
   });
-  ok('fra le voci del rilievo ci sono gli insiemi, come «Aiuola»',
-    daInsieme.opzioni.some(o => o.startsWith('insieme:aiuola=Aiuola')), daInsieme.opzioni.join(' | '));
-  ok('e un insieme aggiunge le sue ore e una riga per ogni sua voce',
-    daInsieme.aggiunte.join(',') === 'manodopera,piante,pacciamatura,ala-gocciolante,telo-pacciamante' &&
-    daInsieme.disegnate === 5, daInsieme.aggiunte.join(',') + ' / ' + daInsieme.disegnate);
-  ok('le ore portano il nome dell\'insieme',
-    daInsieme.descrizioneOre === 'Manodopera – Aiuola', daInsieme.descrizioneOre);
-  ok('e la loro unità è h, senza menù per cambiarla',
-    !daInsieme.unitaOre.menu && daInsieme.unitaOre.scritta === 'h', JSON.stringify(daInsieme.unitaOre));
+  ok('dice di cosa è fatta, e che le quantità le conta l\'ufficio, senza ripetere il nome',
+    cartaSiepe.testo.includes('Telo pacciamante') && cartaSiepe.testo.includes('le conta l\'ufficio') &&
+    !cartaSiepe.doppione, cartaSiepe.testo.slice(0, 160));
+  await page.click('#overlay-rilievo .btn-primary');
+  await page.waitForTimeout(300);
+  // Senza ore non parte: le mezze giornate verrebbero più corte del lavoro, e in
+  // lavagna il pomeriggio sembrerebbe libero.
+  ok('una siepe senza ore ferma il rilievo, e dice quale',
+    await page.evaluate(() => DB.rilievi.length) === 0 &&
+    (await page.textContent('#toast')).includes('ore di «Siepe nuova»'), await page.textContent('#toast'));
+  // Un'aiuola si misura in m², e lì il sesto non dice quante file ci stanno: le
+  // piante si scrivono.
+  const aiuolaRil = await page.evaluate(() => {
+    scegliDaElencoRilievo('insieme:aiuola');
+    const carta = document.querySelector('#ril-righe .lav-riga:nth-child(2)');
+    const r = { sesto: !!carta.querySelector('[aria-label="Sesto"]'), piante: !!carta.querySelector('[aria-label="Piante"]'),
+      unita: lavorazioniRilievo[1].Unita };
+    togliRigaRilievo(1);
+    togliRigaRilievo(0);
+    return r;
+  });
+  ok('un\'aiuola si misura in m² e chiede le piante, non il sesto',
+    aiuolaRil.unita === 'm²' && aiuolaRil.piante && !aiuolaRil.sesto, JSON.stringify(aiuolaRil));
+
   await page.selectOption('#f-ril-voce', 'tappeto-erboso');
   await page.waitForTimeout(150);
-  ok('la riga nasce col nome della voce già scritto, da correggere',
-    await page.inputValue('#ril-righe .ril-desc') === 'Tappeto erboso');
-  ok('e con l\'unità della voce, non da battere a mano',
-    await page.evaluate(() => righeRilievo[0].Unita) === 'm²');
-  // Il menù disegnato deve dire l'unità che la riga ha davvero, per **ogni** voce di
-  // listino. Con un elenco che non copriva le unità delle voci, «Piante» (unità `n`)
-  // compariva come m²: il modello diceva una cosa e lo schermo un'altra. Si guarda
-  // il menù, non la funzione che gli passa le scelte, o la prova non vede niente.
-  const unitaMentite = await page.evaluate(() => {
-    const tenute = righeRilievo.slice();
-    const sbagliate = [];
-    // La manodopera è in ore e basta, e non ha menù: lo guarda la prova sopra.
-    DB.voci.filter(v => v.Unita && v.VoceID !== 'manodopera').forEach(v => {
-      righeRilievo = [{ RigaID: 'u', VoceID: v.VoceID, Voce: v.Nome, Descrizione: v.Nome,
-        Unita: v.Unita, Quantita: 1 }];
-      renderRilievoRighe();
-      const sel = document.querySelector('#ril-righe select');
-      if (sel.value !== v.Unita) sbagliate.push(v.Nome + ': ' + v.Unita + ' → ' + sel.value);
-    });
-    righeRilievo = tenute;
-    renderRilievoRighe();
-    return sbagliate;
-  });
-  ok('e il menù dell\'unità mostra quella che la riga ha davvero, per ogni voce',
-    unitaMentite.length === 0, unitaMentite.join(' | ') || 'nessuna');
-  await page.fill('#ril-righe .ril-desc', 'Fornitura e posa di tappeto erboso in rotoli');
-  await page.fill('#ril-righe .conto-numeri input', '240');
+  ok('una voce a misura porta la sua unità, senza menù da scegliere',
+    await page.evaluate(() => lavorazioniRilievo[0].Unita === 'm²' &&
+      !document.querySelector('#ril-righe .lav-riga select')));
+  await page.fill('#ril-righe .lav-riga:nth-child(1) [aria-label="Misura"]', '240');
   await page.selectOption('#f-ril-voce', 'smaltimento-verde');
   await page.waitForTimeout(150);
-  await page.fill('#ril-righe .conto-riga:nth-child(2) .conto-numeri input', '150');
+  await page.fill('#ril-righe .lav-riga:nth-child(2) [aria-label="Misura"]', '150');
   ok('senza ore il rilievo dice che il lavoro andrà largo il minimo',
     (await page.textContent('#f-ril-mezze-eco')).includes('Nessuna ora'),
     await page.textContent('#f-ril-mezze-eco'));
-  // Le mezze giornate sono le ore di manodopera, 8 per mezza, per eccesso: 17,5
-  // ore ne fanno 3, non 2. E la virgola è come si scrivono i decimali qui.
+  // Il lavoro che non lascia materiali è solo ore, con un nome: una potatura.
   await page.selectOption('#f-ril-voce', 'manodopera');
   await page.waitForTimeout(150);
-  // Una riga di ore lasciata vuota non parte: le mezze verrebbero più corte del
-  // lavoro, e in lavagna il pomeriggio sembrerebbe libero.
   await page.fill('#f-ril-note', 'Accesso stretto, il camion resta in strada.\nRubinetto sul lato nord.');
   await page.click('#overlay-rilievo .btn-primary');
   await page.waitForTimeout(300);
-  ok('una riga di ore lasciata vuota ferma il rilievo, e dice quale',
+  ok('una lavorazione di sole ore senza nome ferma il rilievo',
     await page.evaluate(() => DB.rilievi.length) === 0 &&
-    (await page.textContent('#toast')).includes('ore di «Manodopera»'),
-    await page.textContent('#toast'));
-  await page.fill('#ril-righe .conto-riga:nth-child(3) .conto-numeri input', '17,5');
+    (await page.textContent('#toast')).includes('cosa c\'è da fare'), await page.textContent('#toast'));
+  await page.fill('#ril-righe .lav-riga:nth-child(3) [aria-label="cosa"]', 'Potatura');
+  // Le mezze giornate sono le ore, 8 per mezza, per eccesso: 17,5 ore ne fanno
+  // 3, non 2. E la virgola è come si scrivono i decimali qui.
+  await page.fill('#ril-righe .lav-riga:nth-child(3) [aria-label="Ore"]', '17,5');
   ok('le mezze giornate escono dalle ore, arrotondate per eccesso, mentre si scrive',
     (await page.textContent('#f-ril-mezze-eco')).includes('17,5 h') &&
     (await page.textContent('#f-ril-mezze-eco')).includes('3 mezze giornate'),
@@ -678,7 +677,10 @@ try {
   ok('il conto è uno solo, e le mezze cominciate contano intere',
     await page.evaluate(() => mezzeDaOre(8) === 1 && mezzeDaOre(8.5) === 2 && mezzeDaOre(0) === 0 &&
       oreManodopera([0.1, 0.2, 7.7].map(q => ({ voceID: 'manodopera', quantita: q }))) === 8 &&
-      oreManodopera([{ voceID: 'noleggio', quantita: 5, unita: 'h' }]) === 0));
+      oreManodopera([{ voceID: 'noleggio', quantita: 5, unita: 'h' }]) === 0 &&
+      // Le ore dentro una riga a corpo contano come le altre.
+      oreManodopera([{ voceID: '', componenti: [{ voceID: 'manodopera', quantita: 6 }] }]) === 6 &&
+      pianteDaSesto(24, 0.4) === 61 && pianteDaSesto('10', '0,5') === 21));
   await page.click('#overlay-rilievo .btn-primary');
   await page.waitForTimeout(500);
 
@@ -721,15 +723,28 @@ try {
   ok('per chi non è ancora cliente basta scriverne il nome',
     sconosciuto.nome === 'Anna Nuova' && sconosciuto.id === '' && sconosciuto.telefono === '333 1234567',
     JSON.stringify(sconosciuto));
-  ok('porta le righe con descrizione, quantità e unità',
-    docRilievo.righe.length === 3 && docRilievo.righe[0].quantita === 240 &&
-    docRilievo.righe[0].unita === 'm²' &&
-    docRilievo.righe[0].descrizione === 'Fornitura e posa di tappeto erboso in rotoli',
-    JSON.stringify(docRilievo.righe[0]));
+  ok('porta le lavorazioni con misura e unità',
+    docRilievo.lavorazioni.length === 3 && docRilievo.lavorazioni[0].misura === 240 &&
+    docRilievo.lavorazioni[0].unita === 'm²' && docRilievo.lavorazioni[0].genere === 'voce',
+    JSON.stringify(docRilievo.lavorazioni[0]));
+  // La descrizione per il cliente la scrive l'ufficio: dal campo non parte.
+  ok('e nessun testo per il cliente: quello lo scrive l\'ufficio',
+    !('righe' in docRilievo) && docRilievo.lavorazioni.every(l => !l.descrizione));
   // Denormalizzato come il rapportino: l'ufficio ha il suo listino, ma un
   // rilievo si deve leggere da solo anche fra due anni.
   ok('e il nome della voce viaggia col suo identificativo',
-    docRilievo.righe[0].voceID === 'tappeto-erboso' && docRilievo.righe[0].voce === 'Tappeto erboso');
+    docRilievo.lavorazioni[0].voceID === 'tappeto-erboso' && docRilievo.lavorazioni[0].nome === 'Tappeto erboso');
+  // I rilievi mandati prima portano righe con la descrizione già scritta: si
+  // leggono come lavorazioni, la manodopera come ore, e quella descrizione resta.
+  ok('un rilievo di prima, a righe, si legge come lavorazioni',
+    await page.evaluate(() => {
+      const r = leggiRilievo({ tipo: 'rilievo', versione: 1, id: 'p', righe: [
+        { id: 'a', voceID: 'tappeto-erboso', voce: 'Tappeto erboso', descrizione: 'Posa in rotoli', quantita: 90, unita: 'm²' },
+        { id: 'b', voceID: 'manodopera', voce: 'Manodopera', descrizione: 'Manodopera – Aiuola', quantita: 6, unita: 'h' }] });
+      const [t, m] = r.lavorazioni;
+      return t.genere === 'voce' && t.misura === 90 && t.descrizione === 'Posa in rotoli' &&
+        m.genere === 'manodopera' && m.ore === 6 && m.nome === 'Manodopera – Aiuola';
+    }));
   ok('il rilievo dice che aspetta il disegno, non che tipo di lavoro è',
     docRilievo.disegno === true && !('lavoro' in docRilievo), JSON.stringify({ d: docRilievo.disegno, l: docRilievo.lavoro }));
   // I rilievi mandati prima portano il vecchio «lavoro»: prato in rotoli e
@@ -741,7 +756,8 @@ try {
       return vecchio.disegno === true && altro.disegno === false;
     }));
   ok('porta le ore e le mezze giornate che ne escono, che sono la larghezza sulla lavagna',
-    docRilievo.ore === 17.5 && docRilievo.mezze === 3 && docRilievo.righe[2].quantita === 17.5,
+    docRilievo.ore === 17.5 && docRilievo.mezze === 3 && docRilievo.lavorazioni[2].ore === 17.5 &&
+    docRilievo.lavorazioni[2].genere === 'manodopera' && docRilievo.lavorazioni[2].nome === 'Potatura',
     docRilievo.ore + ' h · ' + docRilievo.mezze);
   // I rilievi mandati prima delle ore sulle righe portano solo le mezze contate a
   // mano: valgono ancora, senza alzare la versione.
@@ -790,7 +806,8 @@ try {
     await page.evaluate(async () => {
       const quanti = DB.rilievi.length;
       apriRilievo();
-      aggiungiRigaRilievo('piante');
+      scegliDaElencoRilievo('piante');
+      lavorazioniRilievo[0].Misura = 5;
       await salvaRilievo();
       const fermato = DB.rilievi.length === quanti &&
         document.getElementById('overlay-rilievo').classList.contains('open');
@@ -1227,14 +1244,14 @@ try {
   ok('ognuna fa la sua riga nel conto', aiuola.conto === '3 q', aiuola.conto);
   ok('e togliendo la spunta si spengono tutte', aiuola.spente);
 
-  // Gli insiemi si creano da Archivi: domani «Siepe nuova» non chiede a nessuno.
+  // Gli insiemi si creano da Archivi: domani «Siepe di confine» non chiede a nessuno.
   const insiemeNuovo = await page.evaluate(async () => {
     openVoceArchivio('tipiOperazione');
-    document.getElementById('f-arch-Nome').value = 'Siepe nuova';
+    document.getElementById('f-arch-Nome').value = 'Siepe di confine';
     document.getElementById('f-arch-dettaglio').value = 'insieme';
     document.querySelectorAll('#f-arch-Insieme input').forEach(i => { i.checked = ['piantumazione', 'telo-pacciamante'].includes(i.value); });
     await salvaVoceArchivio();
-    const t = DB.tipiOperazione.find(x => x.Nome === 'Siepe nuova');
+    const t = DB.tipiOperazione.find(x => x.Nome === 'Siepe di confine');
     const r = { insieme: t && t.Insieme, dettaglio: t && t.dettaglio,
       // un insieme non può contenere altri insiemi, né sé stesso
       senzaInsiemi: (() => { openVoceArchivio('tipiOperazione', t.TipoID);
@@ -2913,8 +2930,8 @@ try {
   ok('e dice da quale sopralluogo arriva, con le note dell\'ufficio',
     precompilato.da.includes('Dal sopralluogo') && precompilato.da.includes('siepe sul confine'));
   const fattoDaSop = await page.evaluate(async () => {
-    aggiungiRigaRilievo('piante');
-    righeRilievo[0].Quantita = 40;
+    scegliDaElencoRilievo('piante');
+    lavorazioniRilievo[0].Misura = 40;
     await salvaRilievo();
     const r = DB.rilievi[DB.rilievi.length - 1];
     const doc = costruisciRilievo({ rilievo: r, cliente: null, voci: DB.voci });
@@ -3038,8 +3055,8 @@ try {
     schermoRilievi.slice(0, 160));
   // Le righe non stanno nell'elenco ma nella schermata del preventivo, dove si
   // prezzano: qui basta quanto lavoro è, per decidere da quale cominciare.
-  ok('l\'elenco dice quante righe e quante mezze giornate, non le righe stesse',
-    schermoRilievi.includes('3 righe') && schermoRilievi.includes('3 mezze giornate'),
+  ok('l\'elenco dice quante lavorazioni e quante mezze giornate, non le lavorazioni stesse',
+    schermoRilievi.includes('3 lavorazioni') && schermoRilievi.includes('3 mezze giornate'),
     schermoRilievi.slice(0, 200));
   ok('le note del campo si leggono come sono state scritte',
     schermoRilievi.includes('Accesso stretto') && schermoRilievi.includes('Rubinetto sul lato nord'));
@@ -3108,16 +3125,29 @@ try {
     campiPrev + ' § ' + schermoPrev.slice(0, 120));
   ok('e le mezze giornate che escono dalle ore del campo',
     schermoPrev.includes('3 mezze giornate · 17,5 h'), schermoPrev.slice(0, 160));
-  // Le ore sono una riga come le altre: col prezzo di listino della manodopera,
-  // proposto, da guardare come gli altri.
-  ok('le ore arrivano come riga, col prezzo della manodopera proposto',
-    await pagU.evaluate(() => {
-      const r = PREVENTIVO.doc.righe.find(x => x.voceID === 'manodopera');
-      return !!r && r.quantita === 17.5 && r.unita === 'h' && r.prezzo === 35 && r.proposto;
-    }));
-  ok('la descrizione è quella scritta in giardino, non la voce di listino',
-    await pagU.evaluate(() => PREVENTIVO.doc.righe[0].descrizione) ===
-      'Fornitura e posa di tappeto erboso in rotoli');
+  // Una lavorazione diventa una riga a corpo: al cliente un prezzo solo, e sotto,
+  // in ufficio, i componenti che lo fanno — qui le ore, a prezzo di listino. Il
+  // prezzo proposto è la loro somma, da guardare come gli altri.
+  const potatura = await pagU.evaluate(() => {
+    const r = PREVENTIVO.doc.righe.find(x => x.lavorazione && x.lavorazione.genere === 'manodopera');
+    return r && { unita: r.unita, quantita: r.quantita, prezzo: r.prezzo, proposto: r.proposto,
+      descrizione: r.descrizione, comp: r.componenti.map(c => c.voceID + ':' + c.quantita + '×' + c.prezzo) };
+  });
+  ok('la potatura arriva come riga a corpo, con le ore fra i componenti',
+    potatura && potatura.unita === 'a corpo' && potatura.quantita === 1 &&
+    potatura.comp.join() === 'manodopera:17.5×35' && potatura.descrizione === 'Potatura',
+    JSON.stringify(potatura));
+  ok('e il prezzo proposto è la somma dei componenti a listino',
+    potatura && potatura.prezzo === 612.5 && potatura.proposto === true, JSON.stringify(potatura));
+  ok('i componenti si vedono sotto la loro riga, con la somma a listino',
+    await pagU.evaluate(() => !!document.querySelector('#pagina-preventivo tr.componenti') &&
+      document.querySelector('#pagina-preventivo .somma-componenti').textContent.includes('612,50')));
+  // La descrizione per il cliente non arriva dal campo: nasce dal nome della voce
+  // e la scrive l'ufficio, guardando quello che il campo ha misurato.
+  ok('la descrizione nasce dal nome, e accanto c\'è quello che il campo ha misurato',
+    await pagU.evaluate(() => PREVENTIVO.doc.righe[0].descrizione) === 'Tappeto erboso' &&
+    schermoPrev.includes('dal campo: Tappeto erboso · 240 m²'), schermoPrev.slice(0, 300));
+  await pagU.evaluate(() => modificaRigaPreventivo(0, 'descrizione', 'Fornitura e posa di tappeto erboso in rotoli'));
   ok('il prezzo arriva dal listino, proposto',
     await pagU.evaluate(() => PREVENTIVO.doc.righe[0].prezzo) === 12 &&
     await pagU.evaluate(() => PREVENTIVO.doc.righe[0].proposto) === true);
@@ -3177,17 +3207,21 @@ try {
   // giornate si rifanno dalle righe, non si leggono dal rilievo. E si aggiornano
   // mentre si scrive, come il totale.
   const oreCorrette = await pagU.evaluate(() => {
-    const i = PREVENTIVO.doc.righe.findIndex(r => r.voceID === 'manodopera');
-    const sotto = [];
-    modificaRigaPreventivo(i, 'quantita', '30');
+    const i = PREVENTIVO.doc.righe.findIndex(r => r.lavorazione && r.lavorazione.genere === 'manodopera');
+    const sotto = [], prezzi = [];
+    modificaComponente(i, 0, 'quantita', '30');
     sotto.push(document.getElementById('mezze-preventivo').textContent);
-    modificaRigaPreventivo(i, 'quantita', '17,5');
+    prezzi.push(document.getElementById('prezzo-riga-' + i).value);
+    modificaComponente(i, 0, 'quantita', '17,5');
     sotto.push(document.getElementById('mezze-preventivo').textContent);
-    return sotto;
+    prezzi.push(document.getElementById('prezzo-riga-' + i).value);
+    return { sotto, prezzi };
   });
   ok('correggendo le ore in ufficio le mezze giornate seguono, senza ridisegnare',
-    oreCorrette[0] === '4 mezze giornate · 30 h' && oreCorrette[1] === '3 mezze giornate · 17,5 h',
-    oreCorrette.join(' / '));
+    oreCorrette.sotto[0] === '4 mezze giornate · 30 h' && oreCorrette.sotto[1] === '3 mezze giornate · 17,5 h',
+    oreCorrette.sotto.join(' / '));
+  ok('e il prezzo ancora da guardare segue la somma dei componenti',
+    oreCorrette.prezzi.join(' / ') === '1050 / 612,5', oreCorrette.prezzi.join(' / '));
   ok('una tariffa a ore non occupa la lavagna, e un rilievo di prima tiene le sue mezze',
     await pagU.evaluate(() => {
       const tariffa = mezzePreventivo({ mezze: 0, righe: [
@@ -3219,8 +3253,13 @@ try {
     return { stampato, html: document.getElementById('foglio').innerHTML };
   });
   ok('confermati i prezzi la stampa parte', foglioPrev.stampato === true);
-  ok('il foglio porta la descrizione scritta in giardino',
+  ok('il foglio porta la descrizione scritta in ufficio',
     foglioPrev.html.includes('Fornitura e posa di tappeto erboso in rotoli'));
+  // Al cliente la riga a corpo e basta: le ore e i materiali dentro sono il conto
+  // dell'ufficio, come le fasce orarie di un rapportino.
+  ok('e la potatura come una riga a corpo, senza i suoi componenti',
+    foglioPrev.html.includes('Potatura') && foglioPrev.html.includes('a corpo') &&
+    !foglioPrev.html.includes('ore stimate in giardino') && !foglioPrev.html.includes('17,5'));
   ok('e la frase di apertura dei preventivi veri',
     foglioPrev.html.includes('migliore offerta'));
   ok('la tariffa sta sotto il totale, fuori da esso',
@@ -3626,6 +3665,102 @@ try {
   ok('l\'avviso dopo il salvataggio dice la forchetta, non la somma delle alternative',
     avvisoSalvato.includes('da 100,00') && avvisoSalvato.includes('300,00') && !avvisoSalvato.includes('400,00'),
     avvisoSalvato);
+
+  // ── DALLA SIEPE MISURATA ALLA RIGA A CORPO, E ALLA SCHEDA DI CANTIERE ──
+  // Dal campo arriva «Siepe nuova · 24 m · lauro · sesto 0,40 · 10 h»; qui i conti
+  // li fa l'ufficio: 61 piante dal sesto, telo e ala dalla ricetta del listino, le
+  // ore. Al cliente una riga a corpo; in cantiere una scheda senza prezzi.
+  const siepe = await pagU.evaluate(() => {
+    const rilievo = leggiRilievo({ tipo: 'rilievo', versione: 1, id: 'ril-siepe', revisione: 1,
+      creato: '2026-10-02T08:00:00Z', cliente: { nome: 'Carla Bianchi', indirizzo: 'Via Roma 1', citta: 'Lavis', telefono: '333 1112223' },
+      note: 'Il camion resta in strada', lavorazioni: [{
+        id: 'l1', genere: 'insieme', nome: 'Siepe nuova', unita: 'm', misura: 24, pianta: 'lauro 80-100', sesto: 0.4, ore: 10,
+        note: 'lato strada',
+        insieme: { id: 'siepe-nuova', nome: 'Siepe nuova', componenti: [
+          { tipoID: 'piantumazione', voceID: 'piante', voce: 'Piante', unita: 'n' },
+          { tipoID: 'telo-pacciamante', voceID: 'telo-pacciamante', voce: 'Telo pacciamante', unita: 'm²' },
+          { tipoID: 'ala-gocciolante', voceID: 'ala-gocciolante', voce: 'Ala gocciolante', unita: 'm' }] } }] });
+    // Il telo ha una ricetta, l'ala ancora no: tutti e due i casi.
+    const tenute = JSON.stringify(LISTINO.ricette || {});
+    LISTINO.ricette = { 'siepe-nuova': { 'telo-pacciamante': 1.2 } };
+    const d = costruisciPreventivo(rilievo, null);
+    const r = d.righe[0];
+    // Una copia, presa prima di toccare niente: sotto si corregge il telo a mano.
+    const comp = JSON.parse(JSON.stringify(Object.fromEntries(r.componenti.map(c => [c.voceID, c]))));
+    // Il campo rimanda il rilievo con la siepe allungata: le quantità seguono, il
+    // prezzo deciso e il telo corretto a mano restano.
+    r.prezzo = 999; r.proposto = false;
+    const telo = r.componenti.find(c => c.voceID === 'telo-pacciamante');
+    telo.quantita = 40; telo.quantitaMano = true;
+    r.descrizione = 'Fornitura e messa a dimora di siepe di lauro';
+    const rev = leggiRilievo({ ...rilievo, revisione: 2, lavorazioni: [{ ...rilievo.lavorazioni[0], misura: 30 }] });
+    const d2 = costruisciPreventivo(rev, d);
+    const r2 = d2.righe[0];
+    const comp2 = Object.fromEntries(r2.componenti.map(c => [c.voceID, c]));
+    const scheda = costruisciSchedaCantiere(d2);
+    // La sezione Lavorazioni del listino nasce dagli insiemi che il campo ha usato.
+    RILIEVI.push({ doc: rilievo, file: 'x.json' });
+    const visti = insiemiVisti().map(x => x.id + ':' + x.unita);
+    vaiA('listino');
+    const listino = document.getElementById('pagina-listino').textContent;
+    RILIEVI.pop();
+    LISTINO.ricette = JSON.parse(tenute);
+    vaiA('preventivo');
+    return {
+      unita: r.unita, descrizione0: d.righe[0] && costruisciPreventivo(rilievo, null).righe[0].descrizione,
+      piante: comp.piante && comp.piante.quantita, pianteCalcolo: comp.piante && comp.piante.calcolo,
+      pianteVoce: comp.piante && comp.piante.voce,
+      telo: comp['telo-pacciamante'].quantita, ala: comp['ala-gocciolante'].quantita,
+      alaCalcolo: comp['ala-gocciolante'].calcolo, ore: comp.manodopera && comp.manodopera.quantita,
+      piante2: comp2.piante.quantita, telo2: comp2['telo-pacciamante'].quantita,
+      prezzo2: r2.prezzo, proposto2: r2.proposto, descrizione2: r2.descrizione,
+      mezze: mezzePreventivo(d).mezze, scheda, visti, listino,
+    };
+  });
+  ok('la siepe diventa una riga a corpo, con la descrizione da correggere',
+    siepe.unita === 'a corpo' && siepe.descrizione0 === 'Siepe nuova di lauro 80-100 — 24 ml',
+    siepe.descrizione0);
+  ok('le piante escono dal sesto, col perché accanto',
+    siepe.piante === 61 && siepe.pianteCalcolo === '24 m a sesto 0,4' && siepe.pianteVoce === 'Piante – lauro 80-100',
+    JSON.stringify([siepe.piante, siepe.pianteCalcolo, siepe.pianteVoce]));
+  ok('il telo dalla ricetta del listino, l\'ala senza ricetta resta da scrivere e lo dice',
+    siepe.telo === 28.8 && siepe.ala === '' && siepe.alaCalcolo.includes('Listino'),
+    JSON.stringify([siepe.telo, siepe.ala, siepe.alaCalcolo]));
+  ok('le ore stanno fra i componenti, e fanno le mezze giornate',
+    siepe.ore === 10 && siepe.mezze === 2, JSON.stringify([siepe.ore, siepe.mezze]));
+  ok('rimandata dal campo, le quantità seguono e le decisioni dell\'ufficio restano',
+    siepe.piante2 === 76 && siepe.telo2 === 40 && siepe.prezzo2 === 999 && siepe.proposto2 === false &&
+    siepe.descrizione2 === 'Fornitura e messa a dimora di siepe di lauro',
+    JSON.stringify([siepe.piante2, siepe.telo2, siepe.prezzo2, siepe.descrizione2]));
+  // La scheda è per il cantiere: misure, sesto, piante, materiali, ore, e quello
+  // che si è visto in giardino. Un prezzo lì sopra non serve e finisce dove non deve.
+  ok('la scheda di cantiere dice misura, sesto, piante, materiali e ore',
+    siepe.scheda.includes('Scheda di cantiere') && siepe.scheda.includes('sesto 0,4') &&
+    siepe.scheda.includes('Piante – lauro 80-100') && siepe.scheda.includes('76') &&
+    siepe.scheda.includes('Telo pacciamante') && siepe.scheda.includes('10 h') &&
+    siepe.scheda.includes('lato strada'), siepe.scheda.slice(0, 300));
+  ok('con i materiali da ordinare e le note del sopralluogo',
+    siepe.scheda.includes('Materiali da ordinare') && siepe.scheda.includes('Il camion resta in strada') &&
+    siepe.scheda.includes('333 1112223'));
+  ok('e senza un prezzo',
+    !/€|999|prezzo/i.test(siepe.scheda), (siepe.scheda.match(/.{40}(€|999|prezzo).{40}/i) || [''])[0]);
+  ok('il listino ha le ricette delle lavorazioni che il campo ha usato',
+    siepe.visti.includes('siepe-nuova:m') && siepe.listino.includes('Lavorazioni') &&
+    siepe.listino.includes('Telo pacciamante') && siepe.listino.includes('m² per m'),
+    siepe.visti.join());
+  ok('la scheda di cantiere si stampa anche coi prezzi ancora da guardare',
+    await pagU.evaluate(() => {
+      let stampato = false;
+      const vera = window.print;
+      window.print = () => { stampato = true; };
+      const r = PREVENTIVO.doc.righe.find(x => x.tipo === 'totale');
+      const prima = r.proposto;
+      r.proposto = true;
+      stampaSchedaCantiere();
+      r.proposto = prima;
+      window.print = vera;
+      return stampato && document.getElementById('foglio').innerHTML.includes('Scheda di cantiere');
+    }));
 
   ok('nessun errore JavaScript nell\'app dell\'ufficio', erroriU.length === 0, erroriU.join(' | '));
   await ctxU.close();

@@ -189,6 +189,13 @@ select.tipo-riga:hover, select.tipo-riga:focus { border-color: var(--border); ba
 table.elenco td.via-col { padding-left: 10px; width: 34px; }
 /* Una tariffa non entra nel totale: si vede che è di un'altra natura. */
 tr.riga-tariffa td { background: var(--foglio); }
+/* I componenti di una riga a corpo: sotto la riga, più piccoli e rientrati. Sono
+   il conto dietro il prezzo, non righe del preventivo, e devono sembrarlo. */
+tr.componenti > td { padding: 0 0 10px 18px; border-top: none; }
+table.componenti { width: 100%; font-size: 0.82rem; }
+table.componenti td { padding: 3px 8px; border-bottom: 1px dashed var(--border); color: var(--text-mid); }
+.somma-componenti { margin: 6px 8px 0; }
+.dal-campo { margin-top: 3px; }
 /* Una sezione è un titolo, non una riga da prezzare: niente colonne, e il testo
    si legge come un titolo anche dentro il campo in cui si scrive. */
 tr.riga-sezione input[type=text] { font-weight: 600; font-size: 0.95rem; border-color: transparent;
@@ -670,7 +677,7 @@ const IMPOSTAZIONI_VUOTE = {
 };
 
 let CARTELLA = null;
-let LISTINO = { tipo: 'listino', versione: 1, voci: [], prodotti: [] };
+let LISTINO = { tipo: 'listino', versione: 1, voci: [], prodotti: [], ricette: {} };
 // Il listino si modifica a video e si scrive su file solo col bottone. Finché
 // resta da salvare, nessuna rilettura della cartella lo deve sovrascrivere: un
 // prezzo appena battuto che sparisce a un Ricontrolla è lavoro perso in silenzio.
@@ -932,11 +939,14 @@ async function caricaListino() {
       tipo: 'listino', versione: Number(l.versione) || 1,
       voci: Array.isArray(l.voci) ? l.voci : [],
       prodotti: Array.isArray(l.prodotti) ? l.prodotti.map(sistemaProdotto) : [],
+      // Le ricette delle lavorazioni sono arrivate dopo, come i prodotti: assenti
+      // vuol dire «nessuna ancora», e i materiali restano da scrivere a mano.
+      ricette: l.ricette && typeof l.ricette === 'object' ? l.ricette : {},
     };
   } catch (e) {
     // Nessun listino ancora: si parte vuoto e si scrive al primo salvataggio.
     // Non lo creo qui, o un permesso di sola lettura fallirebbe all'apertura.
-    return { tipo: 'listino', versione: 1, voci: [], prodotti: [] };
+    return { tipo: 'listino', versione: 1, voci: [], prodotti: [], ricette: {} };
   }
 }
 
@@ -1619,6 +1629,7 @@ async function salvaListino() {
     aggiornato: new Date().toISOString(),
     voci: LISTINO.voci,
     prodotti: LISTINO.prodotti,
+    ricette: LISTINO.ricette || {},
   };
   try {
     await scriviTesto(CARTELLA, FILE_LISTINO, JSON.stringify(da_salvare, null, 2));
@@ -1653,6 +1664,32 @@ function modificaVoce(voceID, campo, valore) {
   const v = voceInListino(voceID);
   if (!v) return;
   v[campo] = campo === 'prezzo' ? valore.replace(',', '.') : valore;
+  LISTINO_DA_SALVARE = true;
+  segnalaListinoDaSalvare();
+}
+
+// Gli insiemi che il campo ha usato, dai rilievi e dai preventivi già fatti: la
+// composizione è quella che viaggia col rilievo, perché in ufficio gli insiemi
+// non si definiscono — li crea chi lavora, da Archivi sul telefono.
+function insiemiVisti() {
+  const visti = new Map();
+  const guarda = l => {
+    if (l && l.genere === 'insieme' && l.insieme && l.insieme.id && !visti.has(l.insieme.id)) {
+      visti.set(l.insieme.id, { id: l.insieme.id, nome: l.insieme.nome || l.nome,
+        unita: l.unita || 'm²', componenti: l.insieme.componenti || [] });
+    }
+  };
+  RILIEVI.forEach(r => (r.doc.lavorazioni || []).forEach(guarda));
+  PREVENTIVI.forEach(p => (p.doc.righe || []).forEach(r => guarda(r.lavorazione)));
+  return [...visti.values()].sort((a, b) => a.nome.localeCompare(b.nome, 'it'));
+}
+
+function modificaRicetta(insiemeID, voceID, valore) {
+  if (!LISTINO.ricette) LISTINO.ricette = {};
+  if (!LISTINO.ricette[insiemeID]) LISTINO.ricette[insiemeID] = {};
+  const n = numeroScritto(valore);
+  if (n === '') delete LISTINO.ricette[insiemeID][voceID];
+  else LISTINO.ricette[insiemeID][voceID] = n;
   LISTINO_DA_SALVARE = true;
   segnalaListinoDaSalvare();
 }
@@ -2015,6 +2052,17 @@ async function ricontrolla() {
 // non si legge, e quello che non si legge tanto vale non scriverlo.
 const NOVITA = [
   {
+    versione: '2026-10-02d',
+    data: '2026-10-02',
+    titolo: 'Preventivi: dal campo le misure, qui i conti',
+    righe: [
+      'Dal telefono arrivano **lavorazioni** — «Siepe nuova · 24 m · lauro · sesto 0,40 · 10 h» — e non più righe con la descrizione già scritta: **la descrizione per il cliente si scrive qui**, guardando «dal campo: …».',
+      'Ogni lavorazione è **una riga a corpo**: sotto, in piccolo, i componenti — piante dal sesto, materiali, ore — col prezzo di listino. Il prezzo proposto è la loro somma; al cliente arriva solo la riga.',
+      'In **Listino › Lavorazioni** si scrive quanto materiale serve per metro o per m² (telo, ala, pacciamatura): da lì le quantità si contano da sole.',
+      'Nuovo bottone **«Scheda di cantiere»**: misure, sesto, piante, materiali da ordinare, ore e note, **senza prezzi**, da stampare o salvare in PDF.',
+    ],
+  },
+  {
     versione: '2026-10-02c',
     data: '2026-10-02',
     titolo: 'Le mezze giornate escono dalle ore',
@@ -2271,35 +2319,154 @@ function forchettaPreventivo(d) {
   return min === max ? formattaEuro(min) : 'da ' + formattaEuro(min) + ' a ' + formattaEuro(max);
 }
 
-function righePreventivo(rilievo, vecchie) {
-  const prima = Array.isArray(vecchie) ? vecchie : [];
-  const righe = (rilievo.righe || []).map(r => {
-    const giaFatta = prima.find(x => x.chiave && x.chiave === r.id);
+// ── DALLE LAVORAZIONI ALLE RIGHE ──
+// Dal campo arrivano lavorazioni — «Siepe nuova · 24 m · lauro · sesto 0,40 ·
+// 10 h» — e qui diventano quello che il cliente legge: **una riga a corpo per
+// lavorazione**, con la descrizione scritta in ufficio e un prezzo solo. Dentro
+// la riga stanno i **componenti**: le piante contate dal sesto, i materiali dalla
+// ricetta del listino, le ore. Sono il perché di quel prezzo e la scheda di
+// cantiere, e al cliente non arrivano — come le fasce orarie di un rapportino.
+
+const alCentesimoUfficio = n => Math.round(n * 100) / 100;
+
+// Quanto materiale per ogni unità di misura di un insieme: «1 m² di telo per
+// metro di siepe». Sta nel listino perché è un dato dell'azienda come i prezzi,
+// e si decide in un posto solo invece che a ogni preventivo.
+function ricetta(insiemeID, voceID) {
+  const r = (LISTINO.ricette || {})[insiemeID];
+  const n = r ? Number(String(r[voceID] ?? '').replace(',', '.')) : NaN;
+  return n > 0 ? n : null;
+}
+
+function prezzoDiListino(voceID) {
+  const v = voceID ? voceInListino(voceID) : null;
+  return v && v.prezzo !== '' && v.prezzo != null ? Number(v.prezzo) : '';
+}
+
+const scriviNumero = n => String(alCentesimoUfficio(Number(n) || 0)).replace('.', ',');
+
+// I componenti di una lavorazione, nell'ordine in cui si leggono: prima i
+// materiali, poi le ore. `calcolo` dice da dove esce la quantità — fra sei mesi
+// «61» da solo non dice se il sesto era 0,40 o 0,50. Quello che l'ufficio ha
+// già corretto a mano resta: una quantità ritoccata (`quantitaMano`) o un prezzo
+// deciso (`prezzoMano`) non tornano al calcolo quando il campo rimanda il
+// rilievo, come i prezzi delle righe.
+function componentiLavorazione(l, vecchi) {
+  const prima = Array.isArray(vecchi) ? vecchi : [];
+  const comp = [];
+  const metti = c => {
+    const gia = prima.find(x => x.chiave === c.chiave);
+    const prezzo = prezzoDiListino(c.voceID);
+    comp.push({
+      ...c,
+      quantita: gia && gia.quantitaMano ? gia.quantita : c.quantita,
+      quantitaMano: !!(gia && gia.quantitaMano),
+      prezzo: gia && gia.prezzoMano ? gia.prezzo : prezzo,
+      prezzoMano: !!(gia && gia.prezzoMano),
+    });
+  };
+  if (l.genere === 'insieme' && l.insieme) {
+    l.insieme.componenti.forEach(c => {
+      if (c.voceID === VOCE_PIANTE || c.tipoID === 'piantumazione') {
+        const n = pianteDellaLavorazione(l);
+        metti({ chiave: c.voceID || c.tipoID, voceID: c.voceID, unita: c.unita || 'n',
+          voce: (c.voce || 'Piante') + (l.pianta ? ' – ' + l.pianta : ''),
+          quantita: n == null ? '' : n,
+          calcolo: l.unita === 'm' && l.sesto
+            ? scriviNumero(l.misura) + ' m a sesto ' + scriviNumero(l.sesto)
+            : 'scritte in giardino' });
+        return;
+      }
+      const k = ricetta(l.insieme.id, c.voceID);
+      metti({ chiave: c.voceID, voceID: c.voceID, voce: c.voce, unita: c.unita,
+        quantita: k ? alCentesimoUfficio(k * l.misura) : '',
+        calcolo: k ? scriviNumero(k) + ' ' + c.unita + ' per ' + l.unita
+          : 'manca la ricetta: Listino › Lavorazioni' });
+    });
+  } else if (l.genere === 'voce' || l.genere === 'libera') {
+    if (l.misura > 0) {
+      metti({ chiave: l.voceID || 'misura', voceID: l.voceID, voce: l.nome, unita: l.unita,
+        quantita: l.misura, calcolo: 'misurato in giardino' });
+    }
+  }
+  if (l.ore > 0) {
+    const mano = voceInListino(VOCE_MANODOPERA);
+    metti({ chiave: VOCE_MANODOPERA, voceID: VOCE_MANODOPERA, voce: (mano && mano.voce) || 'Manodopera',
+      unita: 'h', quantita: l.ore, calcolo: 'ore stimate in giardino' });
+  }
+  return comp;
+}
+
+// La somma dei componenti a prezzo di listino, e quanti ne restano fuori. Un
+// componente senza quantità o senza prezzo è un buco, e va detto: una somma che
+// sembra finita mentre le manca il telo è peggio di nessuna somma.
+function sommaComponenti(componenti) {
+  let totale = 0, mancano = 0;
+  (componenti || []).forEach(c => {
+    const i = importoRiga(c);
+    if (i == null) mancano++; else totale += i;
+  });
+  return { totale: alCentesimoUfficio(totale), mancano };
+}
+
+// Il primo testo per il cliente, da correggere: il nome della lavorazione, la
+// pianta e la misura. La descrizione vera la scrive l'ufficio — è il motivo per
+// cui dal telefono non parte più.
+function descrizioneProposta(l) {
+  if (l.descrizione) return l.descrizione;
+  const misura = l.misura > 0 && l.genere !== 'manodopera'
+    ? ' — ' + scriviNumero(l.misura) + ' ' + (l.unita === 'm' ? 'ml' : l.unita) : '';
+  return (l.nome || 'Lavorazione') + (l.pianta ? ' di ' + l.pianta : '') + misura;
+}
+
+// Una lavorazione diventa una riga a corpo, tranne una voce a misura senza ore —
+// il verde da smaltire, 800 kg — che resta una riga a misura col suo prezzo
+// unitario: è così che sta sui preventivi veri, e spesso diventa una tariffa.
+function rigaDaLavorazione(l, giaFatta) {
+  const aMisura = (l.genere === 'voce' || l.genere === 'libera') && !(l.ore > 0);
+  if (aMisura) {
     // Un prezzo già guardato non torna indietro a essere una proposta: chi l'ha
-    // messo sapeva qualcosa che il listino non sa, e rimetterlo in discussione a
-    // ogni rilettura vorrebbe dire riconfermarlo ogni volta.
-    if (giaFatta) return { ...giaFatta, descrizione: r.descrizione || giaFatta.descrizione,
-      quantita: r.quantita, unita: r.unita };
-    const inListino = voceInListino(r.voceID);
-    const dalListino = inListino && inListino.prezzo !== '' && inListino.prezzo != null
-      ? Number(inListino.prezzo) : '';
+    // messo sapeva qualcosa che il listino non sa.
+    if (giaFatta) return { ...giaFatta, quantita: l.misura, unita: l.unita, lavorazione: l };
+    const prezzo = prezzoDiListino(l.voceID);
     return {
-      chiave: r.id || '',
-      voceID: r.voceID || '',
-      voce: r.voce || '',
-      descrizione: r.descrizione || r.voce || '',
-      quantita: r.quantita == null ? '' : Number(r.quantita),
-      unita: r.unita || '',
-      prezzo: dalListino,
+      chiave: l.id, voceID: l.voceID || '', voce: l.nome || '',
+      descrizione: l.descrizione || l.nome || '',
+      quantita: l.misura || '', unita: l.unita || '',
+      prezzo,
       // Un prezzo che non c'è non è una proposta: è un buco, e va riempito. Solo
       // quello che il listino ha proposto aspetta una conferma.
-      proposto: dalListino !== '',
+      proposto: prezzo !== '',
       tipo: 'totale',
       // Comune: entra nel totale di tutte le soluzioni. Chi la vuole in una sola
       // la sposta, ed è la scelta rara.
       soluzione: '',
+      lavorazione: l,
     };
-  });
+  }
+  const componenti = componentiLavorazione(l, giaFatta && giaFatta.componenti);
+  const somma = sommaComponenti(componenti);
+  const deciso = giaFatta && !giaFatta.proposto && giaFatta.prezzo !== '' && giaFatta.prezzo != null;
+  // Il prezzo proposto è la somma dei componenti a listino, e segue la somma
+  // finché nessuno l'ha guardato. Deciso, resta: il margine è un giudizio.
+  const prezzo = deciso ? giaFatta.prezzo : (somma.totale > 0 ? somma.totale : '');
+  return {
+    chiave: l.id, voceID: '', voce: l.nome || '',
+    descrizione: (giaFatta && giaFatta.descrizione) || descrizioneProposta(l),
+    quantita: 1, unita: 'a corpo',
+    prezzo,
+    proposto: !deciso && prezzo !== '',
+    tipo: (giaFatta && giaFatta.tipo) || 'totale',
+    soluzione: (giaFatta && giaFatta.soluzione) || '',
+    lavorazione: l,
+    componenti,
+  };
+}
+
+function righePreventivo(rilievo, vecchie) {
+  const prima = Array.isArray(vecchie) ? vecchie : [];
+  const righe = (rilievo.lavorazioni || []).map(l =>
+    rigaDaLavorazione(l, prima.find(x => x.chiave && x.chiave === l.id)));
   // Le righe aggiunte in ufficio non nascono dal rilievo e restano dove sono.
   prima.filter(r => !r.chiave).forEach(r => righe.push({ ...r }));
   return righe;
@@ -2611,6 +2778,114 @@ function apriPreventivo(id) {
   vaiA('preventivo');
 }
 
+// Quello che il campo ha misurato, in una riga: in ufficio si scrive la
+// descrizione guardando questo, e fra sei mesi spiega da dove viene il prezzo.
+function riassuntoLavorazione(l) {
+  const parti = [];
+  if (l.misura > 0) parti.push(scriviNumero(l.misura) + ' ' + l.unita);
+  if (l.pianta) parti.push(l.pianta);
+  if (l.sesto > 0) parti.push('sesto ' + scriviNumero(l.sesto));
+  else if (l.piante > 0) parti.push(l.piante + ' piante');
+  if (l.ore > 0) parti.push(scriviNumero(l.ore) + ' h');
+  if (l.note) parti.push(l.note);
+  return (l.nome || '') + (parti.length ? ' · ' + parti.join(' · ') : '');
+}
+
+// I componenti stanno sotto la loro riga, piccoli, e non vanno al cliente: sono
+// il conto che sta dietro il prezzo a corpo. Quantità e prezzi si correggono qui,
+// e la somma segue senza ridisegnare.
+function righeComponenti(r, i) {
+  const somma = sommaComponenti(r.componenti);
+  let html = '<tr class="componenti"><td colspan="6"><table class="componenti"><tbody>';
+  if (!r.componenti.length) {
+    html += '<tr><td class="meta">Nessun componente: il prezzo si scrive a mano.</td></tr>';
+  }
+  r.componenti.forEach((c, j) => {
+    const imp = importoRiga(c);
+    html += '<tr>' +
+      '<td>' + perValore(c.voce) + '<div class="meta">' + perValore(c.calcolo || '') + '</div></td>' +
+      '<td class="num"><input type="text" inputmode="decimal" class="stretto" value="' +
+        perValore(formattaQuantita(c.quantita)) + '" ' +
+        'oninput="modificaComponente(' + i + ', ' + j + ', \'quantita\', this.value)" aria-label="quantità"></td>' +
+      '<td>' + perValore(c.unita) + '</td>' +
+      '<td class="num"><input type="text" inputmode="decimal" class="stretto" value="' +
+        perValore(formattaQuantita(c.prezzo)) + '" ' +
+        'oninput="modificaComponente(' + i + ', ' + j + ', \'prezzo\', this.value)" aria-label="prezzo"></td>' +
+      '<td class="num" id="imp-comp-' + i + '-' + j + '">' +
+        (imp == null ? '<span class="meta">—</span>' : formattaEuro(imp)) + '</td>' +
+    '</tr>';
+  });
+  html += '</tbody></table>' +
+    '<div class="meta somma-componenti" id="somma-riga-' + i + '">' + testoSommaComponenti(r, somma, i) + '</div>' +
+    '</td></tr>';
+  return html;
+}
+
+function testoSommaComponenti(r, somma, i) {
+  const decisa = !r.proposto && r.prezzo !== '' && r.prezzo != null;
+  return 'A listino: <strong>' + formattaEuro(somma.totale) + '</strong>' +
+    (somma.mancano ? ' · ' + somma.mancano + (somma.mancano === 1 ? ' componente senza quantità o prezzo'
+      : ' componenti senza quantità o prezzo') : '') +
+    // Deciso il prezzo, la somma resta accanto: è il listino contro il giudizio,
+    // e la differenza si vede senza farsi il conto.
+    (decisa && alCentesimoUfficio(Number(r.prezzo)) !== somma.totale
+      ? ' · <button class="secondaria piccola" onclick="usaSommaRiga(' + i + ')">Usa la somma</button>' : '');
+}
+
+function modificaComponente(i, j, campo, valore) {
+  const r = PREVENTIVO.doc.righe[i];
+  const c = r && r.componenti && r.componenti[j];
+  if (!c) return;
+  c[campo] = numeroScritto(valore);
+  if (campo === 'quantita') c.quantitaMano = true;
+  if (campo === 'prezzo') c.prezzoMano = true;
+  aggiornaRigaACorpo(i);
+}
+
+// Finché il prezzo a corpo è una proposta, segue la somma dei componenti; deciso,
+// resta dov'è e la somma gli sta accanto. Si aggiornano le caselle che cambiano,
+// non la tabella: il campo sotto le dita non deve sparire.
+function aggiornaRigaACorpo(i) {
+  const r = PREVENTIVO.doc.righe[i];
+  if (!r || !Array.isArray(r.componenti)) return;
+  const somma = sommaComponenti(r.componenti);
+  r.componenti.forEach((c, j) => {
+    const el = document.getElementById('imp-comp-' + i + '-' + j);
+    const imp = importoRiga(c);
+    if (el) el.innerHTML = imp == null ? '<span class="meta">—</span>' : formattaEuro(imp);
+  });
+  if (r.proposto || r.prezzo === '' || r.prezzo == null) {
+    r.prezzo = somma.totale > 0 ? somma.totale : '';
+    r.proposto = r.prezzo !== '';
+    const campo = document.getElementById('prezzo-riga-' + i);
+    if (campo) {
+      campo.value = formattaQuantita(r.prezzo);
+      campo.classList.toggle('proposto', r.proposto);
+    }
+  }
+  const el = document.getElementById('somma-riga-' + i);
+  if (el) el.innerHTML = testoSommaComponenti(r, somma, i);
+  aggiornaImportoRiga(i);
+  aggiornaCodaPreventivo();
+  aggiornaTotalePreventivo();
+}
+
+function aggiornaImportoRiga(i) {
+  const r = PREVENTIVO.doc.righe[i];
+  const el = document.getElementById('imp-riga-' + i);
+  if (!r || !el || r.tipo !== 'totale') return;
+  const imp = importoRiga(r);
+  el.innerHTML = imp == null ? '<span class="meta">—</span>' : formattaEuro(imp);
+}
+
+function usaSommaRiga(i) {
+  const r = PREVENTIVO.doc.righe[i];
+  if (!r || !Array.isArray(r.componenti)) return;
+  r.prezzo = sommaComponenti(r.componenti).totale;
+  r.proposto = false;
+  disegnaPreventivo();
+}
+
 // Toccare un prezzo proposto significa farlo proprio: da lì in poi è una
 // decisione, e la casella torna bianca. Non si ridisegna la tabella mentre si
 // scrive — il campo sparirebbe da sotto le dita — quindi la classe si toglie a
@@ -2623,6 +2898,11 @@ function modificaPrezzoRiga(i, valore, elemento) {
     r.proposto = false;
     if (elemento) elemento.classList.remove('proposto');
     aggiornaCodaPreventivo();
+  }
+  aggiornaImportoRiga(i);
+  if (Array.isArray(r.componenti)) {
+    const el = document.getElementById('somma-riga-' + i);
+    if (el) el.innerHTML = testoSommaComponenti(r, sommaComponenti(r.componenti), i);
   }
   aggiornaTotalePreventivo();
 }
@@ -2665,16 +2945,8 @@ function cambiaTipoRiga(i, tipo) {
 }
 
 // ── DAI METRI ALLE PIANTE ──
-// La formula è quella del foglio di calcolo della segretaria: metri diviso il
-// sesto d'impianto, **più uno**, arrotondato per difetto. Il più uno è la pianta
-// di testa: una siepe di 24 m a sesto 0,40 ne vuole 61, non 60, perché ce n'è una
-// a ogni estremo. Rifarlo a mano ogni volta era aritmetica che l'app può fare.
-function pianteDaSesto(metri, sesto) {
-  const m = parseFloat(String(metri).replace(',', '.'));
-  const s = parseFloat(String(sesto).replace(',', '.'));
-  if (isNaN(m) || isNaN(s) || m <= 0 || s <= 0) return null;
-  return Math.floor(m / s + 1);
-}
+// Per le righe aggiunte in ufficio, che non nascono da una lavorazione: la
+// formula è `pianteDaSesto()` in rapportino.js, la stessa del telefono.
 
 function mostraPianteDaSesto() {
   const el = document.getElementById('piante-calcolate');
@@ -2849,6 +3121,7 @@ function disegnaPreventivo() {
         (sezione ? ' riga-sezione' : '') + '">' +
       '<td' + (sezione ? ' colspan="5"' : '') + '><input type="text" value="' + perValore(r.descrizione) + '" ' +
         'oninput="modificaRigaPreventivo(' + i + ', \'descrizione\', this.value)">' +
+        (r.lavorazione ? '<div class="meta dal-campo">dal campo: ' + perValore(riassuntoLavorazione(r.lavorazione)) + '</div>' : '') +
         '<select class="tipo-riga" onchange="cambiaTipoRiga(' + i + ', this.value)">' +
         TIPI_RIGA_PREVENTIVO.map(x => '<option value="' + x.id + '"' +
           (x.id === r.tipo ? ' selected' : '') + '>' + x.nome + '</option>').join('') +
@@ -2867,16 +3140,17 @@ function disegnaPreventivo() {
           '<input type="text" inputmode="decimal" class="stretto" value="' +
           perValore(formattaQuantita(r.quantita)) + '" ' +
           'oninput="modificaRigaPreventivo(' + i + ', \'quantita\', this.value)">') + '</td>' +
-        '<td>' + perValore(r.unita) + '</td>' +
+        '<td style="white-space:nowrap">' + perValore(r.unita) + '</td>' +
         '<td class="num"><input type="text" inputmode="decimal" class="stretto prezzo' +
-          (r.proposto ? ' proposto' : '') + '" value="' + perValore(formattaQuantita(r.prezzo)) + '" ' +
+          (r.proposto ? ' proposto' : '') + '" id="prezzo-riga-' + i + '" value="' + perValore(formattaQuantita(r.prezzo)) + '" ' +
           'oninput="modificaPrezzoRiga(' + i + ', this.value, this)">' +
           (r.proposto ? '<button class="conferma" onclick="confermaPrezzo(' + i + ')" ' +
             'title="Va bene così">✓</button>' : '') + '</td>' +
-        '<td class="num">' + (r.tipo === 'tariffa' ? '<span class="meta">fuori totale</span>' :
+        '<td class="num" id="imp-riga-' + i + '">' + (r.tipo === 'tariffa' ? '<span class="meta">fuori totale</span>' :
           (imp == null ? '<span class="meta">—</span>' : formattaEuro(imp))) + '</td>') +
       '<td class="via-col"><button class="via" onclick="togliRigaPreventivo(' + i + ')" title="Togli">✕</button></td>' +
     '</tr>';
+    if (Array.isArray(r.componenti)) html += righeComponenti(r, i);
   });
   if (t.unico) {
     html += '<tr class="riga-totale"><td colspan="4">Totale (IVA inclusa)</td>' +
@@ -2954,6 +3228,7 @@ function disegnaPreventivo() {
   html += '<div class="bottoni">' +
     '<button class="principale" onclick="salvaPreventivo()">Salva</button>' +
     '<button class="secondaria" onclick="stampaPreventivo()">Stampa o salva in PDF</button>' +
+    '<button class="secondaria" onclick="stampaSchedaCantiere()">Scheda di cantiere</button>' +
     '<button class="secondaria" onclick="inviaPreventivo()">Manda per mail</button>' +
     (d.stato === 'bozza' ? '<button class="secondaria" onclick="segnaMandato()">Consegnato a mano</button>' : '') +
     (d.stato === 'accettato' || soluzioni.length ? '' :
@@ -3062,6 +3337,117 @@ async function accettaPreventivo(soluzioneID) {
     await salvaLavagna();
   }
   await salvaPreventivo();
+}
+
+// ── LA SCHEDA DI CANTIERE ──
+// Il preventivo dice al cliente *quanto*; la scheda dice a chi va in giardino
+// *cosa*: per ogni lavorazione le misure, il sesto, le piante, i materiali con le
+// loro quantità, le ore, e in fondo cosa ordinare. **Niente prezzi**: è un foglio
+// che gira in cantiere, e un prezzo lì sopra non serve a nessuno e finisce dove
+// non deve. Per la stessa ragione non aspetta i prezzi confermati — si stampa
+// anche da un preventivo ancora aperto, per ordinare il materiale.
+//
+// Con le alternative vale quella scelta, se c'è: in cantiere si fa un lavoro
+// solo. Finché il cliente non ha scelto ci sono tutte, ognuna col suo nome.
+function righeDellaScheda(d) {
+  const soluzioni = soluzioniDi(d);
+  return (d.righe || []).filter(r => r.tipo === 'totale' &&
+    (!d.scelta || !r.soluzione || r.soluzione === d.scelta))
+    .map(r => ({ r, soluzione: r.soluzione ? (soluzioni.find(x => x.id === r.soluzione) || {}).nome || '' : '' }));
+}
+
+// I materiali da ordinare, sommati fra le lavorazioni: due aiuole col telo sono
+// un ordine solo di telo. Le piante restano divise per pianta — lauro e fotinia
+// non si ordinano insieme — e la manodopera non si ordina. Vengono dagli insiemi
+// e basta: una voce a misura come lo smaltimento del verde è un servizio, e sta
+// già nel suo blocco qui sopra.
+function materialiDaOrdinare(righe) {
+  const somma = new Map();
+  const aggiungi = (voce, quantita, unita) => {
+    const q = parseFloat(quantita);
+    if (!voce || isNaN(q) || q <= 0) return;
+    const k = voce + '|' + unita;
+    const prima = somma.get(k) || { voce, unita, quantita: 0 };
+    prima.quantita = alCentesimoUfficio(prima.quantita + q);
+    somma.set(k, prima);
+  };
+  righe.forEach(({ r }) => {
+    if (!Array.isArray(r.componenti) || !r.lavorazione || r.lavorazione.genere !== 'insieme') return;
+    r.componenti.filter(c => c.voceID !== VOCE_MANODOPERA).forEach(c => aggiungi(c.voce, c.quantita, c.unita));
+  });
+  return [...somma.values()];
+}
+
+function costruisciSchedaCantiere(d) {
+  const righe = righeDellaScheda(d);
+  const c = d.cliente || {};
+  const noto = clienteDelPreventivo(d);
+  const scelta = soluzioniDi(d).find(x => x.id === d.scelta);
+  const ore = oreManodopera(righe.map(x => x.r));
+  const mezze = mezzeDaOre(ore);
+
+  let html = '<h1>Scheda di cantiere</h1>';
+  html += '<div class="a-chi">' +
+    '<div><strong>' + perValore(c.nome || '') + '</strong>' +
+      [c.indirizzo || (noto && noto.indirizzo), c.citta || (noto && noto.citta),
+       c.telefono || (noto && noto.telefono)].filter(x => x).map(x => '<br>' + perValore(x)).join('') +
+    '</div>' +
+    '<div style="text-align:right"><div class="etichetta-campo">Preventivo del</div>' +
+      '<strong>' + formattaData(d.creato) + '</strong>' +
+      (scelta ? '<br>Soluzione: <strong>' + perValore(scelta.nome) + '</strong>' : '') +
+      '<br>' + (ore ? scriviNumero(ore) + ' h · ' + etichettaMezze(mezze) : 'ore non stimate') +
+    '</div>' +
+  '</div>';
+
+  html += '<table><thead><tr><th>Lavorazione</th><th class="num">Q.tà</th><th>UM</th>' +
+    '<th>Da dove</th></tr></thead><tbody>';
+  righe.forEach(({ r, soluzione }) => {
+    const l = r.lavorazione;
+    html += '<tr class="riga-blocco"><td colspan="4">' + perValore(l ? l.nome : (r.descrizione || r.voce)) +
+      (soluzione ? ' <span class="da-definire">· solo in ' + perValore(soluzione) + '</span>' : '') +
+      (l && l.note ? ' <span class="da-definire">· ' + perValore(l.note) + '</span>' : '') + '</td></tr>';
+    if (Array.isArray(r.componenti)) {
+      if (l && l.misura > 0 && l.genere !== 'manodopera') {
+        html += '<tr><td>Misura</td><td class="num">' + scriviNumero(l.misura) + '</td><td>' +
+          perValore(l.unita) + '</td><td>' + (l.sesto > 0 ? 'sesto ' + scriviNumero(l.sesto) + ' m' : '') + '</td></tr>';
+      }
+      r.componenti.forEach(k => {
+        html += '<tr><td>' + perValore(k.voce) + '</td>' +
+          '<td class="num">' + perValore(formattaQuantita(k.quantita)) + '</td>' +
+          '<td>' + perValore(k.unita) + '</td>' +
+          '<td class="da-definire">' + perValore(k.calcolo || '') + '</td></tr>';
+      });
+    } else {
+      html += '<tr><td>' + perValore(r.descrizione || r.voce) + '</td>' +
+        '<td class="num">' + perValore(formattaQuantita(r.quantita)) + '</td>' +
+        '<td>' + perValore(r.unita) + '</td><td></td></tr>';
+    }
+  });
+  html += '</tbody></table>';
+
+  const materiali = materialiDaOrdinare(righe);
+  if (materiali.length) {
+    html += '<h2 class="titolo-soluzione">Materiali da ordinare</h2>' +
+      '<table><tbody>' + materiali.map(m => '<tr><td>' + perValore(m.voce) + '</td>' +
+        '<td class="num">' + perValore(formattaQuantita(m.quantita)) + '</td><td>' + perValore(m.unita) + '</td></tr>').join('') +
+      '</tbody></table>';
+  }
+  // Quello che il campo ha visto e che il preventivo non dice: l'accesso, il
+  // rubinetto, dove resta il camion. In cantiere è la prima cosa che serve.
+  const note = d.daRilievo && d.daRilievo.note;
+  if (note) html += '<h2 class="titolo-soluzione">Dal sopralluogo</h2><div class="nota-sotto">' + perValore(note) + '</div>';
+  return html;
+}
+
+function stampaSchedaCantiere() {
+  if (!PREVENTIVO) return;
+  const d = PREVENTIVO.doc;
+  document.getElementById('foglio').innerHTML = costruisciSchedaCantiere(d);
+  const titolo = document.title;
+  const ripristina = () => { document.title = titolo; window.removeEventListener('afterprint', ripristina); };
+  window.addEventListener('afterprint', ripristina);
+  document.title = 'Scheda di cantiere ' + ((d.cliente && d.cliente.nome) || 'cliente');
+  window.print();
 }
 
 function costruisciFoglioPreventivo(d) {
@@ -3211,7 +3597,7 @@ function disegnaPreventivi() {
           '<span class="meta" style="margin-left:auto">' + formattaData(d.creato) + '</span>' +
         '</div>' +
         '<div class="meta" style="margin-top:6px">' +
-          d.righe.length + (d.righe.length === 1 ? ' riga' : ' righe') +
+          d.lavorazioni.length + (d.lavorazioni.length === 1 ? ' lavorazione' : ' lavorazioni') +
           ' · ' + (d.mezze ? etichettaMezze(d.mezze) : 'senza ore') +
           (d.sopralluogo ? ' · 📍 dal sopralluogo' : '') +
           (cliente ? '' : ' · <strong>non in anagrafica</strong>') +
@@ -4753,6 +5139,33 @@ function disegnaListino() {
     '<button class="secondaria" onclick="importaProdotti()">Importa i prodotti dal telefono</button>' +
     '<button class="principale" onclick="salvaListino()">Salva il listino</button>' +
   '</div></div>';
+
+  // ── le ricette delle lavorazioni: quanto materiale per metro, o per m² ──
+  const insiemi = insiemiVisti();
+  html += '<div class="scheda"><div class="titolo-sezione">Lavorazioni</div>';
+  html += '<p class="meta">Quanto materiale chiede una lavorazione per ogni metro, o m², misurato in ' +
+    'giardino. Da qui il preventivo conta telo, ala e pacciamatura da solo; le piante escono dal ' +
+    'sesto e le ore dal rilievo.</p>';
+  if (!insiemi.length) {
+    html += '<div class="vuoto-elenco">Nessuna lavorazione ancora: compaiono qui quando arriva il primo ' +
+      'rilievo con un insieme, come «Siepe nuova» o «Aiuola».</div>';
+  }
+  insiemi.forEach(ins => {
+    html += '<table class="elenco"><thead><tr><th colspan="3">' + perValore(ins.nome) +
+      ' <span class="meta">· si misura a ' + perValore(ins.unita) + '</span></th></tr></thead><tbody>';
+    const materiali = ins.componenti.filter(c => c.voceID !== VOCE_PIANTE && c.tipoID !== 'piantumazione');
+    if (!materiali.length) html += '<tr><td colspan="3" class="meta">Solo piante: escono dal sesto.</td></tr>';
+    materiali.forEach(c => {
+      const valore = ((LISTINO.ricette || {})[ins.id] || {})[c.voceID];
+      html += '<tr><td>' + perValore(c.voce) + '</td>' +
+        '<td class="num"><input type="text" inputmode="decimal" class="stretto" value="' +
+          perValore(valore == null ? '' : formattaQuantita(valore)) + '" ' +
+          'oninput="modificaRicetta(\'' + perOnclick(ins.id) + '\', \'' + perOnclick(c.voceID) + '\', this.value)"></td>' +
+        '<td class="meta">' + perValore(c.unita) + ' per ' + perValore(ins.unita) + '</td></tr>';
+    });
+    html += '</tbody></table>';
+  });
+  html += '<div class="bottoni"><button class="principale" onclick="salvaListino()">Salva il listino</button></div></div>';
 
   // Quelli visti nei rapportini che non hanno ancora un prezzo: senza questo
   // elenco te ne accorgeresti solo da un totale più basso del dovuto.

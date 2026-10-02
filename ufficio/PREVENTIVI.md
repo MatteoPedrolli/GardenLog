@@ -261,8 +261,9 @@ entra in «Da pianificare» sulla lavagna, ed è il motivo per cui lo stato serv
 La prima metà esiste, ed è quella che si fa in giardino. Il **rilievo** è un
 documento come il rapportino, viaggia nella stessa coda e finisce in `rilievi/`;
 l'ufficio lo legge in una pagina sua. Quello che porta: il cliente, se aspetta il
-disegno dal CAD, le righe misurate con descrizione, quantità e unità — le ore di
-manodopera comprese — e le note di quello che si vede solo stando lì.
+disegno dal CAD, le **lavorazioni** — «Siepe nuova · 24 m · lauro · sesto 0,40 ·
+10 h» — e le note di quello che si vede solo stando lì. Niente testo per il
+cliente: quello lo scrive l'ufficio.
 
 **Non porta prezzi**, per la stessa ragione per cui non li porta il rapportino: il
 listino sta in ufficio, in un posto solo. Il campo dice *cosa* e *quanto*, la cosa
@@ -270,14 +271,16 @@ che solo lui sa.
 
 Tre cose decise lì che vale la pena non rifare:
 
-- **le mezze giornate escono dalle ore.** Erano contate a mano, una per rilievo;
-  ora la manodopera è una riga in ore — una per insieme, o a sé — e le mezze sono
-  la loro somma diviso `ORE_MEZZA`, per eccesso. È anche la larghezza che il
-  cartellino avrà sulla lavagna: lo stesso fatto misurato una volta sola, e il
-  conto sta in `rapportino.js` perché lo fanno entrambe le app;
-- **la manodopera ha il suo prezzo come le altre righe.** Prima stava fuori dalle
-  righe perché la dicevano le mezze giornate; adesso le mezze la leggono dalle
-  righe, e non si conta due volte;
+- **dal campo partono lavorazioni, non righe.** Il campo misura, l'ufficio conta i
+  materiali e scrive al cliente. Scrivere la descrizione in giardino voleva dire
+  vedere «Piante» e sotto ancora «Piante»;
+- **le mezze giornate escono dalle ore** delle lavorazioni, `ORE_MEZZA` per mezza,
+  per eccesso. È anche la larghezza che il cartellino avrà sulla lavagna: lo stesso
+  fatto misurato una volta sola, e il conto sta in `rapportino.js` perché lo fanno
+  entrambe le app;
+- **una lavorazione è una riga a corpo**, col prezzo proposto dalla somma dei suoi
+  componenti — piante dal sesto, materiali dalla ricetta, ore — che al cliente non
+  arrivano. È il foglio della segretaria per la siepe nuova, fatto dall'app;
 - **il rilievo che aspetta il disegno lo dichiara**, con una casella: l'ufficio lo
   ripete nell'elenco, o un rilievo si apre credendolo finito. Erano due dei
   quattro tipi di lavoro, che non ci sono più.
@@ -362,17 +365,21 @@ ancora — sono i preventivi da richiamare, non quelli persi.
 
 ### Cosa manca
 
-1. **Il consuntivo contro il preventivo.** È la cosa che la segretaria faceva e
+1. **La scheda di cantiere sul telefono.** Oggi si stampa o si salva in PDF
+   dall'ufficio. Portarla nell'app vorrebbe un file riservato come
+   `sopralluoghi.json`, consegnato con la chiave, e una distribuzione nuova dello
+   script.
+2. **Il consuntivo contro il preventivo.** È la cosa che la segretaria faceva e
    che ancora non si fa: a lavoro finito, confrontare il conto dell'archivio con
    il preventivo accettato. I due documenti hanno la stessa forma e lo stesso
    cliente, quindi il confronto è a portata — ed è la domanda «ci abbiamo
    guadagnato?», che nessun altro pezzo del sistema risponde.
-2. **Il preventivo che non nasce da un rilievo**: una telefonata, un lavoro che si
+3. **Il preventivo che non nasce da un rilievo**: una telefonata, un lavoro che si
    conosce a memoria. Oggi serve per forza un rilievo dal campo.
-3. **Rifiutato**: lo stato c'è nel modello e non ha ancora un bottone. Serve a
+4. **Rifiutato**: lo stato c'è nel modello e non ha ancora un bottone. Serve a
    sapere quanti se ne perdono e perché, che è un'informazione che oggi non esiste
    da nessuna parte.
-4. **Le taglie delle piante** (80-100, 100-125…) come dato invece che come testo
+5. **Le taglie delle piante** (80-100, 100-125…) come dato invece che come testo
    dentro la descrizione: è il secondo pezzo del prezzo al metro, dopo il sesto.
 
 ## Domande ancora aperte

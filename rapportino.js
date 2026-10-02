@@ -467,14 +467,18 @@ function etichettaMezzaGiornata(giorno, mezza) {
 // taccuino del preventivo: quello che si vede stando lì, scritto col cliente
 // davanti, e che in ufficio diventa un preventivo con i prezzi addosso.
 //
-// **Un rilievo è un conto che si fa prima.** Le righe hanno la stessa forma di
-// quelle del conto — voce, descrizione, quantità, unità — e per la stessa
-// ragione **non hanno prezzi**: il listino sta in ufficio, in un posto solo. Il
-// cantiere dice *cosa* c'è da fare e *quanto* ce n'è, la cosa che solo lui sa.
+// **Dal giardino partono lavorazioni, non righe di preventivo.** Una lavorazione è
+// un fatto misurato: «Siepe · 24 m · lauro 80-100 · sesto 0,40 · 10 h». Le righe
+// col testo per il cliente, le quantità dei materiali e i prezzi li fa l'ufficio:
+// scriverli in giardino voleva dire scrivere due volte la stessa cosa — la voce e
+// una descrizione uguale sotto — e fare sul telefono conti che spettano a chi ha
+// il listino. Il campo dice *cosa* e *quanto*, la cosa che solo lui sa.
 //
-// Denormalizzato come il rapportino: il nome della voce viaggia col suo
-// identificativo, perché l'ufficio deve poter leggere un rilievo anche fra due
-// anni, anche se quella voce di listino nel frattempo è stata rinominata.
+// Denormalizzato come il rapportino: il nome della voce e la composizione
+// dell'insieme viaggiano coi loro identificativi, perché l'ufficio deve poter
+// leggere un rilievo anche fra due anni, anche se quell'insieme nel frattempo è
+// cambiato o non c'è più.
+//
 // Una mezza giornata sono otto ore di manodopera: quattro d'orologio in due. Sta
 // qui e non in una delle due app perché la usano entrambe — la lavagna per sapere
 // quante mezze giornate occupa un lavoro, il rilievo per dire quanto ci vuole — e
@@ -482,13 +486,15 @@ function etichettaMezzaGiornata(giorno, mezza) {
 const ORE_MEZZA = 8;
 
 // Le mezze giornate di un preventivo **non si stimano a parte**: sono le ore di
-// manodopera delle sue righe, sommate e arrotondate per eccesso. Erano un numero
-// col suo −/+, e le righe dicevano cosa c'era da fare senza dire quanto lavoro
-// costava: le ore stavano solo dentro una stima che nessuno vedeva scomposta.
-// Adesso le ore stanno sulla riga — per ogni insieme, o come voce a sé — e la
-// lavagna ne riceve la somma. Per eccesso perché una mezza giornata cominciata
-// è occupata: con 9 ore non si comincia un altro lavoro nel pomeriggio.
+// manodopera, sommate e arrotondate per eccesso. Erano un numero col suo −/+, e
+// le righe dicevano cosa c'era da fare senza dire quanto lavoro costava. Adesso
+// le ore stanno sulla lavorazione e la lavagna ne riceve la somma. Per eccesso
+// perché una mezza giornata cominciata è occupata: con 9 ore non si comincia un
+// altro lavoro nel pomeriggio.
 const VOCE_MANODOPERA = 'manodopera';
+// Le piante si contano dal sesto, non da un coefficiente: è la voce che
+// l'ufficio riconosce per farlo.
+const VOCE_PIANTE = 'piante';
 
 // Il numero scritto con la virgola, com'è scritto qui: «2,5» sono due ore e mezza,
 // non una casella vuota.
@@ -498,20 +504,53 @@ function numeroDaTesto(valore) {
   return isNaN(n) ? 0 : n;
 }
 
-// Le righe di un documento (rilievo o preventivo): conta la voce manodopera e
-// basta. Un noleggio a ore è in ore ma non è lavoro nostro, e non occupa la
-// lavagna. Si arrotonda al centesimo prima di dividere: tre righe da 0,1 non
-// devono fare 0,30000000000000004 e saltare alla mezza dopo.
+const alCentesimo = n => Math.round(n * 100) / 100;
+
+// Le ore di un elenco di righe (di un preventivo): la voce manodopera e basta, e
+// anche quella dentro una riga a corpo, fra i suoi componenti. Un noleggio a ore
+// è in ore ma non è lavoro nostro, e non occupa la lavagna. Si arrotonda al
+// centesimo prima di dividere: tre righe da 0,1 non devono fare
+// 0,30000000000000004 e saltare alla mezza dopo.
 function oreManodopera(righe) {
-  const somma = (righe || [])
-    .filter(r => r && r.voceID === VOCE_MANODOPERA)
-    .reduce((t, r) => t + numeroDaTesto(r.quantita), 0);
-  return Math.round(somma * 100) / 100;
+  const somma = (righe || []).reduce((t, r) => {
+    if (!r) return t;
+    const proprie = r.voceID === VOCE_MANODOPERA ? numeroDaTesto(r.quantita) : 0;
+    return t + proprie + (Array.isArray(r.componenti) ? oreManodopera(r.componenti) : 0);
+  }, 0);
+  return alCentesimo(somma);
+}
+
+// Le ore di un rilievo stanno sulle lavorazioni.
+function oreDelleLavorazioni(lavorazioni) {
+  return alCentesimo((lavorazioni || []).reduce((t, l) => t + numeroDaTesto(l && l.ore), 0));
 }
 
 function mezzeDaOre(ore) {
   const n = Number(ore) || 0;
   return n > 0 ? Math.ceil(n / ORE_MEZZA) : 0;
+}
+
+// La formula è quella del foglio di calcolo della segretaria: metri diviso il
+// sesto d'impianto, **più uno**, arrotondato per difetto. Il più uno è la pianta
+// di testa: una siepe di 24 m a sesto 0,40 ne vuole 61, non 60, perché ce n'è una
+// a ogni estremo. Sta qui perché la fanno tutte e due le app: il telefono la
+// mostra mentre si scrive il sesto, l'ufficio la usa per il conto.
+function pianteDaSesto(metri, sesto) {
+  const m = parseFloat(String(metri).replace(',', '.'));
+  const s = parseFloat(String(sesto).replace(',', '.'));
+  if (isNaN(m) || isNaN(s) || m <= 0 || s <= 0) return null;
+  // Il piccolo margine evita che 24 / 0,4 = 59,999… perda la pianta di testa.
+  return Math.floor(m / s + 1 + 1e-9);
+}
+
+// Quante piante chiede una lavorazione: dal sesto quando si misura in metri (una
+// fila), scritte a mano quando si misura un'area — su un'aiuola il sesto non dice
+// quante file ci stanno.
+function pianteDellaLavorazione(l) {
+  if (!l) return null;
+  if (l.unita === 'm' && numeroDaTesto(l.sesto) > 0) return pianteDaSesto(l.misura, l.sesto);
+  const n = numeroDaTesto(l.piante);
+  return n > 0 ? Math.round(n) : null;
 }
 
 const VERSIONE_RILIEVO = 1;
@@ -524,10 +563,49 @@ const VERSIONE_RILIEVO = 1;
 // modello dice n. È già successo.
 const UNITA_RILIEVO = ['m²', 'ml', 'n', 'kg', 'l', 'h', 'sacchi', 'a corpo'];
 
+// I quattro generi di lavorazione. **Insieme**: un'aiuola, una siepe — si misura
+// una volta e i materiali li conta l'ufficio. **Voce**: una cosa del listino a
+// misura, come il verde da smaltire. **Manodopera**: solo ore, per quello che non
+// lascia materiali (una potatura). **Libera**: scritta a mano, quando non c'è
+// niente che le somigli.
+const GENERI_LAVORAZIONE = ['insieme', 'voce', 'manodopera', 'libera'];
+
+function lavorazioneDalTelefono(l) {
+  return {
+    id: l.LavID || '',
+    genere: GENERI_LAVORAZIONE.includes(l.Genere) ? l.Genere : 'libera',
+    nome: l.Nome || '',
+    insieme: l.Genere === 'insieme' ? {
+      id: l.TipoID || '',
+      nome: l.Nome || '',
+      componenti: (l.Componenti || []).map(c => ({
+        tipoID: c.TipoID || '', voceID: c.VoceID || '', voce: c.Voce || '', unita: c.Unita || '',
+      })),
+    } : null,
+    voceID: l.Genere === 'voce' ? (l.VoceID || '') : '',
+    misura: numeroDaTesto(l.Misura),
+    unita: l.Unita || '',
+    pianta: l.Pianta || '',
+    sesto: numeroDaTesto(l.Sesto),
+    piante: numeroDaTesto(l.Piante),
+    ore: numeroDaTesto(l.Ore),
+    note: l.Note || '',
+  };
+}
+
 function costruisciRilievo({ rilievo, cliente, voci }) {
   const perID = {};
   (voci || []).forEach(v => { perID[v.VoceID] = v; });
-  const doc = {
+  const lavorazioni = (rilievo.Lavorazioni || []).map(lavorazioneDalTelefono);
+  // Un rilievo salvato sul telefono prima delle lavorazioni porta le righe di
+  // allora: partono come lavorazioni, così l'ufficio ne legge un genere solo.
+  (rilievo.Righe || []).forEach(r => lavorazioni.push(lavorazioneDaRiga({
+    id: r.RigaID, voceID: r.VoceID,
+    voce: r.Voce || (perID[r.VoceID] && perID[r.VoceID].Nome) || '',
+    descrizione: r.Descrizione, quantita: numeroDaTesto(r.Quantita), unita: r.Unita,
+  })));
+  const ore = oreDelleLavorazioni(lavorazioni);
+  return {
     tipo: 'rilievo',
     versione: VERSIONE_RILIEVO,
     id: rilievo.RilievoID,
@@ -554,24 +632,60 @@ function costruisciRilievo({ rilievo, cliente, voci }) {
     // degli irrigatori — e finché non arriva non è finito. Era tutto quello che
     // diceva il «tipo di lavoro» che c'era prima, ed è l'unica cosa rimasta.
     disegno: !!rilievo.Disegno,
-    righe: (rilievo.Righe || []).map(r => ({
-      id: r.RigaID || '',
-      voceID: r.VoceID || '',
-      // Il nome della voce viaggia col riferimento: l'ufficio ha il suo listino,
-      // ma un rilievo si deve leggere da solo anche se quella voce cambia nome.
-      voce: r.Voce || (perID[r.VoceID] && perID[r.VoceID].Nome) || '',
-      descrizione: r.Descrizione || '',
-      quantita: numeroDaTesto(r.Quantita),
-      unita: r.Unita || '',
-    })),
+    lavorazioni,
+    // Ore e mezze escono dalle lavorazioni, non da un campo a parte: lo stesso
+    // fatto misurato una volta sola. Viaggiano scritte lo stesso, perché un
+    // ufficio che le legge non deve rifare il conto, e `mezze` c'era già.
+    ore,
+    mezze: mezzeDaOre(ore),
     note: rilievo.Note || '',
   };
-  // Le ore e le mezze giornate escono dalle righe, non da un campo a parte: lo
-  // stesso fatto misurato una volta sola. Viaggiano scritte lo stesso, perché un
-  // ufficio che le legge non deve rifare il conto, e `mezze` c'era già.
-  doc.ore = oreManodopera(doc.righe);
-  doc.mezze = mezzeDaOre(doc.ore);
-  return doc;
+}
+
+// I rilievi mandati prima delle lavorazioni portano `righe`, con la descrizione
+// per il cliente già scritta in giardino. Si leggono come lavorazioni, senza
+// alzare VERSIONE_RILIEVO: una riga di manodopera è manodopera, ogni altra è una
+// voce a misura — e la descrizione scritta allora resta, perché qualcuno l'ha
+// pensata.
+function lavorazioneDaRiga(r) {
+  const manodopera = r.voceID === VOCE_MANODOPERA;
+  return {
+    id: r.id || '',
+    genere: manodopera ? 'manodopera' : (r.voceID ? 'voce' : 'libera'),
+    nome: manodopera ? (r.descrizione || 'Manodopera') : (r.voce || r.descrizione || ''),
+    insieme: null,
+    voceID: manodopera ? '' : (r.voceID || ''),
+    misura: manodopera ? 0 : numeroDaTesto(r.quantita),
+    unita: manodopera ? '' : (r.unita || ''),
+    pianta: '', sesto: 0, piante: 0,
+    ore: manodopera ? numeroDaTesto(r.quantita) : 0,
+    note: '',
+    descrizione: manodopera ? '' : (r.descrizione || ''),
+  };
+}
+
+function leggiLavorazione(l) {
+  const ins = l.insieme;
+  return {
+    id: l.id || '',
+    genere: GENERI_LAVORAZIONE.includes(l.genere) ? l.genere : 'libera',
+    nome: l.nome || '',
+    insieme: ins ? {
+      id: ins.id || '', nome: ins.nome || '',
+      componenti: (Array.isArray(ins.componenti) ? ins.componenti : []).map(c => ({
+        tipoID: c.tipoID || '', voceID: c.voceID || '', voce: c.voce || '', unita: c.unita || '',
+      })),
+    } : null,
+    voceID: l.voceID || '',
+    misura: numeroDaTesto(l.misura),
+    unita: l.unita || '',
+    pianta: l.pianta || '',
+    sesto: numeroDaTesto(l.sesto),
+    piante: numeroDaTesto(l.piante),
+    ore: numeroDaTesto(l.ore),
+    note: l.note || '',
+    descrizione: l.descrizione || '',
+  };
 }
 
 function leggiRilievo(grezzo) {
@@ -589,8 +703,12 @@ function leggiRilievo(grezzo) {
     throw new Error(`Rilievo della versione ${versione || '?'}: questa app legge la ${VERSIONE_RILIEVO}`);
   }
   if (!doc.id) throw new Error('Rilievo senza identificativo');
+  const lavorazioni = Array.isArray(doc.lavorazioni)
+    ? doc.lavorazioni.map(leggiLavorazione)
+    : (Array.isArray(doc.righe) ? doc.righe : []).map(lavorazioneDaRiga);
+  const { righe, ...resto } = doc;
   return {
-    ...doc,
+    ...resto,
     versione,
     revisione: Number(doc.revisione) || 1,
     cliente: {
@@ -602,18 +720,11 @@ function leggiRilievo(grezzo) {
     // dei quattro tipi aspettavano il CAD, e si leggono ancora così. Senza alzare
     // VERSIONE_RILIEVO — un campo in meno da guardare, non un formato diverso.
     disegno: !!doc.disegno || ['prato-rotoli', 'irrigazione'].includes(doc.lavoro),
-    // I rilievi mandati prima delle ore sulle righe portano solo le mezze
-    // giornate contate a mano: valgono ancora, e `ore` assente vuol dire questo.
+    lavorazioni,
+    // I rilievi di prima delle ore sulle righe portano solo le mezze contate a
+    // mano: valgono ancora, e `ore` assente vuol dire questo.
     ore: Number(doc.ore) || 0,
     mezze: Number(doc.mezze) || 0,
-    righe: (Array.isArray(doc.righe) ? doc.righe : []).map(r => ({
-      id: r.id || '',
-      voceID: r.voceID || '',
-      voce: r.voce || '',
-      descrizione: r.descrizione || '',
-      quantita: Number(r.quantita) || 0,
-      unita: r.unita || '',
-    })),
     note: doc.note || '',
   };
 }
@@ -630,7 +741,8 @@ if (typeof module !== 'undefined' && module.exports) {
     VERSIONE_RAPPORTINO, costruisciRapportino, leggiRapportino, nomeFileRapportino,
     VERSIONE_APPUNTAMENTO, costruisciAppuntamento, leggiAppuntamento, nomeFileAppuntamento,
     VERSIONE_AGENDA, APPUNTAMENTI_IN_AGENDA, costruisciAgenda, leggiAgenda, etichettaMezzaGiornata,
-    ORE_MEZZA, VOCE_MANODOPERA, numeroDaTesto, oreManodopera, mezzeDaOre,
+    ORE_MEZZA, VOCE_MANODOPERA, VOCE_PIANTE, numeroDaTesto, oreManodopera, oreDelleLavorazioni,
+    mezzeDaOre, pianteDaSesto, pianteDellaLavorazione, GENERI_LAVORAZIONE,
     VERSIONE_SOPRALLUOGHI, costruisciSopralluoghi, leggiSopralluoghi,
     VERSIONE_RILIEVO, UNITA_RILIEVO,
     costruisciRilievo, leggiRilievo, nomeFileRilievo,

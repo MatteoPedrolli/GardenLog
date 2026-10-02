@@ -545,6 +545,16 @@ select.form-control { background-image: url("data:image/svg+xml,%3Csvg xmlns='ht
    nascono: è un risultato, non un campo, e si legge come tale. */
 .ore-ril { margin: 8px 0 0; padding: 10px 12px; background: var(--foglio); border-radius: 8px;
   font-size: 0.88rem; color: var(--inchiostro); font-weight: 600; }
+.lav-campi { display: flex; flex-wrap: wrap; align-items: flex-end; gap: 8px; margin-top: 6px; }
+.lav-campo { display: flex; flex-direction: column; gap: 2px; font-size: 0.72rem; color: var(--text-light); }
+.lav-campo.largo { flex: 1; min-width: 140px; }
+.lav-dentro { display: flex; align-items: center; gap: 6px; }
+.lav-campo input, .lav-campo select { padding: 8px 6px; font-size: 0.85rem; border: 1px solid var(--border);
+  border-radius: 8px; font-family: var(--font-body); background: var(--white); color: var(--text); }
+.lav-campo input { width: 68px; text-align: right; }
+.lav-campo.largo input { width: 100%; text-align: left; }
+.lav-campo .unita { font-size: 0.76rem; color: var(--text-light); min-width: 14px; }
+.lav-calcolo { font-size: 0.82rem; color: var(--inchiostro); font-weight: 600; padding-bottom: 9px; }
 .ore-ril .meno { font-weight: 400; color: var(--text-mid); font-size: 0.8rem; margin-top: 2px; }
 
 .barra-aggiorna {
@@ -922,6 +932,8 @@ select.form-control { background-image: url("data:image/svg+xml,%3Csvg xmlns='ht
 
       <div class="form-group">
         <label class="form-label">Cosa c'è da fare, e quanto</label>
+        <div class="dati-nota" style="margin:0 0 6px">Una lavorazione per cosa da fare: la misura, le
+          ore, e per le piante il sesto. Il testo per il cliente e i materiali li fa l'ufficio.</div>
         <div id="ril-righe"></div>
         <select class="form-control" id="f-ril-voce" style="margin-top:8px"
                 onchange="scegliDaElencoRilievo(this.value); this.value=''"></select>
@@ -933,9 +945,9 @@ select.form-control { background-image: url("data:image/svg+xml,%3Csvg xmlns='ht
         <div class="dati-nota" style="margin:6px 0 0">Niente prezzi: il listino sta in ufficio, in un
           posto solo. Qui si dice cosa c'è e quanto ce n'è.</div>
         <div class="ore-ril" id="f-ril-mezze-eco"></div>
-        <div class="dati-nota" style="margin:6px 0 0">Le ore di manodopera, per ogni insieme o come
-          voce a sé: ogni 8 ore (4 d'orologio in due) una mezza giornata, arrotondando per
-          eccesso. È la larghezza che il lavoro avrà sulla lavagna.</div>
+        <div class="dati-nota" style="margin:6px 0 0">Le ore di tutte le lavorazioni: ogni 8 ore
+          (4 d'orologio in due) una mezza giornata, arrotondando per eccesso. È la larghezza che il
+          lavoro avrà sulla lavagna.</div>
       </div>
 
       <div class="form-group">
@@ -1213,6 +1225,11 @@ const TIPI_DEFAULT = [
   // ripetuto a ogni aiuola.
   { TipoID:'aiuola',                  Nome:'Aiuola',                   dettaglio:'insieme',     Unita:'',      Prato:'',   Siepe:'',   VoceID:'',
     Insieme:'piantumazione,pacciamatura,ala-gocciolante,telo-pacciamante', Ordine:12 },
+  // La siepe nuova è il preventivo più frequente, e si misura in metri: è una
+  // fila, e dal sesto escono le piante. Per un insieme l'unità dice come si
+  // misura nel rilievo — l'aiuola a m², la siepe a metri.
+  { TipoID:'siepe-nuova',             Nome:'Siepe nuova',              dettaglio:'insieme',     Unita:'m',     Prato:'',   Siepe:'',   VoceID:'',
+    Insieme:'piantumazione,pacciamatura,ala-gocciolante,telo-pacciamante', Ordine:13 },
 ];
 
 // Tipi e voci arrivati dopo che qualcuno aveva già il suo archivio sul telefono.
@@ -1221,7 +1238,7 @@ const TIPI_DEFAULT = [
 // non se lo deve ritrovare al giro dopo. È un'aggiunta, non una conversione:
 // niente di quello che c'è viene toccato, e VERSIONE_DATI resta com'è.
 const DEFAULT_ARRIVATI_DOPO = {
-  tipiOperazione: ['pacciamatura', 'ala-gocciolante', 'telo-pacciamante', 'aiuola'],
+  tipiOperazione: ['pacciamatura', 'ala-gocciolante', 'telo-pacciamante', 'aiuola', 'siepe-nuova'],
   voci: ['pacciamatura', 'ala-gocciolante', 'telo-pacciamante'],
 };
 
@@ -2907,7 +2924,7 @@ function accodaAppuntamento(prenotazione) {
 // lavoro da fare, e tutti e due dicono *cosa* e *quanto* lasciando all'ufficio
 // *quanto vale*. Viaggia nella stessa coda, perché il campo manca nello stesso
 // modo e un preventivo perso è un lavoro che non si fa.
-let righeRilievo = [];
+let lavorazioniRilievo = [];
 
 // I campi dell'anagrafica del rilievo, in un posto solo: li riempie la ricerca
 // fra i clienti, li riempie un sopralluogo, li legge il salvataggio.
@@ -2938,7 +2955,7 @@ function apriRilievo(sopralluogoID) {
   document.getElementById('f-ril-da').style.display = 'none';
   document.getElementById('f-ril-note').value = '';
   document.getElementById('f-ril-libera').value = '';
-  righeRilievo = [];
+  lavorazioniRilievo = [];
   document.getElementById('f-ril-disegno').checked = false;
   popolaVociRilievo();
   renderRilievoRighe();
@@ -2978,17 +2995,18 @@ function scollegaClienteRilievo() {
   document.getElementById('ril-cliente-suggestions').style.display = 'none';
 }
 
-// Le righe del rilievo nella forma del documento, quella che `oreManodopera()`
-// sa leggere: il conto delle ore è uno solo, qui e in ufficio.
-const righeRilievoComeDoc = () => righeRilievo.map(r => ({ voceID: r.VoceID, quantita: r.Quantita }));
+// Le lavorazioni del rilievo nella forma del documento, quella che
+// `oreDelleLavorazioni()` sa leggere: il conto delle ore è uno solo, qui e in
+// ufficio.
+const lavorazioniComeDoc = () => lavorazioniRilievo.map(l => ({ ore: l.Ore }));
 
-// Le mezze giornate non si contano più a mano col −/+: sono le ore di manodopera
-// delle righe, sommate e arrotondate per eccesso. Si aggiornano mentre si scrive,
-// senza ridisegnare le righe — il campo sparirebbe da sotto le dita.
+// Le mezze giornate non si contano a mano: sono le ore delle lavorazioni,
+// sommate e arrotondate per eccesso. Si aggiornano mentre si scrive, senza
+// ridisegnare le lavorazioni — il campo sparirebbe da sotto le dita.
 function mostraMezzeRilievo() {
   const eco = document.getElementById('f-ril-mezze-eco');
   if (!eco) return;
-  const ore = oreManodopera(righeRilievoComeDoc());
+  const ore = oreDelleLavorazioni(lavorazioniComeDoc());
   const mezze = mezzeDaOre(ore);
   const scritte = String(ore).replace('.', ',');
   eco.innerHTML = ore > 0
@@ -2998,53 +3016,61 @@ function mostraMezzeRilievo() {
     : 'Nessuna ora di manodopera<div class="meno">In lavagna andrà largo una mezza giornata, il minimo.</div>';
 }
 
-// Una riga di manodopera si scrive anche se la voce non c'è più nell'archivio:
-// è quella da cui escono le mezze giornate, e senza la lavagna non saprebbe
-// quanto è largo il lavoro.
-function rigaManodoperaRilievo(descrizione) {
-  const vo = DB.voci.find(x => x.VoceID === VOCE_MANODOPERA);
-  return {
-    RigaID: 'rr-' + Date.now().toString(36) + '-' + righeRilievo.length,
-    VoceID: VOCE_MANODOPERA, Voce: (vo && vo.Nome) || 'Manodopera',
-    Descrizione: descrizione || (vo && vo.Nome) || 'Manodopera',
-    Unita: 'h', Quantita: '',
-  };
+// Come si misura un insieme: lo dice il suo campo Unità in Archivi. «Aiuola» è
+// nata senza, prima che servisse, e un'aiuola si misura in m².
+function misuraInsieme(t) {
+  return (t && t.Unita) || 'm²';
 }
 
-function popolaVociRilievo() {
-  const sel = document.getElementById('f-ril-voce');
-  if (!sel) return;
-  // La manodopera è una voce come le altre, in testa: è il lavoro che non sta in
-  // nessun insieme — una potatura, una pulizia — e le sue ore contano per le
-  // mezze giornate come quelle degli insiemi.
-  const insiemi = insiemiPerRilievo();
-  const manodopera = `<option value="${VOCE_MANODOPERA}">Manodopera (ore)</option>`;
-  sel.innerHTML = '<option value="">+ Aggiungi una voce…</option>' +
-    (insiemi.length ? '<optgroup label="Insiemi">' +
-      insiemi.map(t => `<option value="insieme:${perValore(t.TipoID)}">${perValore(t.Nome)} · ore e ${t.voci.length} ${t.voci.length === 1 ? 'voce' : 'voci'}</option>`).join('') +
-      '</optgroup><optgroup label="Voci">' : '') +
-    manodopera +
-    DB.voci.filter(v => v.VoceID !== VOCE_MANODOPERA)
-      .map(v => `<option value="${perValore(v.VoceID)}">${perValore(v.Nome)}</option>`).join('') +
-    (insiemi.length ? '</optgroup>' : '');
-}
+const componenteDiPiante = c => c && (c.VoceID === 'piante' || c.TipoID === 'piantumazione');
 
 // Gli insiemi della visita servono anche qui: un'aiuola chiede sempre piante,
 // pacciamatura, ala gocciolante e telo, in un preventivo come in un lavoro
 // finito. Sono gli stessi, creati da Archivi senza toccare il codice — così le
 // lavorazioni collegate sono quelle che si decidono qui, non una lista scritta
-// da chi programma. Di un insieme si prende la voce di ogni suo tipo: un tipo
-// senza voce è manodopera, e la manodopera dell'insieme è la sua riga di ore.
+// da chi programma. La composizione parte col rilievo: le quantità le conta
+// l'ufficio, e deve sapere di cosa è fatta quell'aiuola anche se l'insieme poi
+// cambia. Un tipo senza voce è manodopera, ed è già nelle ore.
 function insiemiPerRilievo() {
   return (DB.tipiOperazione || [])
     .filter(t => t.dettaglio === 'insieme' && t.Insieme)
     .map(t => ({
       ...t,
-      voci: String(t.Insieme).split(',').map(x => x.trim()).filter(x => x)
+      componenti: String(t.Insieme).split(',').map(x => x.trim()).filter(x => x)
         .map(id => (DB.tipiOperazione || []).find(o => o.TipoID === id))
-        .map(o => o && o.VoceID)
-        .filter(v => v && v !== VOCE_MANODOPERA && DB.voci.some(x => x.VoceID === v)),
+        .filter(o => o && o.VoceID && o.VoceID !== VOCE_MANODOPERA)
+        .map(o => {
+          const v = DB.voci.find(x => x.VoceID === o.VoceID);
+          return v ? { TipoID: o.TipoID, VoceID: v.VoceID, Voce: v.Nome, Unita: v.Unita || o.Unita || '' } : null;
+        })
+        .filter(Boolean),
     }));
+}
+
+function popolaVociRilievo() {
+  const sel = document.getElementById('f-ril-voce');
+  if (!sel) return;
+  // La manodopera è in testa alle voci: è il lavoro che non sta in nessun
+  // insieme e non lascia materiali — una potatura, una pulizia.
+  const insiemi = insiemiPerRilievo();
+  sel.innerHTML = '<option value="">+ Aggiungi una lavorazione…</option>' +
+    (insiemi.length ? '<optgroup label="Insiemi">' +
+      insiemi.map(t => `<option value="insieme:${perValore(t.TipoID)}">${perValore(t.Nome)} · a ${perValore(misuraInsieme(t))}</option>`).join('') +
+      '</optgroup>' : '') +
+    `<optgroup label="Solo ore"><option value="${VOCE_MANODOPERA}">Manodopera: potatura, pulizia…</option></optgroup>` +
+    '<optgroup label="Voci a misura">' +
+    DB.voci.filter(v => v.VoceID !== VOCE_MANODOPERA && !isSi(v.ACorpo))
+      .map(v => `<option value="${perValore(v.VoceID)}">${perValore(v.Nome)}${v.Unita ? ' · ' + perValore(v.Unita) : ''}</option>`).join('') +
+    '</optgroup>';
+}
+
+function nuovaLavorazione(campi) {
+  return {
+    LavID: 'lav-' + Date.now().toString(36) + '-' + lavorazioniRilievo.length,
+    Genere: 'libera', Nome: '', TipoID: '', VoceID: '', Componenti: [],
+    Misura: '', Unita: '', Pianta: '', Sesto: '', Piante: '', Ore: '', Note: '',
+    ...campi,
+  };
 }
 
 function scegliDaElencoRilievo(valore) {
@@ -3052,36 +3078,20 @@ function scegliDaElencoRilievo(valore) {
   if (valore.startsWith('insieme:')) {
     const t = insiemiPerRilievo().find(x => x.TipoID === valore.slice(8));
     if (!t) return;
-    // Prima le ore, col nome dell'insieme: sono quelle che si stimano guardando
-    // l'aiuola intera, non voce per voce. Poi una riga per voce, da correggere o
-    // togliere come le altre: l'insieme è una scorciatoia per scriverle, non un
-    // blocco che poi non si tocca.
-    righeRilievo.push(rigaManodoperaRilievo('Manodopera – ' + t.Nome));
-    t.voci.forEach(v => aggiungiRigaRilievo(v, { senzaDisegno: true }));
-    renderRilievoRighe();
-    return;
+    lavorazioniRilievo.push(nuovaLavorazione({
+      Genere: 'insieme', TipoID: t.TipoID, Nome: t.Nome, Unita: misuraInsieme(t),
+      Componenti: t.componenti,
+    }));
+  } else if (valore === VOCE_MANODOPERA) {
+    lavorazioniRilievo.push(nuovaLavorazione({ Genere: 'manodopera' }));
+  } else {
+    const vo = DB.voci.find(x => x.VoceID === valore);
+    if (!vo) return;
+    lavorazioniRilievo.push(nuovaLavorazione({
+      Genere: 'voce', VoceID: vo.VoceID, Nome: vo.Nome, Unita: vo.Unita || '',
+    }));
   }
-  if (valore === VOCE_MANODOPERA) {
-    righeRilievo.push(rigaManodoperaRilievo());
-    renderRilievoRighe();
-    return;
-  }
-  aggiungiRigaRilievo(valore);
-}
-
-function aggiungiRigaRilievo(voceID, { senzaDisegno } = {}) {
-  const vo = DB.voci.find(x => x.VoceID === voceID);
-  if (!vo) return;
-  righeRilievo.push({
-    RigaID: 'rr-' + Date.now().toString(36) + '-' + righeRilievo.length,
-    VoceID: vo.VoceID, Voce: vo.Nome,
-    // La descrizione nasce dal nome della voce e si corregge: sul preventivo
-    // quella riga va letta da un cliente, e «Piante» da solo non si capisce.
-    Descrizione: vo.Nome,
-    Unita: isSi(vo.ACorpo) ? 'a corpo' : (vo.Unita || ''),
-    Quantita: isSi(vo.ACorpo) ? 1 : '',
-  });
-  if (!senzaDisegno) renderRilievoRighe();
+  renderRilievoRighe();
 }
 
 function aggiungiRigaLiberaRilievo() {
@@ -3089,26 +3099,33 @@ function aggiungiRigaLiberaRilievo() {
   if (!campo) return;
   const testo = campo.value.trim();
   if (!testo) return;
-  righeRilievo.push({
-    RigaID: 'rr-' + Date.now().toString(36) + '-' + righeRilievo.length,
-    VoceID: '', Voce: testo, Descrizione: testo, Unita: '', Quantita: '',
-  });
+  lavorazioniRilievo.push(nuovaLavorazione({ Genere: 'libera', Nome: testo, Unita: 'a corpo' }));
   campo.value = '';
   renderRilievoRighe();
 }
 
 function togliRigaRilievo(i) {
-  righeRilievo.splice(i, 1);
+  lavorazioniRilievo.splice(i, 1);
   renderRilievoRighe();
 }
 
 // Non si ridisegna mentre si scrive: il campo sparirebbe da sotto le dita. Si
-// aggiorna solo il conto delle ore, che deve seguire il numero.
-function modificaRigaRilievo(i, campo, valore) {
-  const r = righeRilievo[i];
-  if (!r) return;
-  r[campo] = valore;
-  if (campo === 'Quantita') mostraMezzeRilievo();
+// aggiornano solo i due conti che devono seguire il numero — le mezze giornate
+// e le piante dal sesto.
+function modificaLavorazione(i, campo, valore) {
+  const l = lavorazioniRilievo[i];
+  if (!l) return;
+  l[campo] = valore;
+  if (campo === 'Ore') mostraMezzeRilievo();
+  if (campo === 'Misura' || campo === 'Sesto') mostraPianteLavorazione(i);
+}
+
+function mostraPianteLavorazione(i) {
+  const el = document.getElementById('lav-piante-' + i);
+  const l = lavorazioniRilievo[i];
+  if (!el || !l) return;
+  const n = pianteDaSesto(l.Misura, l.Sesto);
+  el.textContent = n == null ? '' : `→ ${n} ${n === 1 ? 'pianta' : 'piante'}`;
 }
 
 // L'unità della riga compare sempre fra le scelte, anche se non è nell'elenco: un
@@ -3119,34 +3136,88 @@ function unitaPerLaRiga(unita) {
   return unita && !UNITA_RILIEVO.includes(unita) ? [unita, ...UNITA_RILIEVO] : UNITA_RILIEVO;
 }
 
+// Cosa manca a una lavorazione per partire, detto con le parole di chi la
+// guarda. Una lavorazione senza misura o senza ore è un'aiuola senza stima: in
+// ufficio non si può più chiedere, e in lavagna il pomeriggio sembrerebbe libero.
+function cosaMancaLavorazione(l) {
+  const nome = l.Nome || 'la lavorazione';
+  const conPiante = l.Genere === 'insieme' && (l.Componenti || []).some(componenteDiPiante);
+  if ((l.Genere === 'manodopera' || l.Genere === 'libera') && !String(l.Nome || '').trim()) {
+    return 'Scrivi cosa c\'è da fare nella lavorazione di sole ore';
+  }
+  if ((l.Genere === 'insieme' || l.Genere === 'voce') && !(numeroDaTesto(l.Misura) > 0)) {
+    return `Scrivi quanto misura «${nome}»`;
+  }
+  if (conPiante && l.Unita === 'm' && !(numeroDaTesto(l.Sesto) > 0)) {
+    return `Scrivi il sesto d'impianto di «${nome}»`;
+  }
+  if (conPiante && l.Unita !== 'm' && !(numeroDaTesto(l.Piante) > 0)) {
+    return `Scrivi quante piante vanno in «${nome}»`;
+  }
+  if ((l.Genere === 'insieme' || l.Genere === 'manodopera') && !(numeroDaTesto(l.Ore) > 0)) {
+    return `Scrivi le ore di «${nome}»`;
+  }
+  if (l.Genere === 'libera' && !(numeroDaTesto(l.Misura) > 0) && !(numeroDaTesto(l.Ore) > 0)) {
+    return `Scrivi quanto misura «${nome}», o quante ore ci vogliono`;
+  }
+  return '';
+}
+
+function campoLavorazione(i, campo, etichetta, valore, { largo, unita, segnaposto } = {}) {
+  return `<label class="lav-campo${largo ? ' largo' : ''}">${etichetta}
+    <span class="lav-dentro"><input type="text" ${largo ? '' : 'inputmode="decimal"'} value="${perValore(valore)}"
+      placeholder="${perValore(segnaposto || '')}" oninput="modificaLavorazione(${i}, '${campo}', this.value)"
+      aria-label="${perValore(etichetta)}">${unita ? `<span class="unita">${perValore(unita)}</span>` : ''}</span>
+  </label>`;
+}
+
+// Una lavorazione è un fatto misurato, non una riga di preventivo: niente testo
+// per il cliente e niente unità da scegliere. La descrizione la scrive l'ufficio,
+// e scriverla qui era scriverla due volte — la voce, e sotto la stessa parola.
 function renderRilievoRighe() {
   const el = document.getElementById('ril-righe');
   if (!el) return;
   mostraMezzeRilievo();
-  if (!righeRilievo.length) {
-    el.innerHTML = '<div class="dati-nota">Ancora niente. Aggiungi quello che hai misurato.</div>';
+  if (!lavorazioniRilievo.length) {
+    el.innerHTML = '<div class="dati-nota">Ancora niente. Aggiungi quello che c\'è da fare.</div>';
     return;
   }
-  el.innerHTML = righeRilievo.map((r, i) => `<div class="conto-riga">
-    <div class="conto-voce">
-      <span style="flex:1">${perValore(r.Voce)}</span>
-      <button type="button" class="via" onclick="togliRigaRilievo(${i})" title="Togli">✕</button>
-    </div>
-    <input type="text" class="ril-desc" value="${perValore(r.Descrizione)}"
-           oninput="modificaRigaRilievo(${i}, 'Descrizione', this.value)"
-           placeholder="Come va scritta sul preventivo" aria-label="descrizione">
-    <div class="conto-numeri">
-      <input type="text" inputmode="decimal" value="${perValore(r.Quantita)}"
-             oninput="modificaRigaRilievo(${i}, 'Quantita', this.value)" aria-label="quantità">
-      ${r.VoceID === VOCE_MANODOPERA
-        // Le ore sono ore: cambiare l'unità della manodopera vorrebbe dire contare
-        // nelle mezze giornate dei metri quadri.
-        ? '<span class="unita">h</span>'
-        : `<select onchange="modificaRigaRilievo(${i}, 'Unita', this.value)" aria-label="unità">
-        ${unitaPerLaRiga(r.Unita).map(u => `<option value="${perValore(u)}"${u === r.Unita ? ' selected' : ''}>${perValore(u)}</option>`).join('')}
-      </select>`}
-    </div>
-  </div>`).join('');
+  el.innerHTML = lavorazioniRilievo.map((l, i) => {
+    const conPiante = l.Genere === 'insieme' && (l.Componenti || []).some(componenteDiPiante);
+    const nomeLibero = l.Genere === 'manodopera' || l.Genere === 'libera';
+    const dentro = l.Genere === 'insieme' && l.Componenti.length
+      ? `<div class="op-insieme" style="margin-top:2px">${l.Componenti.map(c => perValore(c.Voce)).join(', ')}: le quantità le conta l'ufficio</div>` : '';
+    return `<div class="conto-riga lav-riga">
+      <div class="conto-voce">
+        ${nomeLibero
+          ? `<input type="text" class="ril-desc lav-nome" value="${perValore(l.Nome)}" style="margin:0"
+               placeholder="${l.Genere === 'manodopera' ? 'Cosa: potatura, pulizia…' : 'Cosa c\'è da fare'}"
+               oninput="modificaLavorazione(${i}, 'Nome', this.value)" aria-label="cosa">`
+          : `<span style="flex:1">${perValore(l.Nome)}</span>`}
+        <button type="button" class="via" onclick="togliRigaRilievo(${i})" title="Togli">✕</button>
+      </div>
+      ${dentro}
+      <div class="lav-campi">
+        ${l.Genere === 'manodopera' ? '' : (l.Genere === 'libera'
+          ? `<label class="lav-campo">Misura<span class="lav-dentro"><input type="text" inputmode="decimal"
+               value="${perValore(l.Misura)}" oninput="modificaLavorazione(${i}, 'Misura', this.value)" aria-label="Misura">
+               <select onchange="modificaLavorazione(${i}, 'Unita', this.value)" aria-label="unità">
+                 ${unitaPerLaRiga(l.Unita).map(u => `<option value="${perValore(u)}"${u === l.Unita ? ' selected' : ''}>${perValore(u)}</option>`).join('')}
+               </select></span></label>`
+          : campoLavorazione(i, 'Misura', 'Misura', l.Misura, { unita: l.Unita }))}
+        ${campoLavorazione(i, 'Ore', 'Ore', l.Ore, { unita: 'h' })}
+      </div>
+      ${conPiante ? `<div class="lav-campi">
+        ${campoLavorazione(i, 'Pianta', 'Pianta', l.Pianta, { largo: true, segnaposto: 'lauro 80-100' })}
+        ${l.Unita === 'm'
+          ? campoLavorazione(i, 'Sesto', 'Sesto', l.Sesto, { unita: 'm' }) + `<span class="lav-calcolo" id="lav-piante-${i}"></span>`
+          : campoLavorazione(i, 'Piante', 'Piante', l.Piante, { unita: 'n' })}
+      </div>` : ''}
+      <input type="text" class="ril-desc" value="${perValore(l.Note)}" placeholder="Note: dove, cosa ricordare (facoltative)"
+             oninput="modificaLavorazione(${i}, 'Note', this.value)" aria-label="note">
+    </div>`;
+  }).join('');
+  lavorazioniRilievo.forEach((l, i) => mostraPianteLavorazione(i));
 }
 
 async function salvaRilievo() {
@@ -3155,14 +3226,11 @@ async function salvaRilievo() {
   // Il nome basta: un preventivo si fa spesso a chi non è ancora cliente, e
   // farlo prima aggiungere in anagrafica era lavoro in più col cliente davanti.
   if (!anagrafica.Cliente) { showToast('⚠️ Scrivi per chi è'); return; }
-  // Un rilievo senza righe è un foglio bianco: l'ufficio non ci può fare un
-  // preventivo, e chi l'ha mandato non è più davanti al giardino per chiedere.
-  if (!righeRilievo.length) { showToast('⚠️ Aggiungi almeno una riga'); return; }
-  // Una riga di ore lasciata vuota è un'aiuola senza stima: le mezze giornate
-  // verrebbero più corte del lavoro, e in lavagna il pomeriggio sembrerebbe
-  // libero. O si scrivono, o la riga si toglie.
-  const senzaOre = righeRilievo.find(r => r.VoceID === VOCE_MANODOPERA && !(numeroDaTesto(r.Quantita) > 0));
-  if (senzaOre) { showToast(`⚠️ Scrivi le ore di «${senzaOre.Descrizione || 'Manodopera'}», o togli la riga`); return; }
+  // Un rilievo senza lavorazioni è un foglio bianco: l'ufficio non ci può fare
+  // un preventivo, e chi l'ha mandato non è più davanti al giardino per chiedere.
+  if (!lavorazioniRilievo.length) { showToast('⚠️ Aggiungi almeno una lavorazione'); return; }
+  const manca = lavorazioniRilievo.map(cosaMancaLavorazione).find(x => x);
+  if (manca) { showToast('⚠️ ' + manca); return; }
 
   const rilievo = {
     RilievoID: 'ril-' + Date.now().toString(36),
@@ -3180,9 +3248,9 @@ async function salvaRilievo() {
     // fatto che contava: il rilievo è incompleto finché non arriva il disegno.
     Disegno: document.getElementById('f-ril-disegno').checked,
     // Scritte per la scheda di qui sotto, finché è da consegnare: il documento
-    // le rifà dalle righe, e sono le stesse.
-    Mezze: mezzeDaOre(oreManodopera(righeRilievoComeDoc())),
-    Righe: righeRilievo.map(r => ({ ...r })),
+    // le rifà dalle lavorazioni, e sono le stesse.
+    Mezze: mezzeDaOre(oreDelleLavorazioni(lavorazioniComeDoc())),
+    Lavorazioni: lavorazioniRilievo.map(l => ({ ...l, Componenti: (l.Componenti || []).map(c => ({ ...c })) })),
     Note: document.getElementById('f-ril-note').value.trim(),
     Creato: new Date().toISOString(),
     Consegnato: '',
@@ -3236,9 +3304,10 @@ function renderRilievi() {
     // tacerlo vorrebbe dire dire «da consegnare» proprio quando non è colpa sua.
     const davanti = posto > 0 ? coda.slice(0, posto).find(v => v.errore) : null;
     const quante = Number(r.Mezze) || 0;
+    const quanteLav = (r.Lavorazioni || r.Righe || []).length;
     return `<div class="card" style="padding:12px">
       <div style="font-weight:600">${perValore(nome)}</div>
-      <div style="font-size:0.85rem; color:var(--text-mid)">${(r.Righe || []).length} ${(r.Righe || []).length === 1 ? 'riga' : 'righe'}${r.Disegno ? ' · 📐 aspetta il disegno' : ''}</div>
+      <div style="font-size:0.85rem; color:var(--text-mid)">${quanteLav} ${quanteLav === 1 ? 'lavorazione' : 'lavorazioni'}${r.Disegno ? ' · 📐 aspetta il disegno' : ''}</div>
       <div style="font-size:0.78rem; color:var(--text-light); margin-top:4px">
         ${quante ? `${quante} ${quante === 1 ? 'mezza giornata' : 'mezze giornate'}` : 'senza ore'} · 📤 da consegnare
       </div>
@@ -3658,7 +3727,7 @@ const ARCHIVI = {
       { k:'Insieme', label:'Se è un insieme, quali operazioni accende', tipo:'scelte', opzioni: () =>
         DB.tipiOperazione.filter(t => !eInsieme(t) && String(t.TipoID) !== String(archivioVoceId))
           .map(t => ({ v: t.TipoID, label: t.Nome })) },
-      { k:'Unita', label:'Unità di misura (kg, l, n, m², sacchi…)' },
+      { k:'Unita', label:'Unità di misura (kg, l, n, m², sacchi…) — per un insieme, come si misura nel rilievo (m, m²)' },
       { k:'ChiedeCosa', label:'Chiede anche "cosa" (la specie, il materiale)', tipo:'flag' },
       { k:'Prato', label:'Riguarda il prato', tipo:'flag' },
       { k:'Siepe', label:'Riguarda la siepe', tipo:'flag' },
