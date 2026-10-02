@@ -244,6 +244,10 @@ del vaso, e in ufficio per saperlo bisognerebbe alzarsi e andare in vivaio. La
 piantumazione chiede quindi pianta, numero e prezzo a pezzo, e ne accetta più
 d'una (12 lauri, 3 aceri): ogni pianta è **un'operazione sua dello stesso tipo**,
 con la sua riga nel conto, così lo schema delle operazioni resta quello di sempre.
+Nello **storico delle visite**, invece, le piante sono un'etichetta sola —
+«Piantumazione · 15 piante» — che toccata apre l'elenco (`etichetteOperazioni()`):
+una siepe di dodici varietà erano dodici etichette, e coprivano il resto della
+visita. Cambia solo come si guardano: le operazioni restano una per pianta.
 Il tipo si riconosce dall'identificativo `piantumazione` (`ePiantumazione()`), non
 da un campo nuovo sul tipo: i tipi stanno già nei DB di chi lavora. Il prezzo
 viaggia nel rapportino preso **dall'operazione**, non dalla riga del conto, perché

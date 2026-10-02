@@ -418,6 +418,12 @@ select.form-control { background-image: url("data:image/svg+xml,%3Csvg xmlns='ht
 }
 .op-tag.prato { background: var(--earth-light); color: var(--earth); }
 .op-tag.siepe { background: #e8f4f0; color: #2a7a5a; }
+/* Le piante in una sola etichetta: aperta, l'elenco sta sotto di lei. Non
+   display: contents, che su Safari col <details> fa i capricci. */
+.op-piante { display: inline-block; }
+.op-piante summary { cursor: pointer; list-style: none; display: inline-block; }
+.op-piante summary::-webkit-details-marker { display: none; }
+.op-piante-elenco { font-size: 0.8rem; color: var(--text-mid); padding: 4px 2px 0; }
 .next-int {
   margin-top: 10px; padding: 8px 10px;
   background: var(--foglio); border-radius: 8px;
@@ -1682,7 +1688,7 @@ function showCliente(id) {
             <div><div class="visit-card-title">${data}</div><div class="visit-card-date">${v.Ore_Visita ? v.Ore_Visita+'h di lavoro' : ''}</div></div>
           </div>
           ${v.Note_visita ? `<div style="font-size:0.82rem; color:var(--text-mid); margin-top:8px">${v.Note_visita}</div>` : ''}
-          ${ops.length ? `<div class="visit-ops">${ops.map(o => `<span class="op-tag ${isSi(o.Flag_prato)?'prato':''} ${isSi(o.Flag_siepe)?'siepe':''}">${o.Tipo_operazione}${o.Descrizione?' – '+o.Descrizione:''}</span>`).join('')}</div>` : ''}
+          ${etichetteOperazioni(ops)}
         </div>`;
       }).join('') : '<div class="empty"><div class="empty-text">Nessuna visita</div></div>'}
     </div>`;
@@ -1696,6 +1702,26 @@ function renderClientiPage() {
     </div>
     <div id="clienti-list"></div>`;
   renderClienti();
+}
+
+// Le operazioni di una visita come etichette. Le piante sono un'operazione
+// ciascuna — è così che hanno la loro riga nel conto — ma nello storico una siepe
+// di dodici varietà diventava dodici etichette e copriva tutto il resto. Qui
+// diventano una sola, «Piantumazione · 15 piante», e l'elenco si apre toccandola.
+function etichetteOperazioni(ops) {
+  if (!ops.length) return '';
+  const piante = ops.filter(o => o.TipoID === 'piantumazione');
+  const altre = ops.filter(o => o.TipoID !== 'piantumazione');
+  const etichetta = o => `<span class="op-tag ${isSi(o.Flag_prato)?'prato':''} ${isSi(o.Flag_siepe)?'siepe':''}">${perValore(o.Tipo_operazione)}${o.Descrizione?' – '+perValore(o.Descrizione):''}</span>`;
+  let html = altre.map(etichetta).join('');
+  if (piante.length) {
+    const quante = piante.reduce((s, o) => s + (parseFloat(o.Quantita) || 0), 0);
+    html += `<details class="op-piante"><summary class="op-tag">${perValore(piante[0].Tipo_operazione || 'Piantumazione')}` +
+      `${quante ? ' · ' + formattaQuantita(quante) + (quante === 1 ? ' pianta' : ' piante') : ''} ▾</summary>` +
+      `<div class="op-piante-elenco">${piante.map(o =>
+        `<div>${o.Quantita ? perValore(formattaQuantita(o.Quantita)) + ' × ' : ''}${perValore(o.Descrizione || 'pianta senza nome')}</div>`).join('')}</div></details>`;
+  }
+  return `<div class="visit-ops">${html}</div>`;
 }
 
 // ── VISITE ──
@@ -1714,7 +1740,7 @@ function renderVisite() {
         <div style="flex:1"><div class="visit-card-title">${nome}</div><div class="visit-card-date">${data}${v.Ore_Visita ? ' · '+v.Ore_Visita+'h' : ''}${statoConsegna(v)}</div></div>
       </div>
       ${v.Note_visita ? `<div style="font-size:0.82rem; color:var(--text-mid); margin-top:8px">${v.Note_visita}</div>` : ''}
-      ${ops.length ? `<div class="visit-ops">${ops.map(o => `<span class="op-tag ${isSi(o.Flag_prato)?'prato':''}">${o.Tipo_operazione}${o.Descrizione?' – '+o.Descrizione:''}</span>`).join('')}</div>` : ''}
+      ${etichetteOperazioni(ops)}
       <div style="display:flex; gap:6px; margin-top:10px; padding-top:10px; border-top:1px solid var(--foglio)">
         <button class="btn btn-secondary btn-sm" style="flex:1" onclick="openModificaVisita('${perOnclick(v.VisitaID)}')">✏️ Apri</button>
         <button class="btn btn-danger btn-sm" onclick="eliminaVisita('${perOnclick(v.VisitaID)}')">🗑</button>

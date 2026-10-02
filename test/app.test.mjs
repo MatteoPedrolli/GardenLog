@@ -1092,9 +1092,26 @@ try {
     const doc = costruisciRapportino({ visita, cliente: DB.clienti[0],
       operazioni: ops.map(o => ({ ...o, VisitaID: 'v-piante' })),
       tipi: DB.tipiOperazione, voci: DB.voci, concimi: DB.concimi, sementi: DB.sementi, fitofarmaci: DB.fitofarmaci });
+    // nello storico: dodici lauri e tre aceri sono un'etichetta sola, non due
+    const storico = document.createElement('div');
+    storico.innerHTML = etichetteOperazioni([
+      ...ops.map(o => ({ ...o })),
+      { TipoID: 'taglio-prato', Tipo_operazione: 'Taglio prato', Flag_prato: 'Sì' },
+    ]);
+    const chiusa = storico.querySelector('details.op-piante');
+    const vistaStorico = { etichette: storico.querySelectorAll('.op-tag').length,
+      riassunto: chiusa && chiusa.querySelector('summary').textContent,
+      elenco: chiusa && chiusa.querySelector('.op-piante-elenco').textContent, aperta: chiusa && chiusa.open };
     closeDrawer('overlay-visita');
-    return { campi, righe, doc };
+    return { campi, righe, doc, vistaStorico };
   });
+  ok('nello storico le piante sono un\'etichetta sola, accanto alle altre',
+    piante.vistaStorico.etichette === 2 && /Piantumazione · 15 piante/.test(piante.vistaStorico.riassunto || ''),
+    JSON.stringify(piante.vistaStorico));
+  ok('e chiusa, con dentro l\'elenco delle piante',
+    piante.vistaStorico.aperta === false &&
+    /12 × Lauro/.test(piante.vistaStorico.elenco) && /3 × Acero/.test(piante.vistaStorico.elenco),
+    piante.vistaStorico.elenco);
   ok('la piantumazione chiede pianta, numero e prezzo, e ne accetta più d\'una',
     piante.campi === 2, String(piante.campi));
   ok('ogni pianta ha la sua riga nel conto, col suo nome',
