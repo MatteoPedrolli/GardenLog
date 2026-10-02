@@ -254,7 +254,10 @@ viaggia nel rapportino preso **dall'operazione**, non dalla riga del conto, perc
 i conti delle visite di prima portano ancora i loro prezzi storici e quelli non
 devono partire come un listino. In ufficio conta come un prezzo scritto a mano: il
 listino non lo tocca; se il cantiere lo corregge rimandando il rapportino, segue
-il cantiere, finché l'ufficio non lo cambia a mano (`daCantiere`).
+il cantiere, finché l'ufficio non lo cambia a mano (`daCantiere`). Per la stessa ragione la
+pagina Listino **non le propone** fra le voci viste e non in listino: chiederle lì
+faceva credere che ognuna andasse messa in listino, e con «Aggiungi» la voce
+prendeva il nome della prima pianta vista.
 
 L'elenco **nasce già compilato**: la manodopera dalle fasce orarie, i materiali
 dalle operazioni che hanno una voce collegata. Chi lo apre corregge, non scrive

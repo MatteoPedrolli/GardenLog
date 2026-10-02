@@ -1354,7 +1354,9 @@ try {
     await pagU.isVisible('#novita.aperto'));
   const schermoNovita = await pagU.textContent('#novita');
   ok('e dice cosa c\'è di nuovo, non cosa è cambiato nel codice',
-    schermoNovita.includes('Cosa c\'è di nuovo') && schermoNovita.includes('rilievi'),
+    // l'ultima novità, qualunque sia: legata a una parola, si rompeva a ogni voce nuova
+    schermoNovita.includes('Cosa c\'è di nuovo') &&
+      schermoNovita.includes(await pagU.evaluate(() => NOVITA[0].titolo)),
     schermoNovita.slice(0, 120));
   // La prima volta in assoluto si mostra solo l'ultima: scaricare addosso tutta
   // la storia a chi apre l'app non è un annuncio, è un muro.
@@ -2393,8 +2395,23 @@ try {
     aMano[0].prezzo = 13; aMano[0].manuale = true; aMano[0].daCantiere = false;
     r.aManoResta = costruisciConteggio(corretto, aMano).find(x => x.voce.includes('Lauro')).prezzo;
     r.foglio = costruisciFoglio({ cliente: d.cliente, data: d.data, righe: costruisciConteggio(d, null) });
+    // Le piante non si chiedono in listino: con un rapportino che ne porta,
+    // e senza la voce «piante», la pagina Listino non le propone.
+    const voci0 = LISTINO.voci; const arrivi0 = ARRIVI;
+    LISTINO.voci = voci0.filter(v => v.voceID !== 'piante');
+    ARRIVI = [{ doc: d }];
+    r.chiesteInListino = vociMancanti().filter(v => v.voceID === 'piante').length;
+    // E una voce aggiunta quando le proponeva, col nome della prima pianta, non
+    // si porta dietro quel nome sulle altre.
+    LISTINO.voci = voci0.filter(v => v.voceID !== 'piante').concat([{ voceID: 'piante', voce: 'Piante – Lauro', unita: 'n', prezzo: '' }]);
+    r.conNomeVecchio = costruisciConteggio(d, null).filter(x => x.voceID === 'piante').map(x => x.voce);
+    LISTINO.voci = voci0; ARRIVI = arrivi0;
     return r;
   }, piante.doc);
+  ok('le piante non si chiedono in listino: il prezzo lo porta il cantiere', pianteU.chiesteInListino === 0,
+    String(pianteU.chiesteInListino));
+  ok('e una voce «Piante – Lauro» già in listino non diventa «Piante – Lauro – Acero»',
+    JSON.stringify(pianteU.conNomeVecchio) === '["Piante – Lauro","Piante – Acero"]', JSON.stringify(pianteU.conNomeVecchio));
   ok('in ufficio il prezzo delle piante è quello del cantiere', pianteU.prezzi.join(',') === '14.5,38', JSON.stringify(pianteU));
   ok('e conta come scritto a mano: il listino non lo tocca', pianteU.manuali);
   ok('se il cantiere lo corregge, il prezzo segue', pianteU.dopoCorrezione === 15, String(pianteU.dopoCorrezione));

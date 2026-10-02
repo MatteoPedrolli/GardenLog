@@ -1326,8 +1326,11 @@ function costruisciConteggio(doc, precedenti) {
       // va il conto.
       // Le piante invece escono col loro nome, «Piante – Lauro»: il cliente vuole
       // sapere cosa ha nel giardino, e non c'è un nome commerciale da tenere in casa.
+      // Della voce in listino si prende solo la parte prima del trattino: una voce
+      // aggiunta dalla pagina Listino quando la proponeva poteva chiamarsi
+      // «Piante – Lauro», e ogni pianta dopo sarebbe uscita «Piante – Lauro – Acero».
       voce: pianta && op.descrizione
-        ? ((inListino && inListino.voce) || 'Piante') + ' – ' + op.descrizione
+        ? (((inListino && inListino.voce) || 'Piante').split(' – ')[0].trim() || 'Piante') + ' – ' + op.descrizione
         : (inListino && inListino.voce) || r.voce || '',
       prodottoID: daProdotto ? daProdotto.id : '',
       prodotto: daProdotto ? daProdotto.nome : '',
@@ -2011,6 +2014,14 @@ async function ricontrolla() {
 // La più recente per prima. Le righe sono poche e corte apposta: un elenco lungo
 // non si legge, e quello che non si legge tanto vale non scriverlo.
 const NOVITA = [
+  {
+    versione: '2026-10-02.2',
+    data: '2026-10-02',
+    titolo: 'Le piante non chiedono il listino',
+    righe: [
+      'Nella pagina Listino le **piante non compaiono più** fra le voci da aggiungere: il prezzo lo scrive il cantiere dall\'etichetta del vaso.',
+    ],
+  },
   {
     versione: '2026-10-02',
     data: '2026-10-02',
@@ -4800,6 +4811,12 @@ function vociMancanti() {
   const viste = new Map();
   const daDoc = d => (d.righe || []).forEach(r => {
     if (!r.voceID || voceInListino(r.voceID) || viste.has(r.voceID)) return;
+    // Le piante no: il prezzo lo porta il cantiere dall'etichetta del vaso, e il
+    // listino non lo tocca. Chiederle qui faceva credere che ognuna andasse
+    // messa in listino, e con «Aggiungi» la voce prendeva il nome della prima
+    // pianta vista — «Piante – Lauro» — e se lo portava dietro su tutte.
+    const op = operazioneDellaRiga(d, r);
+    if (op && op.tipoID === 'piantumazione') return;
     viste.set(r.voceID, { voceID: r.voceID, voce: r.voce || '', unita: r.unita || '' });
   });
   ARRIVI.forEach(a => daDoc(a.doc));
