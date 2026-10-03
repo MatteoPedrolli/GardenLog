@@ -490,11 +490,18 @@ select.form-control { background-image: url("data:image/svg+xml,%3Csvg xmlns='ht
 .scelte-arch { display: flex; flex-direction: column; gap: 6px; font-size: 0.9rem; }
 .scelte-arch label { display: flex; align-items: center; gap: 8px; }
 .op-insieme { font-size: 0.72rem; color: var(--text-light); }
-.op-dentro { margin-left: 18px; padding-left: 10px; border-left: 2px solid var(--velo); }
-.link-altre {
-  background: none; border: none; cursor: pointer; padding: 10px 2px;
-  font-family: var(--font-body); font-size: 0.82rem; color: var(--inchiostro-tenue); font-weight: 500;
-}
+/* I settori della visita: una testata che si apre, e chiusa dice cosa c'è di
+   spuntato dentro. Il conteggio è una pastiglia, la freccia dice da che parte va. */
+.settore-testa { display: flex; align-items: center; gap: 10px; padding: 12px 2px;
+  border-bottom: 1px solid var(--border); cursor: pointer; font-size: 0.95rem; font-weight: 600; color: var(--text); }
+.settore-testa.aperto { color: var(--inchiostro); }
+.settore-freccia { width: 14px; color: var(--text-light); font-size: 0.8rem; }
+.settore-conta { min-width: 22px; height: 22px; padding: 0 7px; border-radius: 11px; background: var(--inchiostro-tenue);
+  color: var(--white); font-size: 0.75rem; display: flex; align-items: center; justify-content: center; }
+.settore-spuntate { font-size: 0.78rem; color: var(--inchiostro-tenue); padding: 4px 2px 10px 24px; border-bottom: 1px solid var(--border); margin-top: -1px; }
+.settore-corpo { padding-left: 14px; border-left: 2px solid var(--velo); margin: 0 0 6px 6px; }
+.riga-settore input[aria-label="quanti"] { width: 64px; flex: none; text-align: right; }
+.riga-settore select { flex: none; width: 76px; }
 .op-libera {
   display: flex; align-items: center; gap: 10px;
   padding: 11px 2px; border-bottom: 1px solid var(--border);
@@ -1116,16 +1123,14 @@ select.form-control { background-image: url("data:image/svg+xml,%3Csvg xmlns='ht
 
       <div class="rapporto-sez">Operazioni</div>
       <div id="op-promemoria" class="dati-nota" style="display:none; margin-bottom:8px"></div>
+      <input type="search" class="form-control" id="f-op-cerca" placeholder="🔍 Cerca una lavorazione…"
+             autocomplete="off" oninput="cercaOperazioni(this.value)" style="margin-bottom:8px">
       <div id="operazioni-check"></div>
       <div id="operazioni-libere"></div>
       <input type="text" class="form-control" id="f-op-libera" style="margin-top:8px"
              placeholder="+ Altra operazione…"
              onkeydown="if(event.key==='Enter'){event.preventDefault();aggiungiOperazioneLibera();}"
              onblur="aggiungiOperazioneLibera()">
-      <div id="altre-wrap" style="display:none">
-        <button type="button" class="link-altre" id="btn-altre" onclick="toggleAltreOperazioni()">▾ Altre operazioni</button>
-        <div id="operazioni-altre" style="display:none"></div>
-      </div>
 
       <div class="rapporto-sez">Altro da conteggiare</div>
       <div id="conto-righe"></div>
@@ -1175,7 +1180,7 @@ const VERSIONE_DATI = 13;
 // piccola, ma è la stessa categoria di dato che il backup deve salvare.
 const IMPOSTAZIONI_DEFAULT = { UrlRapportini: '', NomeMittente: '', ChiaveLettura: '' };
 
-const COLLEZIONI = ['clienti', 'visite', 'operazioni', 'concimi', 'sementi', 'fitofarmaci', 'fasce', 'tipiOperazione', 'voci', 'coda', 'prenotazioni', 'rilievi'];
+const COLLEZIONI = ['clienti', 'visite', 'operazioni', 'concimi', 'sementi', 'fitofarmaci', 'fasce', 'tipiOperazione', 'voci', 'settori', 'coda', 'prenotazioni', 'rilievi'];
 
 // Fasce di partenza per chi apre l'app la prima volta: numeri da correggere
 // in Archivi, non verità rivelate. Chi arriva da Sheets o da un backup se li
@@ -1219,6 +1224,14 @@ const TIPI_DEFAULT = [
   { TipoID:'pacciamatura',            Nome:'Pacciamatura',             dettaglio:'quantita',    Unita:'q',     Prato:'',   Siepe:'',   VoceID:'pacciamatura',      Ordine:14 },
   { TipoID:'ala-gocciolante',         Nome:'Ala gocciolante',          dettaglio:'quantita',    Unita:'m',     Prato:'',   Siepe:'',   VoceID:'ala-gocciolante',   Ordine:15 },
   { TipoID:'telo-pacciamante',        Nome:'Telo pacciamante',         dettaglio:'quantita',    Unita:'m²',    Prato:'',   Siepe:'',   VoceID:'telo-pacciamante',  Ordine:16 },
+  // Arrivati coi settori: il lavoro di terra del prato e dell'aiuola, la bordura
+  // della siepe, la potatura che vuole la piattaforma. Livellamento e alberature
+  // sono manodopera — il noleggio della piattaforma va in «Altro da conteggiare».
+  { TipoID:'asporto-terriccio',       Nome:'Asporto terriccio',        dettaglio:'quantita',    Unita:'m³',    Prato:'',   Siepe:'',   VoceID:'asporto-terriccio', Ordine:17 },
+  { TipoID:'apporto-terra-vegetale',  Nome:'Apporto terra vegetale',   dettaglio:'quantita',    Unita:'m³',    Prato:'',   Siepe:'',   VoceID:'terra-vegetale',    Ordine:18 },
+  { TipoID:'livellamento',            Nome:'Livellamento terra',       dettaglio:'niente',      Unita:'',      Prato:'',   Siepe:'',   VoceID:'',                  Ordine:19 },
+  { TipoID:'bordura',                 Nome:'Bordura',                  dettaglio:'quantita',    Unita:'m',     Prato:'',   Siepe:'',   VoceID:'bordura',           Ordine:20, ChiedeCosa:'Sì' },
+  { TipoID:'potatura-alberature',     Nome:'Potatura alberature con piattaforma', dettaglio:'niente', Unita:'', Prato:'', Siepe:'',  VoceID:'',                  Ordine:21 },
   // Un insieme non è un'operazione: spuntarlo accende in un colpo quelle che un
   // lavoro di quel genere chiede sempre. Un'aiuola vuol dire piante,
   // pacciamatura, ala gocciolante e telo, e spuntarle una per una era lavoro
@@ -1238,14 +1251,19 @@ const TIPI_DEFAULT = [
 // non se lo deve ritrovare al giro dopo. È un'aggiunta, non una conversione:
 // niente di quello che c'è viene toccato, e VERSIONE_DATI resta com'è.
 const DEFAULT_ARRIVATI_DOPO = {
-  tipiOperazione: ['pacciamatura', 'ala-gocciolante', 'telo-pacciamante', 'aiuola', 'siepe-nuova'],
-  voci: ['pacciamatura', 'ala-gocciolante', 'telo-pacciamante'],
+  tipiOperazione: ['pacciamatura', 'ala-gocciolante', 'telo-pacciamante', 'aiuola', 'siepe-nuova',
+    'asporto-terriccio', 'apporto-terra-vegetale', 'livellamento', 'bordura', 'potatura-alberature'],
+  voci: ['pacciamatura', 'ala-gocciolante', 'telo-pacciamante', 'asporto-terriccio', 'terra-vegetale', 'bordura'],
+  settori: ['prato', 'aiuole', 'potature', 'siepe', 'irrigazione', 'piantumazione', 'trattamenti'],
 };
 
 function aggiungiDefaultArrivatiDopo(db) {
   const fatti = new Set(db.defaultAggiunti || []);
   let cambiato = false;
-  [['tipiOperazione', TIPI_DEFAULT, 'TipoID'], ['voci', VOCI_DEFAULT, 'VoceID']].forEach(([coll, def, id]) => {
+  [['tipiOperazione', TIPI_DEFAULT, 'TipoID'], ['voci', VOCI_DEFAULT, 'VoceID'],
+   ['settori', SETTORI_DEFAULT, 'SettoreID']].forEach(([coll, def, id]) => {
+    // Un archivio di prima può non avere la collezione: i settori sono arrivati dopo.
+    if (!Array.isArray(db[coll])) db[coll] = [];
     DEFAULT_ARRIVATI_DOPO[coll].forEach(chiave => {
       const segno = coll + ':' + chiave;
       if (fatti.has(segno)) return;
@@ -1278,6 +1296,31 @@ const VOCI_DEFAULT = [
   { VoceID:'pacciamatura',      Nome:'Pacciamatura',      Unita:'q',      Ordine:11 },
   { VoceID:'ala-gocciolante',   Nome:'Ala gocciolante',   Unita:'m',      Ordine:12 },
   { VoceID:'telo-pacciamante',  Nome:'Telo pacciamante',  Unita:'m²',     Ordine:13 },
+  { VoceID:'asporto-terriccio', Nome:'Asporto terriccio', Unita:'m³',     Ordine:14 },
+  { VoceID:'terra-vegetale',    Nome:'Terra vegetale',    Unita:'m³',     Ordine:15 },
+  { VoceID:'bordura',           Nome:'Bordura',           Unita:'m',      Ordine:16 },
+];
+
+// I settori della visita: le lavorazioni raccolte come si dicono a voce — «sul
+// prato ho fatto…», «nell'aiuola…». Con trenta tipi un elenco solo da scorrere
+// col pollice non reggeva più. Una lavorazione può stare in più settori (il
+// diserbo totale è del prato e delle aiuole) ed è **una sola**: spuntata in uno,
+// è spuntata anche nell'altro. Si cambiano da Archivi, come gli insiemi: le
+// lavorazioni le raggruppa chi lavora, non chi programma. `Libero` vuol dire
+// righe scritte a mano — cosa, quanti, unità — per i lavori dove le voci cambiano
+// ogni volta, come l'irrigazione.
+const SETTORI_DEFAULT = [
+  { SettoreID:'prato',         Nome:'Prato',         Ordine:1, Libero:'',
+    Tipi:'asporto-terriccio,apporto-terra-vegetale,livellamento,semina,arieggiatura,taglio-prato,concimazione,apporto-terriccio,diserbo-selettivo,diserbo-totale,posa-tappeto-erboso' },
+  { SettoreID:'aiuole',        Nome:'Aiuole',        Ordine:2, Libero:'',
+    Tipi:'diserbo-totale,asporto-terriccio,apporto-terra-vegetale,telo-pacciamante,ala-gocciolante,piantumazione,pacciamatura' },
+  { SettoreID:'potature',      Nome:'Potature',      Ordine:3, Libero:'',
+    Tipi:'potatura-arbusti,potatura-siepi,potatura-alberature,scarico-verde' },
+  { SettoreID:'siepe',         Nome:'Siepe',         Ordine:4, Libero:'',
+    Tipi:'piantumazione,ala-gocciolante,bordura,telo-pacciamante,pacciamatura' },
+  { SettoreID:'irrigazione',   Nome:'Irrigazione',   Ordine:5, Libero:'Sì', Tipi:'' },
+  { SettoreID:'piantumazione', Nome:'Piantumazione', Ordine:6, Libero:'',   Tipi:'piantumazione' },
+  { SettoreID:'trattamenti',   Nome:'Trattamenti',   Ordine:7, Libero:'',   Tipi:'trattamento-fitosanitario' },
 ];
 
 // Quale voce di conto nasce da quale lavoro. Potature, taglio prato e
@@ -1382,6 +1425,7 @@ function datiIniziali() {
   db.fasce = FASCE_DEFAULT.map(f => ({ ...f }));
   db.tipiOperazione = TIPI_DEFAULT.map(t => ({ ...t }));
   db.voci = VOCI_DEFAULT.map(v => ({ ...v }));
+  db.settori = SETTORI_DEFAULT.map(s => ({ ...s }));
   aggiungiDefaultArrivatiDopo(db);   // già dentro: qui segna solo che ci sono
   return db;
 }
@@ -2063,10 +2107,9 @@ function useGPS() {
 // lo schermo nello stesso ordine del foglio evita di tradurre da una forma
 // all'altra proprio alla fine di una giornata in cui si è stanchi.
 let pendingFromVisita = false;
-let altreOperazioniAperte = false;
+let settoreAperto = '';      // il settore aperto della visita, uno alla volta
+let ricercaOperazioni = '';  // quello che è scritto nella casella di ricerca
 let oreEreditate = '';   // ore di una visita registrata prima delle fasce orarie
-
-const TIPI_IN_CIMA = 6;
 
 // ── ORE LAVORATE ──
 function minutiDa(hhmm) {
@@ -2213,21 +2256,6 @@ function tipiOrdinati(clienteID) {
     if (!o.TipoID) return;
     usi.set(o.TipoID, (usi.get(o.TipoID) || 0) + (visiteCliente.has(o.VisitaID) ? 10 : 1));
   });
-  // Un insieme non lascia operazioni sue: conta le visite in cui c'erano tutte le
-  // sue, con lo stesso peso per quelle di questo cliente.
-  DB.tipiOperazione.filter(eInsieme).forEach(ins => {
-    const dentro = componentiDi(ins).map(t => t.TipoID);
-    if (!dentro.length) return;
-    const perVisita = new Map();
-    DB.operazioni.forEach(o => {
-      if (!dentro.includes(o.TipoID)) return;
-      if (!perVisita.has(o.VisitaID)) perVisita.set(o.VisitaID, new Set());
-      perVisita.get(o.VisitaID).add(o.TipoID);
-    });
-    let n = 0;
-    perVisita.forEach((tipi, vid) => { if (tipi.size === dentro.length) n += visiteCliente.has(vid) ? 10 : 1; });
-    usi.set(ins.TipoID, n);
-  });
   return [...DB.tipiOperazione].sort((a, b) =>
     (usi.get(b.TipoID) || 0) - (usi.get(a.TipoID) || 0) ||
     (Number(a.Ordine) || 99) - (Number(b.Ordine) || 99));
@@ -2245,42 +2273,8 @@ function componentiDi(insieme) {
   return String(insieme.Insieme || '').split(',').map(x => x.trim()).filter(Boolean)
     .map(tipoDi).filter(t => t && !eInsieme(t));
 }
-// Gli insiemi spuntati in questa visita: le loro operazioni stanno raccolte sotto
-// di loro invece che sparse nell'elenco, dove andrebbero cercate una per una.
-let insiemiAperti = new Set();
-
-function rigaInsieme(tipo) {
-  const dentro = componentiDi(tipo);
-  const accese = dentro.filter(t => opDelTipo(t.TipoID).length).length;
-  const tutte = dentro.length && accese === dentro.length;
-  const aperto = insiemiAperti.has(tipo.TipoID);
-  const riga = `<div class="op-riga ${tutte ? 'on' : ''}" onclick="spuntaInsieme('${perOnclick(tipo.TipoID)}')">
-      <span class="op-box">${tutte ? '✓' : accese ? '–' : ''}</span>
-      <span style="flex:1">${perValore(tipo.Nome)}</span>
-      <span class="op-insieme">${dentro.length} operazioni</span>
-    </div>`;
-  return riga + (aperto ? `<div class="op-dentro">${dentro.map(rigaOperazione).join('')}</div>` : '');
-}
-
-function spuntaInsieme(tipoID) {
-  const tipo = tipoDi(tipoID);
-  if (!tipo) return;
-  const dentro = componentiDi(tipo);
-  const tutte = dentro.length && dentro.every(t => opDelTipo(t.TipoID).length);
-  if (tutte) {
-    const via = new Set(dentro.map(t => t.TipoID));
-    pendingOperazioni = pendingOperazioni.filter(o => !via.has(o.TipoID));
-    insiemiAperti.delete(tipoID);
-  } else {
-    dentro.forEach(t => { if (!opDelTipo(t.TipoID).length) pendingOperazioni.push(nuovaOperazione(t)); });
-    insiemiAperti.add(tipoID);
-  }
-  renderOperazioni();
-  aggiornaConto();
-}
-
-function rigaOperazione(tipo) {
-  if (eInsieme(tipo)) return rigaInsieme(tipo);
+// `nota` dice dove sta la lavorazione quando la si trova con la ricerca.
+function rigaOperazione(tipo, nota) {
   const ops = opDelTipo(tipo.TipoID);
   const altra = ePiantumazione(tipo) && ops.length
     ? `<div class="op-dett"><button type="button" class="btn btn-secondary btn-sm" onclick="aggiungiPianta()">+ Un'altra pianta</button></div>`
@@ -2288,6 +2282,7 @@ function rigaOperazione(tipo) {
   const riga = `<div class="op-riga ${ops.length ? 'on' : ''}" onclick="spuntaOperazione('${perOnclick(tipo.TipoID)}')">
       <span class="op-box">${ops.length ? '✓' : ''}</span>
       <span style="flex:1">${perValore(tipo.Nome)}</span>
+      ${nota ? `<span class="op-insieme">${perValore(nota)}</span>` : ''}
     </div>`;
   return riga + ops.map(o => dettaglioOperazione(tipo, o)).join('') + altra;
 }
@@ -2330,29 +2325,129 @@ function dettaglioOperazione(tipo, op) {
   return campi.length ? `<div class="op-dett">${campi.join('')}</div>` : '';
 }
 
+// ── I SETTORI DELLA VISITA ──
+// Le lavorazioni raccolte per settore, come si dicono: «sul prato…», «nelle
+// aiuole…». Un settore aperto alla volta: con due aperti la stessa lavorazione —
+// il diserbo totale sta nel prato e nelle aiuole — avrebbe due caselle per la
+// stessa quantità, e scrivendo in una l'altra resterebbe indietro. Chiusi, i
+// settori dicono quante e quali lavorazioni sono spuntate lì dentro: nascondere
+// una cosa segnata è il modo migliore per fartela dimenticare.
+function tipiDelSettore(s) {
+  const ids = String((s && s.Tipi) || '').split(',').map(x => x.trim()).filter(Boolean);
+  return ids.map(tipoDi).filter(t => t && !eInsieme(t));
+}
+
+// I settori nell'ordine di Archivi, e in fondo «Altre» con i tipi che non stanno
+// in nessun settore: un tipo creato ieri e non ancora messo in un settore deve
+// trovarsi lo stesso, non sparire.
+function settoriVisita() {
+  const settori = [...(DB.settori || [])]
+    .sort((a, b) => (Number(a.Ordine) || 99) - (Number(b.Ordine) || 99));
+  const dentro = new Set(settori.flatMap(s => tipiDelSettore(s).map(t => t.TipoID)));
+  const fuori = DB.tipiOperazione.filter(t => !eInsieme(t) && !dentro.has(t.TipoID));
+  if (fuori.length) settori.push({ SettoreID: '_altre', Nome: 'Altre', Tipi: fuori.map(t => t.TipoID).join(','), Libero: '' });
+  return settori;
+}
+
+function righeLibereDelSettore(settoreID) {
+  return pendingOperazioni.filter(o => !o.TipoID && o.Settore === settoreID);
+}
+
+// Per la ricerca: «diser», «diserbò» e «DISERBO» sono la stessa parola.
+const perCercare = t => String(t || '').normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase().trim();
+
+function apriSettore(id) {
+  settoreAperto = settoreAperto === id ? '' : id;
+  renderOperazioni();
+}
+
+// Si ridisegna l'elenco, non la casella di ricerca: la casella sta fuori, e
+// resta sotto le dita mentre si scrive.
+function cercaOperazioni(testo) {
+  ricercaOperazioni = testo;
+  renderOperazioni();
+}
+
+function bloccoSettore(s, ordine) {
+  const ids = new Set(tipiDelSettore(s).map(t => t.TipoID));
+  // Dentro il settore l'ordine è quello di sempre: prima quello che fai da quel cliente.
+  const tipi = ordine.filter(t => ids.has(t.TipoID));
+  const spuntati = tipi.filter(t => opDelTipo(t.TipoID).length);
+  const libere = isSi(s.Libero) ? righeLibereDelSettore(s.SettoreID) : [];
+  const nomi = spuntati.map(t => t.Nome).concat(libere.map(o => o.Tipo_operazione).filter(Boolean));
+  const quante = spuntati.length + libere.length;
+  const aperto = settoreAperto === s.SettoreID;
+  const testa = `<div class="settore-testa${aperto ? ' aperto' : ''}" onclick="apriSettore('${perOnclick(s.SettoreID)}')">
+      <span class="settore-freccia">${aperto ? '▾' : '▸'}</span>
+      <span style="flex:1">${perValore(s.Nome)}</span>
+      ${quante ? `<span class="settore-conta">${quante}</span>` : ''}
+    </div>`;
+  if (!aperto) {
+    return testa + (nomi.length ? `<div class="settore-spuntate">✓ ${perValore(nomi.join(', '))}</div>` : '');
+  }
+  return testa + `<div class="settore-corpo">
+      ${tipi.map(t => rigaOperazione(t)).join('')}
+      ${isSi(s.Libero) ? righeLibereSettore(s) : ''}
+      ${!tipi.length && !isSi(s.Libero) ? '<div class="dati-nota">Vuoto: le lavorazioni si aggiungono da Archivi › Settori.</div>' : ''}
+    </div>`;
+}
+
+// Le righe a mano dei settori dove le voci cambiano ogni volta — l'irrigazione:
+// un'elettrovalvola, sei irrigatori, quaranta metri di tubo. Cosa, quanti, unità,
+// e partono nel conto come voci da prezzare in ufficio.
+function righeLibereSettore(s) {
+  const righe = righeLibereDelSettore(s.SettoreID).map(o => {
+    const i = pendingOperazioni.indexOf(o);
+    return `<div class="op-dett riga-settore">
+      <input type="text" placeholder="Cosa" value="${perValore(o.Tipo_operazione)}" oninput="modificaOperazione(${i}, 'Tipo_operazione', this.value)" aria-label="cosa">
+      <input type="text" inputmode="decimal" placeholder="0" value="${perValore(o.Quantita)}" oninput="modificaOperazione(${i}, 'Quantita', this.value)" aria-label="quanti">
+      <select onchange="modificaOperazione(${i}, 'Unita', this.value)" aria-label="unità">
+        ${UNITA_RILIEVO.map(u => `<option value="${perValore(u)}"${u === o.Unita ? ' selected' : ''}>${perValore(u)}</option>`).join('')}
+      </select>
+      <button type="button" class="via" onclick="togliOperazione(${i})" title="Togli">✕</button>
+    </div>`;
+  }).join('');
+  return righe + `<div class="op-dett"><button type="button" class="btn btn-secondary btn-sm" onclick="aggiungiRigaSettore('${perOnclick(s.SettoreID)}')">+ Una riga</button></div>`;
+}
+
+function aggiungiRigaSettore(settoreID) {
+  pendingOperazioni.push({ OperazioneID: generateID(), TipoID: '', Settore: settoreID, Tipo_operazione: '', Descrizione: '',
+    Flag_prato: '', Flag_siepe: '', ConcimeID: '', SementeID: '', FitofarmacaID: '',
+    Quantita: '', Unita: 'n' });
+  renderOperazioni();
+  const campi = document.querySelectorAll('#operazioni-check .riga-settore input[aria-label="cosa"]');
+  if (campi.length) campi[campi.length - 1].focus();
+  aggiornaConto();
+}
+
 function renderOperazioni() {
-  const cima = document.getElementById('operazioni-check');
-  if (!cima) return;
-  // Quello che sta dentro un insieme aperto si vede lì sotto, non due volte.
-  const raccolti = new Set([...insiemiAperti].flatMap(id => { const t = tipoDi(id); return t ? componentiDi(t).map(c => c.TipoID) : []; }));
-  const ordinati = tipiOrdinati(document.getElementById('f-visita-cliente').value).filter(t => !raccolti.has(t.TipoID));
-  // Quello che hai già spuntato resta sempre in vista, anche se è un lavoro che
-  // fai una volta l'anno: nascondere una cosa segnata è il modo migliore per
-  // fartela dimenticare.
-  const inCima = ordinati.filter((t, i) => i < TIPI_IN_CIMA || opDelTipo(t.TipoID).length || insiemiAperti.has(t.TipoID));
-  const sotto = ordinati.filter(t => !inCima.includes(t));
-  cima.innerHTML = inCima.map(rigaOperazione).join('');
-  document.getElementById('operazioni-altre').innerHTML = sotto.map(rigaOperazione).join('');
-  document.getElementById('altre-wrap').style.display = sotto.length ? 'block' : 'none';
-  document.getElementById('operazioni-altre').style.display = altreOperazioniAperte ? 'block' : 'none';
-  const btn = document.getElementById('btn-altre');
-  if (btn) btn.textContent = `${altreOperazioniAperte ? '▴' : '▾'} Altre operazioni (${sotto.length})`;
+  const el = document.getElementById('operazioni-check');
+  if (!el) return;
+  // Nella visita non ci sono insiemi: li hanno sostituiti i settori, che si aprono
+  // invece di spuntare tutto in un colpo. Restano per i rilievi.
+  const ordine = tipiOrdinati(document.getElementById('f-visita-cliente').value).filter(t => !eInsieme(t));
+  const q = perCercare(ricercaOperazioni);
+  if (q) {
+    // La ricerca guarda in tutti i settori insieme, e accanto dice dove sta: è la
+    // strada più corta quando sai già cosa cerchi.
+    const settori = settoriVisita();
+    const trovati = ordine.filter(t => perCercare(t.Nome).includes(q));
+    el.innerHTML = trovati.length
+      ? trovati.map(t => rigaOperazione(t, settori.filter(s => tipiDelSettore(s).some(x => x.TipoID === t.TipoID))
+          .map(s => s.Nome).join(', '))).join('')
+      : `<div class="dati-nota">Nessuna lavorazione con «${perValore(ricercaOperazioni.trim())}». Se capita una volta sola, scrivila qui sotto.</div>`;
+  } else {
+    el.innerHTML = settoriVisita().map(s => bloccoSettore(s, ordine)).join('');
+  }
   renderOperazioniLibere();
 }
 
-function toggleAltreOperazioni() {
-  altreOperazioniAperte = !altreOperazioniAperte;
-  renderOperazioni();
+// Aprendo una visita già fatta si apre il settore della prima cosa spuntata: è
+// lì che probabilmente si torna a correggere.
+function settoreDaAprire() {
+  const s = settoriVisita().find(x => tipiDelSettore(x).some(t => opDelTipo(t.TipoID).length) ||
+    (isSi(x.Libero) && righeLibereDelSettore(x.SettoreID).length));
+  return s ? s.SettoreID : '';
 }
 
 function nuovaOperazione(tipo) {
@@ -2404,7 +2499,7 @@ function modificaOperazione(i, campo, valore) {
 function renderOperazioniLibere() {
   const el = document.getElementById('operazioni-libere');
   if (!el) return;
-  el.innerHTML = pendingOperazioni.filter(o => !o.TipoID).map(o => {
+  el.innerHTML = pendingOperazioni.filter(o => !o.TipoID && !o.Settore).map(o => {
     const i = pendingOperazioni.indexOf(o);
     return `<div class="op-libera">
       <span class="op-box" style="background:var(--inchiostro-tenue);border-color:var(--inchiostro-tenue)">✓</span>
@@ -2456,14 +2551,14 @@ function mostraPromemoria(clienteID) {
 // ── APERTURA E SALVATAGGIO ──
 function openNuovaVisita() {
   pendingOperazioni = [];
-  insiemiAperti = new Set();
   pendingFasce = [fasciaProposta('')];
   editVisitaID = null;
-  altreOperazioniAperte = false;
+  settoreAperto = '';
+  ricercaOperazioni = '';
   oreEreditate = '';
   document.getElementById('drawer-visita-titolo').textContent = 'Nuova Visita';
   bloccaSalvataggio(false);
-  ['f-visita-note', 'f-op-libera', 'f-conto-libera']
+  ['f-visita-note', 'f-op-libera', 'f-conto-libera', 'f-op-cerca']
     .forEach(id => { document.getElementById(id).value = ''; });
   document.getElementById('f-visita-data').value = new Date().toISOString().split('T')[0];
   clearVisitaCliente();
@@ -2479,9 +2574,10 @@ function openModificaVisita(vid) {
   const v = DB.visite.find(x => x.VisitaID == vid);
   if (!v) { showToast('⚠️ Visita non trovata'); return; }
   editVisitaID = v.VisitaID;
-  altreOperazioniAperte = false;
   pendingOperazioni = DB.operazioni.filter(o => o.VisitaID == vid).map(o => ({ ...o }));
-  insiemiAperti = new Set();
+  ricercaOperazioni = '';
+  document.getElementById('f-op-cerca').value = '';
+  settoreAperto = settoreDaAprire();
   pendingFasce = (v.Fasce || []).map(f => ({ ...f, proposta: false }));
   oreEreditate = pendingFasce.length ? '' : (v.Ore_Visita || '');
   document.getElementById('f-visita-data').value = v.Data ? new Date(v.Data).toISOString().split('T')[0] : '';
@@ -2581,6 +2677,20 @@ async function saveVisita({ invia = false } = {}) {
   const sbagliata = pendingFasce.findIndex(f => oreFascia(f) === 0);
   if (sbagliata >= 0) { showToast('⚠️ La fascia ' + (sbagliata + 1) + ' non ha un orario valido'); return; }
   aggiungiOperazioneLibera();   // quello che è rimasto scritto nella casella non si perde
+  // Le righe a mano dei settori (l'irrigazione): una vuota si lascia cadere, è un
+  // «+ Una riga» toccato per sbaglio; una con la quantità e senza «cosa» no —
+  // in ufficio arriverebbe «3 n» di niente.
+  pendingOperazioni = pendingOperazioni.filter(o => !(o.Settore && !o.TipoID &&
+    !String(o.Tipo_operazione || '').trim() && !String(o.Quantita || '').trim()));
+  if (pendingOperazioni.some(o => o.Settore && !o.TipoID && !String(o.Tipo_operazione || '').trim())) {
+    showToast('⚠️ Scrivi cosa hai messo nelle righe a mano, o toglile');
+    return;
+  }
+  // Quella casella accetta la virgola, il rapportino legge il punto: «2,5» deve
+  // arrivare in ufficio come due e mezzo, non come un numero che non c'è.
+  pendingOperazioni.forEach(o => {
+    if (o.Settore && !o.TipoID) o.Quantita = String(o.Quantita || '').replace(',', '.').trim();
+  });
 
   const visitaID = editVisitaID || generateID();
   const fasce = pendingFasce.map(({ Inizio, Fine, Persone, Cosa }) =>
@@ -2704,6 +2814,16 @@ function righeAutomatiche(fasce, operazioni) {
       riga.Prezzo = parseFloat(o.Prezzo);
     }
     righe.push(riga);
+  });
+
+  // Le righe a mano di un settore (l'irrigazione) sono materiale: partono come
+  // voci col loro nome e la loro quantità, senza prezzo — lo mette l'ufficio,
+  // come per tutto il resto.
+  (operazioni || []).filter(o => !o.TipoID && o.Settore).forEach(o => {
+    const quantita = parseFloat(String(o.Quantita || '').replace(',', '.'));
+    if (!quantita || !String(o.Tipo_operazione || '').trim()) return;
+    righe.push({ Chiave: o.OperazioneID, VoceID: '', Voce: String(o.Tipo_operazione).trim(),
+      Unita: o.Unita || '', Quantita: quantita });
   });
   return righe;
 }
@@ -3741,6 +3861,23 @@ const ARCHIVI = {
       return `${t.Nome}${t.Unita ? ' · ' + t.Unita : ''}${isSi(t.Prato) ? ' · prato' : ''}${isSi(t.Siepe) ? ' · siepe' : ''}${voce ? ' → ' + voce.Nome : ''}`;
     },
     usato: t => DB.operazioni.filter(o => o.TipoID === t.TipoID).length,
+  },
+  settori: {
+    titolo: 'Settori della visita', singolare: 'settore', articolo: 'Nuovo', icona: '🗂', id: 'SettoreID',
+    campi: [
+      { k:'Nome', label:'Nome', obbligatorio:true },
+      { k:'Tipi', label:'Le lavorazioni che ci stanno dentro', tipo:'scelte', opzioni: () =>
+        DB.tipiOperazione.filter(t => !eInsieme(t)).map(t => ({ v: t.TipoID, label: t.Nome })) },
+      { k:'Libero', label:'Anche righe scritte a mano: cosa, quanti, unità', tipo:'flag' },
+      { k:'Ordine', label:'Posizione in elenco', tipo:'number' },
+    ],
+    riga: s => {
+      const n = tipiDelSettore(s).length;
+      return `${s.Nome} · ${n} ${n === 1 ? 'lavorazione' : 'lavorazioni'}${isSi(s.Libero) ? ' · righe a mano' : ''}`;
+    },
+    // Un settore è un modo di guardare i tipi, non un dato delle visite:
+    // toglierlo non lascia niente senza riferimento.
+    usato: () => 0,
   },
   voci: {
     titolo: 'Voci di conto', singolare: 'voce di conto', articolo: 'Nuova', icona: '🧾', id: 'VoceID',

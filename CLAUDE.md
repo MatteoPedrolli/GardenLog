@@ -126,15 +126,37 @@ per quanto si usano da quel cliente. Spuntando si apre solo il dettaglio che
 quel tipo richiede (`dettaglio`: niente, concime, semente, fitofarmaco,
 quantita) e i flag prato/siepe li mette il tipo, non l'utente.
 
-**Un insieme accende più operazioni in un colpo.** Un'aiuola chiede sempre
-piante, pacciamatura (q), ala gocciolante (m) e telo pacciamante (m²): spuntarle
-una per una era lavoro ripetuto a ogni aiuola. Un tipo con `dettaglio: 'insieme'`
-non fa un'operazione sua: il suo campo `Insieme` elenca i `TipoID` che accende, e
-le loro operazioni stanno **raccolte sotto di lui** (`insiemiAperti`) invece che
-sparse nell'elenco. Ognuna resta un'operazione normale, con la sua riga nel conto;
-se al cliente deve arrivare una voce sola, in ufficio si uniscono col gruppo a
-corpo. Gli insiemi si creano da **Archivi**, senza toccare il codice — «Aiuola» è
-già pronta — e un insieme non ne contiene altri.
+**Le lavorazioni stanno per settore.** Con trenta tipi un elenco solo da scorrere
+col pollice non reggeva, e a voce si dice «sul prato ho fatto…». I settori — Prato,
+Aiuole, Potature, Siepe, Irrigazione, Piantumazione, Trattamenti — sono un archivio
+(`DB.settori`, Archivi › Settori della visita): ognuno elenca i `TipoID` che
+contiene, e le lavorazioni le raggruppa chi lavora, non chi programma. Sono
+arrivati con `DEFAULT_ARRIVATI_DOPO`, come i tipi nuovi che si portavano dietro
+(asporto terriccio, terra vegetale, livellamento, bordura, potatura alberature):
+nessuna versione alzata.
+
+**Un settore aperto alla volta**, e chiusi dicono quante e quali lavorazioni ci
+sono spuntate dentro: nascondere una cosa segnata è il modo migliore per fartela
+dimenticare. Uno alla volta perché **una lavorazione in due settori è una sola** —
+il diserbo totale sta nel prato e nelle aiuole: spuntato in uno, è spuntato
+nell'altro — e con due settori aperti avrebbe due caselle per la stessa quantità.
+Sopra c'è una **ricerca** che guarda in tutti i settori senza badare ad accenti e
+maiuscole, e accanto a ogni lavorazione trovata dice dove sta. Un tipo che non sta
+in nessun settore finisce in **«Altre»**, in fondo: un tipo creato ieri si deve
+trovare lo stesso. Aprendo una visita già fatta si apre il settore della prima
+cosa spuntata.
+
+**Un settore `Libero` ha righe scritte a mano** — cosa, quanti, unità — per i lavori
+dove le voci cambiano ogni volta: l'irrigazione (un'elettrovalvola, sei
+irrigatori, quaranta metri di tubo). Sono operazioni senza tipo con `Settore`, e
+partono nel conto come voci col loro nome e la loro quantità, senza prezzo. Una
+riga vuota al salvataggio si lascia cadere; una con la quantità e senza «cosa» ferma
+il salvataggio.
+
+**Nella visita gli insiemi non ci sono più**: li hanno sostituiti i settori, che si
+aprono invece di spuntare tutto in un colpo. Restano in Archivi per i **rilievi**,
+dove «Siepe nuova» o «Aiuola» sono una lavorazione che si misura una volta. Un
+insieme non ne contiene altri.
 
 I campi che l'utente compila usano `oninput`, non `onchange`: con `onchange` il
 modello resta indietro fino al blur. E non si ridisegna l'elenco mentre si

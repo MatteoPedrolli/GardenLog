@@ -102,6 +102,18 @@ try {
   ok('il totale ore lo calcola l\'app',
     (await page.textContent('#ore-totale-val')).includes('8,00'));
 
+  // Le lavorazioni stanno per settore, come si dicono a voce, e i settori partono
+  // chiusi: con trenta tipi un elenco solo da scorrere col pollice non reggeva.
+  const testate = await page.$$eval('#operazioni-check .settore-testa span:nth-child(2)', els => els.map(e => e.textContent.trim()));
+  ok('le lavorazioni stanno nei settori, chiusi',
+    ['Prato', 'Aiuole', 'Potature', 'Siepe', 'Irrigazione', 'Piantumazione', 'Trattamenti'].every((n, i) => testate[i] === n) &&
+    await page.locator('#operazioni-check .op-riga').count() === 0, testate.join(' | '));
+  await page.click('#operazioni-check .settore-testa:has-text("Prato")');
+  await page.waitForTimeout(150);
+  const nelPrato = await page.textContent('#operazioni-check .settore-corpo');
+  ok('aprendo il prato si vedono le sue lavorazioni, anche quelle nuove',
+    ['Concimazione', 'Asporto terriccio', 'Apporto terra vegetale', 'Livellamento terra', 'Posa tappeto erboso', 'Diserbo totale']
+      .every(n => nelPrato.includes(n)) && !nelPrato.includes('Potatura'), nelPrato.slice(0, 200));
   await page.click('#operazioni-check .op-riga:has-text("Concimazione")');
   await page.waitForTimeout(150);
   ok('spuntare segna il prato senza chiederlo',
@@ -1152,6 +1164,7 @@ try {
   // vaso: è l'unico prezzo che si scrive sul telefono.
   const piante = await page.evaluate(() => {
     openNuovaVisita();
+    apriSettore('piantumazione');
     spuntaOperazione('piantumazione');
     const scrivi = (n, campo, v) => {
       const ops = pendingOperazioni.filter(o => o.TipoID === 'piantumazione');
@@ -1219,17 +1232,6 @@ try {
     aggiungiDefaultArrivatiDopo(prova);
     r.cancellatoResta = !prova.tipiOperazione.some(t => t.TipoID === 'aiuola');
 
-    openNuovaVisita();
-    spuntaInsieme('aiuola');
-    r.accese = ['piantumazione', 'pacciamatura', 'ala-gocciolante', 'telo-pacciamante'].every(id => opDelTipo(id).length === 1);
-    r.raccolte = document.querySelectorAll('#operazioni-check .op-dentro > .op-riga').length;
-    r.unaVolta = [...document.querySelectorAll('.op-riga')].filter(e => e.textContent.includes('Pacciamatura')).length;
-    const pac = pendingOperazioni.find(o => o.TipoID === 'pacciamatura');
-    modificaOperazione(pendingOperazioni.indexOf(pac), 'Quantita', '3');
-    const riga = contoCorrente.find(x => x.VoceID === 'pacciamatura');
-    r.conto = riga ? riga.Quantita + ' ' + riga.Unita : '';
-    spuntaInsieme('aiuola');
-    r.spente = pendingOperazioni.length === 0;
     closeDrawer('overlay-visita');
     return r;
   });
@@ -1238,11 +1240,98 @@ try {
   ok('su un telefono che ha già il suo archivio si aggiungono da soli, senza doppioni',
     aiuola.aggiunti && aiuola.nonDoppi, JSON.stringify(aiuola));
   ok('ma uno cancellato apposta non ritorna', aiuola.cancellatoResta);
-  ok('spuntare «Aiuola» accende le sue quattro operazioni', aiuola.accese, JSON.stringify(aiuola));
-  ok('raccolte sotto di lei', aiuola.raccolte === 4, String(aiuola.raccolte));
-  ok('e non ripetute nell\'elenco', aiuola.unaVolta === 1, String(aiuola.unaVolta));
-  ok('ognuna fa la sua riga nel conto', aiuola.conto === '3 q', aiuola.conto);
-  ok('e togliendo la spunta si spengono tutte', aiuola.spente);
+
+  // ── I SETTORI DELLA VISITA ──
+  // Le lavorazioni per settore, un settore aperto alla volta, e una casella di
+  // ricerca. Nella visita gli insiemi non ci sono più: li hanno sostituiti i settori.
+  const settori = await page.evaluate(() => {
+    const r = {};
+    // Un archivio di prima, senza settori: arrivano da soli, una volta sola.
+    const vecchio = { tipiOperazione: DB.tipiOperazione.map(t => ({ ...t })), voci: DB.voci.map(v => ({ ...v })),
+      defaultAggiunti: (DB.defaultAggiunti || []).filter(x => !x.startsWith('settori:')) };
+    aggiungiDefaultArrivatiDopo(vecchio);
+    r.arrivati = (vecchio.settori || []).map(s => s.SettoreID).join(',');
+    r.tipiNuovi = ['asporto-terriccio', 'apporto-terra-vegetale', 'livellamento', 'bordura', 'potatura-alberature']
+      .map(id => tipoDi(id) ? (tipoDi(id).Unita || 'ore') : 'manca').join(',');
+    r.bordura = isSi(tipoDi('bordura').ChiedeCosa);
+
+    openNuovaVisita();
+    r.insiemi = [...document.querySelectorAll('#operazioni-check .settore-testa, #operazioni-check .op-riga')]
+      .some(e => e.textContent.includes('Aiuola') && !e.textContent.includes('Aiuole'));
+    apriSettore('aiuole');
+    r.unSoloAperto = document.querySelectorAll('#operazioni-check .settore-corpo').length === 1;
+    spuntaOperazione('pacciamatura');
+    const pac = pendingOperazioni.find(o => o.TipoID === 'pacciamatura');
+    modificaOperazione(pendingOperazioni.indexOf(pac), 'Quantita', '3');
+    const riga = contoCorrente.find(x => x.VoceID === 'pacciamatura');
+    r.conto = riga ? riga.Quantita + ' ' + riga.Unita : '';
+    // Il diserbo totale sta nel prato e nelle aiuole, ed è una lavorazione sola.
+    spuntaOperazione('diserbo-totale');
+    apriSettore('prato');
+    r.nelPrato = [...document.querySelectorAll('#operazioni-check .settore-corpo .op-riga.on')].map(e => e.textContent.trim()).join('|');
+    r.unaSola = opDelTipo('diserbo-totale').length === 1;
+    // Chiuso, un settore dice quante e quali lavorazioni ci sono spuntate.
+    const testaAiuole = [...document.querySelectorAll('#operazioni-check .settore-testa')].find(e => e.textContent.includes('Aiuole'));
+    r.contaAiuole = testaAiuole.querySelector('.settore-conta')?.textContent;
+    r.spuntateAiuole = testaAiuole.nextElementSibling?.textContent || '';
+    // La ricerca guarda in tutti i settori e dice dove sta ogni lavorazione.
+    cercaOperazioni('diserbo');
+    r.trovati = [...document.querySelectorAll('#operazioni-check .op-riga')].map(e => e.textContent.replace(/\s+/g, ' ').trim());
+    cercaOperazioni('DISERBÒ sel');
+    r.senzaAccenti = document.querySelectorAll('#operazioni-check .op-riga').length === 1;
+    cercaOperazioni('zzz');
+    r.nessuno = document.getElementById('operazioni-check').textContent.includes('Nessuna lavorazione');
+    cercaOperazioni('');
+    // L'irrigazione cambia ogni volta: righe a mano, che partono nel conto.
+    apriSettore('irrigazione');
+    aggiungiRigaSettore('irrigazione');
+    const irr = pendingOperazioni.find(o => o.Settore === 'irrigazione');
+    const i = pendingOperazioni.indexOf(irr);
+    modificaOperazione(i, 'Tipo_operazione', 'Elettrovalvola');
+    modificaOperazione(i, 'Quantita', '2');
+    r.irrigazione = contoCorrente.filter(x => x.Voce === 'Elettrovalvola').map(x => x.Quantita + ' ' + x.Unita).join();
+    r.nonFraLeLibere = !document.getElementById('operazioni-libere').textContent.includes('Elettrovalvola');
+    // Un tipo che non sta in nessun settore si trova lo stesso, in «Altre».
+    DB.tipiOperazione.push({ TipoID: 'prova-fuori', Nome: 'Rimozione ceppo', dettaglio: 'niente', Unita: '' });
+    r.altre = settoriVisita().some(s => s.SettoreID === '_altre' && s.Tipi.includes('prova-fuori'));
+    DB.tipiOperazione = DB.tipiOperazione.filter(t => t.TipoID !== 'prova-fuori');
+    closeDrawer('overlay-visita');
+    return r;
+  });
+  ok('su un telefono che aveva già il suo archivio i settori arrivano da soli',
+    settori.arrivati === 'prato,aiuole,potature,siepe,irrigazione,piantumazione,trattamenti', settori.arrivati);
+  ok('con le lavorazioni nuove e le loro unità',
+    settori.tipiNuovi === 'm³,m³,ore,m,ore' && settori.bordura, settori.tipiNuovi);
+  ok('nella visita gli insiemi non ci sono più', !settori.insiemi);
+  ok('un settore aperto alla volta', settori.unSoloAperto);
+  ok('dentro un settore si spunta come prima, e il conto segue', settori.conto === '3 q', settori.conto);
+  ok('una lavorazione in due settori è una sola, spuntata in tutti e due',
+    settori.unaSola && settori.nelPrato.includes('Diserbo totale'), settori.nelPrato);
+  ok('chiuso, il settore dice quante e quali lavorazioni ci sono spuntate',
+    settori.contaAiuole === '2' && settori.spuntateAiuole.includes('Pacciamatura') && settori.spuntateAiuole.includes('Diserbo totale'),
+    settori.contaAiuole + ' · ' + settori.spuntateAiuole);
+  ok('la ricerca guarda in tutti i settori e dice dove sta',
+    settori.trovati.length === 2 && settori.trovati.some(t => t.includes('Diserbo totale') && t.includes('Prato, Aiuole')),
+    settori.trovati.join(' | '));
+  ok('senza badare a maiuscole e accenti, e dice quando non trova niente',
+    settori.senzaAccenti && settori.nessuno);
+  ok('l\'irrigazione si scrive a mano, e parte nel conto', settori.irrigazione === '2 n' && settori.nonFraLeLibere,
+    settori.irrigazione);
+  ok('un tipo fuori dai settori si trova in «Altre»', settori.altre);
+  // I settori si cambiano da Archivi: le lavorazioni le raggruppa chi lavora.
+  ok('i settori si cambiano da Archivi',
+    await page.evaluate(async () => {
+      openVoceArchivio('settori', 'potature');
+      const box = document.querySelector('#f-arch-Tipi input[value="livellamento"]');
+      if (!box) return false;
+      box.checked = true;
+      await salvaVoceArchivio();
+      const ok = tipiDelSettore(DB.settori.find(s => s.SettoreID === 'potature')).some(t => t.TipoID === 'livellamento');
+      const s = DB.settori.find(x => x.SettoreID === 'potature');
+      s.Tipi = s.Tipi.split(',').filter(x => x !== 'livellamento').join(',');
+      await salvaDB();
+      return ok;
+    }));
 
   // Gli insiemi si creano da Archivi: domani «Siepe di confine» non chiede a nessuno.
   const insiemeNuovo = await page.evaluate(async () => {
