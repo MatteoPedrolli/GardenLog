@@ -1860,10 +1860,12 @@ function formattaOre(n) {
 // quello della visita: le fasce non ne hanno uno loro. Il capo lo voleva accanto
 // agli orari perché in ufficio si guarda la riga, e la data in cima al lavoro
 // costringeva ad alzare gli occhi. Al cliente non arriva, come le fasce.
+// Ogni fascia porta il suo giorno, se il telefono l'ha scritto: un lavoro di più
+// giorni sta in un rapportino solo. I rapportini di prima non ce l'hanno, e vale
+// la data della visita.
 function righeFasce(fasce, data) {
-  const giorno = giornoDellaSettimana(data);
   return fasce.map(f =>
-    '<tr><td class="meta">' + perValore(giorno) + '</td>' +
+    '<tr><td class="meta">' + perValore(giornoDellaSettimana(f.data || data)) + '</td>' +
       '<td>' + perValore(f.inizio) + ' – ' + perValore(f.fine) + '</td>' +
       '<td>' + f.persone + (f.persone === 1 ? ' persona' : ' persone') + '</td>' +
       '<td class="num">' + formattaOre(f.ore) + '</td></tr>' +
@@ -2051,6 +2053,15 @@ async function ricontrolla() {
 // La più recente per prima. Le righe sono poche e corte apposta: un elenco lungo
 // non si legge, e quello che non si legge tanto vale non scriverlo.
 const NOVITA = [
+  {
+    versione: '2026-10-03b',
+    data: '2026-10-03',
+    titolo: 'Fasce col loro giorno, operazioni col settore',
+    righe: [
+      'Un rapportino può portare **più giorni**: ogni fascia oraria ha il suo, e il lavoro lo mostra davanti all\'orario.',
+      'Accanto a ogni operazione c\'è il **settore** dove è stata fatta — piantumazione nelle aiuole o nella siepe sono due lavori diversi.',
+    ],
+  },
   {
     versione: '2026-10-03',
     data: '2026-10-03',
@@ -3701,6 +3712,7 @@ function disegnaLavoro() {
       const dettagli = [];
       if (o.prodotto) dettagli.push(perValore(o.prodotto));
       if (o.quantita != null) dettagli.push(formattaQuantita(o.quantita) + ' ' + perValore(o.unita));
+      if (o.settore) dettagli.push(perValore(o.settore));
       if (o.prato) dettagli.push('prato');
       if (o.siepe) dettagli.push('siepe');
       html += '<tr><td><strong>' + perValore(o.nome) + '</strong>' +

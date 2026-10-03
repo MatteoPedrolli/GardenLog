@@ -31,6 +31,10 @@ function costruisciRapportino({ visita, cliente, operazioni, tipi, voci, concimi
     // Cosa si è fatto in quelle ore. È un campo in più: un ufficio fermo alla
     // versione di prima lo ignora, e il documento resta della stessa versione.
     cosa: String(f.Cosa || '').trim(),
+    // Il giorno della fascia: un lavoro di più giorni sta in un rapportino solo, e
+    // ogni fascia dice il suo. Arrivato dopo, senza alzare la versione: un ufficio
+    // che non lo conosce usa la data della visita, come prima.
+    data: f.Data || visita.Data || '',
     ore: Number((((minutiRapportino(f.Fine) - minutiRapportino(f.Inizio)) / 60) * (Number(f.Persone) || 1)).toFixed(2)),
   }));
 
@@ -72,6 +76,9 @@ function costruisciRapportino({ visita, cliente, operazioni, tipi, voci, concimi
         unita: o.Unita || '',
         prezzo: prezzoPianta(o),
         prodotto: nomeProdotto(o),
+        // Il settore dove è stata spuntata, col nome: piantumazione nelle aiuole e
+        // nella siepe sono due lavori diversi. Arrivato dopo, senza alzare la versione.
+        settore: o.SettoreNome || '',
         prato: !!o.Flag_prato && String(o.Flag_prato).trim() !== '',
         siepe: !!o.Flag_siepe && String(o.Flag_siepe).trim() !== '',
       };

@@ -114,12 +114,19 @@ precompilato che nessuno ha guardato è un errore che paga il cliente.
 Sotto ogni fascia c'è **una riga di testo, `Cosa`**: cosa si è fatto in quelle ore.
 Viaggia nel rapportino (`ore.fasce[].cosa`) e in ufficio si legge sotto la sua
 fascia, nel lavoro in arrivo e in archivio; **al cliente non arriva**, come le
-fasce. In ufficio ogni fascia porta anche **il giorno davanti
-all'orario** («Lun 21/09/2026», `righeFasce()`): in ufficio si guarda la riga, e la
-data in cima al lavoro costringeva ad alzare gli occhi. È la data della visita —
-le fasce un giorno loro non ce l'hanno, e non serviva: un lavoro di più giorni
-sono più visite. Scriverla non conferma l'orario di una fascia proposta: sono due cose
+fasce. Scriverla non conferma l'orario di una fascia proposta: sono due cose
 diverse, e un «potatura» scritto sotto un orario mai guardato non lo rende giusto.
+
+**Ogni fascia ha il suo giorno** (`Data`, sopra gli orari, col nome del giorno
+accanto). Si era detto che un lavoro di più giorni fossero più visite, e in
+giardino non è andata così: lo stesso lavoro si chiude in un rapportino solo, e le
+ore di martedì non vanno confuse con quelle di mercoledì. Una fascia nuova prende
+il giorno dell'ultima — si continua la stessa giornata, o si passa alla dopo —
+e cambiando la data della visita la seguono le fasce che stavano sul suo giorno,
+non le altre: quelle qualcuno le ha messe apposta. Come «Cosa», il giorno non
+conferma l'orario. Viaggia nel rapportino (`ore.fasce[].data`) senza alzare la
+versione, e in ufficio sta **davanti all'orario** («Lun 21/09/2026», `righeFasce()`);
+i rapportini di prima, senza, mostrano la data della visita.
 
 **Le operazioni si spuntano.** L'elenco viene da `DB.tipiOperazione`, ordinato
 per quanto si usano da quel cliente. Spuntando si apre solo il dettaglio che
@@ -137,11 +144,17 @@ nessuna versione alzata.
 
 **Un settore aperto alla volta**, e chiusi dicono quante e quali lavorazioni ci
 sono spuntate dentro: nascondere una cosa segnata è il modo migliore per fartela
-dimenticare. Uno alla volta perché **una lavorazione in due settori è una sola** —
-il diserbo totale sta nel prato e nelle aiuole: spuntato in uno, è spuntato
-nell'altro — e con due settori aperti avrebbe due caselle per la stessa quantità.
+dimenticare.
+
+**I settori non sono legati fra loro.** Per un giorno una lavorazione in due
+settori è stata una sola, spuntata in tutti e due: la piantumazione delle aiuole
+compariva anche nella siepe, e creava solo confusione. Le aiuole e la siepe sono
+lavori diversi, con le loro piante e le loro quantità: ogni operazione ricorda il
+settore dove è nata (`Settore`, e `SettoreNome` che viaggia nel rapportino come
+`settore` e in ufficio si legge accanto all'operazione). Le operazioni registrate
+prima valgono nel primo settore che contiene il loro tipo (`settoreDiOperazione()`).
 Sopra c'è una **ricerca** che guarda in tutti i settori senza badare ad accenti e
-maiuscole, e accanto a ogni lavorazione trovata dice dove sta. Un tipo che non sta
+maiuscole: una riga per lavorazione e settore, col settore accanto. Un tipo che non sta
 in nessun settore finisce in **«Altre»**, in fondo: un tipo creato ieri si deve
 trovare lo stesso. Aprendo una visita già fatta si apre il settore della prima
 cosa spuntata.
@@ -254,6 +267,14 @@ stanno in `contoCorrente` e partono col rapportino come prima; si leggono nel
 riepilogo **«Cosa parte per il conto»**, chiuso di suo, e si correggono in ufficio.
 Dal telefono non si toglie più il trasferimento né si ritocca la manodopera: le
 ore si correggono sulla fascia, il resto lo decide chi fattura.
+
+**L'altro si scrive in una casella sola.** Erano tre — «Altra operazione» fra le
+operazioni, «Voce non in elenco» e un menù «Aggiungi una voce» nel conto — per dire
+la stessa cosa: c'è stato anche questo. Ora c'è solo «+ Altro» (`aggiungiRigaLibera()`):
+mentre si scrive suggerisce le voci che ci sono già, e se il testo è il nome di una
+voce la riga è quella voce, con la sua unità e il suo prezzo in ufficio; se no è una
+riga scritta a mano, che chiede quantità e unità. Le operazioni libere delle visite
+di prima restano dove sono, e si possono togliere.
 
 **Sul telefono non ci sono prezzi.** Il listino sta in ufficio, in un posto solo
 invece che su due dispositivi che divergono. Il cantiere dice *cosa* è stato

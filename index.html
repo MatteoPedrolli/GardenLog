@@ -450,6 +450,11 @@ select.form-control { background-image: url("data:image/svg+xml,%3Csvg xmlns='ht
   border-bottom: 2px solid var(--velo);
 }
 .fascia-blocco { margin-bottom: 10px; }
+/* Il giorno sta sopra gli orari, su una riga sua: sulla stessa riga non ci
+   stava, e un giorno schiacciato fra due orari non si legge. */
+.fascia-giorno { display: flex; align-items: center; gap: 8px; margin-bottom: 4px; font-size: 0.78rem; color: var(--text-light); }
+.fascia-giorno input { padding: 6px 8px; font-size: 0.82rem; border: 1px solid var(--border); border-radius: var(--radius-sm);
+  font-family: var(--font-body); background: var(--white); color: var(--text); }
 .fascia { display: flex; align-items: center; gap: 6px; margin-bottom: 4px; }
 .fascia-cosa { width: 100%; padding: 8px 10px; font-size: 0.85rem; border: 1px solid var(--border);
   border-radius: var(--radius-sm); font-family: var(--font-body); background: var(--white); }
@@ -1113,7 +1118,7 @@ select.form-control { background-image: url("data:image/svg+xml,%3Csvg xmlns='ht
       </div>
       <div class="form-group">
         <label class="form-label">Data *</label>
-        <input type="date" class="form-control" id="f-visita-data">
+        <input type="date" class="form-control" id="f-visita-data" oninput="cambiaDataVisita(this.value)">
       </div>
 
       <div class="rapporto-sez">Ore lavorate</div>
@@ -1127,21 +1132,14 @@ select.form-control { background-image: url("data:image/svg+xml,%3Csvg xmlns='ht
              autocomplete="off" oninput="cercaOperazioni(this.value)" style="margin-bottom:8px">
       <div id="operazioni-check"></div>
       <div id="operazioni-libere"></div>
-      <input type="text" class="form-control" id="f-op-libera" style="margin-top:8px"
-             placeholder="+ Altra operazione…"
-             onkeydown="if(event.key==='Enter'){event.preventDefault();aggiungiOperazioneLibera();}"
-             onblur="aggiungiOperazioneLibera()">
 
       <div class="rapporto-sez">Altro da conteggiare</div>
       <div id="conto-righe"></div>
-      <select class="form-control" id="f-conto-voce" style="margin-top:12px"
-              onchange="aggiungiRigaDaVoce(this.value); this.value='';">
-        <option value="">+ Aggiungi una voce…</option>
-      </select>
-      <input type="text" class="form-control" id="f-conto-libera" style="margin-top:8px"
-             placeholder="+ Voce non in elenco…"
+      <input type="text" class="form-control" id="f-conto-libera" style="margin-top:12px" list="voci-conto"
+             placeholder="+ Altro: noleggio, smaltimento…" autocomplete="off"
              onkeydown="if(event.key==='Enter'){event.preventDefault();aggiungiRigaLibera();}"
              onblur="aggiungiRigaLibera()">
+      <datalist id="voci-conto"></datalist>
       <div id="conto-riepilogo"></div>
 
       <div class="rapporto-sez">Note</div>
@@ -2110,6 +2108,7 @@ let pendingFromVisita = false;
 let settoreAperto = '';      // il settore aperto della visita, uno alla volta
 let ricercaOperazioni = '';  // quello che è scritto nella casella di ricerca
 let oreEreditate = '';   // ore di una visita registrata prima delle fasce orarie
+let dataVisitaPrima = '';   // la data della visita prima dell'ultimo cambio: le fasce su quel giorno la seguono
 
 // ── ORE LAVORATE ──
 function minutiDa(hhmm) {
@@ -2139,6 +2138,14 @@ function formattaOre(n) {
   return (Number(n) || 0).toFixed(2).replace('.', ',') + ' h';
 }
 
+// Il giorno di una fascia nuova: quello dell'ultima fascia, perché chi ne
+// aggiunge una dopo un'altra di solito sta continuando la stessa giornata o
+// passando alla successiva — e altrimenti il giorno della visita.
+function giornoNuovaFascia() {
+  const ultima = pendingFasce[pendingFasce.length - 1];
+  return (ultima && ultima.Data) || document.getElementById('f-visita-data').value || '';
+}
+
 // La fascia che l'app propone: quella che si ripete di più da questo cliente,
 // altrimenti la più frequente in assoluto, altrimenti una mattina tipo.
 function fasciaProposta(clienteID) {
@@ -2151,9 +2158,9 @@ function fasciaProposta(clienteID) {
   const migliore = [...conta.entries()].sort((a, b) => b[1] - a[1])[0];
   // Due persone: si lavora quasi sempre in coppia, e partire dal caso
   // frequente è un tocco risparmiato a ogni visita.
-  if (!migliore) return { Inizio: '08:00', Fine: '12:00', Persone: 2, proposta: true };
+  if (!migliore) return { Data: giornoNuovaFascia(), Inizio: '08:00', Fine: '12:00', Persone: 2, proposta: true };
   const [Inizio, Fine, Persone] = migliore[0].split('|');
-  return { Inizio, Fine, Persone: Number(Persone) || 1, proposta: true };
+  return { Data: giornoNuovaFascia(), Inizio, Fine, Persone: Number(Persone) || 1, proposta: true };
 }
 
 function renderFasce() {
@@ -2161,7 +2168,10 @@ function renderFasce() {
   if (!lista) return;
   lista.innerHTML = pendingFasce.map((f, i) => {
     const errata = f.Inizio && f.Fine && oreFascia(f) === 0;
-    return `<div class="fascia-blocco"><div class="fascia ${f.proposta ? 'proposta' : ''} ${errata ? 'errata' : ''}">
+    return `<div class="fascia-blocco">
+    <div class="fascia-giorno"><input type="date" value="${perValore(f.Data || '')}" oninput="scriviGiornoFascia(${i}, this.value)" aria-label="giorno">
+      <span id="fascia-giorno-${i}">${perValore(nomeGiorno(f.Data))}</span></div>
+    <div class="fascia ${f.proposta ? 'proposta' : ''} ${errata ? 'errata' : ''}">
       <input type="time" value="${perValore(f.Inizio)}" oninput="modificaFascia(${i}, 'Inizio', this.value)">
       <span class="freccia">→</span>
       <input type="time" value="${perValore(f.Fine)}" oninput="modificaFascia(${i}, 'Fine', this.value)">
@@ -2215,6 +2225,31 @@ function modificaFascia(i, campo, valore) {
   aggiornaConto();
 }
 
+// Ogni fascia ha il suo giorno: un lavoro di più giorni dallo stesso cliente sta
+// in un rapportino solo, e le ore di martedì non vanno confuse con quelle di
+// mercoledì. Come «Cosa», scriverlo non conferma l'orario di una fascia proposta:
+// il giorno giusto sotto un orario mai guardato non lo rende giusto.
+function scriviGiornoFascia(i, valore) {
+  if (!pendingFasce[i]) return;
+  pendingFasce[i].Data = valore;
+  const el = document.getElementById('fascia-giorno-' + i);
+  if (el) el.textContent = nomeGiorno(valore);
+}
+
+function nomeGiorno(iso) {
+  const d = new Date(String(iso || '') + 'T12:00:00');
+  return isNaN(d) ? '' : d.toLocaleDateString('it-IT', { weekday: 'long' });
+}
+
+// Cambiando la data della visita, le fasce che stavano su quel giorno lo
+// seguono: erano state messe lì perché era il giorno della visita. Quelle su un
+// altro giorno restano dove sono, perché qualcuno ce le ha messe apposta.
+function cambiaDataVisita(nuova) {
+  pendingFasce.forEach(f => { if (!f.Data || f.Data === dataVisitaPrima) f.Data = nuova; });
+  dataVisitaPrima = nuova;
+  renderFasce();
+}
+
 // Cosa si è fatto in quelle ore: resta in ufficio, come le fasce, e al cliente
 // non arriva. Scriverla non conferma l'orario — una fascia proposta resta da
 // guardare anche se ci hai scritto sotto «potatura» — e non ridisegna niente,
@@ -2242,8 +2277,22 @@ function tipoDi(tipoID) {
   return DB.tipiOperazione.find(t => t.TipoID === tipoID);
 }
 
-function opDelTipo(tipoID) {
-  return pendingOperazioni.filter(o => o.TipoID === tipoID);
+// In quale settore sta un'operazione: quello dove è stata spuntata. Le
+// operazioni registrate prima che lo scrivessero valgono nel primo settore che
+// contiene il loro tipo — e lo stesso vale se il settore nel frattempo non c'è più.
+function settoreDiOperazione(o) {
+  const settori = settoriVisita();
+  const dove = settori.find(s => s.SettoreID === o.Settore && tipiDelSettore(s).some(t => t.TipoID === o.TipoID));
+  if (dove) return dove.SettoreID;
+  const primo = settori.find(s => tipiDelSettore(s).some(t => t.TipoID === o.TipoID));
+  return primo ? primo.SettoreID : '';
+}
+
+// Le operazioni di un tipo, in un settore. Senza settore, tutte: il conto e il
+// promemoria non guardano dove sono state spuntate.
+function opDelTipo(tipoID, settoreID) {
+  return pendingOperazioni.filter(o => o.TipoID === tipoID &&
+    (settoreID == null || settoreDiOperazione(o) === settoreID));
 }
 
 // Le operazioni che fai davvero da quel cliente vengono per prime. Il peso è
@@ -2273,13 +2322,14 @@ function componentiDi(insieme) {
   return String(insieme.Insieme || '').split(',').map(x => x.trim()).filter(Boolean)
     .map(tipoDi).filter(t => t && !eInsieme(t));
 }
-// `nota` dice dove sta la lavorazione quando la si trova con la ricerca.
-function rigaOperazione(tipo, nota) {
-  const ops = opDelTipo(tipo.TipoID);
+// Una lavorazione dentro il suo settore. `nota` dice dove sta quando la si trova
+// con la ricerca.
+function rigaOperazione(tipo, settoreID, nota) {
+  const ops = opDelTipo(tipo.TipoID, settoreID);
   const altra = ePiantumazione(tipo) && ops.length
-    ? `<div class="op-dett"><button type="button" class="btn btn-secondary btn-sm" onclick="aggiungiPianta()">+ Un'altra pianta</button></div>`
+    ? `<div class="op-dett"><button type="button" class="btn btn-secondary btn-sm" onclick="aggiungiPianta('${perOnclick(settoreID)}')">+ Un'altra pianta</button></div>`
     : '';
-  const riga = `<div class="op-riga ${ops.length ? 'on' : ''}" onclick="spuntaOperazione('${perOnclick(tipo.TipoID)}')">
+  const riga = `<div class="op-riga ${ops.length ? 'on' : ''}" onclick="spuntaOperazione('${perOnclick(tipo.TipoID)}', '${perOnclick(settoreID)}')">
       <span class="op-box">${ops.length ? '✓' : ''}</span>
       <span style="flex:1">${perValore(tipo.Nome)}</span>
       ${nota ? `<span class="op-insieme">${perValore(nota)}</span>` : ''}
@@ -2302,7 +2352,7 @@ function dettaglioOperazione(tipo, op) {
     // Il prezzo delle piante si scrive qui, ed è l'unico: sta sull'etichetta del
     // vaso, e in ufficio per saperlo bisognerebbe andare in vivaio. Tutto il resto
     // del listino resta dell'ufficio.
-    const piu = opDelTipo(tipo.TipoID).length > 1;
+    const piu = opDelTipo(tipo.TipoID, settoreDiOperazione(op)).length > 1;
     return `<div class="op-dett op-pianta">
       <input type="text" placeholder="Pianta" value="${perValore(op.Descrizione)}" oninput="modificaOperazione(${i}, 'Descrizione', this.value)">
       <input type="number" step="1" min="0" placeholder="n" value="${perValore(op.Quantita)}" oninput="modificaOperazione(${i}, 'Quantita', this.value)" aria-label="quante">
@@ -2372,7 +2422,7 @@ function bloccoSettore(s, ordine) {
   const ids = new Set(tipiDelSettore(s).map(t => t.TipoID));
   // Dentro il settore l'ordine è quello di sempre: prima quello che fai da quel cliente.
   const tipi = ordine.filter(t => ids.has(t.TipoID));
-  const spuntati = tipi.filter(t => opDelTipo(t.TipoID).length);
+  const spuntati = tipi.filter(t => opDelTipo(t.TipoID, s.SettoreID).length);
   const libere = isSi(s.Libero) ? righeLibereDelSettore(s.SettoreID) : [];
   const nomi = spuntati.map(t => t.Nome).concat(libere.map(o => o.Tipo_operazione).filter(Boolean));
   const quante = spuntati.length + libere.length;
@@ -2386,7 +2436,7 @@ function bloccoSettore(s, ordine) {
     return testa + (nomi.length ? `<div class="settore-spuntate">✓ ${perValore(nomi.join(', '))}</div>` : '');
   }
   return testa + `<div class="settore-corpo">
-      ${tipi.map(t => rigaOperazione(t)).join('')}
+      ${tipi.map(t => rigaOperazione(t, s.SettoreID)).join('')}
       ${isSi(s.Libero) ? righeLibereSettore(s) : ''}
       ${!tipi.length && !isSi(s.Libero) ? '<div class="dati-nota">Vuoto: le lavorazioni si aggiungono da Archivi › Settori.</div>' : ''}
     </div>`;
@@ -2411,7 +2461,9 @@ function righeLibereSettore(s) {
 }
 
 function aggiungiRigaSettore(settoreID) {
-  pendingOperazioni.push({ OperazioneID: generateID(), TipoID: '', Settore: settoreID, Tipo_operazione: '', Descrizione: '',
+  const s = settoriVisita().find(x => x.SettoreID === settoreID);
+  pendingOperazioni.push({ OperazioneID: generateID(), TipoID: '', Settore: settoreID, SettoreNome: s ? s.Nome : '',
+    Tipo_operazione: '', Descrizione: '',
     Flag_prato: '', Flag_siepe: '', ConcimeID: '', SementeID: '', FitofarmacaID: '',
     Quantita: '', Unita: 'n' });
   renderOperazioni();
@@ -2428,13 +2480,14 @@ function renderOperazioni() {
   const ordine = tipiOrdinati(document.getElementById('f-visita-cliente').value).filter(t => !eInsieme(t));
   const q = perCercare(ricercaOperazioni);
   if (q) {
-    // La ricerca guarda in tutti i settori insieme, e accanto dice dove sta: è la
-    // strada più corta quando sai già cosa cerchi.
+    // La ricerca guarda in tutti i settori insieme: una riga per lavorazione e
+    // settore, col settore accanto, perché le aiuole e la siepe sono due posti
+    // diversi anche quando ci si mette la stessa pianta.
     const settori = settoriVisita();
-    const trovati = ordine.filter(t => perCercare(t.Nome).includes(q));
+    const trovati = ordine.filter(t => perCercare(t.Nome).includes(q)).flatMap(t =>
+      settori.filter(s => tipiDelSettore(s).some(x => x.TipoID === t.TipoID)).map(s => ({ t, s })));
     el.innerHTML = trovati.length
-      ? trovati.map(t => rigaOperazione(t, settori.filter(s => tipiDelSettore(s).some(x => x.TipoID === t.TipoID))
-          .map(s => s.Nome).join(', '))).join('')
+      ? trovati.map(({ t, s }) => rigaOperazione(t, s.SettoreID, s.Nome)).join('')
       : `<div class="dati-nota">Nessuna lavorazione con «${perValore(ricercaOperazioni.trim())}». Se capita una volta sola, scrivila qui sotto.</div>`;
   } else {
     el.innerHTML = settoriVisita().map(s => bloccoSettore(s, ordine)).join('');
@@ -2445,7 +2498,7 @@ function renderOperazioni() {
 // Aprendo una visita già fatta si apre il settore della prima cosa spuntata: è
 // lì che probabilmente si torna a correggere.
 function settoreDaAprire() {
-  const s = settoriVisita().find(x => tipiDelSettore(x).some(t => opDelTipo(t.TipoID).length) ||
+  const s = settoriVisita().find(x => tipiDelSettore(x).some(t => opDelTipo(t.TipoID, x.SettoreID).length) ||
     (isSi(x.Libero) && righeLibereDelSettore(x.SettoreID).length));
   return s ? s.SettoreID : '';
 }
@@ -2466,22 +2519,39 @@ function nuovaOperazione(tipo) {
   };
 }
 
-function spuntaOperazione(tipoID) {
+// I settori non sono legati fra loro: la piantumazione spuntata nelle aiuole non
+// compare nella siepe. Era una lavorazione sola mostrata in tutti e due i posti,
+// e creava solo confusione — le aiuole e la siepe sono lavori diversi, con le loro
+// piante e le loro quantità. Ogni operazione ricorda il settore dove è nata, col
+// nome, che viaggia nel rapportino.
+function settorePerSpuntare(tipoID, settoreID) {
+  const settori = settoriVisita();
+  const contiene = s => s && tipiDelSettore(s).some(t => t.TipoID === tipoID);
+  const scelto = settori.find(s => s.SettoreID === settoreID);
+  if (contiene(scelto)) return scelto;
+  const aperto = settori.find(s => s.SettoreID === settoreAperto);
+  return contiene(aperto) ? aperto : settori.find(contiene) || null;
+}
+
+function spuntaOperazione(tipoID, settoreID) {
   const tipo = tipoDi(tipoID);
   if (!tipo) return;
-  if (opDelTipo(tipoID).length) {
-    pendingOperazioni = pendingOperazioni.filter(o => o.TipoID !== tipoID);
+  const s = settorePerSpuntare(tipoID, settoreID);
+  const id = s ? s.SettoreID : '';
+  if (opDelTipo(tipoID, id).length) {
+    pendingOperazioni = pendingOperazioni.filter(o => !(o.TipoID === tipoID && settoreDiOperazione(o) === id));
   } else {
-    pendingOperazioni.push(nuovaOperazione(tipo));
+    pendingOperazioni.push({ ...nuovaOperazione(tipo), Settore: id, SettoreNome: s ? s.Nome : '' });
   }
   renderOperazioni();
   aggiornaConto();
 }
 
-function aggiungiPianta() {
+function aggiungiPianta(settoreID) {
   const tipo = tipoDi('piantumazione');
   if (!tipo) return;
-  pendingOperazioni.push(nuovaOperazione(tipo));
+  const s = settorePerSpuntare('piantumazione', settoreID);
+  pendingOperazioni.push({ ...nuovaOperazione(tipo), Settore: s ? s.SettoreID : '', SettoreNome: s ? s.Nome : '' });
   renderOperazioni();
   aggiornaConto();
 }
@@ -2507,20 +2577,6 @@ function renderOperazioniLibere() {
       <button type="button" class="via" onclick="togliOperazione(${i})" title="Togli">✕</button>
     </div>`;
   }).join('');
-}
-
-// La casella libera: quello che capita una volta sola e non merita una voce
-// in archivio.
-function aggiungiOperazioneLibera() {
-  const campo = document.getElementById('f-op-libera');
-  const testo = campo.value.trim();
-  if (!testo) return;
-  pendingOperazioni.push({ OperazioneID: generateID(), TipoID: '', Tipo_operazione: testo, Descrizione: '',
-    Flag_prato: '', Flag_siepe: '', ConcimeID: '', SementeID: '', FitofarmacaID: '',
-    Quantita: '', Unita: '' });
-  campo.value = '';
-  renderOperazioni();
-  aggiornaConto();
 }
 
 function togliOperazione(i) {
@@ -2558,9 +2614,11 @@ function openNuovaVisita() {
   oreEreditate = '';
   document.getElementById('drawer-visita-titolo').textContent = 'Nuova Visita';
   bloccaSalvataggio(false);
-  ['f-visita-note', 'f-op-libera', 'f-conto-libera', 'f-op-cerca']
+  ['f-visita-note', 'f-conto-libera', 'f-op-cerca']
     .forEach(id => { document.getElementById(id).value = ''; });
   document.getElementById('f-visita-data').value = new Date().toISOString().split('T')[0];
+  dataVisitaPrima = document.getElementById('f-visita-data').value;
+  pendingFasce.forEach(f => { f.Data = dataVisitaPrima; });
   clearVisitaCliente();
   contoCorrente = [];
   popolaVociConto();
@@ -2581,8 +2639,10 @@ function openModificaVisita(vid) {
   pendingFasce = (v.Fasce || []).map(f => ({ ...f, proposta: false }));
   oreEreditate = pendingFasce.length ? '' : (v.Ore_Visita || '');
   document.getElementById('f-visita-data').value = v.Data ? new Date(v.Data).toISOString().split('T')[0] : '';
+  dataVisitaPrima = document.getElementById('f-visita-data').value;
+  // Le fasce registrate prima che avessero un giorno loro stavano sul giorno della visita.
+  pendingFasce.forEach(f => { if (!f.Data) f.Data = dataVisitaPrima; });
   document.getElementById('f-visita-note').value = v.Note_visita || '';
-  document.getElementById('f-op-libera').value = '';
   document.getElementById('f-conto-libera').value = '';
   clearVisitaCliente();
   const c = DB.clienti.find(x => x.ClienteID == v.ClienteID);
@@ -2614,7 +2674,7 @@ function selectVisitaCliente(id, nome) {
   document.getElementById('visita-cliente-suggestions').style.display = 'none';
   // Cambiando cliente cambiano sia le operazioni in cima sia la fascia più
   // probabile: aggiorno quelle ancora da confermare, le altre sono roba tua.
-  pendingFasce = pendingFasce.map(f => f.proposta ? fasciaProposta(id) : f);
+  pendingFasce = pendingFasce.map(f => f.proposta ? { ...fasciaProposta(id), Data: f.Data } : f);
   renderFasce();
   renderOperazioni();
   mostraPromemoria(id);
@@ -2676,7 +2736,7 @@ async function saveVisita({ invia = false } = {}) {
   }
   const sbagliata = pendingFasce.findIndex(f => oreFascia(f) === 0);
   if (sbagliata >= 0) { showToast('⚠️ La fascia ' + (sbagliata + 1) + ' non ha un orario valido'); return; }
-  aggiungiOperazioneLibera();   // quello che è rimasto scritto nella casella non si perde
+  aggiungiRigaLibera();   // quello che è rimasto scritto nella casella non si perde
   // Le righe a mano dei settori (l'irrigazione): una vuota si lascia cadere, è un
   // «+ Una riga» toccato per sbaglio; una con la quantità e senza «cosa» no —
   // in ufficio arriverebbe «3 n» di niente.
@@ -2693,8 +2753,8 @@ async function saveVisita({ invia = false } = {}) {
   });
 
   const visitaID = editVisitaID || generateID();
-  const fasce = pendingFasce.map(({ Inizio, Fine, Persone, Cosa }) =>
-    ({ Inizio, Fine, Persone: Number(Persone) || 1, Cosa: String(Cosa || '').trim() }));
+  const fasce = pendingFasce.map(({ Data, Inizio, Fine, Persone, Cosa }) =>
+    ({ Data: Data || data, Inizio, Fine, Persone: Number(Persone) || 1, Cosa: String(Cosa || '').trim() }));
   const precedente = DB.visite.find(v => v.VisitaID == visitaID);
   const visita = {
     // Si riparte da quello che la visita aveva: ricostruirla da zero
@@ -2866,12 +2926,17 @@ function renderContoRighe() {
             <button type="button" class="via" onclick="togliRigaConto(${i})" title="Togli">✕</button>
           </div>
           <div class="conto-numeri">
-            <input type="number" step="any" min="0" value="${perValore(r.Quantita)}"
+            <input type="text" inputmode="decimal" value="${perValore(formattaQuantita(r.Quantita))}"
                    oninput="modificaRigaConto(${i}, 'Quantita', this.value)" aria-label="quantità">
-            <span class="unita">${perValore(r.Unita)}</span>
+            ${r.VoceID ? `<span class="unita">${perValore(r.Unita)}</span>`
+              // Una riga scritta a mano non ha un'unità sua: la si sceglie, o in
+              // ufficio arriverebbe un «3» che non dice tre cosa.
+              : `<select onchange="modificaRigaConto(${i}, 'Unita', this.value)" aria-label="unità">
+                  ${['', ...UNITA_RILIEVO].map(u => `<option value="${perValore(u)}"${u === (r.Unita || '') ? ' selected' : ''}>${u ? perValore(u) : '—'}</option>`).join('')}
+                </select>`}
           </div>
         </div>`).join('')
-    : '<div class="dati-nota">Ore e materiali delle operazioni partono da soli. Qui va quello che non nasce da lì: un noleggio, uno smaltimento. I prezzi li mette l\'ufficio.</div>');
+    : '<div class="dati-nota">Ore e materiali delle operazioni partono da soli. Qui va quello che non nasce da lì: un noleggio, uno smaltimento, una riparazione. Mentre scrivi compaiono le voci che ci sono già. I prezzi li mette l\'ufficio.</div>');
   const riepilogo = document.getElementById('conto-riepilogo');
   if (!riepilogo) return;
   riepilogo.innerHTML = (contoCorrente.length
@@ -2883,34 +2948,37 @@ function renderContoRighe() {
       : '');
 }
 
-// Non ridisegno le righe: si sta scrivendo dentro un campo.
+// Non ridisegno le righe: si sta scrivendo dentro un campo. La virgola diventa
+// punto qui, perché il rapportino legge il punto: «2,5» deve arrivare due e mezzo.
 function modificaRigaConto(i, campo, valore) {
   const r = contoCorrente[i];
   if (!r) return;
-  r[campo] = valore;
+  r[campo] = campo === 'Quantita' ? String(valore).replace(',', '.') : valore;
 }
 
+// Le voci che ci sono già, suggerite mentre si scrive. Manodopera e
+// trasferimento no: le ore vengono dalle fasce e il trasferimento c'è da solo.
 function popolaVociConto() {
-  const sel = document.getElementById('f-conto-voce');
-  if (!sel) return;
-  sel.innerHTML = '<option value="">+ Aggiungi una voce…</option>' +
-    DB.voci.map(v => `<option value="${perValore(v.VoceID)}">${perValore(v.Nome)}</option>`).join('');
+  const elenco = document.getElementById('voci-conto');
+  if (!elenco) return;
+  elenco.innerHTML = DB.voci.filter(v => !['manodopera', 'trasferimento'].includes(v.VoceID))
+    .map(v => `<option value="${perValore(v.Nome)}"></option>`).join('');
 }
 
-function aggiungiRigaDaVoce(voceID) {
-  const vo = DB.voci.find(x => x.VoceID === voceID);
-  if (!vo) return;
-  contoCorrente.push({ VoceID: vo.VoceID, Voce: vo.Nome, Unita: vo.Unita || '',
-    Quantita: isSi(vo.ACorpo) ? 1 : '' });
-  renderContoRighe();
-}
-
+// Una casella sola per quello che non nasce da ore e operazioni. Erano tre — una
+// «altra operazione», una «voce non in elenco» e un menù di voci — per dire la
+// stessa cosa: c'è stato anche questo. Se quello che scrivi è il nome di una voce,
+// la riga è quella voce, con la sua unità e il suo prezzo in ufficio; se no, è una
+// riga scritta a mano, e il prezzo lo decide l'ufficio.
 function aggiungiRigaLibera() {
   const campo = document.getElementById('f-conto-libera');
   if (!campo) return;
   const testo = campo.value.trim();
   if (!testo) return;
-  contoCorrente.push({ VoceID: '', Voce: testo, Unita: '', Quantita: '' });
+  const vo = DB.voci.find(v => perCercare(v.Nome) === perCercare(testo));
+  contoCorrente.push(vo
+    ? { VoceID: vo.VoceID, Voce: vo.Nome, Unita: vo.Unita || '', Quantita: isSi(vo.ACorpo) ? 1 : '' }
+    : { VoceID: '', Voce: testo, Unita: '', Quantita: '' });
   campo.value = '';
   renderContoRighe();
 }

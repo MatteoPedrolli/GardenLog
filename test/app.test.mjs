@@ -122,12 +122,12 @@ try {
     await page.evaluate(() => DB.concimi[0].ConcimeID));
   await page.fill('#operazioni-check .op-dett input[type=number]', '10');
 
-  // la casella libera per quello che non sta in archivio
-  await page.fill('#f-op-libera', 'Riparazione irrigazione');
-  await page.press('#f-op-libera', 'Enter');
-  await page.waitForTimeout(150);
-  ok('operazione libera aggiunta',
-    (await page.textContent('#operazioni-libere')).includes('Riparazione irrigazione'));
+  // Una casella sola per quello che non nasce da ore e operazioni: erano tre —
+  // «altra operazione», «voce non in elenco» e un menù di voci — per dire la
+  // stessa cosa.
+  ok('c\'è una casella sola per l\'altro, senza il menù delle voci',
+    await page.locator('#f-op-libera').count() === 0 && await page.locator('#f-conto-voce').count() === 0 &&
+    await page.locator('#f-conto-libera').count() === 1);
 
   // ── le voci da conteggiare si compilano mentre registri ──
   // Senza prezzi: il listino sta in ufficio. Il cantiere dice cosa è stato fatto
@@ -144,8 +144,6 @@ try {
     await voceRiepilogo(0).textContent());
   ok('il trasferimento c\'è sempre, senza aggiungerlo',
     (await page.textContent('#conto-riepilogo')).includes('Trasferimento'));
-  ok('l\'operazione libera non fa riga di conto',
-    !(await page.textContent('#conto-riepilogo')).includes('Riparazione irrigazione'));
   ok('e in fondo non c\'è nessun totale da leggere',
     await page.locator('#conto-totale').count() === 0);
 
@@ -154,8 +152,27 @@ try {
   await page.press('#f-conto-libera', 'Enter');
   await page.waitForTimeout(150);
   ok('riga aggiunta a mano', await page.locator('#conto-righe .conto-riga').count() === 1);
-  ok('ogni riga ha un campo solo, la quantità: nessun prezzo sul telefono',
-    await page.locator('#conto-righe .conto-riga').first().locator('input').count() === 1);
+  // Scritta a mano, la riga chiede quanto e di cosa: un «3» senza unità non dice
+  // niente all'ufficio. E nessun prezzo, come sempre sul telefono.
+  ok('la riga scritta a mano chiede quantità e unità, e nessun prezzo',
+    await page.locator('#conto-righe .conto-riga').first().locator('input').count() === 1 &&
+    await page.locator('#conto-righe .conto-riga').first().locator('select').count() === 1);
+  // Se quello che scrivi è il nome di una voce, la riga è quella voce: la sua unità,
+  // e in ufficio il suo prezzo di listino.
+  const dallaVoce = await page.evaluate(() => {
+    document.getElementById('f-conto-libera').value = 'smaltimento VERDE';
+    aggiungiRigaLibera();
+    const r = contoCorrente[contoCorrente.length - 1];
+    const fatto = { voce: r.VoceID, unita: r.Unita, suggerita: [...document.querySelectorAll('#voci-conto option')]
+      .some(o => o.value === 'Smaltimento verde'), senzaManodopera: ![...document.querySelectorAll('#voci-conto option')]
+      .some(o => o.value === 'Manodopera') };
+    contoCorrente.pop();
+    renderContoRighe();
+    return fatto;
+  });
+  ok('scrivendo il nome di una voce, la riga è quella voce, e le voci compaiono mentre si scrive',
+    dallaVoce.voce === 'smaltimento-verde' && dallaVoce.unita === 'kg' && dallaVoce.suggerita && dallaVoce.senzaManodopera,
+    JSON.stringify(dallaVoce));
   ok('e nel riepilogo compare anche lei', await page.locator('#conto-riepilogo .riepilogo-voce').count() === 4);
 
   // il conto segue le ore mentre le correggi, senza uscire dalla schermata
@@ -177,10 +194,45 @@ try {
     await page.evaluate(() => DB.visite[0].Ore_Visita === 8 && DB.visite[0].Fasce.length === 1));
   ok('con scritto cosa si è fatto in quelle ore',
     await page.evaluate(() => DB.visite[0].Fasce[0].Cosa) === 'Potatura siepe lato strada');
+  // Ogni fascia ha il suo giorno: un lavoro di più giorni sta in un rapportino solo.
+  ok('e il giorno della fascia, che nasce da quello della visita',
+    await page.evaluate(() => DB.visite[0].Fasce[0].Data === DB.visite[0].Data && !!DB.visite[0].Data));
+  const giorni = await page.evaluate(() => {
+    openModificaVisita(DB.visite[0].VisitaID);
+    const r = {};
+    r.campo = document.querySelectorAll('#fasce-list .fascia-giorno input[type=date]').length === 1;
+    // Una fascia nuova prende il giorno dell'ultima: si continua la stessa giornata.
+    scriviGiornoFascia(0, '2026-09-21');
+    aggiungiFascia();
+    r.nuova = pendingFasce[1].Data;
+    r.proposta = pendingFasce[1].proposta === true;
+    // Scrivere il giorno non conferma l'orario di una fascia proposta.
+    scriviGiornoFascia(1, '2026-09-22');
+    r.ancoraProposta = pendingFasce[1].proposta === true;
+    r.nome = document.getElementById('fascia-giorno-1').textContent;
+    // Cambiando la data della visita le fasce sul suo giorno la seguono, le altre no.
+    dataVisitaPrima = '2026-09-21';
+    cambiaDataVisita('2026-09-23');
+    r.seguono = pendingFasce[0].Data === '2026-09-23' && pendingFasce[1].Data === '2026-09-22';
+    // Nel rapportino ogni fascia porta il suo giorno.
+    const doc = costruisciRapportino({ visita: { VisitaID: 'g', Data: '2026-09-23', ClienteID: DB.clienti[0].ClienteID,
+      Fasce: [{ Data: '2026-09-22', Inizio: '08:00', Fine: '12:00', Persone: 2 }, { Inizio: '13:00', Fine: '17:00', Persone: 1 }] },
+      cliente: DB.clienti[0], operazioni: [], tipi: DB.tipiOperazione, voci: DB.voci,
+      concimi: DB.concimi, sementi: DB.sementi, fitofarmaci: DB.fitofarmaci });
+    r.doc = doc.ore.fasce.map(f => f.data).join(',');
+    closeDrawer('overlay-visita');
+    return r;
+  });
+  ok('sulla visita ogni fascia ha il suo giorno, col nome accanto',
+    giorni.campo && /martedì/.test(giorni.nome), giorni.nome);
+  ok('una fascia nuova prende il giorno dell\'ultima, e resta proposta anche cambiandolo',
+    giorni.nuova === '2026-09-21' && giorni.proposta && giorni.ancoraProposta, JSON.stringify(giorni));
+  ok('cambiando la data della visita la seguono le fasce di quel giorno, le altre restano',
+    giorni.seguono);
+  ok('nel rapportino ogni fascia porta il suo giorno, o quello della visita',
+    giorni.doc === '2026-09-22,2026-09-23', giorni.doc);
   ok('operazione agganciata al suo tipo',
     await page.evaluate(() => DB.operazioni.find(o => o.TipoID === 'concimazione') != null));
-  ok('operazione libera salvata senza tipo',
-    await page.evaluate(() => DB.operazioni.some(o => !o.TipoID && o.Tipo_operazione === 'Riparazione irrigazione')));
   // 10 kg al 12% su 200 mq = 1200 g di azoto = 6 g/m²
   ok('azoto per metro quadro calcolato',
     await page.evaluate(() => DB.operazioni.find(o => o.TipoID === 'concimazione').N_g_m2) == 6);
@@ -191,7 +243,7 @@ try {
   await page.reload({ waitUntil: 'load' });
   await page.waitForTimeout(600);
   ok('dati ritrovati dopo la ricarica',
-    await page.evaluate(() => DB.clienti.length === 1 && DB.visite.length === 1 && DB.operazioni.length === 2));
+    await page.evaluate(() => DB.clienti.length === 1 && DB.visite.length === 1 && DB.operazioni.length === 1));
   ok('archivio ritrovato dopo la ricarica', await page.evaluate(() => DB.concimi.length) === 1);
   ok('conto ritrovato dopo la ricarica',
     await page.evaluate(() => DB.visite[0].Conto?.length) === 4);
@@ -1051,7 +1103,7 @@ try {
   await page.setInputFiles('#file-backup', { name: 'backup.json', mimeType: 'application/json', buffer: Buffer.from(backup) });
   await page.waitForTimeout(400);
   ok('backup reimportato per intero',
-    await page.evaluate(() => DB.clienti.length === 1 && DB.visite.length === 1 && DB.operazioni.length === 2));
+    await page.evaluate(() => DB.clienti.length === 1 && DB.visite.length === 1 && DB.operazioni.length === 1));
   ok('contatore modifiche azzerato dal backup', await page.evaluate(() => META.modificheDalBackup) === 0);
 
   // ── modalità costruzione: i dati di un'altra versione non si convertono ──
@@ -1265,11 +1317,23 @@ try {
     modificaOperazione(pendingOperazioni.indexOf(pac), 'Quantita', '3');
     const riga = contoCorrente.find(x => x.VoceID === 'pacciamatura');
     r.conto = riga ? riga.Quantita + ' ' + riga.Unita : '';
-    // Il diserbo totale sta nel prato e nelle aiuole, ed è una lavorazione sola.
-    spuntaOperazione('diserbo-totale');
+    // Il diserbo totale sta nel prato e nelle aiuole, e i due settori non sono
+    // legati: spuntato nelle aiuole, nel prato non compare.
+    spuntaOperazione('diserbo-totale', 'aiuole');
     apriSettore('prato');
     r.nelPrato = [...document.querySelectorAll('#operazioni-check .settore-corpo .op-riga.on')].map(e => e.textContent.trim()).join('|');
-    r.unaSola = opDelTipo('diserbo-totale').length === 1;
+    const dis = pendingOperazioni.find(o => o.TipoID === 'diserbo-totale');
+    r.doveDiserbo = dis && dis.Settore + '/' + dis.SettoreNome;
+    // La piantumazione delle aiuole e quella della siepe sono due lavori, con le loro piante.
+    spuntaOperazione('piantumazione', 'aiuole');
+    spuntaOperazione('piantumazione', 'siepe');
+    r.duePiantumazioni = opDelTipo('piantumazione', 'aiuole').length === 1 && opDelTipo('piantumazione', 'siepe').length === 1;
+    spuntaOperazione('piantumazione', 'siepe');
+    r.toltaSoloSiepe = opDelTipo('piantumazione', 'aiuole').length === 1 && opDelTipo('piantumazione', 'siepe').length === 0;
+    spuntaOperazione('piantumazione', 'aiuole');
+    // Un'operazione registrata prima che i settori la ricordassero vale nel primo
+    // settore che contiene il suo tipo.
+    r.vecchia = settoreDiOperazione({ TipoID: 'pacciamatura' }) === 'aiuole';
     // Chiuso, un settore dice quante e quali lavorazioni ci sono spuntate.
     const testaAiuole = [...document.querySelectorAll('#operazioni-check .settore-testa')].find(e => e.textContent.includes('Aiuole'));
     r.contaAiuole = testaAiuole.querySelector('.settore-conta')?.textContent;
@@ -1305,13 +1369,21 @@ try {
   ok('nella visita gli insiemi non ci sono più', !settori.insiemi);
   ok('un settore aperto alla volta', settori.unSoloAperto);
   ok('dentro un settore si spunta come prima, e il conto segue', settori.conto === '3 q', settori.conto);
-  ok('una lavorazione in due settori è una sola, spuntata in tutti e due',
-    settori.unaSola && settori.nelPrato.includes('Diserbo totale'), settori.nelPrato);
+  ok('i settori non sono legati: spuntata nelle aiuole, nel prato non compare',
+    !settori.nelPrato.includes('Diserbo totale') && settori.doveDiserbo === 'aiuole/Aiuole',
+    settori.nelPrato + ' · ' + settori.doveDiserbo);
+  ok('la piantumazione delle aiuole e quella della siepe sono due lavori',
+    settori.duePiantumazioni && settori.toltaSoloSiepe);
+  ok('un\'operazione di prima, senza settore, vale nel primo che contiene il suo tipo', settori.vecchia);
   ok('chiuso, il settore dice quante e quali lavorazioni ci sono spuntate',
     settori.contaAiuole === '2' && settori.spuntateAiuole.includes('Pacciamatura') && settori.spuntateAiuole.includes('Diserbo totale'),
     settori.contaAiuole + ' · ' + settori.spuntateAiuole);
-  ok('la ricerca guarda in tutti i settori e dice dove sta',
-    settori.trovati.length === 2 && settori.trovati.some(t => t.includes('Diserbo totale') && t.includes('Prato, Aiuole')),
+  // Una riga per lavorazione e settore: il diserbo totale del prato e quello delle
+  // aiuole sono due righe, e solo la seconda è spuntata.
+  ok('la ricerca guarda in tutti i settori, una riga per settore',
+    settori.trovati.length === 3 &&
+    settori.trovati.some(t => t.startsWith('✓') && t.includes('Diserbo totale') && t.includes('Aiuole')) &&
+    settori.trovati.some(t => !t.startsWith('✓') && t.includes('Diserbo totale') && t.includes('Prato')),
     settori.trovati.join(' | '));
   ok('senza badare a maiuscole e accenti, e dice quando non trova niente',
     settori.senzaAccenti && settori.nessuno);
@@ -1669,6 +1741,14 @@ try {
   ok('ogni fascia porta il giorno davanti all\'orario',
     !!giornoFascia.atteso && /^(Lun|Mar|Mer|Gio|Ven|Sab|Dom) \d{2}\/\d{2}\/\d{4}$/.test(giornoFascia.atteso) &&
     giornoFascia.riga.startsWith(giornoFascia.atteso), JSON.stringify(giornoFascia));
+  // Un lavoro di più giorni: ogni fascia col suo, e quelle dei rapportini di prima
+  // col giorno della visita.
+  ok('ogni fascia col suo giorno, e senza quello della visita',
+    await pagU.evaluate(() => {
+      const html = righeFasce([{ data: '2026-09-22', inizio: '08:00', fine: '12:00', persone: 2, ore: 8 },
+        { inizio: '13:00', fine: '15:00', persone: 1, ore: 2 }], '2026-09-23');
+      return html.includes('Mar 22/09/2026') && html.includes('Mer 23/09/2026');
+    }));
   const conto = await pagU.evaluate(() => totaleConteggio(LAVORO.righe));
   ok('il totale somma le righe complete', conto.totale > 0, JSON.stringify(conto));
   ok('e dice quante ne ha lasciate fuori', conto.escluse >= 1, JSON.stringify(conto));
