@@ -524,8 +524,8 @@ select.form-control { background-image: url("data:image/svg+xml,%3Csvg xmlns='ht
 .rapp-riga:last-child { border-bottom: none; }
 .rapp-riga.totale { font-weight: 600; color: var(--inchiostro); border-top: 1px solid var(--border); border-bottom: none; }
 .conto-riga { padding: 10px 0; border-bottom: 1px solid var(--border); }
-.conto-riepilogo { margin-top: 12px; font-size: 0.85rem; color: var(--text-mid); }
-.conto-riepilogo summary { cursor: pointer; padding: 6px 0; color: var(--inchiostro-tenue); font-weight: 500; }
+.conto-riepilogo { margin-top: 14px; padding-top: 10px; border-top: 1px solid var(--border); font-size: 0.85rem; color: var(--text-mid); }
+.conto-riepilogo-titolo { padding: 2px 0 4px; color: var(--inchiostro-tenue); font-weight: 500; }
 .conto-riepilogo ul { list-style: none; margin: 4px 0 0; padding: 0; }
 .riepilogo-voce { display: flex; justify-content: space-between; gap: 10px; padding: 5px 0; border-bottom: 1px dashed var(--border); }
 .conto-voce { display: flex; align-items: center; gap: 8px; font-size: 0.88rem; font-weight: 500; }
@@ -1133,7 +1133,7 @@ select.form-control { background-image: url("data:image/svg+xml,%3Csvg xmlns='ht
       <div id="operazioni-check"></div>
       <div id="operazioni-libere"></div>
 
-      <div class="rapporto-sez">Altro da conteggiare</div>
+      <div class="rapporto-sez">Altro</div>
       <div id="conto-righe"></div>
       <input type="text" class="form-control" id="f-conto-libera" style="margin-top:12px" list="voci-conto"
              placeholder="+ Altro: noleggio, smaltimento…" autocomplete="off"
@@ -1151,9 +1151,11 @@ select.form-control { background-image: url("data:image/svg+xml,%3Csvg xmlns='ht
       <button class="btn btn-secondary" onclick="prenotaDaVisita()">📅 Prenota il prossimo intervento</button>
       <div style="height:14px"></div>
 
-      <button class="btn btn-primary" id="btn-salva-visita" onclick="saveVisita()">💾 Salva</button>
+      <!-- Salva e invia è quello di tutti i giorni: scuro e per primo. Salva da
+           solo serve a fermarsi a metà, e si usa di rado. -->
+      <button class="btn btn-primary" id="btn-salva-invia" onclick="saveVisita({ invia: true })">📧 Salva e invia</button>
       <div style="height:8px"></div>
-      <button class="btn btn-secondary" id="btn-salva-invia" onclick="saveVisita({ invia: true })">📧 Salva e invia</button>
+      <button class="btn btn-secondary" id="btn-salva-visita" onclick="saveVisita()">💾 Salva</button>
       <div style="height:8px"></div>
       <button class="btn btn-secondary" onclick="closeDrawer('overlay-visita')">Annulla</button>
     </div>
@@ -1224,7 +1226,7 @@ const TIPI_DEFAULT = [
   { TipoID:'telo-pacciamante',        Nome:'Telo pacciamante',         dettaglio:'quantita',    Unita:'m²',    Prato:'',   Siepe:'',   VoceID:'telo-pacciamante',  Ordine:16 },
   // Arrivati coi settori: il lavoro di terra del prato e dell'aiuola, la bordura
   // della siepe, la potatura che vuole la piattaforma. Livellamento e alberature
-  // sono manodopera — il noleggio della piattaforma va in «Altro da conteggiare».
+  // sono manodopera — il noleggio della piattaforma va in «Altro».
   { TipoID:'asporto-terriccio',       Nome:'Asporto terriccio',        dettaglio:'quantita',    Unita:'m³',    Prato:'',   Siepe:'',   VoceID:'asporto-terriccio', Ordine:17 },
   { TipoID:'apporto-terra-vegetale',  Nome:'Apporto terra vegetale',   dettaglio:'quantita',    Unita:'m³',    Prato:'',   Siepe:'',   VoceID:'terra-vegetale',    Ordine:18 },
   { TipoID:'livellamento',            Nome:'Livellamento terra',       dettaglio:'niente',      Unita:'',      Prato:'',   Siepe:'',   VoceID:'',                  Ordine:19 },
@@ -2911,7 +2913,6 @@ function aggiornaConto() {
 // e che solo chi è in giardino sa. Le righe automatiche partono lo stesso col
 // rapportino, e si correggono in ufficio; chi vuole vedere cosa parte apre il
 // riepilogo, chiuso di suo.
-let riepilogoContoAperto = false;
 
 function renderContoRighe() {
   const el = document.getElementById('conto-righe');
@@ -2936,15 +2937,19 @@ function renderContoRighe() {
                 </select>`}
           </div>
         </div>`).join('')
-    : '<div class="dati-nota">Ore e materiali delle operazioni partono da soli. Qui va quello che non nasce da lì: un noleggio, uno smaltimento, una riparazione. Mentre scrivi compaiono le voci che ci sono già. I prezzi li mette l\'ufficio.</div>');
+    // Vuoto non dice niente: la casella sotto e il riepilogo bastano, e la
+    // spiegazione la si leggeva una volta e poi era solo da scavalcare.
+    : '');
   const riepilogo = document.getElementById('conto-riepilogo');
   if (!riepilogo) return;
   riepilogo.innerHTML = (contoCorrente.length
-      ? `<details class="conto-riepilogo" ${riepilogoContoAperto ? 'open' : ''} ontoggle="riepilogoContoAperto = this.open">
-          <summary>Cosa parte per il conto (${contoCorrente.length} ${contoCorrente.length === 1 ? 'voce' : 'voci'})</summary>
+      // Aperto: chiuso lo si apriva a ogni visita per controllare, ed è l'ultima
+      // cosa che si guarda prima di mandare il rapportino.
+      ? `<div class="conto-riepilogo">
+          <div class="conto-riepilogo-titolo">Cosa parte per il conto</div>
           <ul>${contoCorrente.map(r => `<li class="riepilogo-voce"><span>${perValore(r.Voce)}</span>
             <span>${perValore(quantita(r))}${r.Prezzo != null ? ' · ' + perValore(String(r.Prezzo).replace('.', ',')) + ' € cad.' : ''}</span></li>`).join('')}</ul>
-        </details>`
+        </div>`
       : '');
 }
 

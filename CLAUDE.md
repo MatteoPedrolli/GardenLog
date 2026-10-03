@@ -259,12 +259,16 @@ informazioni due volte, una da compilare e una da rileggere. Chi le separa di
 nuovo reintroduce quella copia.
 
 **E il conto non ripete quello che sta sopra.** In fondo alla visita c'è solo
-**«Altro da conteggiare»**: quello che non nasce da ore e operazioni — un noleggio,
+**«Altro»**, una casella e basta — la spiegazione che c'era sotto la si leggeva
+una volta e poi era solo da scavalcare: quello che non nasce da ore e operazioni — un noleggio,
 uno smaltimento — e che sa solo chi è in giardino. Le righe automatiche
 (manodopera, trasferimento, i materiali delle operazioni) non si mostrano più una
 per una: erano ore e operazioni dette una seconda volta. Si calcolano lo stesso,
 stanno in `contoCorrente` e partono col rapportino come prima; si leggono nel
-riepilogo **«Cosa parte per il conto»**, chiuso di suo, e si correggono in ufficio.
+riepilogo **«Cosa parte per il conto»**, aperto e separato da una riga — chiuso lo
+si apriva a ogni visita, ed è l'ultima cosa che si guarda prima di mandare — e si
+correggono in ufficio. Sotto, **«Salva e invia»** è il bottone scuro e viene per
+primo: è quello di tutti i giorni; «Salva» da solo serve a fermarsi a metà.
 Dal telefono non si toglie più il trasferimento né si ritocca la manodopera: le
 ore si correggono sulla fascia, il resto lo decide chi fattura.
 

@@ -133,13 +133,21 @@ try {
   // Senza prezzi: il listino sta in ufficio. Il cantiere dice cosa è stato fatto
   // e quanto, che è la cosa che solo lui sa.
   // Le righe che nascono da ore e operazioni non si ripetono una per una: stanno
-  // nel riepilogo chiuso, e partono lo stesso col rapportino.
+  // nel riepilogo, e partono lo stesso col rapportino.
   const voceRiepilogo = i => page.locator('#conto-riepilogo .riepilogo-voce').nth(i);
   ok('tre righe automatiche nel riepilogo: manodopera, trasferimento, concime',
     await page.locator('#conto-riepilogo .riepilogo-voce').count() === 3);
   ok('che non si ripetono come righe da compilare',
     await page.locator('#conto-righe .conto-riga').count() === 0);
-  ok('e il riepilogo parte chiuso', !(await page.locator('#conto-riepilogo details').evaluate(d => d.open)));
+  ok('e il riepilogo si legge aperto, senza toccarlo',
+    await page.locator('#conto-riepilogo details').count() === 0 && await voceRiepilogo(0).isVisible());
+  // Salva e invia è quello di tutti i giorni: scuro e per primo.
+  ok('«Salva e invia» è il bottone scuro, prima di «Salva»',
+    await page.evaluate(() => {
+      const invia = document.getElementById('btn-salva-invia'), salva = document.getElementById('btn-salva-visita');
+      return invia.classList.contains('btn-primary') && salva.classList.contains('btn-secondary') &&
+        !!(invia.compareDocumentPosition(salva) & Node.DOCUMENT_POSITION_FOLLOWING);
+    }));
   ok('manodopera con le ore calcolate', (await voceRiepilogo(0).textContent()).includes('8 h'),
     await voceRiepilogo(0).textContent());
   ok('il trasferimento c\'è sempre, senza aggiungerlo',
