@@ -609,7 +609,7 @@ input.vuoto { background: #fffdf5; border-color: #ecdca8; }
     <button class="voce-barra" id="v-da-pagare" onclick="apriArchivio('da-fatturare')">
       <span>🧾</span> Da pagare <span class="pallino" id="pallino-da-pagare">0</span>
     </button>
-    <button class="voce-barra" id="v-pagati" onclick="apriArchivio('fatturato')"><span>🗂️</span> Pagati</button>
+    <button class="voce-barra" id="v-pagati" onclick="apriArchivio('fatturato')"><span>🗂️</span> Lavori chiusi</button>
     <button class="voce-barra" id="v-listino" onclick="vaiA('listino')"><span>🏷️</span> Listino</button>
     <button class="voce-barra" id="v-impostazioni" onclick="vaiA('impostazioni')"><span>⚙️</span> Impostazioni</button>
     <div id="stato-cartella">Nessuna cartella collegata</div>
@@ -2088,6 +2088,14 @@ async function ricontrolla() {
 // La più recente per prima. Le righe sono poche e corte apposta: un elenco lungo
 // non si legge, e quello che non si legge tanto vale non scriverlo.
 const NOVITA = [
+  {
+    versione: '2026-10-05.3',
+    data: '2026-10-05',
+    titolo: 'Lavori chiusi',
+    righe: [
+      'La voce «Pagati» della barra adesso si chiama **Lavori chiusi**: dentro ci sono gli stessi conti, quelli già pagati.',
+    ],
+  },
   {
     versione: '2026-10-05.2',
     data: '2026-10-05',
@@ -3999,7 +4007,7 @@ function disegnaArchivio() {
 
   const qui = STATO_ARCHIVIO === 'fatturato' ? ARCHIVIO.filter(pagato) : ARCHIVIO.filter(l => !pagato(l));
   let html = '<p class="sottotitolo">' + qui.length + (STATO_ARCHIVIO === 'fatturato'
-    ? (qui.length === 1 ? ' lavoro pagato' : ' lavori pagati')
+    ? (qui.length === 1 ? ' lavoro chiuso' : ' lavori chiusi')
     : (qui.length === 1 ? ' lavoro da pagare' : ' lavori da pagare')) + '</p>';
 
   html += '<div class="tavolo">';
@@ -4028,7 +4036,7 @@ function disegnaArchivio() {
   html += '<section class="coda"><h3 class="titolo-colonna">Gestionale</h3>' +
     '<div class="elenco-stati">' +
       voce('da-fatturare', 'Da pagare') +
-      voce('fatturato', 'Pagati') +
+      voce('fatturato', 'Chiusi') +
     '</div>' +
     '<h3 class="titolo-colonna" style="margin-top:18px">Raccogli</h3>' +
     '<div class="elenco-stati">' +
@@ -4068,7 +4076,7 @@ function righeArchivioSole() {
   if (!lavori.length) {
     return '<div class="scheda"><div class="vuoto-elenco">' +
       (FILTRO_ARCHIVIO.trim() || CLIENTE_ARCHIVIO ? 'Nessun lavoro con questi filtri.'
-        : STATO_ARCHIVIO === 'fatturato' ? 'Nessun lavoro pagato.' : 'Niente da pagare: è tutto incassato.') +
+        : STATO_ARCHIVIO === 'fatturato' ? 'Nessun lavoro chiuso.' : 'Niente da pagare: è tutto incassato.') +
       '</div></div>';
   }
   if (RACCOLTA_ARCHIVIO !== 'cliente') return lavori.map(schedaArchivio).join('');

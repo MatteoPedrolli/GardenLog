@@ -972,7 +972,10 @@ arrivo e si riarchivia — è la solita regola, in arrivo perché l'archivio non
 copia — mentre se non c'è più, quel file era l'unica copia rimasta di lavoro fatto
 e non torna. Una conferma che dicesse sempre la stessa frase servirebbe a niente.
 
-**L'archivio è due voci della barra: «Da pagare» e «Pagati».** Era una pagina sola
+**L'archivio è due voci della barra: «Da pagare» e «Lavori chiusi».** Si chiamava
+«Pagati», ed è stato rinominato: in ufficio quella è la cartella dei lavori finiti,
+e «chiusi» è la parola che si usa. Dentro il gestionale è «Chiusi», e il cartellino
+del singolo conto continua a dire «pagato», perché è il suo stato. Era una pagina sola
 col filtro e, guardando «Tutto», divisa in due parti; il capo l'ha voluto separato
 davvero, perché sono due domande diverse — cosa devo ancora incassare, cosa è chiuso
 — e due voci dicono subito dove si è. Non c'è più un «Tutto». La pagina resta una

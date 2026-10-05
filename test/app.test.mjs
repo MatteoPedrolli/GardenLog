@@ -2580,8 +2580,8 @@ try {
 
   const archivio = await pagU.evaluate(() => { vaiA('archivio'); return document.getElementById('pagina-archivio').innerHTML; });
   ok('a sinistra c\'è il gestionale con i due stati',
-    archivio.includes('Da pagare') && archivio.includes('Pagati') && archivio.includes('Gestionale'));
-  // L'archivio è due: le voci «Da pagare» e «Pagati» nella barra, e ognuna
+    archivio.includes('Da pagare') && archivio.includes('Chiusi') && archivio.includes('Gestionale'));
+  // L'archivio è due: le voci «Da pagare» e «Lavori chiusi» nella barra, e ognuna
   // mostra solo i suoi. Mescolati, un conto aperto si perdeva fra i chiusi.
   const dueArchivi = await pagU.evaluate(() => {
     // a questo punto del giro sono pagati tutti e due: uno torna aperto, per la prova
@@ -2604,7 +2604,7 @@ try {
   ok('«Da pagare» nella barra mostra solo i conti aperti, e il pallino li conta',
     dueArchivi.daPagare.voce === 'v-da-pagare' && JSON.stringify(dueArchivi.daPagare.lista) === JSON.stringify([dueArchivi.aperto]) &&
     dueArchivi.daPagare.pallino === '1', JSON.stringify(dueArchivi));
-  ok('«Pagati» solo quelli chiusi', dueArchivi.pagati.voce === 'v-pagati' &&
+  ok('«Lavori chiusi» solo quelli già pagati', dueArchivi.pagati.voce === 'v-pagati' &&
     dueArchivi.pagati.lista.length === 1 && !dueArchivi.pagati.lista.includes(dueArchivi.aperto), JSON.stringify(dueArchivi.pagati));
   ok('e un lavoro aperto da lì resta sotto la voce da cui si è entrati', dueArchivi.dentro === 'v-pagati', dueArchivi.dentro);
   ok('e con quanto c\'è ancora da incassare', archivio.includes('stato-somma'));
