@@ -1222,6 +1222,40 @@ try {
   // ── piantumazione: più piante diverse, ognuna col suo nome, numero e prezzo ──
   // In un lavoro se ne mettono di più tipi, e il prezzo sta sull'etichetta del
   // vaso: è l'unico prezzo che si scrive sul telefono.
+  // Due concimi diversi sullo stesso prato: il + accanto alla lavorazione
+  // spuntata ne aggiunge un'altra, vuota, con la sua riga nel conto.
+  const dueConcimi = await page.evaluate(() => {
+    openNuovaVisita();
+    const s = settorePerSpuntare('concimazione', '');
+    apriSettore(s.SettoreID);
+    const piuPrima = !!document.querySelector('.op-riga .op-piu');
+    spuntaOperazione('concimazione', s.SettoreID);
+    const bottone = [...document.querySelectorAll('.op-riga.on')].find(r => r.textContent.includes('Concimazione'))
+      .querySelector('.op-piu');
+    bottone.click();
+    const ops = pendingOperazioni.filter(o => o.TipoID === 'concimazione');
+    const [c1, c2] = DB.concimi;
+    modificaOperazione(pendingOperazioni.indexOf(ops[0]), 'ConcimeID', c1.ConcimeID);
+    modificaOperazione(pendingOperazioni.indexOf(ops[0]), 'Quantita', '10');
+    modificaOperazione(pendingOperazioni.indexOf(ops[1]), 'ConcimeID', (c2 || c1).ConcimeID);
+    modificaOperazione(pendingOperazioni.indexOf(ops[1]), 'Quantita', '5');
+    const r = { piuPrima, quante: ops.length, idDiversi: ops[0].OperazioneID !== ops[1].OperazioneID,
+      stessoSettore: ops[0].Settore === ops[1].Settore,
+      righe: contoCorrente.filter(x => ops.some(o => o.OperazioneID === x.Chiave)).length,
+      via: document.querySelectorAll('#operazioni-check .op-dett .via').length,
+      piuTaglio: (() => { const t = DB.tipiOperazione.find(x => x.dettaglio === 'niente' || !x.dettaglio); return t ? haDettaglio(t) : false; })() };
+    togliOperazione(pendingOperazioni.indexOf(ops[1]));
+    r.dopoTolta = pendingOperazioni.filter(o => o.TipoID === 'concimazione').length;
+    closeDrawer('overlay-visita');
+    return r;
+  });
+  ok('il + compare solo accanto a una lavorazione spuntata', !dueConcimi.piuPrima);
+  ok('e aggiunge un altro concime nello stesso settore, con la sua riga nel conto',
+    dueConcimi.quante === 2 && dueConcimi.idDiversi && dueConcimi.stessoSettore && dueConcimi.righe === 2,
+    JSON.stringify(dueConcimi));
+  ok('ognuno dei due si toglie da sé', dueConcimi.via === 2 && dueConcimi.dopoTolta === 1, JSON.stringify(dueConcimi));
+  ok('una lavorazione senza niente da distinguere non ha il +', dueConcimi.piuTaglio === false);
+
   const piante = await page.evaluate(() => {
     openNuovaVisita();
     apriSettore('piantumazione');

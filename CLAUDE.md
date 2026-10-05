@@ -146,6 +146,14 @@ nessuna versione alzata.
 sono spuntate dentro: nascondere una cosa segnata è il modo migliore per fartela
 dimenticare.
 
+**Il + accanto a una lavorazione spuntata ne aggiunge un'altra uguale**
+(`aggiungiUguale()`): due concimi diversi sullo stesso prato, due fitofarmaci, dodici
+lauri e tre aceri. È un'operazione in più dello stesso tipo e settore, vuota, con la
+sua riga nel conto; con più d'una ognuna ha la sua ✕. Il + c'è **solo dove c'è
+qualcosa da distinguere** — un prodotto, una quantità, un «cosa» (`haDettaglio()`):
+due tagli prato nella stessa visita sarebbero la stessa cosa detta due volte. Era
+nato per le piante, col bottone «+ Un'altra pianta»; adesso è lo stesso per tutte.
+
 **I settori non sono legati fra loro.** Per un giorno una lavorazione in due
 settori è stata una sola, spuntata in tutti e due: la piantumazione delle aiuole
 compariva anche nella siepe, e creava solo confusione. Le aiuole e la siepe sono

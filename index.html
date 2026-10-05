@@ -492,6 +492,13 @@ select.form-control { background-image: url("data:image/svg+xml,%3Csvg xmlns='ht
 .op-dett input[type=text] { flex: 1; min-width: 0; padding: 9px 8px; font-size: 0.85rem; }
 .op-dett .unita { font-size: 0.78rem; color: var(--text-light); min-width: 36px; }
 .op-pianta input[type=number] { width: 64px; }
+/* Piccolo e a destra, ma grande abbastanza per il pollice: è un bottone dentro
+   una riga che si tocca per spuntare. */
+.op-piu {
+  flex-shrink: 0; width: 30px; height: 30px; border-radius: 8px; padding: 0;
+  border: 1px solid var(--velo); background: var(--white); color: var(--inchiostro-tenue);
+  font-size: 1.1rem; font-weight: 600; line-height: 1; cursor: pointer;
+}
 .scelte-arch { display: flex; flex-direction: column; gap: 6px; font-size: 0.9rem; }
 .scelte-arch label { display: flex; align-items: center; gap: 8px; }
 .op-insieme { font-size: 0.72rem; color: var(--text-light); }
@@ -2328,16 +2335,25 @@ function componentiDi(insieme) {
 // con la ricerca.
 function rigaOperazione(tipo, settoreID, nota) {
   const ops = opDelTipo(tipo.TipoID, settoreID);
-  const altra = ePiantumazione(tipo) && ops.length
-    ? `<div class="op-dett"><button type="button" class="btn btn-secondary btn-sm" onclick="aggiungiPianta('${perOnclick(settoreID)}')">+ Un'altra pianta</button></div>`
+  // Il + accanto a una lavorazione spuntata ne aggiunge un'altra uguale: due
+  // concimi diversi sullo stesso prato, dodici lauri e tre aceri. Solo dove c'è
+  // qualcosa da distinguere — un prodotto, una quantità, un «cosa»: due tagli
+  // prato nella stessa visita sarebbero la stessa cosa detta due volte.
+  const piu = ops.length && haDettaglio(tipo)
+    ? `<button type="button" class="op-piu" onclick="event.stopPropagation(); aggiungiUguale('${perOnclick(tipo.TipoID)}', '${perOnclick(settoreID)}')"
+         title="Aggiungine un'altra" aria-label="Aggiungi un'altra ${perValore(tipo.Nome)}">+</button>`
     : '';
   const riga = `<div class="op-riga ${ops.length ? 'on' : ''}" onclick="spuntaOperazione('${perOnclick(tipo.TipoID)}', '${perOnclick(settoreID)}')">
       <span class="op-box">${ops.length ? '✓' : ''}</span>
       <span style="flex:1">${perValore(tipo.Nome)}</span>
       ${nota ? `<span class="op-insieme">${perValore(nota)}</span>` : ''}
+      ${piu}
     </div>`;
-  return riga + ops.map(o => dettaglioOperazione(tipo, o)).join('') + altra;
+  return riga + ops.map(o => dettaglioOperazione(tipo, o)).join('');
 }
+
+const haDettaglio = tipo => ePiantumazione(tipo) ||
+  ['concime', 'semente', 'fitofarmaco', 'quantita'].includes(tipo.dettaglio) || isSi(tipo.ChiedeCosa);
 
 // Spuntare apre solo i campi che quell'operazione richiede davvero: un taglio
 // prato non chiede niente, una concimazione chiede prodotto e quantità.
@@ -2373,6 +2389,10 @@ function dettaglioOperazione(tipo, op) {
   if (e || tipo.dettaglio === 'quantita') {
     campi.push(`<input type="number" step="any" min="0" placeholder="0" value="${perValore(op.Quantita)}" oninput="modificaOperazione(${i}, 'Quantita', this.value)">`);
     campi.push(`<span class="unita">${perValore(tipo.Unita)}</span>`);
+  }
+  // Con più d'una, ognuna si toglie da sé; l'ultima si toglie togliendo la spunta.
+  if (campi.length && opDelTipo(tipo.TipoID, settoreDiOperazione(op)).length > 1) {
+    campi.push(`<button type="button" class="via" onclick="togliOperazione(${i})" title="Togli questa">✕</button>`);
   }
   return campi.length ? `<div class="op-dett">${campi.join('')}</div>` : '';
 }
@@ -2549,14 +2569,19 @@ function spuntaOperazione(tipoID, settoreID) {
   aggiornaConto();
 }
 
-function aggiungiPianta(settoreID) {
-  const tipo = tipoDi('piantumazione');
+// Un'altra operazione dello stesso tipo nello stesso settore, vuota: è un altro
+// prodotto o un'altra pianta, e copiare i campi di quella sopra vorrebbe dire
+// doverli cancellare. Ognuna ha il suo id, e quindi la sua riga nel conto.
+function aggiungiUguale(tipoID, settoreID) {
+  const tipo = tipoDi(tipoID);
   if (!tipo) return;
-  const s = settorePerSpuntare('piantumazione', settoreID);
+  const s = settorePerSpuntare(tipoID, settoreID);
   pendingOperazioni.push({ ...nuovaOperazione(tipo), Settore: s ? s.SettoreID : '', SettoreNome: s ? s.Nome : '' });
   renderOperazioni();
   aggiornaConto();
 }
+
+const aggiungiPianta = settoreID => aggiungiUguale('piantumazione', settoreID);
 
 // Il conto segue: cambiare il concime o i chili cambia una sua riga, e rifare la lista farebbe
 // perdere il fuoco a chi sta scrivendo.
