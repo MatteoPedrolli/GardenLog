@@ -129,15 +129,15 @@ tr.cosa-fascia td { color: var(--text-mid); font-size: 0.86rem; padding-top: 0; 
 .etichetta.fatturato { background: var(--foglio); color: var(--inchiostro-tenue); }
 .etichetta.da-fatturare { background: var(--earth-light); color: var(--earth); }
 
-button.principale, button.secondaria, button.pericolo {
+button.principale, button.secondaria, button.pericolo, label.secondaria {
   font-family: var(--font-body); font-size: 0.92rem; font-weight: 500;
   padding: 10px 18px; border-radius: var(--radius-sm); cursor: pointer;
   border: 1px solid transparent; transition: all 0.15s;
 }
 button.principale { background: var(--inchiostro-tenue); color: var(--white); }
 button.principale:hover { background: var(--inchiostro); }
-button.secondaria { background: var(--white); color: var(--text-mid); border-color: var(--border); }
-button.secondaria:hover { border-color: var(--ocra); color: var(--inchiostro-tenue); }
+button.secondaria, label.secondaria { background: var(--white); color: var(--text-mid); border-color: var(--border); }
+button.secondaria:hover, label.secondaria:hover { border-color: var(--ocra); color: var(--inchiostro-tenue); }
 button.pericolo { background: var(--white); color: var(--red); border-color: #f2d4d0; }
 button.piccola { padding: 6px 12px; font-size: 0.82rem; }
 button.secondaria[disabled] { opacity: 0.55; cursor: default; border-color: var(--border); color: var(--text-light); }
@@ -582,7 +582,30 @@ input.vuoto { background: #fffdf5; border-color: #ecdca8; }
   margin-top: 26px; padding-top: 12px; border-top: 1px solid #ccc;
   font-size: 0.82rem; color: #333; white-space: pre-line;
 }
+.riga-logo { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
+.riga-logo img { max-height: 60px; max-width: 220px; border: 1px solid var(--border); border-radius: 6px; padding: 4px; background: #fff; }
+.bottone-file { display: inline-block; cursor: pointer; }
 #foglio .incompleto { margin-top: 16px; font-size: 0.85rem; color: #8a6d1f; }
+/* Il preventivo, come quelli veri: logo a sinistra, intestazione a destra,
+   destinatario a destra come in una lettera, e la tabella a griglia. */
+#foglio .prev-testata { display: flex; justify-content: space-between; align-items: flex-start; gap: 24px; margin-bottom: 26px; }
+#foglio .prev-logo img { max-width: 70mm; max-height: 30mm; display: block; }
+#foglio .prev-azienda { text-align: right; }
+#foglio .prev-destinatario { margin: 0 0 18px auto; width: 45%; font-size: 0.95rem; line-height: 1.45; }
+#foglio .prev-luogo-data { margin: 0 0 14px; font-size: 0.95rem; }
+#foglio .prev table.griglia { margin-top: 6px; }
+#foglio .prev table.griglia th, #foglio .prev table.griglia td {
+  border: 1px solid #000; padding: 5px 7px; vertical-align: top;
+}
+#foglio .prev table.griglia th { background: #eee; font-size: 0.78rem; letter-spacing: 0; text-transform: none; font-weight: 700; }
+#foglio .prev table.griglia td.num, #foglio .prev table.griglia th.num { padding-right: 7px; }
+#foglio .prev .centro { text-align: center; }
+/* Importi e unità su una riga: «1.599,20» con l'euro a capo si legge male. */
+#foglio .prev table.griglia td.num, #foglio .prev table.griglia td.centro { white-space: nowrap; width: 1%; }
+#foglio .prev table.griglia .riga-totale td { border: 1px solid #000; border-top: 2px solid #000; padding-top: 7px; font-size: 0.98rem; }
+#foglio .prev table.griglia tr.sezione-foglio td { padding-top: 10px; background: #f6f6f6; }
+#foglio .prev-firma { margin: 40px 0 0 auto; width: 45%; text-align: center; font-size: 0.95rem; }
+#foglio .prev-riga-firma { border-bottom: 1px solid #000; height: 34px; }
 
 #benvenuto { max-width: 560px; }
 #benvenuto .scheda { padding: 26px 28px; }
@@ -679,6 +702,11 @@ const MEZZE = ['mattina', 'pomeriggio'];
 // al listino, così il backup del PC li copre come tutto il resto.
 const IMPOSTAZIONI_VUOTE = {
   azienda: '', indirizzo: '', citta: '', piva: '', telefono: '', email: '',
+  // Il logo, come immagine dentro le impostazioni: è dell'azienda come
+  // l'intestazione, quindi vive nella cartella e non nel codice — il repository è
+  // pubblico — e il backup del PC lo copre col resto. Rimpicciolito al caricamento,
+  // perché un file da fotocamera gonfierebbe impostazioni.json per niente.
+  logo: '',
   nota: 'Questo documento non è una fattura.',
   // Le condizioni stanno in fondo al preventivo e non al conto: validità,
   // caparra, cosa succede se il lavoro cambia. Sono di un'azienda vera, quindi
@@ -1881,10 +1909,9 @@ function mettiNelFoglio(html) {
     '<tbody><tr><td>' + html + '</td></tr></tbody></table>';
 }
 
-// Le fasce di un lavoro, una riga ciascuna, col giorno davanti. Il giorno è
-// quello della visita: le fasce non ne hanno uno loro. Il capo lo voleva accanto
-// agli orari perché in ufficio si guarda la riga, e la data in cima al lavoro
-// costringeva ad alzare gli occhi. Al cliente non arriva, come le fasce.
+// Le fasce di un lavoro, una riga ciascuna, col giorno davanti: il capo lo voleva
+// accanto agli orari perché in ufficio si guarda la riga, e la data in cima al
+// lavoro costringeva ad alzare gli occhi. Al cliente non arriva, come le fasce.
 // Ogni fascia porta il suo giorno, se il telefono l'ha scritto: un lavoro di più
 // giorni sta in un rapportino solo. I rapportini di prima non ce l'hanno, e vale
 // la data della visita.
@@ -2105,6 +2132,15 @@ function riassuntoRicontrolla() {
 // La più recente per prima. Le righe sono poche e corte apposta: un elenco lungo
 // non si legge, e quello che non si legge tanto vale non scriverlo.
 const NOVITA = [
+  {
+    versione: '2026-10-05.5',
+    data: '2026-10-05',
+    titolo: 'Il preventivo stampato come quelli di prima',
+    righe: [
+      'Il foglio del preventivo ha **il logo in alto a sinistra** e l\'intestazione a destra, lo «Spett.le» a destra, località e data per esteso, e le righe in una **tabella a griglia**: Descrizione, UM, Q.tà, Costo un., Totale.',
+      'Il logo si carica in **Impostazioni › Logo**: si sceglie l\'immagine e si preme Salva.',
+    ],
+  },
   {
     versione: '2026-10-05.4',
     data: '2026-10-05',
@@ -3556,30 +3592,48 @@ function stampaSchedaCantiere() {
   window.print();
 }
 
+// La località per la riga della data, «Lavis, 5 ottobre 2026»: il paese della
+// sede senza CAP e senza provincia, che in Impostazioni ci sono per l'intestazione.
+function localitaAzienda() {
+  return String(IMPOSTAZIONI.citta || '').replace(/^\s*\d{5}\s*/, '').replace(/\s*\([A-Za-z]{2}\)\s*$/, '').trim();
+}
+
+function dataPerEsteso(iso) {
+  const d = new Date(String(iso || '').slice(0, 10) + 'T12:00:00');
+  return isNaN(d) ? '' : d.toLocaleDateString('it-IT', { day: 'numeric', month: 'long', year: 'numeric' });
+}
+
+// Il foglio del preventivo ricalca quelli veri, che il cliente ha sempre visto
+// così: **il logo in alto a sinistra e l'intestazione a destra**, lo «Spett.le»
+// a destra come in una lettera, località e data per esteso, la frase d'apertura,
+// e le righe in una **tabella a griglia** — Descrizione, UM, Q.tà, Costo un.,
+// Totale, in quest'ordine, con l'unità prima della quantità come sui fogli veri.
+// Un titolo «Preventivo» in grande non c'era, e non c'è.
 function costruisciFoglioPreventivo(d) {
   const t = totaliPreventivo(d);
-  const sede = [IMPOSTAZIONI.indirizzo, IMPOSTAZIONI.citta].filter(x => x).join(' · ');
-  const contatti = [
+  const c = d.cliente || {};
+  const righeIntestazione = [
+    IMPOSTAZIONI.indirizzo, IMPOSTAZIONI.citta,
     IMPOSTAZIONI.piva ? 'P.IVA ' + IMPOSTAZIONI.piva : '',
-    IMPOSTAZIONI.telefono, IMPOSTAZIONI.email,
-  ].filter(x => x).join(' · ');
+    IMPOSTAZIONI.telefono ? 'Tel. ' + IMPOSTAZIONI.telefono : '', IMPOSTAZIONI.email,
+  ].filter(x => x);
 
-  let html = '<div class="intestazione">' +
-    '<div class="azienda">' + perValore(IMPOSTAZIONI.azienda) + '</div>' +
-    (sede ? '<div class="recapiti">' + perValore(sede) + '</div>' : '') +
-    (contatti ? '<div class="recapiti">' + perValore(contatti) + '</div>' : '') +
-  '</div>';
-
-  html += '<h1>Preventivo</h1>';
-  html += '<div class="a-chi">' +
-    '<div><div class="etichetta-campo">Spett.le</div>' +
-      '<strong>' + perValore((d.cliente && d.cliente.nome) || '') + '</strong>' +
-      ((d.cliente && d.cliente.indirizzo) ? '<br>' + perValore(d.cliente.indirizzo) : '') +
-      ((d.cliente && d.cliente.citta) ? '<br>' + perValore(d.cliente.citta) : '') +
+  let html = '<div class="prev">';
+  html += '<div class="prev-testata">' +
+    '<div class="prev-logo">' + (IMPOSTAZIONI.logo
+      ? '<img src="' + perValore(IMPOSTAZIONI.logo) + '" alt="">' : '') + '</div>' +
+    '<div class="prev-azienda">' +
+      '<div class="azienda">' + perValore(IMPOSTAZIONI.azienda) + '</div>' +
+      righeIntestazione.map(x => '<div class="recapiti">' + perValore(x) + '</div>').join('') +
     '</div>' +
-    '<div style="text-align:right"><div class="etichetta-campo">Data</div>' +
-      '<strong>' + formattaData(d.creato) + '</strong></div>' +
   '</div>';
+
+  html += '<div class="prev-destinatario">Spett.le<br>' +
+    '<strong>' + perValore(c.nome || '') + '</strong>' +
+    [c.indirizzo, c.citta, c.telefono, c.email].filter(x => x).map(x => '<br>' + perValore(x)).join('') +
+  '</div>';
+  const luogo = localitaAzienda();
+  html += '<p class="prev-luogo-data">' + perValore((luogo ? luogo + ', ' : '') + dataPerEsteso(d.creato)) + '</p>';
 
   // La frase che apre tutti i preventivi veri letti finora, parola per parola.
   html += '<p class="apertura">A seguito Vostra gentile richiesta, Vi comunichiamo la nostra ' +
@@ -3596,14 +3650,14 @@ function costruisciFoglioPreventivo(d) {
     const imp = importoRiga(r);
     return '<tr>' +
       '<td>' + perValore(r.descrizione || r.voce) + '</td>' +
+      '<td class="centro">' + perValore(r.unita) + '</td>' +
       '<td class="num">' + perValore(formattaQuantita(r.quantita)) + '</td>' +
-      '<td>' + perValore(r.unita) + '</td>' +
       '<td class="num">' + (r.prezzo === '' || r.prezzo == null ? '' : formattaEuro(r.prezzo)) + '</td>' +
       '<td class="num">' + (imp == null ? '<span class="da-definire">da definire</span>' : formattaEuro(imp)) + '</td>' +
     '</tr>';
   };
-  const intestazioneTabella = '<table><thead><tr><th>Descrizione</th><th class="num">Q.tà</th>' +
-    '<th>UM</th><th class="num">Costo un.</th><th class="num">Totale</th></tr></thead><tbody>';
+  const intestazioneTabella = '<table class="griglia"><thead><tr><th>Descrizione</th><th class="centro">UM</th>' +
+    '<th class="num">Q.tà</th><th class="num">Costo un.</th><th class="num">Totale</th></tr></thead><tbody>';
   const soluzioni = soluzioniDi(d);
   const comuni = d.righe.filter(r => r.tipo !== 'tariffa' && !r.soluzione);
 
@@ -3630,7 +3684,7 @@ function costruisciFoglioPreventivo(d) {
       if (!sue.length) {
         html += '<p class="apertura" style="margin:6px 0">Le sole lavorazioni elencate sopra.</p>';
       }
-      html += (sue.length ? intestazioneTabella : '<table><tbody>');
+      html += (sue.length ? intestazioneTabella : '<table class="griglia"><tbody>');
       sue.forEach(r => { html += rigaStampata(r); });
       html += '<tr class="riga-totale"><td colspan="4">TOTALE ' +
         perValore(sol.nome).toUpperCase() + ' S.E. &amp; O. (IVA inclusa)</td>' +
@@ -3643,11 +3697,11 @@ function costruisciFoglioPreventivo(d) {
   // cosa che forse servirà, e sommarle direbbe una cifra che non esiste.
   const tariffe = d.righe.filter(r => r.tipo === 'tariffa');
   if (tariffe.length) {
-    html += '<table class="tariffe"><thead><tr><th>Non compreso nel totale</th>' +
-      '<th>UM</th><th class="num">Prezzo</th></tr></thead><tbody>';
+    html += '<table class="tariffe griglia"><thead><tr><th>Non compreso nel totale</th>' +
+      '<th class="centro">UM</th><th class="num">Prezzo</th></tr></thead><tbody>';
     tariffe.forEach(r => {
       html += '<tr><td>' + perValore(r.descrizione || r.voce) + '</td>' +
-        '<td>' + perValore(r.unita) + '</td>' +
+        '<td class="centro">' + perValore(r.unita) + '</td>' +
         '<td class="num">' + (r.prezzo === '' || r.prezzo == null ? '' : formattaEuro(r.prezzo)) + '</td></tr>';
     });
     html += '</tbody></table>';
@@ -3663,6 +3717,10 @@ function costruisciFoglioPreventivo(d) {
   if (IMPOSTAZIONI.condizioni) {
     html += '<div class="nota-sotto">' + perValore(IMPOSTAZIONI.condizioni) + '</div>';
   }
+  // La firma, in basso a destra, col nome dell'azienda sopra la riga.
+  html += '<div class="prev-firma"><div>' + perValore(IMPOSTAZIONI.azienda) + '</div>' +
+    '<div class="prev-riga-firma"></div></div>';
+  html += '</div>';
   return html;
 }
 
@@ -5441,6 +5499,15 @@ function disegnaImpostazioni() {
         '" oninput="modificaImpostazione(\'' + campo + '\', this.value)"></td></tr>';
   });
   html += '</tbody></table>';
+  // Il logo va in alto a sinistra sul preventivo, come sui fogli veri.
+  html += '<div class="titolo-sezione" style="margin-top:18px">Logo</div>';
+  html += '<div class="riga-logo">' +
+    (IMPOSTAZIONI.logo ? '<img src="' + perValore(IMPOSTAZIONI.logo) + '" alt="logo" id="anteprima-logo">'
+      : '<span class="meta">Nessun logo: il preventivo esce con la sola intestazione.</span>') +
+    '<label class="secondaria bottone-file">Scegli un\'immagine<input type="file" accept="image/*" ' +
+      'onchange="caricaLogo(this.files[0])" style="display:none"></label>' +
+    (IMPOSTAZIONI.logo ? '<button class="secondaria" onclick="togliLogo()">Togli</button>' : '') +
+  '</div>';
   html += '<div class="titolo-sezione" style="margin-top:18px">Nota in fondo al foglio</div>';
   html += '<textarea rows="3" oninput="modificaImpostazione(\'nota\', this.value)">' +
     perValore(IMPOSTAZIONI.nota) + '</textarea>';
@@ -5460,6 +5527,43 @@ function disegnaImpostazioni() {
   html += '</div>';
 
   c.innerHTML = html;
+}
+
+// Il logo si rimpicciolisce prima di finire in impostazioni.json: una foto o un
+// file da tipografia pesano megabyte, e sulla carta bastano pochi centimetri. In
+// PNG, perché un logo ha spesso lo sfondo trasparente.
+const LATO_LOGO = 600;
+async function caricaLogo(file) {
+  if (!file) return;
+  try {
+    const url = await new Promise((ok, ko) => {
+      const r = new FileReader();
+      r.onload = () => ok(r.result);
+      r.onerror = () => ko(new Error('non riesco a leggere il file'));
+      r.readAsDataURL(file);
+    });
+    const img = await new Promise((ok, ko) => {
+      const i = new Image();
+      i.onload = () => ok(i);
+      i.onerror = () => ko(new Error('il file non è un\'immagine'));
+      i.src = url;
+    });
+    const scala = Math.min(1, LATO_LOGO / Math.max(img.width, img.height));
+    const tela = document.createElement('canvas');
+    tela.width = Math.max(1, Math.round(img.width * scala));
+    tela.height = Math.max(1, Math.round(img.height * scala));
+    tela.getContext('2d').drawImage(img, 0, 0, tela.width, tela.height);
+    modificaImpostazione('logo', tela.toDataURL('image/png'));
+    disegnaImpostazioni();
+    avvisa('Logo caricato: premi Salva per tenerlo');
+  } catch (e) {
+    avvisa('Logo non caricato: ' + e.message, true);
+  }
+}
+
+function togliLogo() {
+  modificaImpostazione('logo', '');
+  disegnaImpostazioni();
 }
 
 // Un foglio di prova con righe finte: serve a vedere l'intestazione sulla carta

@@ -3522,6 +3522,45 @@ try {
     !foglioPrev.html.includes('ore stimate in giardino') && !foglioPrev.html.includes('17,5'));
   ok('e la frase di apertura dei preventivi veri',
     foglioPrev.html.includes('migliore offerta'));
+  // Come i preventivi veri: logo a sinistra e intestazione a destra, località e
+  // data per esteso, la tabella a griglia con l'unità prima della quantità.
+  const formaPrev = await pagU.evaluate(async () => {
+    const tenute = { ...IMPOSTAZIONI };
+    // Un logo vero passa dal caricamento: si rimpicciolisce e finisce nelle impostazioni.
+    const tela = document.createElement('canvas'); tela.width = 1600; tela.height = 400;
+    tela.getContext('2d').fillRect(0, 0, 1600, 400);
+    const blob = await new Promise(ok => tela.toBlob(ok, 'image/png'));
+    vaiA('impostazioni');
+    await caricaLogo(new File([blob], 'logo.png', { type: 'image/png' }));
+    const caricato = await new Promise(ok => { const i = new Image(); i.onload = () => ok(i.width + 'x' + i.height); i.src = IMPOSTAZIONI.logo; });
+    const inImpostazioni = !!document.getElementById('anteprima-logo');
+    Object.assign(IMPOSTAZIONI, { azienda: 'Giardini Prova', citta: '38015 Lavis (TN)', indirizzo: 'Via dei Prati 1' });
+    mettiNelFoglio(costruisciFoglioPreventivo({ ...PREVENTIVO.doc, creato: '2026-10-05T08:00:00Z' }));
+    const f = document.getElementById('foglio');
+    const testata = f.querySelector('.prev-testata');
+    const r = {
+      caricato, inImpostazioni,
+      logoPrima: testata && testata.firstElementChild.querySelector('img') != null,
+      aziendaDopo: testata && testata.lastElementChild.textContent.includes('Giardini Prova'),
+      colonne: [...f.querySelectorAll('table.griglia thead th')].slice(0, 5).map(th => th.textContent).join('|'),
+      luogo: (f.querySelector('.prev-luogo-data') || {}).textContent,
+      firma: !!f.querySelector('.prev-firma'),
+      titolone: !!f.querySelector('h1'),
+    };
+    Object.keys(IMPOSTAZIONI).forEach(k => delete IMPOSTAZIONI[k]);
+    Object.assign(IMPOSTAZIONI, tenute);
+    IMPOSTAZIONI_DA_SALVARE = false;
+    vaiA('preventivo');
+    return r;
+  });
+  ok('il logo si carica rimpicciolito, e si vede nelle impostazioni',
+    formaPrev.caricato === '600x150' && formaPrev.inImpostazioni, formaPrev.caricato);
+  ok('sul foglio il logo sta a sinistra e l\'intestazione a destra, senza un titolo in grande',
+    formaPrev.logoPrima && formaPrev.aziendaDopo && !formaPrev.titolone, JSON.stringify(formaPrev));
+  ok('la tabella è quella dei preventivi veri: Descrizione, UM, Q.tà, Costo un., Totale',
+    formaPrev.colonne === 'Descrizione|UM|Q.tà|Costo un.|Totale', formaPrev.colonne);
+  ok('con la località senza CAP e la data per esteso, e la firma in fondo',
+    formaPrev.luogo === 'Lavis, 5 ottobre 2026' && formaPrev.firma, formaPrev.luogo);
   ok('la tariffa sta sotto il totale, fuori da esso',
     foglioPrev.html.includes('Non compreso nel totale') &&
     foglioPrev.html.includes('Eventuale conferimento a discarica'));

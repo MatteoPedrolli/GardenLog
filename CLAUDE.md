@@ -1042,7 +1042,16 @@ riga, o il foglio dichiara una cosa e ne mostra un'altra.
 **L'intestazione non sta nel codice.** Sono i dati di un'azienda vera: vivono in
 `impostazioni.json` nella cartella, si compilano in Impostazioni e il backup del PC
 li copre come tutto il resto. Se mancano, la stampa avvisa ma non si rifiuta — la
-decisione resta di chi stampa.
+decisione resta di chi stampa. **Il logo** sta lì con lei (`IMPOSTAZIONI.logo`, un
+PNG rimpicciolito a 600 px al caricamento, `caricaLogo()`): il repository è pubblico,
+e un file da tipografia gonfierebbe impostazioni.json per niente.
+
+**Il preventivo stampato ricalca quelli veri**, che il cliente ha sempre visto
+così: **logo in alto a sinistra, intestazione a destra**, «Spett.le» a destra come
+in una lettera, «Lavis, 5 ottobre 2026» (`localitaAzienda()`, il paese senza CAP né
+provincia), la frase d'apertura, e le righe in una **tabella a griglia** con le
+colonne nell'ordine dei fogli veri — Descrizione, UM, Q.tà, Costo un., Totale — e la
+firma in fondo a destra. Un titolo «Preventivo» in grande non c'era, e non c'è.
 
 **Accanto a ogni «Stampa» c'è «Stampa senza intestazione»**, per la carta
 intestata: i dati dell'azienda ci sono già stampati, e ripeterli sopra li
