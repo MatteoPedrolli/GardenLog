@@ -3308,6 +3308,13 @@ try {
     schermoRilievi.slice(0, 160));
   // Le righe non stanno nell'elenco ma nella schermata del preventivo, dove si
   // prezzano: qui basta quanto lavoro è, per decidere da quale cominciare.
+  // «Ricontrolla» contava solo i rapportini: un rilievo arrivato non compariva nel
+  // messaggio, e «1 da lavorare» faceva cercare un rapportino fra i preventivi.
+  ok('dopo una rilettura il messaggio dice rapportini e rilievi, e dove stanno',
+    await pagU.evaluate(() => {
+      const m = riassuntoRicontrolla();
+      return /rilievo da preventivare in «Preventivi»/.test(m) && (!ARRIVI.length || /in «In arrivo»/.test(m));
+    }), await pagU.evaluate(() => riassuntoRicontrolla()));
   ok('l\'elenco dice quante lavorazioni e quante mezze giornate, non le lavorazioni stesse',
     schermoRilievi.includes('3 lavorazioni') && schermoRilievi.includes('3 mezze giornate'),
     schermoRilievi.slice(0, 200));

@@ -2072,7 +2072,24 @@ async function ricontrolla() {
     return;
   }
   disegna();
-  avvisa(ARRIVI.length ? ARRIVI.length + ' da lavorare' : 'Niente di nuovo');
+  avvisa(riassuntoRicontrolla());
+}
+
+// Cosa c'è da fare dopo una rilettura, detto per nome e con dove andare a
+// cercarlo. Diceva solo «1 da lavorare», contando i rapportini: arrivato un
+// rilievo, quel numero faceva cercare fra i preventivi un rapportino che stava
+// in «In arrivo» — e il rilievo, che il numero non contava, sembrava sparito.
+function riassuntoRicontrolla() {
+  const parti = [];
+  if (ARRIVI.length) {
+    parti.push(ARRIVI.length + (ARRIVI.length === 1 ? ' rapportino' : ' rapportini') + ' in «In arrivo»');
+  }
+  const rilievi = rilieviDaPreventivare().length;
+  if (rilievi) {
+    parti.push(rilievi + (rilievi === 1 ? ' rilievo da preventivare' : ' rilievi da preventivare') +
+      ' in «Preventivi»');
+  }
+  return parti.length ? parti.join(' · ') : 'Niente di nuovo';
 }
 
 // ── COSA C'È DI NUOVO ──
@@ -2088,6 +2105,14 @@ async function ricontrolla() {
 // La più recente per prima. Le righe sono poche e corte apposta: un elenco lungo
 // non si legge, e quello che non si legge tanto vale non scriverlo.
 const NOVITA = [
+  {
+    versione: '2026-10-05.4',
+    data: '2026-10-05',
+    titolo: '«Ricontrolla» dice cosa è arrivato',
+    righe: [
+      'Dopo una rilettura il messaggio dice **quanti rapportini** sono in «In arrivo» e **quanti rilievi** aspettano in «Preventivi». Prima contava solo i rapportini.',
+    ],
+  },
   {
     versione: '2026-10-05.3',
     data: '2026-10-05',
