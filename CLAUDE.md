@@ -1039,6 +1039,15 @@ guardando il foglio che si ha in mano, e un dialogo in più a ogni conto è un c
 in più per tutti. Senza intestazione l'avviso sull'intestazione mancante non
 compare: non serve.
 
+**Chrome non stampa data, titolo e indirizzo dell'app**: li scriveva nel margine
+della pagina, in testa e in fondo, e su un conto per un cliente non c'entrano. Per
+toglierli `@page` ha margine zero, e il bianco attorno lo rimettono due fasce vuote,
+testa e piede di una tabella attorno a tutto il foglio (`mettiNelFoglio()`): in
+stampa teste e piedi di tabella si ripetono a ogni pagina, un padding no. Tutto
+quello che si stampa passa da lì. La classe è `foglio-pagina` e non `pagina`: quella
+è delle schermate dell'app, che stanno nascoste — con quel nome il foglio usciva
+bianco.
+
 Il titolo della pagina viene cambiato prima di stampare, perché Chrome lo propone
 come nome del file in PDF, e rimesso a posto su `afterprint`: rimetterlo subito
 darebbe un file chiamato «GiardinoApp · Ufficio».

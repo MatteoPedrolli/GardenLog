@@ -2005,6 +2005,30 @@ try {
   ok('né quello che si è scritto sulle fasce, che resta in ufficio', !foglio.html.includes('Potatura siepe lato strada'));
   ok('il nome che Chrome proporrà per il PDF parla di conto e cliente',
     /^Conto \d{4}-\d{2}-\d{2} Mario Rossi/.test(foglio.titolo), foglio.titolo);
+  // Data, titolo e indirizzo dell'app li stampa Chrome nel margine della pagina:
+  // a margine zero non ha dove metterli. Il bianco lo rimettono le fasce della
+  // tabella, che si ripetono a ogni pagina.
+  const margini = await pagU.evaluate(() => {
+    // solo i fogli dell'app: quello dei caratteri di Google non si lascia leggere
+    const regole = [...document.styleSheets].filter(f => !f.href).flatMap(f => [...f.cssRules])
+      .filter(r => r.media && /print/.test(r.media.mediaText)).flatMap(r => [...r.cssRules]);
+    const pagina = regole.find(r => r.type === CSSRule.PAGE_RULE);
+    const foglio = document.getElementById('foglio');
+    return { margine: pagina && pagina.style.margin,
+      fasce: !!foglio.querySelector(':scope > table.foglio-pagina > thead') && !!foglio.querySelector(':scope > table.foglio-pagina > tfoot') };
+  });
+  ok('in stampa la pagina non ha margine, così Chrome non ci scrive data e indirizzo',
+    /^0(px)?$/.test(margini.margine || ''), JSON.stringify(margini));
+  ok('e il margine bianco lo danno le fasce che si ripetono a ogni pagina', margini.fasce);
+  // Visto davvero, in stampa: la classe della tabella si chiamava «pagina», come
+  // le schermate dell'app che stanno nascoste, e il foglio usciva bianco.
+  await pagU.emulateMedia({ media: 'print' });
+  const inStampa = await pagU.evaluate(() => ({
+    foglio: document.getElementById('foglio').getBoundingClientRect().height,
+    novita: getComputedStyle(document.getElementById('novita')).display }));
+  await pagU.emulateMedia({ media: 'screen' });
+  ok('in stampa il foglio si vede, e il pannello delle novità no',
+    inStampa.foglio > 200 && inStampa.novita === 'none', JSON.stringify(inStampa));
   ok('il foglio non si vede a schermo: esiste solo per la stampa',
     !(await pagU.isVisible('#foglio')));
   // Sulla carta intestata i dati dell'azienda ci sono già: stampati sopra si

@@ -542,10 +542,19 @@ input.vuoto { background: #fffdf5; border-color: #ecdca8; }
 #foglio { display: none; }
 
 @media print {
-  #app, #avviso { display: none !important; }
+  #app, #avviso, #novita { display: none !important; }
   #foglio { display: block; }
   body { background: var(--white); color: #000; font-size: 11pt; }
-  @page { margin: 18mm 16mm; }
+  /* Margine zero, così Chrome non ha dove scrivere data, titolo e indirizzo
+     dell'app: sono le righe che metteva in testa e in fondo a ogni pagina, e
+     su un conto che va a un cliente non c'entrano. Il bianco attorno lo
+     rimettono le fasce vuote di mettiNelFoglio(), che si ripetono a ogni pagina:
+     un padding sul foglio varrebbe solo per la prima e l'ultima. */
+  @page { margin: 0; }
+  #foglio { padding: 0 16mm; }
+  #foglio .foglio-pagina { width: 100%; border-collapse: collapse; }
+  #foglio .foglio-pagina > thead > tr > td, #foglio .foglio-pagina > tfoot > tr > td { height: 18mm; padding: 0; border: none; }
+  #foglio .foglio-pagina > tbody > tr > td { padding: 0; border: none; }
 }
 
 #foglio .intestazione { border-bottom: 2px solid #000; padding-bottom: 10px; margin-bottom: 22px; }
@@ -1807,7 +1816,7 @@ function stampaConto(origine, id, senzaIntestazione) {
     if (!confirm('Manca l\'intestazione con i dati dell\'azienda: si compila in Impostazioni.\n\nStampare comunque?')) return;
   }
 
-  document.getElementById('foglio').innerHTML = costruisciFoglio({ cliente, data, righe, lavori, senzaIntestazione });
+  mettiNelFoglio(costruisciFoglio({ cliente, data, righe, lavori, senzaIntestazione }));
 
   // Chrome propone il titolo della pagina come nome del file quando si salva in
   // PDF, e lo legge a stampa avviata: rimetterlo a posto subito darebbe un PDF
@@ -1854,6 +1863,18 @@ function formattaQuantita(v) {
 
 function formattaOre(n) {
   return (Number(n) || 0).toFixed(2).replace('.', ',') + ' h';
+}
+
+// Tutto quello che si stampa passa da qui. Il foglio sta dentro una tabella con
+// una fascia vuota in testa e una in fondo: in stampa le teste e i piedi di una
+// tabella si ripetono a ogni pagina, ed è l'unico modo di avere il margine su
+// tutte le pagine dopo aver tolto quello di @page — tolto per non far stampare a
+// Chrome data, titolo e indirizzo dell'app.
+function mettiNelFoglio(html) {
+  document.getElementById('foglio').innerHTML =
+    '<table class="foglio-pagina"><thead><tr><td></td></tr></thead>' +
+    '<tfoot><tr><td></td></tr></tfoot>' +
+    '<tbody><tr><td>' + html + '</td></tr></tbody></table>';
 }
 
 // Le fasce di un lavoro, una riga ciascuna, col giorno davanti. Il giorno è
@@ -2053,6 +2074,14 @@ async function ricontrolla() {
 // La più recente per prima. Le righe sono poche e corte apposta: un elenco lungo
 // non si legge, e quello che non si legge tanto vale non scriverlo.
 const NOVITA = [
+  {
+    versione: '2026-10-05',
+    data: '2026-10-05',
+    titolo: 'Fogli stampati più puliti',
+    righe: [
+      'Stampando un conto, un preventivo o la scheda di cantiere **non escono più data, titolo e indirizzo dell\'app** in cima e in fondo alla pagina.',
+    ],
+  },
   {
     versione: '2026-10-03b',
     data: '2026-10-03',
@@ -3299,7 +3328,7 @@ function stampaPreventivo() {
   if (!String(IMPOSTAZIONI.azienda || '').trim()) {
     if (!confirm('Manca l\'intestazione con i dati dell\'azienda: si compila in Impostazioni.\n\nStampare comunque?')) return;
   }
-  document.getElementById('foglio').innerHTML = costruisciFoglioPreventivo(d);
+  mettiNelFoglio(costruisciFoglioPreventivo(d));
   const titolo = document.title;
   const ripristina = () => { document.title = titolo; window.removeEventListener('afterprint', ripristina); };
   window.addEventListener('afterprint', ripristina);
@@ -3462,7 +3491,7 @@ function costruisciSchedaCantiere(d) {
 function stampaSchedaCantiere() {
   if (!PREVENTIVO) return;
   const d = PREVENTIVO.doc;
-  document.getElementById('foglio').innerHTML = costruisciSchedaCantiere(d);
+  mettiNelFoglio(costruisciSchedaCantiere(d));
   const titolo = document.title;
   const ripristina = () => { document.title = titolo; window.removeEventListener('afterprint', ripristina); };
   window.addEventListener('afterprint', ripristina);
@@ -5374,7 +5403,7 @@ function disegnaImpostazioni() {
 // Un foglio di prova con righe finte: serve a vedere l'intestazione sulla carta
 // senza dover aprire un lavoro vero.
 function anteprimaFoglio() {
-  document.getElementById('foglio').innerHTML = costruisciFoglio({
+  mettiNelFoglio(costruisciFoglio({
     cliente: { nome: 'Cliente di prova', indirizzo: 'Via Roma 1', citta: '38015 Lavis (TN)' },
     data: new Date().toISOString().slice(0, 10),
     righe: [
@@ -5382,7 +5411,7 @@ function anteprimaFoglio() {
       { voce: 'Concime', quantita: 10, unita: 'kg', prezzo: 2.4 },
       { voce: 'Trasferimento', quantita: 1, unita: '', prezzo: '' },
     ],
-  });
+  }));
   window.print();
 }
 
