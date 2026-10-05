@@ -972,11 +972,20 @@ arrivo e si riarchivia — è la solita regola, in arrivo perché l'archivio non
 copia — mentre se non c'è più, quel file era l'unica copia rimasta di lavoro fatto
 e non torna. Una conferma che dicesse sempre la stessa frase servirebbe a niente.
 
+**L'archivio è due voci della barra: «Da pagare» e «Pagati».** Era una pagina sola
+col filtro e, guardando «Tutto», divisa in due parti; il capo l'ha voluto separato
+davvero, perché sono due domande diverse — cosa devo ancora incassare, cosa è chiuso
+— e due voci dicono subito dove si è. Non c'è più un «Tutto». La pagina resta una
+(`STATO_ARCHIVIO` dice quale parte si guarda, `apriArchivio()` ci porta), e la voce
+accesa nella barra segue quella parte, anche dentro un lavoro aperto da lì. Il
+pallino su «Da pagare» conta i conti aperti. «Vedi conti» porta fra i da pagare di
+quel cliente, o fra i suoi pagati se ha pagato tutto: una pagina vuota direbbe che
+non c'è niente.
+
 **A sinistra sta il gestionale**: quanti lavori sono **da pagare** e quanto fanno,
-quanti sono **pagati**, e il totale. Nei file lo stato resta `da-fatturare` /
-`fatturato`: sono cambiate le parole a schermo, non i dati. Guardando «Tutto»
-l'elenco è **diviso**, i da pagare sopra e i pagati sotto: mescolati, un conto
-aperto si perdeva fra quelli chiusi. Resta lì mentre si scorre l'elenco, perché è
+quanti sono **pagati**, e i due numeri portano all'una o all'altra parte. Nei file
+lo stato resta `da-fatturare` / `fatturato`: sono cambiate le parole a schermo, non
+i dati. Resta lì mentre si scorre l'elenco, perché è
 la domanda che in ufficio ci si fa per prima e un numero in fondo alla pagina non
 risponde a nessuno. Raccogliendo **per cliente**, ogni gruppo dice quanto gli si
 deve ancora: è la riga che serve prima di alzare il telefono.

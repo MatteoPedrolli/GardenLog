@@ -218,8 +218,6 @@ tr.riga-gruppo td { border-bottom: none; font-weight: 600; }
 tr.dentro-gruppo td { font-size: 0.82rem; color: var(--text-light); padding-top: 0; }
 .stato-salvataggio { align-self: center; }
 .stato-salvataggio.brutto { color: var(--red); font-weight: 600; }
-.parte-archivio { margin: 6px 0 10px; }
-.parte-archivio ~ .parte-archivio { margin-top: 26px; }
 .barra-scelti {
   position: sticky; top: 0; z-index: 5;
   display: flex; align-items: center; gap: 12px; flex-wrap: wrap; margin-bottom: 12px; padding: 10px 14px;
@@ -605,7 +603,13 @@ input.vuoto { background: #fffdf5; border-color: #ecdca8; }
       <span>📋</span> Lavagna <span class="pallino" id="pallino-lavagna">0</span>
     </button>
     <button class="voce-barra" id="v-clienti" onclick="vaiA('clienti')"><span>👥</span> Clienti</button>
-    <button class="voce-barra" id="v-archivio" onclick="CLIENTE_ARCHIVIO = null; vaiA('archivio')"><span>🗂️</span> Archivio</button>
+    <!-- L'archivio è due: quello che si deve ancora incassare e quello chiuso.
+         Mescolati in una pagina sola, con un filtro, un conto aperto si perdeva
+         fra i pagati; due voci dicono subito dove si è. -->
+    <button class="voce-barra" id="v-da-pagare" onclick="apriArchivio('da-fatturare')">
+      <span>🧾</span> Da pagare <span class="pallino" id="pallino-da-pagare">0</span>
+    </button>
+    <button class="voce-barra" id="v-pagati" onclick="apriArchivio('fatturato')"><span>🗂️</span> Pagati</button>
     <button class="voce-barra" id="v-listino" onclick="vaiA('listino')"><span>🏷️</span> Listino</button>
     <button class="voce-barra" id="v-impostazioni" onclick="vaiA('impostazioni')"><span>⚙️</span> Impostazioni</button>
     <div id="stato-cartella">Nessuna cartella collegata</div>
@@ -1948,13 +1952,23 @@ function vaiA(pagina) {
   if (p) p.classList.add('attiva');
   document.querySelectorAll('.voce-barra').forEach(v => v.classList.remove('attiva'));
   // La schermata di un lavoro vive dentro "In arrivo": è da lì che ci si arriva.
-  const dentro = { lavoro: 'arrivi', archiviato: 'archivio', preventivo: 'preventivi' };
-  const voce = document.getElementById('v-' + (dentro[pagina] || pagina));
+  const dentro = { lavoro: 'arrivi', preventivo: 'preventivi' };
+  // Archivio e lavoro archiviato stanno sotto la voce della parte da cui si è
+  // entrati: da pagare o pagati.
+  const dellArchivio = pagina === 'archivio' || pagina === 'archiviato';
+  const voce = document.getElementById('v-' + (dellArchivio ? voceArchivio() : (dentro[pagina] || pagina)));
   if (voce) voce.classList.add('attiva');
   disegna();
 }
 
 function disegna() {
+  // Quanti conti sono ancora da incassare: è il numero che in ufficio si guarda.
+  const daPagare = ARCHIVIO.filter(l => l.stato !== 'fatturato').length;
+  const pallinoDaPagare = document.getElementById('pallino-da-pagare');
+  if (pallinoDaPagare) {
+    pallinoDaPagare.textContent = daPagare;
+    pallinoDaPagare.classList.toggle('visibile', daPagare > 0);
+  }
   const pallino = document.getElementById('pallino-arrivi');
   pallino.textContent = ARRIVI.length;
   pallino.classList.toggle('visibile', ARRIVI.length > 0);
@@ -2074,6 +2088,16 @@ async function ricontrolla() {
 // La più recente per prima. Le righe sono poche e corte apposta: un elenco lungo
 // non si legge, e quello che non si legge tanto vale non scriverlo.
 const NOVITA = [
+  {
+    versione: '2026-10-05.2',
+    data: '2026-10-05',
+    titolo: 'L\'archivio in due',
+    righe: [
+      'Al posto di «Archivio» nella barra ci sono due voci: **Da pagare**, coi conti ancora aperti, e **Pagati**, con quelli chiusi.',
+      'Il pallino accanto a «Da pagare» dice **quanti conti aspettano** di essere incassati.',
+      'Da un cliente, **«Vedi conti»** porta fra i suoi da pagare; se ha pagato tutto, fra i suoi pagati.',
+    ],
+  },
   {
     versione: '2026-10-05',
     data: '2026-10-05',
@@ -3955,7 +3979,17 @@ function barraScelti() {
       '<button class="secondaria piccola" onclick="annullaScelta()">Annulla</button>' +
     '</span></div>';
 }   // { id, nome } quando si arriva da «Vedi conti»
-let STATO_ARCHIVIO = 'tutti';
+// Da quale delle due parti dell'archivio si guarda: 'da-fatturare' o 'fatturato'.
+// Nei file gli stati si chiamano così; a schermo sono «da pagare» e «pagati».
+let STATO_ARCHIVIO = 'da-fatturare';
+const pagato = l => l.stato === 'fatturato';
+const voceArchivio = () => STATO_ARCHIVIO === 'fatturato' ? 'pagati' : 'da-pagare';
+
+function apriArchivio(stato) {
+  CLIENTE_ARCHIVIO = null;
+  STATO_ARCHIVIO = stato === 'fatturato' ? 'fatturato' : 'da-fatturare';
+  vaiA('archivio');
+}
 let RACCOLTA_ARCHIVIO = 'data';
 let ARCHIVIATO = null;
 
@@ -3963,8 +3997,10 @@ function disegnaArchivio() {
   const c = document.getElementById('pagina-archivio');
   if (!CARTELLA) { c.innerHTML = schermataBenvenuto(); return; }
 
-  let html = '<p class="sottotitolo">' + ARCHIVIO.length +
-    (ARCHIVIO.length === 1 ? ' lavoro archiviato' : ' lavori archiviati') + '</p>';
+  const qui = STATO_ARCHIVIO === 'fatturato' ? ARCHIVIO.filter(pagato) : ARCHIVIO.filter(l => !pagato(l));
+  let html = '<p class="sottotitolo">' + qui.length + (STATO_ARCHIVIO === 'fatturato'
+    ? (qui.length === 1 ? ' lavoro pagato' : ' lavori pagati')
+    : (qui.length === 1 ? ' lavoro da pagare' : ' lavori da pagare')) + '</p>';
 
   html += '<div class="tavolo">';
 
@@ -3975,9 +4011,8 @@ function disegnaArchivio() {
   // gli si deve è la domanda per cui si è aperto il suo archivio.
   const base = CLIENTE_ARCHIVIO ? contiDelCliente(CLIENTE_ARCHIVIO) : ARCHIVIO;
   const conti = {
-    'da-fatturare': base.filter(l => l.stato === 'da-fatturare'),
-    fatturato: base.filter(l => l.stato === 'fatturato'),
-    tutti: base,
+    'da-fatturare': base.filter(l => !pagato(l)),
+    fatturato: base.filter(pagato),
   };
   const somma = elenco => elenco.reduce((s, l) => s + (Number(l.totale) || 0), 0);
   const voce = (chiave, etichetta) => {
@@ -3994,7 +4029,6 @@ function disegnaArchivio() {
     '<div class="elenco-stati">' +
       voce('da-fatturare', 'Da pagare') +
       voce('fatturato', 'Pagati') +
-      voce('tutti', 'Tutto') +
     '</div>' +
     '<h3 class="titolo-colonna" style="margin-top:18px">Raccogli</h3>' +
     '<div class="elenco-stati">' +
@@ -4020,7 +4054,7 @@ function lavoriArchivio() {
   const delCliente = CLIENTE_ARCHIVIO ? new Set(contiDelCliente(CLIENTE_ARCHIVIO)) : null;
   return ARCHIVIO
     .filter(l => !delCliente || delCliente.has(l))
-    .filter(l => STATO_ARCHIVIO === 'tutti' || l.stato === STATO_ARCHIVIO)
+    .filter(l => (STATO_ARCHIVIO === 'fatturato') === pagato(l))
     .filter(l => !filtro || String((l.cliente && l.cliente.nome) || '').toLowerCase().includes(filtro))
     .sort((a, b) => String(b.data).localeCompare(String(a.data)));
 }
@@ -4033,22 +4067,11 @@ function righeArchivioSole() {
   const lavori = lavoriArchivio();
   if (!lavori.length) {
     return '<div class="scheda"><div class="vuoto-elenco">' +
-      (FILTRO_ARCHIVIO.trim() || STATO_ARCHIVIO !== 'tutti' || CLIENTE_ARCHIVIO
-        ? 'Nessun lavoro con questi filtri.' : 'Niente in archivio.') + '</div></div>';
+      (FILTRO_ARCHIVIO.trim() || CLIENTE_ARCHIVIO ? 'Nessun lavoro con questi filtri.'
+        : STATO_ARCHIVIO === 'fatturato' ? 'Nessun lavoro pagato.' : 'Niente da pagare: è tutto incassato.') +
+      '</div></div>';
   }
-  if (RACCOLTA_ARCHIVIO !== 'cliente') {
-    // Guardando «tutto», quello che è ancora da incassare sta sopra e il resto
-    // sotto, divisi: mescolati, un conto aperto si perdeva fra quelli chiusi.
-    if (STATO_ARCHIVIO !== 'tutti') return lavori.map(schedaArchivio).join('');
-    const aperti = lavori.filter(l => l.stato !== 'fatturato');
-    const chiusi = lavori.filter(l => l.stato === 'fatturato');
-    const somma = elenco => elenco.reduce((t, l) => t + (Number(l.totale) || 0), 0);
-    const parte = (titolo, elenco) => elenco.length
-      ? '<h3 class="titolo-colonna parte-archivio">' + titolo + ' · ' + elenco.length + ' · ' + formattaEuro(somma(elenco)) + '</h3>' +
-        elenco.map(schedaArchivio).join('')
-      : '';
-    return parte('Da pagare', aperti) + parte('Pagati', chiusi);
-  }
+  if (RACCOLTA_ARCHIVIO !== 'cliente') return lavori.map(schedaArchivio).join('');
 
   // Raccolti per cliente: quanti lavori ha e quanto di suo è ancora da
   // incassare. È la riga che serve prima di alzare il telefono.
@@ -4061,7 +4084,7 @@ function righeArchivioSole() {
   return [...perCliente.entries()]
     .sort((a, b) => a[0].localeCompare(b[0]))
     .map(([nome, suoi]) => {
-      const aperti = suoi.filter(l => l.stato === 'da-fatturare');
+      const aperti = suoi.filter(l => !pagato(l));
       const dovuto = aperti.reduce((s, l) => s + (Number(l.totale) || 0), 0);
       return '<div class="gruppo-cliente">' +
         '<div class="testa-gruppo">' +
@@ -4106,9 +4129,11 @@ function filtraArchivio(valore) {
   if (el) el.innerHTML = righeArchivio();
 }
 
+// Dal gestionale si passa all'altra parte dell'archivio: è la stessa cosa che
+// toccare l'altra voce della barra, e la barra deve dirlo.
 function filtraStato(stato) {
-  STATO_ARCHIVIO = stato;
-  disegnaArchivio();
+  STATO_ARCHIVIO = stato === 'fatturato' ? 'fatturato' : 'da-fatturare';
+  vaiA('archivio');
 }
 
 function cambiaRaccolta(come) {
@@ -4452,7 +4477,11 @@ function vediConti(id) {
   if (!c) return;
   CLIENTE_ARCHIVIO = { id: c.id, nome: c.nome || 'senza nome' };
   FILTRO_ARCHIVIO = '';
-  STATO_ARCHIVIO = 'tutti';
+  // Da un cliente si arriva su quello che deve ancora: è la domanda per cui lo si
+  // apre. I suoi pagati sono a un clic, dal gestionale. Se è tutto pagato, si va fra i pagati: una pagina vuota direbbe che di quel
+  // cliente non c'è niente.
+  STATO_ARCHIVIO = contiDelCliente(c).some(l => !pagato(l)) || !contiDelCliente(c).length
+    ? 'da-fatturare' : 'fatturato';
   vaiA('archivio');
 }
 

@@ -2581,18 +2581,32 @@ try {
   const archivio = await pagU.evaluate(() => { vaiA('archivio'); return document.getElementById('pagina-archivio').innerHTML; });
   ok('a sinistra c\'è il gestionale con i due stati',
     archivio.includes('Da pagare') && archivio.includes('Pagati') && archivio.includes('Gestionale'));
-  // Guardando tutto, i conti aperti stanno sopra e quelli pagati sotto, divisi.
-  ok('in archivio da pagare e pagati stanno divisi, i da pagare sopra',
-    await pagU.evaluate(() => {
-      // a questo punto del giro sono pagati tutti e due: uno torna aperto, per la prova
-      const prima = ARCHIVIO.map(l => l.stato);
-      ARCHIVIO[ARCHIVIO.length - 1].stato = 'da-fatturare';
-      disegnaArchivio();
-      const parti = [...document.querySelectorAll('#elenco-archivio .parte-archivio')].map(e => e.textContent);
-      ARCHIVIO.forEach((l, k) => { l.stato = prima[k]; });
-      disegnaArchivio();
-      return parti.length === 2 && parti[0].startsWith('Da pagare') && parti[1].startsWith('Pagati');
-    }));
+  // L'archivio è due: le voci «Da pagare» e «Pagati» nella barra, e ognuna
+  // mostra solo i suoi. Mescolati, un conto aperto si perdeva fra i chiusi.
+  const dueArchivi = await pagU.evaluate(() => {
+    // a questo punto del giro sono pagati tutti e due: uno torna aperto, per la prova
+    const prima = ARCHIVIO.map(l => l.stato);
+    const aperto = ARCHIVIO[ARCHIVIO.length - 1];
+    aperto.stato = 'da-fatturare';
+    const nomi = () => [...document.querySelectorAll('#elenco-archivio .nome-cliente')].length;
+    const attiva = () => document.querySelector('.voce-barra.attiva')?.id;
+    document.getElementById('v-da-pagare').click();
+    const daPagare = { quanti: nomi(), voce: attiva(), lista: lavoriArchivio().map(l => l.id),
+      pallino: document.getElementById('pallino-da-pagare').textContent };
+    document.getElementById('v-pagati').click();
+    const pagati = { quanti: nomi(), voce: attiva(), lista: lavoriArchivio().map(l => l.id) };
+    apriArchiviato(aperto.id);
+    const dentro = attiva();
+    ARCHIVIO.forEach((l, k) => { l.stato = prima[k]; });
+    apriArchivio('da-fatturare');
+    return { daPagare, pagati, dentro, aperto: aperto.id };
+  });
+  ok('«Da pagare» nella barra mostra solo i conti aperti, e il pallino li conta',
+    dueArchivi.daPagare.voce === 'v-da-pagare' && JSON.stringify(dueArchivi.daPagare.lista) === JSON.stringify([dueArchivi.aperto]) &&
+    dueArchivi.daPagare.pallino === '1', JSON.stringify(dueArchivi));
+  ok('«Pagati» solo quelli chiusi', dueArchivi.pagati.voce === 'v-pagati' &&
+    dueArchivi.pagati.lista.length === 1 && !dueArchivi.pagati.lista.includes(dueArchivi.aperto), JSON.stringify(dueArchivi.pagati));
+  ok('e un lavoro aperto da lì resta sotto la voce da cui si è entrati', dueArchivi.dentro === 'v-pagati', dueArchivi.dentro);
   ok('e con quanto c\'è ancora da incassare', archivio.includes('stato-somma'));
 
   // ── dalla scheda cliente ai suoi conti ──
@@ -2678,21 +2692,25 @@ try {
       const fatturati = lavoriArchivio();
       filtraStato('da-fatturare');
       const aperti = lavoriArchivio();
-      filtraStato('tutti');
       return fatturati.length === 1 && fatturati[0].id === 'altro-lavoro' &&
         aperti.length === 1 && aperti[0].id !== 'altro-lavoro' &&
-        lavoriArchivio().length === 2;
+        document.querySelector('.voce-barra.attiva').id === 'v-da-pagare';
     }) === true);
   const raccolto = await pagU.evaluate(() => {
     cambiaRaccolta('cliente');
-    return document.getElementById('pagina-archivio').innerHTML;
+    apriArchivio('da-fatturare');
+    const daPagare = document.getElementById('pagina-archivio').innerHTML;
+    apriArchivio('fatturato');
+    const pagati = document.getElementById('pagina-archivio').innerHTML;
+    apriArchivio('da-fatturare');
+    return { daPagare, pagati };
   });
+  const gruppiCliente = h => (h.match(/gruppo-cliente/g) || []).length;
   ok('raccogliendo per cliente i lavori stanno sotto il loro nome',
-    (raccolto.match(/gruppo-cliente/g) || []).length === 2, raccolto.match(/gruppo-cliente/g));
-  ok('e ogni cliente dice quanto gli si deve ancora', raccolto.includes('da incassare'));
+    gruppiCliente(raccolto.daPagare) === 1 && gruppiCliente(raccolto.pagati) === 1, [gruppiCliente(raccolto.daPagare), gruppiCliente(raccolto.pagati)]);
+  ok('e ogni cliente dice quanto gli si deve ancora', raccolto.daPagare.includes('da incassare'));
   // Chi ha già pagato non deve comparire con un importo aperto.
-  ok('chi è tutto fatturato non ha niente da incassare',
-    (raccolto.match(/da incassare/g) || []).length === 1);
+  ok('chi è tutto fatturato non ha niente da incassare', !raccolto.pagati.includes('da incassare'));
   await pagU.evaluate(() => cambiaRaccolta('data'));
 
   // ── le piante in ufficio: prezzo dal cantiere, nome sul conto ──
