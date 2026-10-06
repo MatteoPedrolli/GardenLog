@@ -1222,6 +1222,52 @@ try {
   // ── piantumazione: più piante diverse, ognuna col suo nome, numero e prezzo ──
   // In un lavoro se ne mettono di più tipi, e il prezzo sta sull'etichetta del
   // vaso: è l'unico prezzo che si scrive sul telefono.
+  // Un cliente di passaggio: il rapportino parte, l'anagrafica non si riempie.
+  const passaggio = await page.evaluate(async () => {
+    const clientiPrima = DB.clienti.length;
+    const svuotaVera = window.svuotaCoda;
+    window.svuotaCoda = () => {};
+    openNuovaVisita();
+    filterVisitaClienti('Bianchi di passaggio');
+    const proposta = document.getElementById('visita-cliente-suggestions').textContent.includes('solo per questa visita');
+    scegliPassaggio('Bianchi di passaggio');
+    document.getElementById('f-pass-via').value = 'Via Nuova 2';
+    document.getElementById('f-pass-paese').value = 'Mezzolombardo';
+    pendingFasce.forEach((f, i) => confermaFascia(i));
+    await saveVisita({ invia: true });
+    window.svuotaCoda = svuotaVera;
+    const v = DB.visite.find(x => x.Passaggio && x.Passaggio.Cliente === 'Bianchi di passaggio');
+    const inCoda = v && DB.coda.find(x => x.docID === v.VisitaID);
+    const letto = inCoda && leggiRapportino(JSON.stringify(inCoda.doc));
+    renderVisite();
+    const elenco = document.getElementById('visite-list').innerHTML;
+    const r = { proposta, clienti: DB.clienti.length - clientiPrima, salvata: !!v && v.ClienteID === '',
+      doc: letto && letto.cliente, elenco: elenco.includes('Bianchi di passaggio') && elenco.includes('di passaggio') &&
+        elenco.includes('Metti in anagrafica') };
+    // riaprendola, il cliente di passaggio è ancora lì
+    openModificaVisita(v.VisitaID);
+    r.riaperta = document.getElementById('f-pass-paese').value === 'Mezzolombardo';
+    closeDrawer('overlay-visita');
+    await mettiInAnagrafica(v.VisitaID);
+    const c = DB.clienti.find(x => x.Cliente === 'Bianchi di passaggio');
+    r.dopo = { cliente: !!c && c.Citta === 'Mezzolombardo', legata: !!c && v.ClienteID === c.ClienteID, senzaPassaggio: !v.Passaggio };
+    // pulizia: la prova non deve lasciare niente per quelle dopo
+    DB.visite = DB.visite.filter(x => x !== v);
+    DB.clienti = DB.clienti.filter(x => x !== c);
+    DB.coda = DB.coda.filter(x => x.docID !== v.VisitaID);
+    await salvaDB({ conta: false });
+    return r;
+  });
+  ok('la ricerca del cliente propone «solo per questa visita»', passaggio.proposta);
+  ok('una visita di passaggio si salva senza entrare in anagrafica', passaggio.salvata && passaggio.clienti === 0, JSON.stringify(passaggio));
+  ok('e il rapportino parte col nome e l\'indirizzo, segnato di passaggio',
+    passaggio.doc && passaggio.doc.nome === 'Bianchi di passaggio' && passaggio.doc.citta === 'Mezzolombardo' &&
+    passaggio.doc.passaggio === true && passaggio.doc.id === '', JSON.stringify(passaggio.doc));
+  ok('nell\'elenco delle visite si legge che è di passaggio, col bottone per l\'anagrafica', passaggio.elenco);
+  ok('riaprendo la visita il cliente di passaggio è ancora lì', passaggio.riaperta);
+  ok('«Metti in anagrafica» lo crea coi dati scritti e la visita diventa sua',
+    passaggio.dopo.cliente && passaggio.dopo.legata && passaggio.dopo.senzaPassaggio, JSON.stringify(passaggio.dopo));
+
   // Due concimi diversi sullo stesso prato: il + accanto alla lavorazione
   // spuntata ne aggiunge un'altra, vuota, con la sua riga nel conto.
   const dueConcimi = await page.evaluate(() => {

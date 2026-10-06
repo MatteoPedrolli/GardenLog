@@ -51,6 +51,10 @@ function costruisciRapportino({ visita, cliente, operazioni, tipi, voci, concimi
       nome: cliente?.Cliente || '',
       indirizzo: cliente?.Indirizzo || '',
       citta: cliente?.Citta || '',
+      // Di passaggio: un intervento senza seguito, che sul telefono non è entrato
+      // in anagrafica. L'ufficio non lo propone fra i clienti da aggiungere — se
+      // serve, lo si mette a mano. Arrivato dopo, senza alzare la versione.
+      ...(visita.Passaggio && !visita.ClienteID ? { passaggio: true } : {}),
     },
     data: visita.Data || '',
     ore: {

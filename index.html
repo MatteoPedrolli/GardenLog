@@ -492,6 +492,12 @@ select.form-control { background-image: url("data:image/svg+xml,%3Csvg xmlns='ht
 .op-dett input[type=text] { flex: 1; min-width: 0; padding: 9px 8px; font-size: 0.85rem; }
 .op-dett .unita { font-size: 0.78rem; color: var(--text-light); min-width: 36px; }
 .op-pianta input[type=number] { width: 64px; }
+/* Il cliente di passaggio: tre righe scritte qui, che viaggiano col rapportino e
+   non finiscono in anagrafica. */
+.passaggio { margin-top: 6px; padding: 8px 10px; border: 1px dashed var(--velo); border-radius: 8px; display: flex; flex-direction: column; gap: 6px; }
+.passaggio-testa { display: flex; justify-content: space-between; align-items: center; font-size: 0.78rem; color: var(--text-light); }
+.passaggio-testa button { background: none; border: none; cursor: pointer; color: var(--text-light); font-size: 1rem; }
+.tag-passaggio { font-size: 0.7rem; font-weight: 600; color: var(--text-light); }
 /* Piccolo e a destra, ma grande abbastanza per il pollice: è un bottone dentro
    una riga che si tocca per spuntare. */
 .op-piu {
@@ -1122,6 +1128,13 @@ select.form-control { background-image: url("data:image/svg+xml,%3Csvg xmlns='ht
           <span id="f-visita-cliente-nome"></span>
           <button onclick="clearVisitaCliente()" style="background:none;border:none;cursor:pointer;color:var(--text-light);font-size:1rem;float:right">✕</button>
         </div>
+        <div id="f-visita-passaggio" class="passaggio" style="display:none">
+          <div class="passaggio-testa"><span>Di passaggio · non entra in anagrafica</span>
+            <button type="button" onclick="clearVisitaCliente()" title="Togli">✕</button></div>
+          <input type="text" class="form-control" id="f-pass-nome" placeholder="Nome">
+          <input type="text" class="form-control" id="f-pass-via" placeholder="Via">
+          <input type="text" class="form-control" id="f-pass-paese" placeholder="Paese">
+        </div>
       </div>
       <div class="form-group">
         <label class="form-label">Data *</label>
@@ -1655,8 +1668,7 @@ function renderHome() {
   const recent = [...DB.visite].reverse().slice(0, 5);
   if (!recent.length) { list.innerHTML = '<div class="empty"><div class="empty-icon">📋</div><div class="empty-text">Nessuna visita ancora</div></div>'; return; }
   list.innerHTML = recent.map(v => {
-    const c = DB.clienti.find(x => x.ClienteID == v.ClienteID);
-    const nome = c ? c.Cliente : v.ClienteID;
+    const nome = perValore(nomeDellaVisita(v));
     const data = v.Data ? new Date(v.Data).toLocaleDateString('it-IT', {day:'numeric', month:'short'}) : '';
     return `<div class="visit-item" onclick="navTo('visite')">
       <div class="visit-dot"></div>
@@ -1794,8 +1806,8 @@ function renderVisite() {
   if (!list) return;
   if (!DB.visite.length) { list.innerHTML = '<div class="empty"><div class="empty-icon">📋</div><div class="empty-text">Nessuna visita</div></div>'; return; }
   list.innerHTML = [...DB.visite].reverse().map(v => {
-    const c = DB.clienti.find(x => x.ClienteID == v.ClienteID);
-    const nome = c ? c.Cliente : v.ClienteID;
+    const nome = perValore(nomeDellaVisita(v)) +
+      (v.Passaggio && !v.ClienteID ? ' <span class="tag-passaggio">· di passaggio</span>' : '');
     const ops = DB.operazioni.filter(o => o.VisitaID == v.VisitaID);
     const data = v.Data ? new Date(v.Data).toLocaleDateString('it-IT', {day:'numeric', month:'long', year:'numeric'}) : '';
     return `<div class="visit-card">
@@ -1807,6 +1819,7 @@ function renderVisite() {
       ${etichetteOperazioni(ops)}
       <div style="display:flex; gap:6px; margin-top:10px; padding-top:10px; border-top:1px solid var(--foglio)">
         <button class="btn btn-secondary btn-sm" style="flex:1" onclick="openModificaVisita('${perOnclick(v.VisitaID)}')">✏️ Apri</button>
+        ${v.Passaggio && !v.ClienteID ? `<button class="btn btn-secondary btn-sm" onclick="mettiInAnagrafica('${perOnclick(v.VisitaID)}')">👤 Metti in anagrafica</button>` : ''}
         <button class="btn btn-danger btn-sm" onclick="eliminaVisita('${perOnclick(v.VisitaID)}')">🗑</button>
       </div>
     </div>`;
@@ -2674,6 +2687,7 @@ function openModificaVisita(vid) {
   clearVisitaCliente();
   const c = DB.clienti.find(x => x.ClienteID == v.ClienteID);
   if (c) selectVisitaCliente(c.ClienteID, c.Cliente);
+  else if (v.Passaggio) scegliPassaggio('', v.Passaggio);
   document.getElementById('drawer-visita-titolo').textContent = 'Modifica Visita';
   bloccaSalvataggio(false);
   contoCorrente = Array.isArray(v.Conto) ? v.Conto.map(r => ({ ...r })) : [];
@@ -2688,10 +2702,41 @@ function filterVisitaClienti(q) {
   const sug = document.getElementById('visita-cliente-suggestions');
   if (!q || q.length < 1) { sug.style.display = 'none'; return; }
   const matches = DB.clienti.filter(c => c.Cliente?.toLowerCase().includes(q.toLowerCase())).slice(0, 6);
-  if (!matches.length) { sug.style.display = 'none'; return; }
-  sug.innerHTML = matches.map(c => `<div class="suggestion-item" onclick="selectVisitaCliente('${perOnclick(c.ClienteID)}', '${perOnclick(c.Cliente)}')">${perValore(c.Cliente)}<span style="float:right;font-size:0.72rem;color:var(--text-light)">${perValore(c.Citta)}</span></div>`).join('');
+  // Un intervento senza seguito non deve passare dall'anagrafica: riempirla di
+  // clienti visti una volta la rende più difficile da usare per quelli veri.
+  const passaggio = q.trim().length >= 2
+    ? `<div class="suggestion-item" onclick="scegliPassaggio('${perOnclick(q.trim())}')">➕ «${perValore(q.trim())}» · solo per questa visita</div>`
+    : '';
+  if (!matches.length && !passaggio) { sug.style.display = 'none'; return; }
+  sug.innerHTML = matches.map(c => `<div class="suggestion-item" onclick="selectVisitaCliente('${perOnclick(c.ClienteID)}', '${perOnclick(c.Cliente)}')">${perValore(c.Cliente)}<span style="float:right;font-size:0.72rem;color:var(--text-light)">${perValore(c.Citta)}</span></div>`).join('') + passaggio;
   sug.style.display = 'block';
 }
+
+// Il cliente di passaggio sta sulla visita (`Passaggio`), non in DB.clienti: nome,
+// via e paese bastano al rapportino, che li porta per esteso come per tutti.
+function scegliPassaggio(nome, dati) {
+  clearVisitaCliente();
+  document.getElementById('f-visita-cliente-search').style.display = 'none';
+  document.getElementById('f-visita-passaggio').style.display = 'flex';
+  document.getElementById('f-pass-nome').value = (dati && dati.Cliente) || nome || '';
+  document.getElementById('f-pass-via').value = (dati && dati.Indirizzo) || '';
+  document.getElementById('f-pass-paese').value = (dati && dati.Citta) || '';
+  if (!dati) document.getElementById('f-pass-via').focus();
+}
+
+function passaggioScritto() {
+  if (document.getElementById('f-visita-passaggio').style.display === 'none') return null;
+  return {
+    Cliente: document.getElementById('f-pass-nome').value.trim(),
+    Indirizzo: document.getElementById('f-pass-via').value.trim(),
+    Citta: document.getElementById('f-pass-paese').value.trim(),
+  };
+}
+
+const nomeDellaVisita = v => {
+  const c = DB.clienti.find(x => x.ClienteID == v.ClienteID);
+  return c ? c.Cliente : (v.Passaggio && v.Passaggio.Cliente) || v.ClienteID || 'senza cliente';
+};
 
 function selectVisitaCliente(id, nome) {
   document.getElementById('f-visita-cliente').value = id;
@@ -2709,6 +2754,7 @@ function selectVisitaCliente(id, nome) {
 
 function clearVisitaCliente() {
   document.getElementById('f-visita-cliente').value = '';
+  document.getElementById('f-visita-passaggio').style.display = 'none';
   document.getElementById('f-visita-cliente-search').value = '';
   document.getElementById('f-visita-cliente-search').style.display = 'block';
   document.getElementById('f-visita-cliente-selected').style.display = 'none';
@@ -2753,8 +2799,10 @@ function completaOperazione(op, visitaID, mq) {
 async function saveVisita({ invia = false } = {}) {
   if (salvataggioInCorso) return;
   const cid = document.getElementById('f-visita-cliente').value;
+  const passaggio = cid ? null : passaggioScritto();
   const data = document.getElementById('f-visita-data').value;
-  if (!cid || !data) { showToast('⚠️ Seleziona cliente e data'); return; }
+  if (passaggio && !passaggio.Cliente) { showToast('⚠️ Scrivi il nome del cliente di passaggio'); return; }
+  if ((!cid && !passaggio) || !data) { showToast('⚠️ Seleziona cliente e data'); return; }
   // Una fascia proposta e mai guardata non è un orario di lavoro. Meglio
   // fermarsi qui che mandare in fattura le ore di un'altra giornata.
   if (pendingFasce.some(f => f.proposta)) {
@@ -2798,6 +2846,8 @@ async function saveVisita({ invia = false } = {}) {
     Note_visita: document.getElementById('f-visita-note').value.trim(),
     Conto: contoCorrente.map(r => ({ ...r })),
   };
+  // Un campo in più, senza alzare versioni: chi non ce l'ha ha un cliente vero.
+  if (passaggio) visita.Passaggio = passaggio; else delete visita.Passaggio;
 
   bloccaSalvataggio(true);
   try {
@@ -2827,6 +2877,28 @@ async function saveVisita({ invia = false } = {}) {
   } finally {
     bloccaSalvataggio(false);
   }
+}
+
+async function nuovoClienteDaPassaggio(p) {
+  const c = { ClienteID: generateID(), Cliente: p.Cliente, Indirizzo: p.Indirizzo || '', Citta: p.Citta || '',
+    Lat: '', Lng: '', Ha_prato: '', Mq_prato: '', FasciaID: '', Ha_siepe: '', Siepe_specie: '',
+    Siepe_lunghezza: '', Siepe_altezza: '', Siepe_larghezza: '', Note_cliente: '' };
+  DB.clienti.push(c);
+  if (!await salvaDB({ conta: false })) { DB.clienti = DB.clienti.filter(x => x !== c); return null; }
+  return c;
+}
+
+// Era di passaggio ed è tornato: la visita diventa sua, coi dati già scritti.
+async function mettiInAnagrafica(vid) {
+  const v = DB.visite.find(x => x.VisitaID == vid);
+  if (!v || !v.Passaggio) return;
+  const c = await nuovoClienteDaPassaggio(v.Passaggio);
+  if (!c) return;
+  v.ClienteID = c.ClienteID;
+  delete v.Passaggio;
+  if (!await salvaDB({ conta: false })) return;
+  showToast('👤 ' + c.Cliente + ' è in anagrafica');
+  renderAll();
 }
 
 async function eliminaVisita(vid) {
@@ -3037,7 +3109,17 @@ let orologioCoda = null;
 // **resta aperta sotto**: chiuderla buttava via quello che non era ancora stato
 // salvato, e riaprendola si ritrovava la versione di prima. È successo davvero,
 // con le correzioni di un rapportino perse per una prenotazione fatta a metà.
-function prenotaDaVisita() {
+async function prenotaDaVisita() {
+  // Una prenotazione è un seguito, e chi ha un seguito non è più di passaggio:
+  // per prenotare lo si mette in anagrafica, ma chiedendolo.
+  const passaggio = document.getElementById('f-visita-cliente').value ? null : passaggioScritto();
+  if (passaggio) {
+    if (!passaggio.Cliente) { showToast('⚠️ Scrivi prima il nome del cliente'); return; }
+    if (!confirm('Per prenotare, ' + passaggio.Cliente + ' va messo in anagrafica.\n\nLo aggiungo?')) return;
+    const c = await nuovoClienteDaPassaggio(passaggio);
+    if (!c) return;
+    selectVisitaCliente(c.ClienteID, c.Cliente);
+  }
   const cid = document.getElementById('f-visita-cliente').value;
   const nome = document.getElementById('f-visita-cliente-nome').textContent;
   apriPrenotazione();
@@ -3786,7 +3868,8 @@ function renderPrenotazioni() {
 }
 
 function accodaRapportino(visita) {
-  const cliente = DB.clienti.find(c => c.ClienteID == visita.ClienteID);
+  const cliente = DB.clienti.find(c => c.ClienteID == visita.ClienteID) ||
+    (visita.Passaggio ? { ClienteID: '', ...visita.Passaggio } : undefined);
   const doc = costruisciRapportino({
     visita,
     cliente,
@@ -4192,7 +4275,7 @@ function righeCSV(tipo) {
     intestazioni: ['Data','Cliente','Citta','Ore','Operazioni','Note'],
     righe: [...DB.visite].sort(perData).map(v => {
       const c = cliente(v.ClienteID);
-      return [v.Data, c?.Cliente || v.ClienteID, c?.Citta || '', v.Ore_Visita,
+      return [v.Data, c?.Cliente || v.Passaggio?.Cliente || v.ClienteID, c?.Citta || v.Passaggio?.Citta || '', v.Ore_Visita,
         DB.operazioni.filter(o => o.VisitaID == v.VisitaID).length,
         v.Note_visita];
     }),

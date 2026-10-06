@@ -105,6 +105,18 @@ operazioni, note. Non è estetica — scorrere lo schermo
 nello stesso ordine del foglio evita di tradurre da una forma all'altra alla
 fine di una giornata di lavoro. Chi la riordina perde quel vantaggio.
 
+**Un cliente può essere di passaggio.** Ci sono interventi senza seguito, e metterli
+in anagrafica la riempiva di nomi visti una volta, più difficile da usare per i
+clienti veri. Nella ricerca del cliente c'è sempre «*nome* · solo per questa
+visita»: nome, via e paese stanno sulla visita (`Passaggio`, con `ClienteID` vuoto)
+e non in `DB.clienti`. Il rapportino parte come gli altri — il cliente viaggia già
+per esteso — con `passaggio: true`, e l'ufficio non lo propone fra quelli da
+aggiungere: se serve, si aggiunge a mano. Niente scheda cliente, prato o storico,
+che hanno senso solo per chi si segue. Se torna, **«Metti in anagrafica»** sulla
+visita lo crea coi dati già scritti; e per **prenotare** il prossimo intervento lo
+si mette in anagrafica, chiedendolo: una prenotazione è un seguito. Campo arrivato
+senza alzare versioni.
+
 **Le ore sono un calcolo, non un numero.** Fasce orarie con orario e numero di
 persone; il totale lo fa `oreTotali()`. Una fascia che l'app propone resta
 `proposta: true` finché non viene toccata o confermata, e `saveVisita()` si
