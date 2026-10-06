@@ -405,6 +405,14 @@ giornata: un lavoro ancora in colonna non ha un momento suo, e metterlo in agend
 vorrebbe dire prometterlo. Erano sei, e in giardino non bastavano; oltre i dieci la
 pianificazione cambia ancora, e una lista lunga sarebbe una lista sbagliata.
 
+**«Da oggi» vuol dire oggi, non il giorno in cui l'agenda è stata scritta.**
+L'agenda si scrive salvando la lavagna, e se l'ultimo spostamento era di lunedì il
+telefono mostrava giovedì ancora lunedì, con meno di dieci appuntamenti davanti.
+Per questo **l'ufficio la rifà all'apertura** quando la sua data `da` non è quella
+di oggi (`rinfrescaAgenda()`, una volta al giorno e non a ogni Ricontrolla), e **il
+telefono scarta i giorni passati** mostrandola: un'agenda scaricata ieri, senza
+campo, resta buona per quello che ha davanti.
+
 Entrambi, in modalità costruzione, si leggono **solo alla loro versione corrente**:
 o il documento è di questa versione, o si rifiuta dicendolo. Archiviare un
 documento monco senza dirlo a nessuno è il guasto peggiore che possa capitare qui.

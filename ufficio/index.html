@@ -915,6 +915,18 @@ async function ricarica() {
   RILIEVI = await caricaRilievi();
   PREVENTIVI = await caricaPreventivi();
   await assorbiAppuntamenti();
+  await rinfrescaAgenda();
+}
+
+// L'agenda si scrive salvando la lavagna, e parte dal giorno in cui la si scrive:
+// se l'ultimo spostamento era di lunedì, giovedì in giardino si vedeva ancora
+// lunedì, e i dieci appuntamenti diventavano sei. Aprendo l'ufficio la mattina la
+// si rifà da oggi, una volta al giorno: non a ogni Ricontrolla, che riscriverebbe
+// un file su Drive per niente.
+async function rinfrescaAgenda() {
+  let da = '';
+  try { da = JSON.parse(await leggiTesto(CARTELLA, FILE_AGENDA)).da || ''; } catch (e) { /* non c'è: si scrive */ }
+  if (da !== isoData(new Date())) await salvaAgenda();
 }
 
 function dataDelDocumento(doc) {
@@ -2132,6 +2144,14 @@ function riassuntoRicontrolla() {
 // La più recente per prima. Le righe sono poche e corte apposta: un elenco lungo
 // non si legge, e quello che non si legge tanto vale non scriverlo.
 const NOVITA = [
+  {
+    versione: '2026-10-06',
+    data: '2026-10-06',
+    titolo: 'L\'agenda del cantiere parte da oggi',
+    righe: [
+      'Aprendo l\'ufficio la mattina, l\'agenda per il telefono **si rifà da sola a partire da oggi**: non resta più ferma al giorno dell\'ultimo spostamento sulla lavagna.',
+    ],
+  },
   {
     versione: '2026-10-05.5',
     data: '2026-10-05',

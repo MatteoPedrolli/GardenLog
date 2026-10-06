@@ -3728,12 +3728,17 @@ function renderAgenda() {
       dall'ufficio» quando hai rete: quello che arriva resta anche senza campo.</div></div>`;
     return;
   }
-  if (!agenda.appuntamenti.length) {
+  // Da oggi in avanti, non dal giorno in cui l'ufficio l'ha scritta: un'agenda
+  // scaricata lunedì, giovedì mostrava ancora lunedì. Quello che è già passato non
+  // dice dove si va.
+  const oggi = dataISO(new Date());
+  const davanti = agenda.appuntamenti.filter(a => a.giorno >= oggi);
+  if (!davanti.length) {
     el.innerHTML = `<div class="card" style="padding:14px"><div class="dati-nota">
-      Niente in programma sulla lavagna dell'ufficio.</div></div>`;
+      Niente in programma da oggi in avanti sulla lavagna dell'ufficio.</div></div>`;
     return;
   }
-  el.innerHTML = agenda.appuntamenti.map(a => `<div class="card" style="padding:12px">
+  el.innerHTML = davanti.map(a => `<div class="card" style="padding:12px">
     <div style="font-size:0.78rem; color:var(--primary); font-weight:600">${perValore(etichettaMezzaGiornata(a.giorno, a.mezza))}${a.ora ? ' · ore ' + perValore(a.ora) : ''}</div>
     <div style="font-weight:600">${perValore(a.cliente || 'senza cliente')}</div>
     ${a.note ? `<div style="font-size:0.82rem; color:var(--text-mid); margin-top:4px">${perValore(a.note)}</div>` : ''}

@@ -3044,6 +3044,25 @@ try {
     !agendaScritta.includes('Tigli') && !agendaScritta.includes('piattaforma'),
     Object.keys(agenda.appuntamenti[0] || {}).join(','));
 
+  // Un'agenda scritta lunedì, giovedì partiva ancora da lunedì: aprendo l'ufficio
+  // la si rifà da oggi, una volta al giorno.
+  const rinfrescata = await pagU.evaluate(async () => {
+    const vecchia = JSON.parse(await window.leggiAgendaScritta());
+    vecchia.da = '2026-01-05';
+    await scriviTesto(window.RADICE, 'agenda.json', JSON.stringify(vecchia));
+    await rinfrescaAgenda();
+    const dopo = JSON.parse(await window.leggiAgendaScritta());
+    // e se è già di oggi non la si riscrive
+    const scritture = [];
+    const scriviVera = window.scriviTesto;
+    window.scriviTesto = async (c, nome, t) => { scritture.push(nome); return scriviVera(c, nome, t); };
+    await rinfrescaAgenda();
+    window.scriviTesto = scriviVera;
+    return { da: dopo.da, oggi: isoData(new Date()), riscritte: scritture.length };
+  });
+  ok('aprendo l\'ufficio l\'agenda vecchia si rifà da oggi', rinfrescata.da === rinfrescata.oggi, JSON.stringify(rinfrescata));
+  ok('e una di oggi non si riscrive a ogni giro', rinfrescata.riscritte === 0, JSON.stringify(rinfrescata));
+
   // ── I SOPRALLUOGHI: DALLA LAVAGNA AL RILIEVO ──
   // L'ufficio mette un sopralluogo con via e telefono; in giardino servono —
   // dove andare, chi chiamare — ma sono dati di persone vere, e l'agenda si legge
@@ -3115,6 +3134,20 @@ try {
     scaricata.schermo.includes('Pomeriggio') &&
     scaricata.schermo.includes('chiedere della chiave del cancello'),
     scaricata.atteso + ' | ' + scaricata.schermo.slice(0, 160));
+
+  // Sul telefono si vede da oggi in avanti, anche se l'agenda è di qualche giorno fa.
+  const daOggi = await page.evaluate(() => {
+    const prima = DB.agenda;
+    const ieri = new Date(); ieri.setDate(ieri.getDate() - 1);
+    DB.agenda = { ...prima, appuntamenti: [{ giorno: dataISO(ieri), mezza: 'mattina', cliente: 'Già passato', note: '', ora: '' },
+      ...prima.appuntamenti] };
+    renderAgenda();
+    const html = document.getElementById('agenda-list').innerHTML;
+    DB.agenda = prima; renderAgenda();
+    return { passato: html.includes('Già passato'), futuri: prima.appuntamenti.some(a => html.includes(a.cliente)) };
+  });
+  ok('sul telefono l\'agenda parte da oggi, non dal giorno in cui è stata scritta',
+    !daOggi.passato && daOggi.futuri, JSON.stringify(daOggi));
 
   // ── IL TELEFONO LEGGE I SOPRALLUOGHI ──
   // Con la chiave arrivano completi; senza, si vedono lo stesso dall'agenda col
