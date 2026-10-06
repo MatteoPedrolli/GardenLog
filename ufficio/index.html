@@ -523,17 +523,11 @@ input.vuoto { background: #fffdf5; border-color: #ecdca8; }
 .gruppi-preventivi { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 8px; margin: 6px 0 14px; }
 .stato-nome { font-size: 0.9rem; font-weight: 500; }
 .stato-conta { font-size: 0.8rem; color: var(--text-light); }
-.stato-somma {
-  grid-column: 1 / -1; font-family: var(--font-display); font-size: 1.1rem; font-weight: 700;
-}
 
 .gruppo-cliente { margin-bottom: 18px; }
 .testa-gruppo {
   display: flex; align-items: baseline; gap: 12px; flex-wrap: wrap;
   padding: 0 4px 6px; border-bottom: 1px solid var(--border); margin-bottom: 10px;
-}
-.testa-gruppo .dovuto {
-  margin-left: auto; font-size: 0.82rem; font-weight: 600; color: var(--earth);
 }
 
 /* ── IL FOGLIO DA CONSEGNARE ── */
@@ -2148,6 +2142,14 @@ function riassuntoRicontrolla() {
 // La più recente per prima. Le righe sono poche e corte apposta: un elenco lungo
 // non si legge, e quello che non si legge tanto vale non scriverlo.
 const NOVITA = [
+  {
+    versione: '2026-10-06.3',
+    data: '2026-10-06',
+    titolo: 'Niente somme in archivio',
+    righe: [
+      'In **Da pagare** e **Lavori chiusi** il gestionale e le colonne dicono **quanti** conti ci sono, non più quanto fanno. L\'importo resta su ogni conto.',
+    ],
+  },
   {
     versione: '2026-10-06.2',
     data: '2026-10-06',
@@ -4138,14 +4140,14 @@ function disegnaArchivio() {
     'da-fatturare': base.filter(l => !pagato(l)),
     fatturato: base.filter(pagato),
   };
-  const somma = elenco => elenco.reduce((s, l) => s + (Number(l.totale) || 0), 0);
+  // Solo quanti, non quanto: il capo non vuole le somme a schermo — la pagina si
+  // guarda anche con qualcuno accanto. L'importo resta su ogni conto.
   const voce = (chiave, etichetta) => {
     const elenco = conti[chiave];
     return '<button class="voce-stato' + (STATO_ARCHIVIO === chiave ? ' attiva' : '') +
       '" onclick="filtraStato(\'' + chiave + '\')">' +
       '<span class="stato-nome">' + etichetta + '</span>' +
       '<span class="stato-conta">' + elenco.length + '</span>' +
-      '<span class="stato-somma">' + (formattaEuro(somma(elenco)) || '—') + '</span>' +
     '</button>';
   };
 
@@ -4201,10 +4203,8 @@ function righeArchivioSole() {
     // già mandati che aspettano il pagamento. Sono due lavori diversi per chi sta
     // in ufficio — scrivere il conto, o sollecitarlo — e mescolati non si vedeva
     // quale dei due toccasse.
-    const somma = elenco => elenco.reduce((t, l) => t + (Number(l.totale) || 0), 0);
     const colonna = (titolo, elenco, vuoto) => '<div class="colonna-archivio">' +
-      '<h3 class="titolo-colonna">' + titolo + ' · ' + elenco.length +
-        (elenco.length ? ' · ' + formattaEuro(somma(elenco)) : '') + '</h3>' +
+      '<h3 class="titolo-colonna">' + titolo + ' · ' + elenco.length + '</h3>' +
       (elenco.length ? elenco.map(schedaArchivio).join('') : '<div class="vuoto-elenco">' + vuoto + '</div>') +
     '</div>';
     return '<div class="due-colonne-archivio">' +
@@ -4224,13 +4224,10 @@ function righeArchivioSole() {
   return [...perCliente.entries()]
     .sort((a, b) => a[0].localeCompare(b[0]))
     .map(([nome, suoi]) => {
-      const aperti = suoi.filter(l => !pagato(l));
-      const dovuto = aperti.reduce((s, l) => s + (Number(l.totale) || 0), 0);
       return '<div class="gruppo-cliente">' +
         '<div class="testa-gruppo">' +
           '<span class="nome-cliente">' + perValore(nome) + '</span>' +
           '<span class="meta">' + suoi.length + (suoi.length === 1 ? ' lavoro' : ' lavori') + '</span>' +
-          (aperti.length ? '<span class="dovuto">da incassare ' + formattaEuro(dovuto) + '</span>' : '') +
         '</div>' +
         suoi.map(schedaArchivio).join('') +
       '</div>';

@@ -2684,7 +2684,8 @@ try {
   ok('e la scheda dice da quando è stato mandato', mandati.scritto);
   ok('togliendo il segno torna fra quelli da mandare', mandati.tolto[0].schede === 1 && mandati.tolto[1].schede === 0,
     JSON.stringify(mandati.tolto));
-  ok('e con quanto c\'è ancora da incassare', archivio.includes('stato-somma'));
+  // Solo quanti, non quanto: le somme a schermo il capo non le vuole.
+  ok('il gestionale dice quanti, senza le somme', !archivio.includes('stato-somma') && archivio.includes('stato-conta'));
 
   // ── dalla scheda cliente ai suoi conti ──
   // Chiusa, una scheda è solo il nome: con tutti i campi aperti l'elenco era un
@@ -2785,9 +2786,7 @@ try {
   const gruppiCliente = h => (h.match(/gruppo-cliente/g) || []).length;
   ok('raccogliendo per cliente i lavori stanno sotto il loro nome',
     gruppiCliente(raccolto.daPagare) === 1 && gruppiCliente(raccolto.pagati) === 1, [gruppiCliente(raccolto.daPagare), gruppiCliente(raccolto.pagati)]);
-  ok('e ogni cliente dice quanto gli si deve ancora', raccolto.daPagare.includes('da incassare'));
-  // Chi ha già pagato non deve comparire con un importo aperto.
-  ok('chi è tutto fatturato non ha niente da incassare', !raccolto.pagati.includes('da incassare'));
+  ok('e nessun gruppo mostra una somma', !raccolto.daPagare.includes('da incassare') && !raccolto.pagati.includes('da incassare'));
   await pagU.evaluate(() => cambiaRaccolta('data'));
 
   // ── le piante in ufficio: prezzo dal cantiere, nome sul conto ──

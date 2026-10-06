@@ -1015,13 +1015,15 @@ guarda quella colonna sta per alzare il telefono. Raccogliendo per cliente le
 colonne non ci sono — lì la domanda è quanto deve quel cliente — e la scheda dice
 lo stesso se è stato mandato.
 
-**A sinistra sta il gestionale**: quanti lavori sono **da pagare** e quanto fanno,
-quanti sono **pagati**, e i due numeri portano all'una o all'altra parte. Nei file
+**A sinistra sta il gestionale**: quanti lavori sono **da pagare** e quanti
+**chiusi**, e i due numeri portano all'una o all'altra parte. **Solo quanti, non
+quanto**: le somme c'erano — nel gestionale, in testa alle colonne, sui gruppi per
+cliente — e il capo le ha volute togliere, perché quella schermata si guarda anche
+con qualcuno accanto. L'importo resta su ogni conto, dove serve. Nei file
 lo stato resta `da-fatturare` / `fatturato`: sono cambiate le parole a schermo, non
 i dati. Resta lì mentre si scorre l'elenco, perché è
 la domanda che in ufficio ci si fa per prima e un numero in fondo alla pagina non
-risponde a nessuno. Raccogliendo **per cliente**, ogni gruppo dice quanto gli si
-deve ancora: è la riga che serve prima di alzare il telefono.
+risponde a nessuno. Raccogliendo **per cliente**, ogni gruppo dice quanti lavori ha.
 
 **L'invio non manda niente**, come sul telefono prima di lui: `inviaConto()` apre
 la posta con destinatario — preso dall'anagrafica, ed è il motivo per cui le mail
@@ -1121,8 +1123,8 @@ cantiere l'ha già scritto una volta, e farlo ribattere sarebbe lavoro inventato
 **Una scheda cliente chiusa è solo il nome**, e si apre con un clic: con tutti i
 campi aperti l'elenco era un muro di caselle, e chi cerca un cliente scorre i nomi.
 Aperta, porta **«Vedi conti»**, che va in archivio con i soli lavori di quel
-cliente — il gestionale a sinistra compreso, perché quanto gli si deve è la domanda
-per cui lo si apre. Il filtro resta scritto in cima con una ✕: un archivio che
+cliente — il gestionale a sinistra compreso, perché quali conti ha aperti è la
+domanda per cui lo si apre. Il filtro resta scritto in cima con una ✕: un archivio che
 mostra una parte senza dirlo fa credere che il resto non ci sia. I conti si
 trovano per `id` **o per nome intero**: un cliente aggiunto a mano in ufficio ha un
 id che i rapportini non conoscono, e il nome a pezzi porterebbe le fatture di
