@@ -2653,6 +2653,37 @@ try {
   ok('«Lavori chiusi» solo quelli già pagati', dueArchivi.pagati.voce === 'v-pagati' &&
     dueArchivi.pagati.lista.length === 1 && !dueArchivi.pagati.lista.includes(dueArchivi.aperto), JSON.stringify(dueArchivi.pagati));
   ok('e un lavoro aperto da lì resta sotto la voce da cui si è entrati', dueArchivi.dentro === 'v-pagati', dueArchivi.dentro);
+
+  // Fra i da pagare, due colonne: da mandare e mandati. «Segna mandato» è a mano,
+  // per il conto stampato e consegnato, e si toglie con lo stesso bottone.
+  const mandati = await pagU.evaluate(async () => {
+    const prima = ARCHIVIO.map(l => ({ stato: l.stato, inPosta: l.inPosta }));
+    const l = ARCHIVIO[ARCHIVIO.length - 1];
+    await aggiornaArchiviato(l, { stato: 'da-fatturare', inPosta: '' });
+    apriArchivio('da-fatturare');
+    const colonne = () => [...document.querySelectorAll('#elenco-archivio .colonna-archivio')]
+      .map(c => ({ titolo: c.querySelector('.titolo-colonna').textContent, schede: c.querySelectorAll('.scheda').length }));
+    const r = { prima: colonne() };
+    await segnaMandato(l.id, true);
+    r.dopo = colonne();
+    r.suFile = await (async () => { await ricarica(); return !!ARCHIVIO.find(x => x.id === l.id).inPosta; })();
+    apriArchivio('da-fatturare');
+    r.scritto = document.getElementById('elenco-archivio').textContent.includes('mandato il ');
+    await segnaMandato(l.id, false);
+    r.tolto = colonne();
+    // rimesso com'era
+    for (const [k, x] of ARCHIVIO.entries()) await aggiornaArchiviato(x, prima[k] || {});
+    apriArchivio('da-fatturare');
+    return r;
+  });
+  ok('fra i da pagare ci sono due colonne, da mandare e mandati',
+    mandati.prima.length === 2 && mandati.prima[0].titolo.startsWith('Da mandare') && mandati.prima[1].titolo.startsWith('Mandati') &&
+    mandati.prima[0].schede === 1 && mandati.prima[1].schede === 0, JSON.stringify(mandati.prima));
+  ok('«Segna mandato» lo sposta fra i mandati, e resta scritto sul file',
+    mandati.dopo[0].schede === 0 && mandati.dopo[1].schede === 1 && mandati.suFile, JSON.stringify(mandati));
+  ok('e la scheda dice da quando è stato mandato', mandati.scritto);
+  ok('togliendo il segno torna fra quelli da mandare', mandati.tolto[0].schede === 1 && mandati.tolto[1].schede === 0,
+    JSON.stringify(mandati.tolto));
   ok('e con quanto c\'è ancora da incassare', archivio.includes('stato-somma'));
 
   // ── dalla scheda cliente ai suoi conti ──

@@ -326,6 +326,10 @@ input.vuoto { background: #fffdf5; border-color: #ecdca8; }
 .campione.fatto { background: #eef6fb; border: 1px solid #2a6f9e; }
 .campione.bloccato { background: var(--earth-light); border: 1px solid var(--earth); }
 
+.due-colonne-archivio { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 14px; align-items: start; }
+.colonna-archivio { min-width: 0; }
+.colonna-archivio .riga-scheda { flex-wrap: wrap; }
+@media (max-width: 1100px) { .due-colonne-archivio { grid-template-columns: minmax(0, 1fr); } }
 .tavolo { display: flex; gap: 14px; align-items: flex-start; }
 
 .coda { width: 290px; flex-shrink: 0; }
@@ -2144,6 +2148,15 @@ function riassuntoRicontrolla() {
 // La più recente per prima. Le righe sono poche e corte apposta: un elenco lungo
 // non si legge, e quello che non si legge tanto vale non scriverlo.
 const NOVITA = [
+  {
+    versione: '2026-10-06.2',
+    data: '2026-10-06',
+    titolo: 'Da mandare e mandati',
+    righe: [
+      'In **Da pagare** i conti stanno in due colonne: **Da mandare** e **Mandati**. Quelli mandati dicono da quanti giorni aspettano.',
+      'Un conto inviato con «Invia al cliente» passa fra i mandati da solo. Per uno **stampato e consegnato a mano** c\'è **«Segna mandato»**; se lo si segna per sbaglio, «Non è stato mandato» lo rimette a posto.',
+    ],
+  },
   {
     versione: '2026-10-06',
     data: '2026-10-06',
@@ -4182,7 +4195,23 @@ function righeArchivioSole() {
         : STATO_ARCHIVIO === 'fatturato' ? 'Nessun lavoro chiuso.' : 'Niente da pagare: è tutto incassato.') +
       '</div></div>';
   }
-  if (RACCOLTA_ARCHIVIO !== 'cliente') return lavori.map(schedaArchivio).join('');
+  if (RACCOLTA_ARCHIVIO !== 'cliente') {
+    if (STATO_ARCHIVIO === 'fatturato') return lavori.map(schedaArchivio).join('');
+    // Fra i da pagare, due colonne: quelli ancora da mandare al cliente e quelli
+    // già mandati che aspettano il pagamento. Sono due lavori diversi per chi sta
+    // in ufficio — scrivere il conto, o sollecitarlo — e mescolati non si vedeva
+    // quale dei due toccasse.
+    const somma = elenco => elenco.reduce((t, l) => t + (Number(l.totale) || 0), 0);
+    const colonna = (titolo, elenco, vuoto) => '<div class="colonna-archivio">' +
+      '<h3 class="titolo-colonna">' + titolo + ' · ' + elenco.length +
+        (elenco.length ? ' · ' + formattaEuro(somma(elenco)) : '') + '</h3>' +
+      (elenco.length ? elenco.map(schedaArchivio).join('') : '<div class="vuoto-elenco">' + vuoto + '</div>') +
+    '</div>';
+    return '<div class="due-colonne-archivio">' +
+      colonna('Da mandare', lavori.filter(l => !l.inPosta), 'Niente da mandare.') +
+      colonna('Mandati', lavori.filter(l => l.inPosta), 'Nessun conto mandato in attesa.') +
+    '</div>';
+  }
 
   // Raccolti per cliente: quanti lavori ha e quanto di suo è ancora da
   // incassare. È la riga che serve prima di alzare il telefono.
@@ -4208,6 +4237,27 @@ function righeArchivioSole() {
     }).join('');
 }
 
+// «mandato il 05/10, 8 giorni fa»: chi guarda i mandati sta per sollecitare, e
+// la domanda è da quanto aspetta.
+function daQuandoMandato(iso) {
+  const giorni = Math.floor((new Date(isoData(new Date()) + 'T12:00:00') -
+    new Date(String(iso).slice(0, 10) + 'T12:00:00')) / 86400000);
+  return 'mandato il ' + formattaData(iso) +
+    (giorni > 1 ? ', ' + giorni + ' giorni fa' : giorni === 1 ? ', ieri' : giorni === 0 ? ', oggi' : '');
+}
+
+// A mano, per il conto stampato e consegnato o mandato da un'altra posta: l'app
+// segna da sé solo quello che passa da «Invia al cliente». Si toglie con lo stesso
+// bottone, per lo sbaglio.
+async function segnaMandato(id, si) {
+  const l = ARCHIVIO.find(x => x.id === id);
+  if (!l) return;
+  const errore = await aggiornaArchiviato(l, { inPosta: si ? new Date().toISOString() : '' });
+  if (errore) { avvisa('Non ho potuto salvare: ' + errore.message, true); return; }
+  disegna();
+  avvisa(si ? 'Segnato come mandato al cliente' : 'Rimesso fra quelli da mandare');
+}
+
 function schedaArchivio(l) {
   const id = perOnclick(l.id);
   const nome = (l.cliente && l.cliente.nome) || 'senza nome';
@@ -4219,7 +4269,10 @@ function schedaArchivio(l) {
         (scelto ? ' checked' : '') + ' onclick="event.stopPropagation(); scegliLavoro(\'' + id + '\', this.checked)">' +
       '<span class="nome-cliente">' + perValore(nome) + '</span>' +
       '<span class="etichetta ' + (l.stato === 'fatturato' ? 'fatturato">pagato' : 'da-fatturare">da pagare') + '</span>' +
-      (l.inPosta ? '<span class="meta">✉️ in posta</span>' : '') +
+      (l.inPosta ? '<span class="meta">✉️ ' + perValore(daQuandoMandato(l.inPosta)) + '</span>' : '') +
+      (!l.inPosta && l.stato !== 'fatturato'
+        ? '<button class="secondaria piccola" title="Per un conto stampato e consegnato, o mandato in un altro modo"' +
+          ' onclick="event.stopPropagation(); segnaMandato(\'' + id + '\', true)">Segna mandato</button>' : '') +
       (l.stato !== 'fatturato' && l.rapportino
         ? '<button class="secondaria piccola" onclick="event.stopPropagation(); modificaArchiviato(\'' + id + '\')">Modifica</button>' : '') +
       '<span class="meta">' + formattaData(l.data) + '</span>' +
@@ -4334,6 +4387,8 @@ function disegnaArchiviato() {
     '<button class="secondaria" onclick="stampaConto(\'archivio\', \'' + id + '\')">Stampa</button>' +
     '<button class="secondaria" onclick="stampaConto(\'archivio\', \'' + id + '\', true)">Stampa senza intestazione</button>' +
     '<button class="secondaria" onclick="inviaConto(\'' + id + '\')">Invia al cliente</button>' +
+    (l.stato !== 'fatturato' ? '<button class="secondaria" onclick="segnaMandato(\'' + id + '\', ' + !l.inPosta + ')">' +
+      (l.inPosta ? 'Non è stato mandato' : 'Segna mandato') + '</button>' : '') +
     '<button class="' + (l.stato === 'fatturato' ? 'secondaria' : 'principale') +
       '" onclick="cambiaStato(\'' + id + '\', \'' +
       (l.stato === 'fatturato' ? 'da-fatturare\')">Rimetti da pagare' : 'fatturato\')">Segna pagato') +

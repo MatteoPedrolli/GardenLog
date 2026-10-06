@@ -1005,6 +1005,16 @@ pallino su «Da pagare» conta i conti aperti. «Vedi conti» porta fra i da pag
 quel cliente, o fra i suoi pagati se ha pagato tutto: una pagina vuota direbbe che
 non c'è niente.
 
+**Fra i da pagare, due colonne: «Da mandare» e «Mandati».** Il capo voleva vedere
+quali conti erano già partiti: sono due lavori diversi per l'ufficio — scrivere il
+conto, o sollecitarlo — e mescolati non si capiva quale toccasse. La colonna la
+decide `inPosta`, che «Invia al cliente» segna da sé; per un conto stampato e
+consegnato a mano c'è **«Segna mandato»** (`segnaMandato()`), che si toglie con lo
+stesso bottone sul lavoro aperto. Un mandato dice **da quanti giorni aspetta**: chi
+guarda quella colonna sta per alzare il telefono. Raccogliendo per cliente le
+colonne non ci sono — lì la domanda è quanto deve quel cliente — e la scheda dice
+lo stesso se è stato mandato.
+
 **A sinistra sta il gestionale**: quanti lavori sono **da pagare** e quanto fanno,
 quanti sono **pagati**, e i due numeri portano all'una o all'altra parte. Nei file
 lo stato resta `da-fatturare` / `fatturato`: sono cambiate le parole a schermo, non
