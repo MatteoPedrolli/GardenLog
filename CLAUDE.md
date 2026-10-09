@@ -1295,6 +1295,14 @@ lì: può darsi che sia già stato ragionato.
   in testa e «90n» sotto, perché le celle numeriche non hanno margine a destra.
   Le celle di una tabella **si toccano sempre** — il margine sta dentro — quindi
   una prova che misura i riquadri non vede niente: va misurato il **testo**.
+- La regola generale dei campi (`input[type=text]`, a tutta larghezza) sta **sotto**
+  quelle che li stringono: a parità di peso vince lei. `input.stretto` era scritta
+  così e non valeva da nessuna parte — nel preventivo un «1» stava in una casella
+  larga mezzo schermo. Una regola che stringe un campo di testo dice anche il tipo
+  (`input[type=text].stretto`).
+- Nel preventivo i **componenti** di una riga a corpo sono righe della stessa
+  tabella (`tr.componenti`), non una tabella dentro una cella: con una tabella loro
+  le colonne non cadevano sotto quelle della riga, e l'occhio non scendeva dritto.
 - Una colonna della lavagna cresce fino al suo contenuto più largo e sborda su
   quella accanto: è già successo con la fila `−/1 mezza/+`, che non andava a capo
   e spingeva le ore sopra il «MATTINA» del giorno dopo. Si vede solo a occhio, per

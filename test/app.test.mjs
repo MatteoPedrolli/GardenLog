@@ -3511,6 +3511,21 @@ try {
   ok('i componenti si vedono sotto la loro riga, con la somma a listino',
     await pagU.evaluate(() => !!document.querySelector('#pagina-preventivo tr.componenti') &&
       document.querySelector('#pagina-preventivo .somma-componenti').textContent.includes('612,50')));
+  // Le caselle dei numeri sono strette, e i componenti stanno nelle colonne della
+  // loro riga: la regola generale dei campi stava sotto quella che li stringe, e un
+  // «1» finiva in una casella larga mezzo schermo, con i componenti fuori colonna.
+  const colonnePrev = await pagU.evaluate(() => {
+    const comp = document.querySelector('#pagina-preventivo tr.componenti');
+    let capo = comp && comp.previousElementSibling;
+    while (capo && capo.classList.contains('componenti')) capo = capo.previousElementSibling;
+    const q = capo && capo.querySelector('td.num input.stretto');
+    const qc = comp && comp.querySelector('td.num input.stretto');
+    if (!q || !qc) return null;
+    const a = q.getBoundingClientRect(), b = qc.getBoundingClientRect();
+    return { larga: Math.round(a.width), destra: Math.round(a.right), destraComp: Math.round(b.right) };
+  });
+  ok('le caselle dei numeri sono strette, e i componenti stanno in colonna con la riga',
+    colonnePrev && colonnePrev.larga <= 100 && Math.abs(colonnePrev.destra - colonnePrev.destraComp) <= 2, JSON.stringify(colonnePrev));
   // La descrizione per il cliente non arriva dal campo: nasce dal nome della voce
   // e la scrive l'ufficio, guardando quello che il campo ha misurato.
   ok('la descrizione nasce dal nome, e accanto c\'è quello che il campo ha misurato',

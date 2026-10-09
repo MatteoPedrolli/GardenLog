@@ -177,26 +177,44 @@ button.conferma {
   background: var(--foglio); color: var(--ocra); border-radius: 6px; cursor: pointer;
   font-size: 0.8rem; font-family: inherit;
 }
-input.stretto { width: 84px; text-align: right; }
+/* Più pesante della regola generale dei campi, che sta sotto e li mette a tutta
+   larghezza: a parità di peso vinceva lei, e nel preventivo un «1» stava in una
+   casella larga mezzo schermo. */
+input[type=text].stretto { width: 84px; text-align: right; }
 /* Quasi tutte le righe stanno nel totale: il menù che lo dice resta piccolo e
    in sordina, e quando la riga è una tariffa è la riga intera a farsi notare.
    A tutta larghezza ripeteva «Nel totale» tre volte e raddoppiava l'altezza. */
 select.tipo-riga {
-  width: auto; margin-top: 4px; padding: 3px 6px; font-size: 0.74rem;
+  width: auto; margin: 0; padding: 2px 6px; font-size: 0.74rem; flex: none;
   color: var(--text-light); background: transparent; border-color: transparent;
 }
 select.tipo-riga:hover, select.tipo-riga:focus { border-color: var(--border); background: var(--white); }
 /* E la ✕ non sta attaccata all'importo. */
-table.elenco td.via-col { padding-left: 10px; width: 34px; }
+table.elenco td.via-col { padding-left: 14px; width: 38px; }
 /* Una tariffa non entra nel totale: si vede che è di un'altra natura. */
 tr.riga-tariffa td { background: var(--foglio); }
 /* I componenti di una riga a corpo: sotto la riga, più piccoli e rientrati. Sono
    il conto dietro il prezzo, non righe del preventivo, e devono sembrarlo. */
-tr.componenti > td { padding: 0 0 10px 18px; border-top: none; }
-table.componenti { width: 100%; font-size: 0.82rem; }
-table.componenti td { padding: 3px 8px; border-bottom: 1px dashed var(--border); color: var(--text-mid); }
-.somma-componenti { margin: 6px 8px 0; }
-.dal-campo { margin-top: 3px; }
+/* Stanno nelle colonne della tabella, non in una tabella loro: quantità e prezzo
+   di piante e telo cadono sotto quelli della siepe, e l'occhio scende dritto. */
+table.elenco tr.componenti td { font-size: 0.82rem; padding: 3px 8px 3px 0; color: var(--text-mid);
+  border-bottom: 1px dashed var(--border); }
+table.elenco tr.componenti td.num { padding-right: 0; }
+table.elenco tr.componenti td:first-child { padding-left: 20px; }
+table.elenco tr.componenti input[type=text] { padding: 4px 8px; font-size: 0.82rem; }
+table.elenco tr.componenti.somma td { border-bottom: 1px solid var(--border); padding-bottom: 10px; }
+.somma-componenti { margin: 4px 0 0; }
+/* Sotto la descrizione una riga sola: quello che il campo ha misurato a sinistra,
+   se la riga sta nel totale a destra. Su due righe raddoppiavano l'altezza. */
+.sotto-riga { display: flex; align-items: center; gap: 10px; margin-top: 3px; }
+.sotto-riga .dal-campo { flex: 1; min-width: 0; }
+/* L'importo non sta attaccato al prezzo né al ✓: una colonna sua, con aria. */
+table.elenco td.importo, table.elenco th.importo { padding-left: 16px; white-space: nowrap; }
+table.elenco td.conferma-col { width: 34px; padding-left: 6px; padding-right: 0; }
+button.conferma { margin-left: 0; }
+/* Soluzioni e metri-piante si usano di rado: chiusi, non allungano la pagina. */
+details.scheda > summary.titolo-sezione { cursor: pointer; margin: 0; }
+details.scheda[open] > summary.titolo-sezione { margin-bottom: 10px; }
 /* Una sezione è un titolo, non una riga da prezzare: niente colonne, e il testo
    si legge come un titolo anche dentro il campo in cui si scrive. */
 tr.riga-sezione input[type=text] { font-weight: 600; font-size: 0.95rem; border-color: transparent;
@@ -2146,6 +2164,15 @@ function riassuntoRicontrolla() {
 // non si legge, e quello che non si legge tanto vale non scriverlo.
 const NOVITA = [
   {
+    versione: '2026-10-09.2',
+    data: '2026-10-09',
+    titolo: 'Il preventivo più ordinato',
+    righe: [
+      'Caselle dei numeri della misura giusta, e i **componenti** (piante, telo, ore) **in colonna** sotto la loro riga.',
+      'Il ✓ del prezzo ha una colonna sua, «dal campo» e «Nel totale» stanno su una riga, e **Soluzioni alternative** e **Dai metri alle piante** restano chiusi finché non servono.',
+    ],
+  },
+  {
     versione: '2026-10-09.1',
     data: '2026-10-09',
     titolo: 'Rilievi scritti in ufficio',
@@ -3250,13 +3277,10 @@ function riassuntoLavorazione(l) {
 // e la somma segue senza ridisegnare.
 function righeComponenti(r, i) {
   const somma = sommaComponenti(r.componenti);
-  let html = '<tr class="componenti"><td colspan="6"><table class="componenti"><tbody>';
-  if (!r.componenti.length) {
-    html += '<tr><td class="meta">Nessun componente: il prezzo si scrive a mano.</td></tr>';
-  }
+  let html = '';
   r.componenti.forEach((c, j) => {
     const imp = importoRiga(c);
-    html += '<tr>' +
+    html += '<tr class="componenti">' +
       '<td>' + perValore(c.voce) + '<div class="meta">' + perValore(c.calcolo || '') + '</div></td>' +
       '<td class="num"><input type="text" inputmode="decimal" class="stretto" value="' +
         perValore(formattaQuantita(c.quantita)) + '" ' +
@@ -3265,11 +3289,14 @@ function righeComponenti(r, i) {
       '<td class="num"><input type="text" inputmode="decimal" class="stretto" value="' +
         perValore(formattaQuantita(c.prezzo)) + '" ' +
         'oninput="modificaComponente(' + i + ', ' + j + ', \'prezzo\', this.value)" aria-label="prezzo"></td>' +
-      '<td class="num" id="imp-comp-' + i + '-' + j + '">' +
+      '<td></td>' +
+      '<td class="num importo" id="imp-comp-' + i + '-' + j + '">' +
         (imp == null ? '<span class="meta">—</span>' : formattaEuro(imp)) + '</td>' +
+      '<td></td>' +
     '</tr>';
   });
-  html += '</tbody></table>' +
+  html += '<tr class="componenti somma"><td colspan="7">' +
+    (r.componenti.length ? '' : '<div class="meta">Nessun componente: il prezzo si scrive a mano.</div>') +
     '<div class="meta somma-componenti" id="somma-riga-' + i + '">' + testoSommaComponenti(r, somma, i) + '</div>' +
     '</td></tr>';
   return html;
@@ -3521,6 +3548,11 @@ function aggiornaCodaPreventivo() {
     '<button class="secondaria" onclick="confermaTuttiIPrezzi()">Vanno bene così</button>';
 }
 
+const SCHEDE_APERTE_PREVENTIVO = new Set();
+function ricordaSchedaPreventivo(k, aperta) {
+  if (aperta) SCHEDE_APERTE_PREVENTIVO.add(k); else SCHEDE_APERTE_PREVENTIVO.delete(k);
+}
+
 function disegnaPreventivo() {
   const c = document.getElementById('pagina-preventivo');
   if (!PREVENTIVO) { c.innerHTML = '<div class="vuoto-elenco">Nessun preventivo aperto.</div>'; return; }
@@ -3565,17 +3597,18 @@ function disegnaPreventivo() {
   html += '<div id="da-confermare" class="avvertenza" style="display:none"></div>';
 
   html += '<div class="scheda"><table class="elenco"><thead><tr>' +
-    '<th>Descrizione</th><th class="num">Q.tà</th><th>UM</th><th class="num">Prezzo</th>' +
-    '<th class="num">Importo</th><th></th></tr></thead><tbody>';
+    '<th>Descrizione</th><th class="num">Q.tà</th><th>UM</th><th class="num">Prezzo</th><th></th>' +
+    '<th class="num importo">Importo</th><th></th></tr></thead><tbody>';
   const soluzioni = soluzioniDi(d);
   d.righe.forEach((r, i) => {
     const imp = r.tipo === 'totale' ? importoRiga(r) : null;
     const sezione = r.tipo === 'sezione';
     html += '<tr class="' + (r.tipo === 'tariffa' ? 'riga-tariffa' : '') +
         (sezione ? ' riga-sezione' : '') + '">' +
-      '<td' + (sezione ? ' colspan="5"' : '') + '><input type="text" value="' + perValore(r.descrizione) + '" ' +
+      '<td' + (sezione ? ' colspan="6"' : '') + '><input type="text" value="' + perValore(r.descrizione) + '" ' +
         'oninput="modificaRigaPreventivo(' + i + ', \'descrizione\', this.value)">' +
-        (r.lavorazione ? '<div class="meta dal-campo">dal campo: ' + perValore(riassuntoLavorazione(r.lavorazione)) + '</div>' : '') +
+        '<div class="sotto-riga">' +
+        '<span class="meta dal-campo">' + (r.lavorazione ? 'dal campo: ' + perValore(riassuntoLavorazione(r.lavorazione)) : '') + '</span>' +
         '<select class="tipo-riga" onchange="cambiaTipoRiga(' + i + ', this.value)">' +
         TIPI_RIGA_PREVENTIVO.map(x => '<option value="' + x.id + '"' +
           (x.id === r.tipo ? ' selected' : '') + '>' + x.nome + '</option>').join('') +
@@ -3588,7 +3621,7 @@ function disegnaPreventivo() {
           soluzioni.map(sol => '<option value="' + perValore(sol.id) + '"' +
             (sol.id === r.soluzione ? ' selected' : '') + '>Solo in ' + perValore(sol.nome) + '</option>').join('') +
           '</select>' : '') +
-        '</td>' +
+        '</div></td>' +
       (sezione ? '' :
         '<td class="num">' + (r.tipo === 'tariffa' ? '<span class="meta">—</span>' :
           '<input type="text" inputmode="decimal" class="stretto" value="' +
@@ -3597,27 +3630,27 @@ function disegnaPreventivo() {
         '<td style="white-space:nowrap">' + perValore(r.unita) + '</td>' +
         '<td class="num"><input type="text" inputmode="decimal" class="stretto prezzo' +
           (r.proposto ? ' proposto' : '') + '" id="prezzo-riga-' + i + '" value="' + perValore(formattaQuantita(r.prezzo)) + '" ' +
-          'oninput="modificaPrezzoRiga(' + i + ', this.value, this)">' +
-          (r.proposto ? '<button class="conferma" onclick="confermaPrezzo(' + i + ')" ' +
+          'oninput="modificaPrezzoRiga(' + i + ', this.value, this)"></td>' +
+        '<td class="conferma-col">' + (r.proposto ? '<button class="conferma" onclick="confermaPrezzo(' + i + ')" ' +
             'title="Va bene così">✓</button>' : '') + '</td>' +
-        '<td class="num" id="imp-riga-' + i + '">' + (r.tipo === 'tariffa' ? '<span class="meta">fuori totale</span>' :
+        '<td class="num importo" id="imp-riga-' + i + '">' + (r.tipo === 'tariffa' ? '<span class="meta">fuori totale</span>' :
           (imp == null ? '<span class="meta">—</span>' : formattaEuro(imp))) + '</td>') +
       '<td class="via-col"><button class="via" onclick="togliRigaPreventivo(' + i + ')" title="Togli">✕</button></td>' +
     '</tr>';
     if (Array.isArray(r.componenti)) html += righeComponenti(r, i);
   });
   if (t.unico) {
-    html += '<tr class="riga-totale"><td colspan="4">Totale (IVA inclusa)</td>' +
-      '<td class="num" id="totale-preventivo">' + formattaEuro(t.unico.totale) + '</td><td></td></tr>';
+    html += '<tr class="riga-totale"><td colspan="5">Totale (IVA inclusa)</td>' +
+      '<td class="num importo" id="totale-preventivo">' + formattaEuro(t.unico.totale) + '</td><td></td></tr>';
   } else {
     // Un totale per soluzione, e si escludono: il cliente ne sceglie una sola.
     t.soluzioni.forEach(sol => {
-      html += '<tr class="riga-totale"><td colspan="4">' + perValore(sol.nome) +
+      html += '<tr class="riga-totale"><td colspan="5">' + perValore(sol.nome) +
         ' <span class="meta">· comprese le voci comuni</span>' +
         (d.stato === 'accettato' ? (d.scelta === sol.id ? ' <strong>— scelta</strong>' : '') :
           ' <button class="secondaria" onclick="accettaPreventivo(\'' + perOnclick(sol.id) +
           '\')">Il cliente ha scelto questa</button>') + '</td>' +
-        '<td class="num" id="totale-' + perValore(sol.id) + '">' + formattaEuro(sol.totale) + '</td><td></td></tr>';
+        '<td class="num importo" id="totale-' + perValore(sol.id) + '">' + formattaEuro(sol.totale) + '</td><td></td></tr>';
     });
   }
   html += '</tbody></table>';
@@ -3634,7 +3667,14 @@ function disegnaPreventivo() {
   // «Siepe nuda o con telo e porfido»: due varianti dello stesso lavoro con due
   // totali che si escludono. Quasi nessun preventivo ne ha, quindi il bottone
   // resta e il resto compare solo quando servono.
-  html += '<div class="scheda"><div class="titolo-sezione">Soluzioni alternative</div>';
+  // Si aprono quando servono, e restano come le si è lasciate: la schermata si
+  // ridisegna a ogni conferma, e un riquadro che si richiude da solo fa perdere il
+  // segno.
+  const aperto = k => (SCHEDE_APERTE_PREVENTIVO.has(k) ? ' open' : '');
+  const ricorda = k => ' ontoggle="ricordaSchedaPreventivo(\'' + k + '\', this.open)"';
+  html += '<details class="scheda"' + (soluzioni.length ? ' open' : aperto('soluzioni')) + ricorda('soluzioni') + '>' +
+    '<summary class="titolo-sezione">Soluzioni alternative' +
+    (soluzioni.length ? ' <span class="meta">· ' + soluzioni.length + '</span>' : '') + '</summary>';
   if (!soluzioni.length) {
     html += '<p class="sottotitolo" style="margin:0 0 10px">Due varianti dello stesso lavoro, ' +
       'ognuna col suo totale: il cliente ne sceglie una. Le righe che restano comuni entrano ' +
@@ -3652,9 +3692,10 @@ function disegnaPreventivo() {
     html += '</tbody></table>';
   }
   html += '<button class="secondaria" onclick="aggiungiSoluzione()">+ Aggiungi una soluzione</button>';
-  html += '</div>';
+  html += '</details>';
 
-  html += '<div class="scheda"><div class="titolo-sezione">Dai metri alle piante</div>' +
+  html += '<details class="scheda"' + aperto('metri') + ricorda('metri') + '>' +
+    '<summary class="titolo-sezione">Dai metri alle piante</summary>' +
     '<p class="sottotitolo" style="margin:0 0 10px">Metri di siepe e sesto d\'impianto: ' +
     'il numero di piante è aritmetica, e rifarla a mano ogni volta è un errore che aspetta.</p>' +
     '<table class="elenco"><tbody><tr>' +
@@ -3666,7 +3707,7 @@ function disegnaPreventivo() {
     '<div class="titolo-sezione" id="piante-calcolate" style="margin-top:10px"></div>' +
     '<button class="secondaria" id="sesto-bottone" disabled onclick="aggiungiPianteDaSesto()">' +
       'Mettilo in una riga</button>' +
-    '</div>';
+    '</details>';
 
   html += '<div class="scheda"><div class="titolo-sezione">Note sul preventivo</div>' +
     '<textarea rows="3" oninput="PREVENTIVO.doc.note = this.value">' + perValore(d.note) + '</textarea>' +
