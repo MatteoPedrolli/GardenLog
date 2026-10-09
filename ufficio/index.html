@@ -2160,6 +2160,15 @@ function riassuntoRicontrolla() {
 // non si legge, e quello che non si legge tanto vale non scriverlo.
 const NOVITA = [
   {
+    versione: '2026-10-09.7',
+    data: '2026-10-09',
+    titolo: 'Le singole operazioni',
+    righe: [
+      'Nel **nuovo rilievo** e nel **preventivo** si aggiungono anche le **singole operazioni** — un trattamento, una potatura — oltre ai settori e alle voci di listino.',
+      'Un **trattamento** è a corpo: vale 1 e **non chiede ore né misura**.',
+    ],
+  },
+  {
     versione: '2026-10-09.6',
     data: '2026-10-09',
     titolo: 'Ore per voce nei settori',
@@ -2543,8 +2552,41 @@ function leggiSettoriTelefono(grezzo) {
         tipoID: c.tipoID || '', nome: c.nome || '', voceID: c.voceID || '', voce: c.voce || '', unita: c.unita || '',
       })),
     })),
+    operazioni: (Array.isArray(doc.operazioni) ? doc.operazioni : []).filter(c => c && c.tipoID && c.nome).map(c => ({
+      tipoID: String(c.tipoID), nome: String(c.nome), voceID: c.voceID || '', voce: c.voce || '', unita: c.unita || '',
+    })),
   };
 }
+
+// Le singole operazioni — un trattamento, un taglio prato — da aggiungere da sole,
+// fuori da un settore. Le esporta il telefono insieme ai settori; un file di prima
+// non le ha, e allora sono le lavorazioni dei settori, una volta ciascuna.
+function operazioniConosciute() {
+  if (SETTORI_TELEFONO && SETTORI_TELEFONO.operazioni && SETTORI_TELEFONO.operazioni.length) return SETTORI_TELEFONO.operazioni;
+  const viste = new Map();
+  settoriConosciuti().forEach(st => st.lavorazioni.forEach(t => { if (t.tipoID && !viste.has(t.tipoID)) viste.set(t.tipoID, t); }));
+  return [...viste.values()].sort((a, b) => a.nome.localeCompare(b.nome));
+}
+
+// A corpo lo decide il listino dell'ufficio, come per i rapportini: un trattamento
+// vale 1, e le ore non dicono niente a chi fa il prezzo.
+function voceACorpo(voceID) {
+  const v = voceID ? voceInListino(voceID) : null;
+  return !!(v && v.aCorpo);
+}
+
+function lavorazioneACorpo(l) {
+  if (l.genere === 'voce') return voceACorpo(l.voceID);
+  if (l.genere === 'insieme') {
+    const st = l.insieme ? settoriConosciuti().find(x => x.id === l.insieme.id) : null;
+    const lav = st ? st.lavorazioni : (l.insieme ? l.insieme.componenti : []);
+    return lav.length > 0 && lav.every(t => voceACorpo(t.voceID));
+  }
+  return false;
+}
+
+const etichettaOperazione = t => voceACorpo(t.voceID) ? ' · a corpo'
+  : (t.voceID && t.voceID !== VOCE_MANODOPERA ? (t.unita ? ' · ' + t.unita : '') : ' · solo ore');
 
 // Da dove vengono i settori che si vedono: detto dove si cambiano, o un settore
 // nuovo creato sul telefono sembrerebbe non arrivare mai.
@@ -2616,6 +2658,8 @@ function disegnaRilievoUfficio() {
     '<optgroup label="Settori">' + settori.map(x => '<option value="settore:' + perValore(x.id) + '">' +
       perValore(x.nome) + (x.libero ? ' · scritta a mano' : (x.unita ? ' · a ' + perValore(x.unita) : ' · solo ore')) +
       '</option>').join('') + '</optgroup>' +
+    '<optgroup label="Operazioni">' + operazioniConosciute().map(t => '<option value="operazione:' + perValore(t.tipoID) + '">' +
+      perValore(t.nome) + perValore(etichettaOperazione(t)) + '</option>').join('') + '</optgroup>' +
     '<optgroup label="Solo ore"><option value="manodopera">Manodopera: potatura, pulizia…</option></optgroup>' +
     (voci.length ? '<optgroup label="Voci a misura">' + voci.map(v => '<option value="voce:' + perValore(v.voceID) + '">' +
       perValore(v.voce) + (v.unita ? ' · ' + perValore(v.unita) : '') + '</option>').join('') + '</optgroup>' : '') +
@@ -2681,7 +2725,7 @@ function righeLavorazioniUfficio() {
       '<td>' + (nomeLibero
         ? campo(i, 'nome', l.nome, l.genere === 'manodopera' ? 'Cosa: potatura, pulizia…' : 'Cosa c\'è da fare', true)
         : perValore(l.nome) + spunteSettoreUfficio(l, i)) + '</td>' +
-      '<td class="num">' + (l.genere === 'manodopera' || (l.genere === 'insieme' && !l.unita) ? '' : campo(i, 'misura', l.misura)) + '</td>' +
+      '<td class="num">' + (l.genere === 'manodopera' || (l.genere === 'insieme' && !l.unita) || lavorazioneACorpo(l) ? '' : campo(i, 'misura', l.misura)) + '</td>' +
       '<td>' + (l.genere === 'libera'
         ? '<select onchange="modificaLavorazioneUfficio(' + i + ', \'unita\', this.value)" aria-label="unità">' +
           UNITA_RILIEVO.map(u => '<option' + (u === l.unita ? ' selected' : '') + '>' + perValore(u) + '</option>').join('') + '</select>'
@@ -2690,7 +2734,7 @@ function righeLavorazioniUfficio() {
       // preventivo, come per un rilievo che arriva dal campo.
       '<td>' + (conPiante ? campo(i, 'stile', l.stile || l.pianta,
         l.unita === 'm' ? 'lauro, fitta, alta 1,8 m' : 'perenni da sole, stile naturale', true) : '') + '</td>' +
-      '<td class="num" style="padding-left:12px">' + (l.genere === 'voce' ? '' : campo(i, 'ore', l.ore)) + '</td>' +
+      '<td class="num" style="padding-left:12px">' + (l.genere === 'voce' || lavorazioneACorpo(l) ? '' : campo(i, 'ore', l.ore)) + '</td>' +
       '<td style="padding-left:12px">' + campo(i, 'note', l.note, '', true) + '</td>' +
       '<td class="via-col"><button class="via" onclick="togliLavorazioneUfficio(' + i + ')" title="Togli">✕</button></td>' +
     '</tr>';
@@ -2732,6 +2776,17 @@ function aggiungiLavorazioneUfficio(valore) {
     if (st.libero) Object.assign(l, { genere: 'libera', nome: st.nome, unita: 'n' });
     else Object.assign(l, { genere: 'insieme', nome: st.nome, unita: st.unita,
       insieme: { id: st.id, nome: st.nome, componenti: [] } });
+  } else if (valore.startsWith('operazione:')) {
+    const t = operazioniConosciute().find(x => x.tipoID === valore.slice(11));
+    if (!t) return;
+    // Con una voce è una voce a misura col nome dell'operazione; senza, manodopera.
+    if (t.voceID && t.voceID !== VOCE_MANODOPERA) {
+      const v = voceInListino(t.voceID);
+      Object.assign(l, { genere: 'voce', voceID: t.voceID, nome: t.nome,
+        unita: voceACorpo(t.voceID) ? '' : ((v && v.unita) || t.unita || '') });
+    } else {
+      Object.assign(l, { genere: 'manodopera', nome: t.nome });
+    }
   } else if (valore.startsWith('voce:')) {
     const v = (LISTINO.voci || []).find(x => x.voceID === valore.slice(5));
     if (!v) return;
@@ -3004,6 +3059,10 @@ function componentiLavorazione(l, vecchi) {
       // 18 m² di aiuola, 18 m² di telo — e l'ufficio corregge. Le ricette per
       // settore erano un elenco in più da tenere, per un numero che va guardato
       // comunque.
+      if (voceACorpo(c.voceID)) {
+        metti({ chiave: c.voceID, voceID: c.voceID, voce: c.voce, unita: '', quantita: 1, calcolo: 'a corpo' });
+        return;
+      }
       metti({ chiave: c.voceID, voceID: c.voceID, voce: c.voce, unita: c.unita,
         quantita: l.unita && l.misura > 0 ? l.misura : '',
         calcolo: l.unita && l.misura > 0 ? 'come la misura: ' + scriviNumero(l.misura) + ' ' + l.unita
@@ -3106,14 +3165,18 @@ function descrizioneProposta(l) {
 function rigaDaLavorazione(l, giaFatta) {
   const aMisura = (l.genere === 'voce' || l.genere === 'libera') && !(l.ore > 0);
   if (aMisura) {
+    // Una voce a corpo — il trattamento — vale 1, come nei rapportini.
+    const corpo = l.genere === 'voce' && voceACorpo(l.voceID);
+    const quantita = corpo ? 1 : (l.misura || '');
+    const unita = corpo ? '' : (l.unita || '');
     // Un prezzo già guardato non torna indietro a essere una proposta: chi l'ha
     // messo sapeva qualcosa che il listino non sa.
-    if (giaFatta) return { ...giaFatta, quantita: l.misura, unita: l.unita, lavorazione: l };
+    if (giaFatta) return { ...giaFatta, quantita, unita, lavorazione: l };
     const prezzo = prezzoDiListino(l.voceID);
     return {
       chiave: l.id, voceID: l.voceID || '', voce: l.nome || '',
       descrizione: l.descrizione || l.nome || '',
-      quantita: l.misura || '', unita: l.unita || '',
+      quantita, unita,
       prezzo,
       // Un prezzo che non c'è non è una proposta: è un buco, e va riempito. Solo
       // quello che il listino ha proposto aspetta una conferma.
@@ -3844,17 +3907,33 @@ function cambiaSoluzioneRiga(i, soluzione) {
   disegnaPreventivo();
 }
 
-function aggiungiRigaPreventivo(voceID) {
+function aggiungiRigaPreventivo(voceID, descrizione) {
   const v = voceID ? voceInListino(voceID) : null;
+  const corpo = !!(v && v.aCorpo);
   PREVENTIVO.doc.righe.push({
     chiave: '', voceID: v ? v.voceID : '', voce: v ? v.voce : '',
-    descrizione: v ? v.voce : '', quantita: '', unita: v ? (v.unita || '') : '',
+    descrizione: descrizione || (v ? v.voce : ''), quantita: corpo ? 1 : '', unita: v && !corpo ? (v.unita || '') : '',
     prezzo: v && v.prezzo !== '' && v.prezzo != null ? Number(v.prezzo) : '',
     proposto: !!(v && v.prezzo !== '' && v.prezzo != null),
     tipo: 'totale',
     soluzione: '',
   });
   disegnaPreventivo();
+}
+
+// Una singola operazione nel preventivo: la riga della sua voce col nome
+// dell'operazione, o, senza voce, una riga di manodopera a ore. Si sceglie
+// dall'elenco che si dice a voce — «un trattamento», «la potatura» — e non dalla
+// voce di listino, che per una potatura non c'è.
+function aggiungiDalListinoPreventivo(valore) {
+  if (!valore) return;
+  if (valore.startsWith('operazione:')) {
+    const t = operazioniConosciute().find(x => x.tipoID === valore.slice(11));
+    if (!t) return;
+    aggiungiRigaPreventivo(t.voceID && t.voceID !== VOCE_MANODOPERA ? t.voceID : VOCE_MANODOPERA, t.nome);
+    return;
+  }
+  aggiungiRigaPreventivo(valore.replace(/^voce:/, ''));
 }
 
 function aggiungiSezionePreventivo() {
@@ -4018,10 +4097,14 @@ function disegnaPreventivo() {
   const senzaPrezzo = t.unico ? t.unico.escluse : t.soluzioni.reduce((m, x) => Math.max(m, x.escluse), 0);
   html += '<div class="meta" id="fuori-totale">' + (senzaPrezzo
     ? senzaPrezzo + (senzaPrezzo === 1 ? ' riga senza prezzo' : ' righe senza prezzo') : '') + '</div>';
-  html += '<select onchange="aggiungiRigaPreventivo(this.value); this.value=\'\'" style="margin-top:10px">' +
-    '<option value="">+ Aggiungi una voce di listino…</option>' +
-    LISTINO.voci.map(v => '<option value="' + perValore(v.voceID) + '">' + perValore(v.voce) + '</option>').join('') +
-    '</select>';
+  const operazioni = operazioniConosciute();
+  html += '<select onchange="aggiungiDalListinoPreventivo(this.value); this.value=\'\'" style="margin-top:10px">' +
+    '<option value="">+ Aggiungi un\'operazione o una voce di listino…</option>' +
+    (operazioni.length ? '<optgroup label="Operazioni">' + operazioni.map(t => '<option value="operazione:' + perValore(t.tipoID) + '">' +
+      perValore(t.nome) + perValore(etichettaOperazione(t)) + '</option>').join('') + '</optgroup>' : '') +
+    '<optgroup label="Voci di listino">' +
+    LISTINO.voci.map(v => '<option value="voce:' + perValore(v.voceID) + '">' + perValore(v.voce) + '</option>').join('') +
+    '</optgroup></select>';
   html += ' <button class="secondaria" onclick="aggiungiSezionePreventivo()">+ Titolo di sezione</button>';
   html += '</div>';
 

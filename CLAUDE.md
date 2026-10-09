@@ -558,6 +558,24 @@ numero per l'aiuola — ed era il posto sbagliato: un'aiuola si progetta, non si
 col cliente davanti. Il campo è arrivato senza alzare `VERSIONE_RILIEVO`; i rilievi
 di prima portano pianta e sesto o il numero, e valgono ancora.
 
+**Oltre ai settori, le singole operazioni** (`operazioniPerRilievo()`): un
+trattamento, un taglio prato, una potatura chiesti da soli. Prima c'erano solo
+settori e voci di listino, e un lavoro di una riga andava travestito da settore.
+Un'operazione con una voce diventa una lavorazione `voce` col nome
+dell'operazione; senza voce è `manodopera`, col nome già scritto. Nessun genere
+nuovo nel documento. Il telefono le esporta con i settori (`operazioni` in
+`settori-dal-telefono.json`, senza alzare la versione del file), e l'ufficio le offre
+nel «Nuovo rilievo» e nel preventivo (`operazioniConosciute()`; da un file di prima,
+le lavorazioni dei settori una volta ciascuna). Nel preventivo un'operazione è la
+riga della sua voce col suo nome, o una riga di manodopera a ore.
+
+**Un trattamento non chiede ore.** Si fattura a corpo, e le ore non dicono niente a
+chi fa il prezzo: chiederle in giardino era una casella in più da scavalcare. Una
+lavorazione la cui voce è a corpo, e un settore fatto solo di quelle (Trattamenti),
+non mostrano né misura né ore (`lavorazioneACorpo()`), sul telefono come
+nell'ufficio. In ufficio a corpo lo decide il listino (`voceACorpo()`), come per i
+rapportini: la riga o il componente valgono 1.
+
 **I settori si definiscono sul telefono** (Archivi › Settori della visita): li decide
 chi lavora. L'ufficio non ne ha un elenco suo: il telefono li esporta da ⚙️ Dati in
 `settori-dal-telefono.json`, nella cartella, e l'ufficio **lo legge a ogni rilettura**

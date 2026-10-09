@@ -3341,13 +3341,41 @@ function settoriPerRilievo() {
     .sort((a, b) => (Number(a.Ordine) || 99) - (Number(b.Ordine) || 99))
     .map(s => ({
       SettoreID: s.SettoreID, Nome: s.Nome, Unita: misuraSettore(s), Libero: isSi(s.Libero),
-      lavorazioni: tipiDelSettore(s).map(t => {
-        const v = t.VoceID && t.VoceID !== VOCE_MANODOPERA ? DB.voci.find(x => x.VoceID === t.VoceID) : null;
-        return { TipoID: t.TipoID, Nome: t.Nome, VoceID: v ? v.VoceID : '', Voce: v ? v.Nome : '',
-          Unita: v ? (v.Unita || t.Unita || '') : '' };
-      }),
+      lavorazioni: tipiDelSettore(s).map(lavorazioneDelTipo),
     }));
 }
+
+// Un tipo di operazione come lo legge il rilievo: la sua voce, se ne ha una che
+// non sia manodopera, e se quella voce si conta a corpo.
+function lavorazioneDelTipo(t) {
+  const v = t.VoceID && t.VoceID !== VOCE_MANODOPERA ? DB.voci.find(x => x.VoceID === t.VoceID) : null;
+  return { TipoID: t.TipoID, Nome: t.Nome, VoceID: v ? v.VoceID : '', Voce: v ? v.Nome : '',
+    Unita: v ? (v.Unita || t.Unita || '') : '', ACorpo: !!(v && isSi(v.ACorpo)) };
+}
+
+// Le singole operazioni, fuori dai settori: un trattamento, un taglio prato, una
+// potatura chiesti da soli. Prima nel rilievo c'erano solo settori e voci di
+// listino, e un lavoro di una riga andava travestito da settore.
+function operazioniPerRilievo() {
+  return DB.tipiOperazione.filter(t => !eInsieme(t))
+    .sort((a, b) => (Number(a.Ordine) || 99) - (Number(b.Ordine) || 99) || String(a.Nome).localeCompare(String(b.Nome)))
+    .map(lavorazioneDelTipo);
+}
+
+// Un trattamento si fattura a corpo: le ore non dicono niente a chi fa il prezzo,
+// e chiederle in giardino era una casella in più da scavalcare. Vale per una
+// lavorazione la cui voce è a corpo, e per un settore fatto solo di quelle.
+function settoreACorpo(st) {
+  return !!(st && st.lavorazioni.length && st.lavorazioni.every(t => t.ACorpo));
+}
+
+function lavorazioneACorpo(l) {
+  if (l.Genere === 'voce') { const v = DB.voci.find(x => x.VoceID === l.VoceID); return !!(v && isSi(v.ACorpo)); }
+  if (l.Genere === 'insieme') return settoreACorpo(settoriPerRilievo().find(x => x.SettoreID === l.TipoID));
+  return false;
+}
+
+const etichettaOperazione = t => t.ACorpo ? ' · a corpo' : (t.VoceID ? (t.Unita ? ' · ' + t.Unita : '') : ' · solo ore');
 
 function popolaVociRilievo() {
   const sel = document.getElementById('f-ril-voce');
@@ -3356,8 +3384,11 @@ function popolaVociRilievo() {
   sel.innerHTML = '<option value="">+ Aggiungi una lavorazione…</option>' +
     (settori.length ? '<optgroup label="Settori">' +
       settori.map(s => `<option value="settore:${perValore(s.SettoreID)}">${perValore(s.Nome)}${
-        s.Libero ? ' · scritta a mano' : (s.Unita ? ' · a ' + perValore(s.Unita) : ' · solo ore')}</option>`).join('') +
+        s.Libero ? ' · scritta a mano' : (settoreACorpo(s) ? ' · a corpo' : (s.Unita ? ' · a ' + perValore(s.Unita) : ' · solo ore'))}</option>`).join('') +
       '</optgroup>' : '') +
+    '<optgroup label="Operazioni">' + operazioniPerRilievo().map(t =>
+      `<option value="operazione:${perValore(t.TipoID)}">${perValore(t.Nome)}${perValore(etichettaOperazione(t))}</option>`).join('') +
+    '</optgroup>' +
     `<optgroup label="Solo ore"><option value="${VOCE_MANODOPERA}">Manodopera: potatura, pulizia…</option></optgroup>` +
     '<optgroup label="Voci a misura">' +
     DB.voci.filter(v => v.VoceID !== VOCE_MANODOPERA && !isSi(v.ACorpo))
@@ -3399,6 +3430,14 @@ function scegliDaElencoRilievo(valore) {
     lavorazioniRilievo.push(st.Libero
       ? nuovaLavorazione({ Genere: 'libera', Nome: st.Nome, Unita: 'n' })
       : nuovaLavorazione({ Genere: 'insieme', TipoID: st.SettoreID, Nome: st.Nome, Unita: st.Unita, Componenti: [] }));
+  } else if (valore.startsWith('operazione:')) {
+    const t = operazioniPerRilievo().find(x => x.TipoID === valore.slice(11));
+    if (!t) return;
+    // Con una voce è una voce a misura col nome dell'operazione; senza, è
+    // manodopera, e il nome è già scritto.
+    lavorazioniRilievo.push(t.VoceID
+      ? nuovaLavorazione({ Genere: 'voce', VoceID: t.VoceID, Nome: t.Nome, Unita: t.ACorpo ? '' : t.Unita })
+      : nuovaLavorazione({ Genere: 'manodopera', Nome: t.Nome }));
   } else if (valore === VOCE_MANODOPERA) {
     lavorazioniRilievo.push(nuovaLavorazione({ Genere: 'manodopera' }));
   } else {
@@ -3472,6 +3511,7 @@ function renderRilievoRighe() {
   el.innerHTML = lavorazioniRilievo.map((l, i) => {
     const conPiante = l.Genere === 'insieme' && (l.Componenti || []).some(componenteDiPiante);
     const nomeLibero = l.Genere === 'manodopera' || l.Genere === 'libera';
+    const aCorpo = lavorazioneACorpo(l);
     // Le lavorazioni del settore si spuntano, come nella visita. Un rilievo di
     // prima, fatto con un insieme, mostra di cosa era fatto e basta.
     const settore = l.Genere === 'insieme' ? settoriPerRilievo().find(x => x.SettoreID === l.TipoID) : null;
@@ -3500,8 +3540,8 @@ function renderRilievoRighe() {
                <select onchange="modificaLavorazione(${i}, 'Unita', this.value)" aria-label="unità">
                  ${unitaPerLaRiga(l.Unita).map(u => `<option value="${perValore(u)}"${u === l.Unita ? ' selected' : ''}>${perValore(u)}</option>`).join('')}
                </select></span></label>`
-          : (l.Genere === 'insieme' && !l.Unita ? '' : campoLavorazione(i, 'Misura', 'Misura', l.Misura, { unita: l.Unita })))}
-        ${campoLavorazione(i, 'Ore', 'Ore', l.Ore, { unita: 'h' })}
+          : ((l.Genere === 'insieme' && !l.Unita) || aCorpo ? '' : campoLavorazione(i, 'Misura', 'Misura', l.Misura, { unita: l.Unita })))}
+        ${aCorpo ? '<div class="op-insieme">A corpo: il prezzo lo fa l\'ufficio</div>' : campoLavorazione(i, 'Ore', 'Ore', l.Ore, { unita: 'h' })}
       </div>
       ${conPiante ? `<div class="lav-campi">
         ${campoLavorazione(i, 'Stile', 'Piante e stile', l.Stile || l.Pianta, { largo: true,
@@ -4441,6 +4481,10 @@ function settoriPerUfficio() {
       id: st.SettoreID, nome: st.Nome, unita: st.Unita, libero: st.Libero,
       lavorazioni: st.lavorazioni.map(t => ({ tipoID: t.TipoID, nome: t.Nome, voceID: t.VoceID, voce: t.Voce, unita: t.Unita })),
     })),
+    // Le singole operazioni, per aggiungerle anche dal rilievo e dal preventivo
+    // dell'ufficio. Arrivate dopo, senza alzare la versione del file: un file di
+    // prima non le ha, e l'ufficio le prende dai settori.
+    operazioni: operazioniPerRilievo().map(t => ({ tipoID: t.TipoID, nome: t.Nome, voceID: t.VoceID, voce: t.Voce, unita: t.Unita })),
   };
 }
 

@@ -755,6 +755,41 @@ try {
     await page.evaluate(() => misuraSettore({ SettoreID: 'prato' }) === 'm²' && misuraSettore({ SettoreID: 'siepe', Unita: '' }) === '' &&
       ARCHIVI.settori.campi.find(c => c.k === 'Unita').valore({ SettoreID: 'aiuole' }) === 'm²'));
 
+  // Oltre ai settori, le singole operazioni: un trattamento, una potatura chiesti
+  // da soli. Il trattamento si fattura a corpo, e le ore non si chiedono.
+  const operRil = await page.evaluate(() => {
+    const opzioni = [...document.querySelectorAll('#f-ril-voce option')].map(o => o.value + '=' + o.textContent);
+    scegliDaElencoRilievo('operazione:trattamento-fitosanitario');
+    scegliDaElencoRilievo('operazione:potatura-siepi');
+    scegliDaElencoRilievo('operazione:concimazione');
+    scegliDaElencoRilievo('settore:trattamenti');
+    spuntaLavorazioneRilievo(3, 'trattamento-fitosanitario', true);
+    const carta = n => document.querySelector('#ril-righe .lav-riga:nth-child(' + n + ')');
+    const campi = n => ({ ore: !!carta(n).querySelector('[aria-label="Ore"]'), misura: !!carta(n).querySelector('[aria-label="Misura"]') });
+    const r = {
+      opzTratt: opzioni.find(x => x.startsWith('operazione:trattamento-fitosanitario=')) || '',
+      opzSettore: opzioni.find(x => x.startsWith('settore:trattamenti=')) || '',
+      generi: lavorazioniRilievo.map(l => l.Genere + ':' + (l.VoceID || '') + ':' + l.Nome + ':' + l.Unita).join('|'),
+      tratt: campi(1), potatura: campi(2), concime: campi(3), settore: campi(4),
+      aCorpoTesto: carta(1).textContent.includes('A corpo'),
+      complete: lavorazioniRilievo.every(l => cosaMancaLavorazione(l) === ''),
+      esporta: settoriPerUfficio().operazioni.some(o => o.tipoID === 'trattamento-fitosanitario' && o.voceID === 'trattamento'),
+    };
+    [3, 2, 1, 0].forEach(togliRigaRilievo);
+    return r;
+  });
+  ok('fra le lavorazioni del rilievo ci sono anche le singole operazioni, e il trattamento dice «a corpo»',
+    operRil.opzTratt.includes('Trattamento fitosanitario · a corpo') && operRil.opzSettore.includes('Trattamenti · a corpo'),
+    operRil.opzTratt + ' / ' + operRil.opzSettore);
+  ok('un\'operazione con voce è una voce col suo nome, senza voce è manodopera già nominata',
+    operRil.generi === 'voce:trattamento:Trattamento fitosanitario:|manodopera::Potatura siepi:|voce:concime:Concimazione:kg|insieme::Trattamenti:',
+    operRil.generi);
+  ok('il trattamento non chiede ore né misura, da solo o col suo settore; la potatura le ore, la concimazione anche la misura',
+    !operRil.tratt.ore && !operRil.tratt.misura && operRil.aCorpoTesto && !operRil.settore.ore &&
+    operRil.potatura.ore && operRil.concime.misura && operRil.concime.ore, JSON.stringify(operRil));
+  ok('le operazioni partono senza niente da completare, e vanno all\'ufficio con i settori',
+    operRil.complete && operRil.esporta);
+
   await page.selectOption('#f-ril-voce', 'tappeto-erboso');
   await page.waitForTimeout(150);
   ok('una voce a misura porta la sua unità, senza menù da scegliere',
@@ -4465,6 +4500,59 @@ try {
     oreVoce.oreTelo2 === 2 && oreVoce.mano2 === 9.5, oreVoce.oreTelo2 + ' / ' + oreVoce.mano2);
   ok('un preventivo di prima porta la manodopera in fondo, con le sue ore come ore di cantiere',
     oreVoce.vecchioDopo === 'piante:,telo-pacciamante:24,manodopera:9', oreVoce.vecchioDopo);
+
+  // ── LE SINGOLE OPERAZIONI IN UFFICIO ──
+  // Nel nuovo rilievo e nel preventivo si aggiungono anche le operazioni da sole.
+  // Il trattamento è a corpo nel listino: vale 1, e non chiede ore né misura.
+  const operUff = await pagU.evaluate(() => {
+    const prima = { prev: PREVENTIVO, tel: SETTORI_TELEFONO, voci: LISTINO.voci.slice() };
+    LISTINO.voci.push({ voceID: 'trattamento', voce: 'Trattamento fitosanitario', unita: '', prezzo: 80, aCorpo: true });
+    // Un file di prima, senza operazioni: valgono le lavorazioni dei settori.
+    const daiSettori = operazioniConosciute().map(o => o.tipoID);
+    SETTORI_TELEFONO = { esportato: '2026-10-09T08:00:00Z', settori: SETTORI_DI_PARTENZA, operazioni: [
+      { tipoID: 'trattamento-fitosanitario', nome: 'Trattamento fitosanitario', voceID: 'trattamento', voce: 'Trattamento fitosanitario', unita: '' },
+      { tipoID: 'potatura-siepi', nome: 'Potatura siepi', voceID: '', voce: '', unita: '' }] };
+    const d = costruisciPreventivo(leggiRilievo({ tipo: 'rilievo', versione: 1, id: 'ril-oper', revisione: 1, origine: 'ufficio',
+      creato: '2026-10-09T08:00:00Z', cliente: { nome: 'Prova Operazioni' }, lavorazioni: [
+        { id: 'o1', genere: 'voce', voceID: 'trattamento', nome: 'Trattamento fitosanitario', unita: '' },
+        { id: 'o2', genere: 'insieme', nome: 'Trattamenti', unita: '', insieme: { id: 'trattamenti', nome: 'Trattamenti', componenti: [
+          { tipoID: 'trattamento-fitosanitario', nome: 'Trattamento fitosanitario', voceID: 'trattamento', voce: 'Trattamento fitosanitario', unita: '' }] } }] }), null);
+    const trattRiga = d.righe[0];
+    const trattComp = d.righe[1].componenti.find(c => c.voceID === 'trattamento');
+    PREVENTIVO = { doc: d, file: '', anno: '' };
+    vaiA('preventivo');
+    const opzioni = [...document.querySelectorAll('#pagina-preventivo select option')].map(o => o.value + '=' + o.textContent);
+    aggiungiDalListinoPreventivo('operazione:trattamento-fitosanitario');
+    aggiungiDalListinoPreventivo('operazione:potatura-siepi');
+    const aggiunte = d.righe.slice(-2).map(r => [r.descrizione, r.voceID, r.quantita, r.unita, r.prezzo].join(':')).join('|');
+    nuovoRilievoUfficio();
+    const opzRilievo = [...document.querySelectorAll('#pagina-rilievo option')].map(o => o.value).filter(v => v.startsWith('operazione:'));
+    aggiungiLavorazioneUfficio('operazione:trattamento-fitosanitario');
+    aggiungiLavorazioneUfficio('operazione:potatura-siepi');
+    const lav = RILIEVO_UFFICIO.doc.lavorazioni.map(l => l.genere + ':' + l.nome).join('|');
+    const righe = document.querySelectorAll('#ril-uff-lavorazioni tbody tr');
+    const campiTratt = !righe[0] || !!righe[0].querySelector('[aria-label="misura"], [aria-label="ore"]');
+    const orePotatura = !!(righe[1] && righe[1].querySelector('[aria-label="ore"]'));
+    RILIEVO_UFFICIO = null;
+    PREVENTIVO = prima.prev; SETTORI_TELEFONO = prima.tel; LISTINO.voci = prima.voci;
+    vaiA('preventivo');
+    return { daiSettori: daiSettori.includes('livellamento') && daiSettori.includes('piantumazione'),
+      tratt: [trattRiga.quantita, trattRiga.unita, trattRiga.prezzo].join(':'),
+      comp: trattComp && trattComp.quantita + ':' + trattComp.calcolo,
+      opzioni: opzioni.some(x => x === 'operazione:trattamento-fitosanitario=Trattamento fitosanitario · a corpo') &&
+        opzioni.some(x => x === 'operazione:potatura-siepi=Potatura siepi · solo ore') && opzioni.some(x => x.startsWith('voce:')),
+      aggiunte, opzRilievo: opzRilievo.join(), lav, campiTratt, orePotatura };
+  });
+  ok('le operazioni vengono dal file del telefono, e da un file di prima dalle lavorazioni dei settori',
+    operUff.daiSettori && operUff.opzRilievo === 'operazione:trattamento-fitosanitario,operazione:potatura-siepi', operUff.opzRilievo);
+  ok('un trattamento dal campo vale 1 a corpo col prezzo del listino, da solo o nel suo settore',
+    operUff.tratt === '1::80' && operUff.comp === '1:a corpo', operUff.tratt + ' / ' + operUff.comp);
+  ok('nel preventivo si aggiunge un\'operazione: il trattamento a 1, la potatura a ore',
+    operUff.opzioni && operUff.aggiunte.startsWith('Trattamento fitosanitario:trattamento:1::80|Potatura siepi:manodopera::h:'),
+    operUff.aggiunte);
+  ok('e nel nuovo rilievo dell\'ufficio: il trattamento senza ore né misura, la potatura con le ore',
+    operUff.lav === 'voce:Trattamento fitosanitario|manodopera:Potatura siepi' && !operUff.campiTratt && operUff.orePotatura,
+    JSON.stringify(operUff));
 
   // I settori del telefono in ufficio: letti dal file a ogni rilettura, nel
   // «Nuovo rilievo», con la loro unità e le loro lavorazioni.
