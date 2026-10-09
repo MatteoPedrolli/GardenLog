@@ -530,7 +530,7 @@ lì. Telefono e mail **il telefono non li tiene**: viaggiano col rilievo verso
 l'ufficio, che è dove servono. Sono arrivati senza alzare `VERSIONE_RILIEVO`.
 
 **Dal giardino partono lavorazioni, non righe di preventivo.** Una lavorazione è
-un fatto misurato: «Siepe nuova · 24 m · lauro 80-100 · sesto 0,40 · 10 h». Le
+un fatto misurato: «Siepe nuova · 24 m · lauro, fitta, alta 1,8 m · 10 h». Le
 righe erano quelle del conto — voce, descrizione, quantità, unità — e sul telefono
 si vedeva «Piante» e sotto una casella con scritto di nuovo «Piante»: la
 descrizione per il cliente, da scrivere in giardino. Era il posto sbagliato. **Dal
@@ -542,11 +542,24 @@ misura una volta e i materiali li conta l'ufficio), una **voce** a misura (il ve
 da smaltire), la **manodopera** (solo ore, con un nome: una potatura), e una
 **libera** scritta a mano. Ogni insieme sa come si misura dal suo campo Unità in
 Archivi — la siepe a metri, l'aiuola a m² — e se dentro ha la piantumazione chiede
-la pianta e il **sesto** (a metri: dal sesto escono le piante, e il telefono le
-conta mentre si scrive) o il **numero di piante** (a m²: lì il sesto non dice quante
-file ci stanno). Sesto e pianta si decidono **in giardino**: li sceglie chi vede il
-posto. «Siepe nuova» è fra gli insiemi di partenza, arrivata con
-`DEFAULT_ARRIVATI_DOPO`.
+**piante e stile** (`stile`): «perenni da sole, stile naturale, toni bianchi», «lauro,
+fitta, alta 1,8 m». **Quali piante e quante le decide l'ufficio**, anche per la siepe:
+in giardino si vede il posto e si capisce cosa vuole il cliente, alla scrivania si
+sceglie la specie, il sesto e il numero. Si contavano in giardino — sesto per la siepe,
+numero per l'aiuola — ed era il posto sbagliato: un'aiuola si progetta, non si conta
+col cliente davanti. Il campo è arrivato senza alzare `VERSIONE_RILIEVO`; i rilievi
+di prima portano pianta e sesto o il numero, e valgono ancora. «Siepe nuova» è fra
+gli insiemi di partenza, arrivata con `DEFAULT_ARRIVATI_DOPO`.
+
+**Le lavorazioni complesse si definiscono sul telefono** (Archivi › Tipi di
+operazione, «Un insieme»): le decide chi lavora. L'ufficio non ne ha un elenco suo:
+il telefono le esporta da ⚙️ Dati in `lavorazioni-dal-telefono.json`, nella cartella,
+e l'ufficio **lo legge a ogni rilettura** (`insiemiConosciuti()`) invece di
+importarlo — lì non si modificano, e una copia invecchierebbe senza dirlo. Valgono
+nel «Nuovo rilievo» e fra le ricette del listino; dopo vengono quelle viste nei
+rilievi e non più nel file, poi siepe e aiuola di partenza. Le pagine dicono da dove
+vengono e quando sono state esportate: una lavorazione creata ieri sul telefono che
+in ufficio non compare deve far pensare al file, non a un guasto.
 
 La composizione dell'insieme **viaggia con la lavorazione**: in ufficio gli insiemi
 non si definiscono, e un rilievo si deve leggere anche se l'insieme poi cambia.
@@ -565,7 +578,7 @@ dentro; conta la voce `manodopera`, non l'unità: un noleggio a ore non occupa l
 lavagna.
 
 Una lavorazione **incompleta ferma il rilievo** e dice cosa manca
-(`cosaMancaLavorazione()`): un insieme senza misura, senza sesto o senza ore, una
+(`cosaMancaLavorazione()`): un insieme senza misura, senza piante e stile o senza ore, una
 manodopera senza nome. In ufficio non si può più chiedere, e in lavagna il
 pomeriggio sembrerebbe libero. Un rilievo senza ore (sola fornitura) parte, lo
 dice, e in lavagna va largo il minimo. Il documento porta `ore` e `mezze` già
@@ -604,9 +617,10 @@ provare i preventivi da un PC con una cartella vuota. Le lavorazioni sono quelle
 telefono, e il preventivo ne esce uguale; le regole di cosa manca stanno in
 `rapportino.js` (`lavorazioneIncompleta()`) e il telefono le prende da lì, perché
 due idee di «completo» farebbero partire dalla scrivania quello che il giardino
-avrebbe fermato. Gli insiemi sono quelli che il campo ha usato, più siepe nuova e
-aiuola con la composizione di partenza del telefono (`INSIEMI_DI_PARTENZA`): un
-ufficio appena collegato non deve aspettare il primo rilievo per scriverne uno.
+avrebbe fermato. Gli insiemi sono quelli esportati dal telefono e quelli che il
+campo ha usato, più siepe nuova e aiuola con la composizione di partenza del
+telefono (`INSIEMI_DI_PARTENZA`): un ufficio appena collegato non deve aspettare il
+primo rilievo per scriverne uno.
 
 Finisce in `rilievi/` accanto a quelli del telefono, con `origine: 'ufficio'`, e
 **un file resta di un solo autore**: quello scritto qui l'ufficio lo corregge
@@ -653,7 +667,7 @@ misurato.
 
 **Una lavorazione è una riga a corpo.** Al cliente arriva un prezzo solo per la
 siepe, come sui preventivi veri; dentro la riga stanno i **componenti**
-(`componentiLavorazione()`): le piante contate dal sesto, i materiali dalla
+(`componentiLavorazione()`): le piante scelte in ufficio, i materiali dalla
 **ricetta** del listino, le ore. Sono il conto dietro il prezzo, si vedono sotto la
 riga in piccolo, si correggono lì, e al cliente non arrivano — come le fasce di un
 rapportino. Il prezzo a corpo **proposto è la somma dei componenti** a listino e la
@@ -666,15 +680,24 @@ per m», «ore stimate in giardino»): fra sei mesi «61» da solo non dice nien
 quantità ritoccata o un prezzo deciso in ufficio (`quantitaMano`, `prezzoMano`)
 restano quando il campo rimanda il rilievo, come i prezzi delle righe.
 
+**Le piante si scelgono nella riga.** Il componente «Piante» arriva vuoto, con
+accanto «da scegliere in ufficio» e sopra, in «dal campo», piante e stile: qui si
+scrive quale pianta e quante, e per una siepe il **sesto**, da cui il numero esce da
+sé (metri / sesto + 1). **«+ Un'altra pianta»** ne aggiunge altre — un'aiuola è
+lavanda, graminacee e un acero, ognuna col suo prezzo — e la somma fa il prezzo a
+corpo. Pianta, sesto e piante aggiunte (`piantaMano`, `sestoMano`, `aggiunta`)
+restano quando il campo rimanda il rilievo corretto: se la siepe si allunga, il
+numero segue il sesto scelto qui.
+
 **Le ricette stanno nel listino** (`LISTINO.ricette`, Listino › Lavorazioni): quanto
 telo, ala, pacciamatura per ogni metro o m² di un insieme. Sono un dato dell'azienda
 come i prezzi, e si decidono in un posto solo invece che a ogni preventivo. Gli
-insiemi elencati sono quelli che il campo ha usato. Senza ricetta il componente
-resta senza quantità e lo dice: un buco, non una proposta. Le piante non hanno
-ricetta — escono dal sesto — e le ore nemmeno.
+insiemi elencati sono quelli del telefono e quelli che il campo ha usato. Senza
+ricetta il componente resta senza quantità e lo dice: un buco, non una proposta. Le
+piante non hanno ricetta — si scelgono nel preventivo — e le ore nemmeno.
 
 **La scheda di cantiere** (`costruisciSchedaCantiere()`) è l'altro foglio che esce
-dal preventivo, e va a chi lavora: per ogni lavorazione misura, sesto, piante,
+dal preventivo, e va a chi lavora: per ogni lavorazione misura, piante e stile, le piante scelte,
 materiali, ore, le note del campo; in fondo i **materiali da ordinare**, sommati fra
 le lavorazioni (due aiuole col telo sono un ordine solo), e le note del sopralluogo.
 **Niente prezzi**: gira in cantiere, e un prezzo lì sopra finisce dove non deve. Per

@@ -261,8 +261,9 @@ entra in «Da pianificare» sulla lavagna, ed è il motivo per cui lo stato serv
 La prima metà esiste, ed è quella che si fa in giardino. Il **rilievo** è un
 documento come il rapportino, viaggia nella stessa coda e finisce in `rilievi/`;
 l'ufficio lo legge in una pagina sua. Quello che porta: il cliente, se aspetta il
-disegno dal CAD, le **lavorazioni** — «Siepe nuova · 24 m · lauro · sesto 0,40 ·
-10 h» — e le note di quello che si vede solo stando lì. Niente testo per il
+disegno dal CAD, le **lavorazioni** — «Siepe nuova · 24 m · lauro, fitta · 10 h»
+— e le note di quello che si vede solo stando lì. Le piante arrivano come
+descrizione di piante e stile: quali e quante, col sesto, le sceglie l'ufficio. Niente testo per il
 cliente: quello lo scrive l'ufficio.
 
 **Non porta prezzi**, per la stessa ragione per cui non li porta il rapportino: il
@@ -279,7 +280,7 @@ Tre cose decise lì che vale la pena non rifare:
   fatto misurato una volta sola, e il conto sta in `rapportino.js` perché lo fanno
   entrambe le app;
 - **una lavorazione è una riga a corpo**, col prezzo proposto dalla somma dei suoi
-  componenti — piante dal sesto, materiali dalla ricetta, ore — che al cliente non
+  componenti — le piante scelte in ufficio (dal sesto, per una siepe), materiali dalla ricetta, ore — che al cliente non
   arrivano. È il foglio della segretaria per la siepe nuova, fatto dall'app;
 - **il rilievo che aspetta il disegno lo dichiara**, con una casella: l'ufficio lo
   ripete nell'elenco, o un rilievo si apre credendolo finito. Erano due dei

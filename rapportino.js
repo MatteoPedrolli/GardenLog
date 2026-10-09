@@ -599,6 +599,10 @@ function lavorazioneDalTelefono(l) {
     pianta: l.Pianta || '',
     sesto: numeroDaTesto(l.Sesto),
     piante: numeroDaTesto(l.Piante),
+    // Piante e stile, scritti in giardino: «perenni da sole, stile naturale».
+    // Arrivato dopo, senza alzare VERSIONE_RILIEVO: un rilievo di prima non ce
+    // l'ha, e porta la pianta col sesto o il numero, che valgono ancora.
+    stile: l.Stile || '',
     ore: numeroDaTesto(l.Ore),
     note: l.Note || '',
   };
@@ -619,11 +623,11 @@ function lavorazioneIncompleta(l) {
   if ((l.genere === 'insieme' || l.genere === 'voce') && !(misura > 0)) {
     return `Scrivi quanto misura «${nome}»`;
   }
-  if (conPiante && l.unita === 'm' && !(numeroDaTesto(l.sesto) > 0)) {
-    return `Scrivi il sesto d'impianto di «${nome}»`;
-  }
-  if (conPiante && l.unita !== 'm' && !(numeroDaTesto(l.piante) > 0)) {
-    return `Scrivi quante piante vanno in «${nome}»`;
+  // Quante piante e quali le decide l'ufficio: dal campo partono la misura e una
+  // descrizione di piante e stile, ed è quella che non si può più chiedere dopo.
+  // Un rilievo di prima, con la pianta scritta, vale ancora.
+  if (conPiante && !String(l.stile || '').trim() && !String(l.pianta || '').trim()) {
+    return `Scrivi piante e stile di «${nome}»`;
   }
   if ((l.genere === 'insieme' || l.genere === 'manodopera') && !(ore > 0)) {
     return `Scrivi le ore di «${nome}»`;
@@ -698,7 +702,7 @@ function lavorazioneDaRiga(r) {
     voceID: manodopera ? '' : (r.voceID || ''),
     misura: manodopera ? 0 : numeroDaTesto(r.quantita),
     unita: manodopera ? '' : (r.unita || ''),
-    pianta: '', sesto: 0, piante: 0,
+    pianta: '', sesto: 0, piante: 0, stile: '',
     ore: manodopera ? numeroDaTesto(r.quantita) : 0,
     note: '',
     descrizione: manodopera ? '' : (r.descrizione || ''),
@@ -723,6 +727,7 @@ function leggiLavorazione(l) {
     pianta: l.pianta || '',
     sesto: numeroDaTesto(l.sesto),
     piante: numeroDaTesto(l.piante),
+    stile: l.stile || '',
     ore: numeroDaTesto(l.ore),
     note: l.note || '',
     descrizione: l.descrizione || '',

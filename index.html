@@ -805,12 +805,13 @@ select.form-control { background-image: url("data:image/svg+xml,%3Csvg xmlns='ht
 
       <div class="section-title">Per l'ufficio</div>
       <div class="card" style="padding:14px">
-        <div class="dati-nota">L'anagrafica e l'elenco dei prodotti che hai qui, nel formato che l'app
-          dell'ufficio importa. I file vanno messi nella cartella <strong>GiardinoApp</strong> su Drive.
+        <div class="dati-nota">L'anagrafica, l'elenco dei prodotti e le lavorazioni (siepe nuova, aiuola…)
+          che hai qui, nel formato che l'app dell'ufficio legge. I file vanno messi nella cartella <strong>GiardinoApp</strong> su Drive.
           L'ufficio aggiunge quello che sa lui — telefoni, mail, prezzi — e importare non glielo cancella.</div>
         <div style="display:flex; gap:8px; flex-wrap:wrap">
           <button class="btn btn-secondary btn-sm" onclick="esportaAnagrafica()">Esporta anagrafica clienti</button>
           <button class="btn btn-secondary btn-sm" onclick="esportaProdotti()">Esporta prodotti</button>
+          <button class="btn btn-secondary btn-sm" onclick="esportaLavorazioni()">Esporta lavorazioni</button>
         </div>
       </div>
 
@@ -3368,7 +3369,7 @@ function nuovaLavorazione(campi) {
   return {
     LavID: 'lav-' + Date.now().toString(36) + '-' + lavorazioniRilievo.length,
     Genere: 'libera', Nome: '', TipoID: '', VoceID: '', Componenti: [],
-    Misura: '', Unita: '', Pianta: '', Sesto: '', Piante: '', Ore: '', Note: '',
+    Misura: '', Unita: '', Pianta: '', Sesto: '', Piante: '', Stile: '', Ore: '', Note: '',
     ...campi,
   };
 }
@@ -3410,22 +3411,12 @@ function togliRigaRilievo(i) {
 }
 
 // Non si ridisegna mentre si scrive: il campo sparirebbe da sotto le dita. Si
-// aggiornano solo i due conti che devono seguire il numero — le mezze giornate
-// e le piante dal sesto.
+// aggiorna solo il conto che deve seguire il numero, le mezze giornate.
 function modificaLavorazione(i, campo, valore) {
   const l = lavorazioniRilievo[i];
   if (!l) return;
   l[campo] = valore;
   if (campo === 'Ore') mostraMezzeRilievo();
-  if (campo === 'Misura' || campo === 'Sesto') mostraPianteLavorazione(i);
-}
-
-function mostraPianteLavorazione(i) {
-  const el = document.getElementById('lav-piante-' + i);
-  const l = lavorazioniRilievo[i];
-  if (!el || !l) return;
-  const n = pianteDaSesto(l.Misura, l.Sesto);
-  el.textContent = n == null ? '' : `→ ${n} ${n === 1 ? 'pianta' : 'piante'}`;
 }
 
 // L'unità della riga compare sempre fra le scelte, anche se non è nell'elenco: un
@@ -3489,16 +3480,13 @@ function renderRilievoRighe() {
         ${campoLavorazione(i, 'Ore', 'Ore', l.Ore, { unita: 'h' })}
       </div>
       ${conPiante ? `<div class="lav-campi">
-        ${campoLavorazione(i, 'Pianta', 'Pianta', l.Pianta, { largo: true, segnaposto: 'lauro 80-100' })}
-        ${l.Unita === 'm'
-          ? campoLavorazione(i, 'Sesto', 'Sesto', l.Sesto, { unita: 'm' }) + `<span class="lav-calcolo" id="lav-piante-${i}"></span>`
-          : campoLavorazione(i, 'Piante', 'Piante', l.Piante, { unita: 'n' })}
+        ${campoLavorazione(i, 'Stile', 'Piante e stile', l.Stile || l.Pianta, { largo: true,
+          segnaposto: l.Unita === 'm' ? 'lauro, fitta, alta 1,8 m' : 'perenni da sole, stile naturale, toni bianchi' })}
       </div>` : ''}
       <input type="text" class="ril-desc" value="${perValore(l.Note)}" placeholder="Note: dove, cosa ricordare (facoltative)"
              oninput="modificaLavorazione(${i}, 'Note', this.value)" aria-label="note">
     </div>`;
   }).join('');
-  lavorazioniRilievo.forEach((l, i) => mostraPianteLavorazione(i));
 }
 
 async function salvaRilievo() {
@@ -4417,6 +4405,32 @@ async function esportaProdotti() {
   showToast(esito === 'annullato'
     ? '↩️ Annullato: il file non è uscito'
     : `🧪 ${doc.prodotti.length} prodotti pronti per l'ufficio`);
+}
+
+// Le lavorazioni complesse con la loro composizione, per il «Nuovo rilievo» e le
+// ricette dell'ufficio. Si creano qui, in Archivi, e l'ufficio non le cambia:
+// le legge da questo file così com'è.
+function lavorazioniPerUfficio() {
+  return {
+    tipo: 'lavorazioni', versione: 1, esportato: new Date().toISOString(),
+    insiemi: insiemiPerRilievo().map(t => ({
+      id: t.TipoID, nome: t.Nome, unita: misuraInsieme(t),
+      componenti: t.componenti.map(c => ({ tipoID: c.TipoID, voceID: c.VoceID, voce: c.Voce, unita: c.Unita })),
+    })),
+  };
+}
+
+async function esportaLavorazioni() {
+  const doc = lavorazioniPerUfficio();
+  if (!doc.insiemi.length) { showToast('⚠️ Non c\'è ancora nessuna lavorazione complessa'); return; }
+  const file = new File([JSON.stringify(doc, null, 2)],
+    'lavorazioni-dal-telefono.json', { type: 'application/json' });
+  let esito;
+  try { esito = await consegnaFile(file); }
+  catch (e) { showToast('❌ Non riuscito: ' + (e.message || e)); return; }
+  showToast(esito === 'annullato'
+    ? '↩️ Annullato: il file non è uscito'
+    : `🌿 ${doc.insiemi.length} lavorazioni pronte per l'ufficio`);
 }
 
 async function esportaAnagrafica() {
