@@ -202,14 +202,22 @@ table.elenco tr.componenti td { font-size: 0.82rem; padding: 3px 8px 3px 0; colo
 table.elenco tr.componenti td.num { padding-right: 0; }
 table.elenco tr.componenti td:first-child { padding-left: 20px; }
 table.elenco tr.componenti input[type=text] { padding: 4px 8px; font-size: 0.82rem; }
-table.elenco tr.componenti input[type=text].nome-pianta { width: 190px; }
+table.elenco tr.componenti input[type=text].nome-pianta { width: 160px; }
 table.elenco tr.componenti input[type=text].sesto-pianta { width: 64px; }
 .riga-pianta { display: inline-flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+.sesto-campo { display: inline-flex; align-items: center; gap: 6px; white-space: nowrap; }
 .spunte-settore { display: flex; flex-wrap: wrap; gap: 4px 14px; margin-top: 6px; font-size: 0.85rem; }
 .spunte-settore label { display: inline-flex; align-items: center; gap: 5px; cursor: pointer; }
 .spunte-settore input { margin: 0; accent-color: var(--inchiostro-tenue); }
-tr.componenti.somma button.piccola { margin: 2px 0 6px; }
-table.elenco tr.componenti.somma td { border-bottom: 1px solid var(--border); padding-bottom: 10px; }
+tr.componenti.altra-pianta button.piccola { margin: 2px 0 4px; }
+/* Il totale della riga a corpo chiude i suoi componenti: in fondo, a grandezza
+   piena, perché è il prezzo che va al cliente. */
+table.elenco tr.componenti.somma td { border-bottom: 1px solid var(--border); padding-top: 6px; padding-bottom: 10px;
+  font-size: 0.9rem; color: var(--text); }
+table.elenco tr.componenti.somma input[type=text] { padding: 6px 8px; font-size: 0.9rem; }
+table.elenco tr.riga-corpo td { border-bottom: 1px dashed var(--border); }
+/* La manodopera del settore è una somma, e lo dice: la quantità non si scrive. */
+table.elenco tr.mano-settore td.qta { font-weight: 600; color: var(--text); padding-right: 8px; }
 .somma-componenti { margin: 4px 0 0; }
 /* Sotto la descrizione una riga sola: quello che il campo ha misurato a sinistra,
    se la riga sta nel totale a destra. Su due righe raddoppiavano l'altezza. */
@@ -2152,6 +2160,16 @@ function riassuntoRicontrolla() {
 // non si legge, e quello che non si legge tanto vale non scriverlo.
 const NOVITA = [
   {
+    versione: '2026-10-09.6',
+    data: '2026-10-09',
+    titolo: 'Ore per voce nei settori',
+    righe: [
+      'Nel preventivo, in un settore **ogni voce ha le sue ore** (colonna «Ore»), e la **manodopera in fondo è la somma**: ore di cantiere più quelle delle voci. Le ore vuote vanno bene.',
+      'Il **totale del settore sta in fondo**, sotto i componenti, e «+ Un\'altra pianta» sotto l\'ultima pianta. Il sesto si legge «**m fra le piante**».',
+      'La **scheda di cantiere** ha le ore per voce e non dice più da dove escono le quantità.',
+    ],
+  },
+  {
     versione: '2026-10-09.5',
     data: '2026-10-09',
     titolo: 'Misura e ore facoltative',
@@ -2892,9 +2910,10 @@ function forchettaPreventivo(d) {
 // Dal campo arrivano lavorazioni — «Siepe nuova · 24 m · lauro · sesto 0,40 ·
 // 10 h» — e qui diventano quello che il cliente legge: **una riga a corpo per
 // lavorazione**, con la descrizione scritta in ufficio e un prezzo solo. Dentro
-// la riga stanno i **componenti**: le piante contate dal sesto, i materiali dalla
-// ricetta del listino, le ore. Sono il perché di quel prezzo e la scheda di
-// cantiere, e al cliente non arrivano — come le fasce orarie di un rapportino.
+// la riga stanno i **componenti**: le piante contate dal sesto, i materiali quanto
+// la misura, le ore di ogni voce e in fondo la manodopera che le somma. Sono il
+// perché di quel prezzo e la scheda di cantiere, e al cliente non arrivano — come
+// le fasce orarie di un rapportino.
 
 const alCentesimoUfficio = n => Math.round(n * 100) / 100;
 
@@ -2935,6 +2954,7 @@ const SCRITTE_IN_UFFICIO = 'scritte in ufficio';
 function componentiLavorazione(l, vecchi) {
   const prima = Array.isArray(vecchi) ? vecchi : [];
   const comp = [];
+  const settore = l.genere === 'insieme' && !!l.insieme;
   const metti = c => {
     const gia = prima.find(x => x.chiave === c.chiave);
     const prezzo = prezzoDiListino(c.voceID);
@@ -2945,9 +2965,12 @@ function componentiLavorazione(l, vecchi) {
       prezzo: gia && gia.prezzoMano ? gia.prezzo : prezzo,
       prezzoMano: !!(gia && gia.prezzoMano),
       calcolo: gia && gia.quantitaMano && c.calcolo === DA_SCEGLIERE ? SCRITTE_IN_UFFICIO : c.calcolo,
+      // In un settore ogni voce ha le sue ore, scritte qui: restano quando il
+      // campo rimanda il rilievo, come i prezzi.
+      ...(settore ? { ore: gia && gia.ore !== undefined ? gia.ore : (c.ore === undefined ? '' : c.ore) } : {}),
     });
   };
-  if (l.genere === 'insieme' && l.insieme) {
+  if (settore) {
     l.insieme.componenti.forEach(c => {
       if (c.voceID === VOCE_PIANTE || c.tipoID === 'piantumazione') {
         const chiave = c.voceID || c.tipoID;
@@ -2968,8 +2991,15 @@ function componentiLavorazione(l, vecchi) {
         prima.filter(x => x.aggiunta).forEach(x => metti(componentePianta(l, { ...x, base: x.base || 'Piante' })));
         return;
       }
-      // Una lavorazione senza voce è manodopera, già contata dalle ore.
-      if (!c.voceID || c.voceID === VOCE_MANODOPERA) return;
+      if (c.voceID === VOCE_MANODOPERA) return;
+      // Una lavorazione senza voce è manodopera — il livellamento, una potatura —
+      // e non ha materiale da contare; resta lo stesso, per le sue ore, che finiscono
+      // nella manodopera in fondo al settore.
+      if (!c.voceID) {
+        metti({ chiave: 'ore:' + (c.tipoID || c.nome), voceID: '', voce: c.nome || c.voce || '',
+          unita: '', quantita: '', soloOre: true, calcolo: '' });
+        return;
+      }
       // Nessuna regola di quanto materiale per metro: si propone quanto la misura —
       // 18 m² di aiuola, 18 m² di telo — e l'ufficio corregge. Le ricette per
       // settore erano un elenco in più da tenere, per un numero che va guardato
@@ -2979,7 +3009,10 @@ function componentiLavorazione(l, vecchi) {
         calcolo: l.unita && l.misura > 0 ? 'come la misura: ' + scriviNumero(l.misura) + ' ' + l.unita
           : 'da scrivere in ufficio' });
     });
-  } else if (l.genere === 'voce' || l.genere === 'libera') {
+    comp.push(manodoperaSettore(l, comp, prima.find(x => x.chiave === VOCE_MANODOPERA)));
+    return comp;
+  }
+  if (l.genere === 'voce' || l.genere === 'libera') {
     if (l.misura > 0) {
       metti({ chiave: l.voceID || 'misura', voceID: l.voceID, voce: l.nome, unita: l.unita,
         quantita: l.misura, calcolo: 'misurato in giardino' });
@@ -2993,12 +3026,64 @@ function componentiLavorazione(l, vecchi) {
   return comp;
 }
 
+// La manodopera di un settore sta in fondo, ed è una somma: le ore di ogni voce
+// più le **ore di cantiere**, quelle che non stanno in nessuna voce — scaricare,
+// pulire, andare e tornare. Le ore di cantiere partono da quelle stimate in
+// giardino e si correggono qui; la quantità non si scrive, si fa (`oreCantiere`
+// + le ore delle voci), o la riga direbbe un numero e le voci un altro. Una voce
+// senza ore non è un errore: certe lavorazioni sono questione di minuti.
+function manodoperaSettore(l, componenti, gia) {
+  const mano = voceInListino(VOCE_MANODOPERA);
+  // Un preventivo di prima aveva le ore del campo sulla manodopera, e chi le aveva
+  // corrette lo aveva fatto lì: diventano le ore di cantiere.
+  const dalVecchio = gia && !gia.manodoperaSettore && gia.quantitaMano;
+  const oreCantiere = gia && gia.oreCantiereMano ? gia.oreCantiere
+    : dalVecchio ? gia.quantita : (l && l.ore > 0 ? l.ore : '');
+  const c = {
+    chiave: VOCE_MANODOPERA, voceID: VOCE_MANODOPERA, voce: (mano && mano.voce) || 'Manodopera', unita: 'h',
+    manodoperaSettore: true, oreCantiere, oreCantiereMano: !!(gia && (gia.oreCantiereMano || dalVecchio)),
+    quantitaMano: false,
+    prezzo: gia && gia.prezzoMano ? gia.prezzo : prezzoDiListino(VOCE_MANODOPERA),
+    prezzoMano: !!(gia && gia.prezzoMano),
+  };
+  return { ...c, ...sommaOreSettore(c, componenti) };
+}
+
+function sommaOreSettore(mano, componenti) {
+  const voci = alCentesimoUfficio((componenti || []).filter(c => !c.manodoperaSettore)
+    .reduce((t, c) => t + (Number(c.ore) || 0), 0));
+  const cantiere = Number(mano.oreCantiere) || 0;
+  const totale = alCentesimoUfficio(voci + cantiere);
+  return {
+    quantita: totale > 0 ? totale : '',
+    calcolo: voci > 0
+      ? scriviNumero(cantiere) + ' h di cantiere + ' + scriviNumero(voci) + ' h delle voci'
+      : 'ore di cantiere',
+  };
+}
+
+// Un preventivo fatto prima delle ore per voce ha la manodopera fra i componenti
+// come le altre, o non ce l'ha: all'apertura diventa quella del settore, in fondo,
+// con le ore che aveva come ore di cantiere.
+function preparaRigaSettore(r) {
+  if (!r || !Array.isArray(r.componenti) || !r.lavorazione || r.lavorazione.genere !== 'insieme') return;
+  if (r.componenti.some(c => c.manodoperaSettore)) return;
+  const vecchia = r.componenti.find(c => c.voceID === VOCE_MANODOPERA);
+  const altri = r.componenti.filter(c => c !== vecchia);
+  altri.forEach(c => { if (c.ore === undefined) c.ore = ''; });
+  const gia = vecchia ? { ...vecchia, quantitaMano: true } : null;
+  r.componenti = [...altri, manodoperaSettore(r.lavorazione, altri, gia)];
+}
+
 // La somma dei componenti a prezzo di listino, e quanti ne restano fuori. Un
 // componente senza quantità o senza prezzo è un buco, e va detto: una somma che
 // sembra finita mentre le manca il telo è peggio di nessuna somma.
 function sommaComponenti(componenti) {
   let totale = 0, mancano = 0;
   (componenti || []).forEach(c => {
+    // Una lavorazione senza voce porta solo ore, e una manodopera senza ore non
+    // è un buco: certe lavorazioni sono questione di minuti.
+    if (c.soloOre || (c.manodoperaSettore && !(Number(c.quantita) > 0))) return;
     const i = importoRiga(c);
     if (i == null) mancano++; else totale += i;
   });
@@ -3392,49 +3477,87 @@ function riassuntoLavorazione(l) {
 }
 
 // I componenti stanno sotto la loro riga, piccoli, e non vanno al cliente: sono
-// il conto che sta dietro il prezzo a corpo. Quantità e prezzi si correggono qui,
-// e la somma segue senza ridisegnare.
+// il conto che sta dietro il prezzo a corpo. Quantità, ore e prezzi si correggono
+// qui, e la somma segue senza ridisegnare. In fondo il totale della riga: si
+// legge dopo quello che lo compone, come la manodopera dopo le voci.
 function righeComponenti(r, i) {
   const somma = sommaComponenti(r.componenti);
   let html = '';
   const l = r.lavorazione || {};
+  const settore = l.genere === 'insieme';
+  let ultimaPianta = -1;
+  r.componenti.forEach((c, j) => { if (c.voceID === VOCE_PIANTE) ultimaPianta = j; });
   r.componenti.forEach((c, j) => {
     const imp = importoRiga(c);
     const pianta = c.voceID === VOCE_PIANTE;
-    html += '<tr class="componenti">' +
+    const mano = !!c.manodoperaSettore;
+    html += '<tr class="componenti' + (mano ? ' mano-settore' : '') + '">' +
       '<td>' + (pianta
         // Quale pianta, e per una siepe il sesto: li decide l'ufficio guardando
         // piante e stile scritti in giardino, e il numero ne esce da sé.
         ? '<span class="riga-pianta">' + perValore(c.base || 'Piante') + ' – ' +
             '<input type="text" class="nome-pianta" value="' + perValore(c.pianta || '') + '" placeholder="quale pianta" ' +
               'oninput="modificaPiantaComponente(' + i + ', ' + j + ', this.value)" aria-label="pianta">' +
-            (l.unita === 'm' ? ' sesto <input type="text" inputmode="decimal" class="stretto sesto-pianta" value="' +
-              perValore(formattaQuantita(c.sesto)) + '" placeholder="m" ' +
-              'oninput="modificaSestoComponente(' + i + ', ' + j + ', this.value)" aria-label="sesto">' : '') +
+            // «Sesto» da solo non dice di cosa: è la distanza fra una pianta e l'altra.
+            (l.unita === 'm' ? '<span class="sesto-campo">sesto <input type="text" inputmode="decimal" class="stretto sesto-pianta" value="' +
+              perValore(formattaQuantita(c.sesto)) + '" ' +
+              'oninput="modificaSestoComponente(' + i + ', ' + j + ', this.value)" aria-label="sesto"> m fra le piante</span>' : '') +
           '</span>'
         : perValore(c.voce)) +
         '<div class="meta" id="calc-comp-' + i + '-' + j + '">' + perValore(c.calcolo || '') + '</div></td>' +
-      '<td class="num"><input type="text" inputmode="decimal" class="stretto" id="qta-comp-' + i + '-' + j + '" value="' +
-        perValore(formattaQuantita(c.quantita)) + '" ' +
-        'oninput="modificaComponente(' + i + ', ' + j + ', \'quantita\', this.value)" aria-label="quantità"></td>' +
+      '<td class="num ore">' + (mano
+        // Le ore di cantiere: quelle che non stanno in nessuna voce. La quantità
+        // della manodopera è la loro somma con le ore delle voci.
+        ? '<input type="text" inputmode="decimal" class="stretto" value="' + perValore(formattaQuantita(c.oreCantiere)) + '" ' +
+            'placeholder="cantiere" oninput="modificaOreCantiere(' + i + ', ' + j + ', this.value)" aria-label="ore di cantiere">'
+        : settore ? '<input type="text" inputmode="decimal" class="stretto" value="' + perValore(formattaQuantita(c.ore)) + '" ' +
+            'oninput="modificaOreComponente(' + i + ', ' + j + ', this.value)" aria-label="ore">' : '') + '</td>' +
+      '<td class="num qta">' + (c.soloOre ? '' : mano
+        ? '<span id="qta-comp-' + i + '-' + j + '">' + perValore(formattaQuantita(c.quantita)) + '</span>'
+        : '<input type="text" inputmode="decimal" class="stretto" id="qta-comp-' + i + '-' + j + '" value="' +
+          perValore(formattaQuantita(c.quantita)) + '" ' +
+          'oninput="modificaComponente(' + i + ', ' + j + ', \'quantita\', this.value)" aria-label="quantità">') + '</td>' +
       '<td>' + perValore(c.unita) + '</td>' +
-      '<td class="num"><input type="text" inputmode="decimal" class="stretto" value="' +
+      '<td class="num">' + (c.soloOre ? '' : '<input type="text" inputmode="decimal" class="stretto" value="' +
         perValore(formattaQuantita(c.prezzo)) + '" ' +
-        'oninput="modificaComponente(' + i + ', ' + j + ', \'prezzo\', this.value)" aria-label="prezzo"></td>' +
+        'oninput="modificaComponente(' + i + ', ' + j + ', \'prezzo\', this.value)" aria-label="prezzo">') + '</td>' +
       '<td></td>' +
-      '<td class="num importo" id="imp-comp-' + i + '-' + j + '">' +
-        (imp == null ? '<span class="meta">—</span>' : formattaEuro(imp)) + '</td>' +
+      '<td class="num importo" id="imp-comp-' + i + '-' + j + '">' + (c.soloOre ? '' :
+        (imp == null ? '<span class="meta">—</span>' : formattaEuro(imp))) + '</td>' +
       '<td class="via-col">' + (c.aggiunta ? '<button class="via" onclick="togliPiantaComponente(' + i + ', ' + j + ')" ' +
         'title="Togli questa pianta">✕</button>' : '') + '</td>' +
     '</tr>';
+    // Un'altra pianta si aggiunge dove si guarda, sotto l'ultima: in fondo alla
+    // riga stava dopo telo e manodopera, lontano da quello che si stava scrivendo.
+    if (j === ultimaPianta) {
+      html += '<tr class="componenti altra-pianta"><td colspan="8">' +
+        '<button class="secondaria piccola" onclick="aggiungiPiantaComponente(' + i + ')">+ Un\'altra pianta</button></td></tr>';
+    }
   });
-  const conPiante = r.componenti.some(c => c.voceID === VOCE_PIANTE);
-  html += '<tr class="componenti somma"><td colspan="7">' +
-    (r.componenti.length ? '' : '<div class="meta">Nessun componente: il prezzo si scrive a mano.</div>') +
-    (conPiante ? '<button class="secondaria piccola" onclick="aggiungiPiantaComponente(' + i + ')">+ Un\'altra pianta</button>' : '') +
-    '<div class="meta somma-componenti" id="somma-riga-' + i + '">' + testoSommaComponenti(r, somma, i) + '</div>' +
-    '</td></tr>';
   return html;
+}
+
+// Il totale della riga a corpo, in fondo ai suoi componenti: il prezzo che va al
+// cliente, con accanto quanto fa la somma a listino.
+function rigaTotaleACorpo(r, i) {
+  const somma = sommaComponenti(r.componenti);
+  const imp = r.tipo === 'totale' ? importoRiga(r) : null;
+  return '<tr class="componenti somma' + (r.tipo === 'tariffa' ? ' riga-tariffa' : '') + '">' +
+    '<td colspan="2"><strong>Totale ' + perValore(r.voce || (r.lavorazione && r.lavorazione.nome) || '') + '</strong>' +
+      (r.componenti.length ? '' : '<div class="meta">Nessun componente: il prezzo si scrive a mano.</div>') +
+      '<div class="meta somma-componenti" id="somma-riga-' + i + '">' + testoSommaComponenti(r, somma, i) + '</div></td>' +
+    '<td class="num qta">' + (r.tipo === 'tariffa' ? '<span class="meta">—</span>' :
+      '<input type="text" inputmode="decimal" class="stretto" value="' + perValore(formattaQuantita(r.quantita)) + '" ' +
+      'oninput="modificaRigaPreventivo(' + i + ', \'quantita\', this.value)">') + '</td>' +
+    '<td style="white-space:nowrap">' + perValore(r.unita) + '</td>' +
+    '<td class="num"><input type="text" inputmode="decimal" class="stretto prezzo' +
+      (r.proposto ? ' proposto' : '') + '" id="prezzo-riga-' + i + '" value="' + perValore(formattaQuantita(r.prezzo)) + '" ' +
+      'oninput="modificaPrezzoRiga(' + i + ', this.value, this)"></td>' +
+    '<td class="conferma-col">' + (r.proposto ? '<button class="conferma" onclick="confermaPrezzo(' + i + ')" ' +
+        'title="Va bene così">✓</button>' : '') + '</td>' +
+    '<td class="num importo" id="imp-riga-' + i + '">' + (r.tipo === 'tariffa' ? '<span class="meta">fuori totale</span>' :
+      (imp == null ? '<span class="meta">—</span>' : formattaEuro(imp))) + '</td>' +
+    '<td></td></tr>';
 }
 
 function testoSommaComponenti(r, somma, i) {
@@ -3492,6 +3615,7 @@ function aggiungiPiantaComponente(i) {
     base: 'Piante', voce: 'Piante', pianta: '', piantaMano: true, unita: 'n',
     quantita: '', quantitaMano: false, prezzo: prezzoDiListino(VOCE_PIANTE), prezzoMano: false,
     sesto: '', sestoMano: false, aggiunta: true, calcolo: DA_SCEGLIERE,
+    ...(r.lavorazione && r.lavorazione.genere === 'insieme' ? { ore: '' } : {}),
   });
   disegnaPreventivo();
   aggiornaRigaACorpo(i);
@@ -3521,6 +3645,40 @@ function modificaComponente(i, j, campo, valore) {
   aggiornaRigaACorpo(i);
 }
 
+// Le ore di una voce del settore, e quelle di cantiere: la manodopera in fondo è
+// la loro somma, e la segue mentre si scrive.
+function modificaOreComponente(i, j, valore) {
+  const r = PREVENTIVO.doc.righe[i];
+  const c = r && r.componenti && r.componenti[j];
+  if (!c) return;
+  c.ore = numeroScritto(valore);
+  ricalcolaManodoperaSettore(i);
+}
+
+function modificaOreCantiere(i, j, valore) {
+  const r = PREVENTIVO.doc.righe[i];
+  const c = r && r.componenti && r.componenti[j];
+  if (!c || !c.manodoperaSettore) return;
+  c.oreCantiere = numeroScritto(valore);
+  c.oreCantiereMano = true;
+  ricalcolaManodoperaSettore(i);
+}
+
+function ricalcolaManodoperaSettore(i) {
+  const r = PREVENTIVO.doc.righe[i];
+  if (!r || !Array.isArray(r.componenti)) return;
+  const j = r.componenti.findIndex(c => c.manodoperaSettore);
+  if (j >= 0) {
+    const mano = r.componenti[j];
+    Object.assign(mano, sommaOreSettore(mano, r.componenti));
+    const q = document.getElementById('qta-comp-' + i + '-' + j);
+    if (q) q.textContent = formattaQuantita(mano.quantita);
+    const calc = document.getElementById('calc-comp-' + i + '-' + j);
+    if (calc) calc.textContent = mano.calcolo;
+  }
+  aggiornaRigaACorpo(i);
+}
+
 // Finché il prezzo a corpo è una proposta, segue la somma dei componenti; deciso,
 // resta dov'è e la somma gli sta accanto. Si aggiornano le caselle che cambiano,
 // non la tabella: il campo sotto le dita non deve sparire.
@@ -3531,7 +3689,7 @@ function aggiornaRigaACorpo(i) {
   r.componenti.forEach((c, j) => {
     const el = document.getElementById('imp-comp-' + i + '-' + j);
     const imp = importoRiga(c);
-    if (el) el.innerHTML = imp == null ? '<span class="meta">—</span>' : formattaEuro(imp);
+    if (el && !c.soloOre) el.innerHTML = imp == null ? '<span class="meta">—</span>' : formattaEuro(imp);
   });
   if (r.proposto || r.prezzo === '' || r.prezzo == null) {
     r.prezzo = somma.totale > 0 ? somma.totale : '';
@@ -3795,15 +3953,19 @@ function disegnaPreventivo() {
   html += '<div id="da-confermare" class="avvertenza" style="display:none"></div>';
 
   html += '<div class="scheda"><table class="elenco"><thead><tr>' +
-    '<th>Descrizione</th><th class="num">Q.tà</th><th>UM</th><th class="num">Prezzo</th><th></th>' +
+    '<th>Descrizione</th><th class="num">Ore</th><th class="num">Q.tà</th><th>UM</th><th class="num">Prezzo</th><th></th>' +
     '<th class="num importo">Importo</th><th></th></tr></thead><tbody>';
   const soluzioni = soluzioniDi(d);
   d.righe.forEach((r, i) => {
     const imp = r.tipo === 'totale' ? importoRiga(r) : null;
     const sezione = r.tipo === 'sezione';
-    html += '<tr class="' + (r.tipo === 'tariffa' ? 'riga-tariffa' : '') +
+    // Una riga a corpo ha il suo totale in fondo, sotto i componenti: in testa
+    // resta la descrizione per il cliente.
+    const corpo = !sezione && Array.isArray(r.componenti);
+    preparaRigaSettore(r);
+    html += '<tr class="' + (corpo ? 'riga-corpo' : '') + (r.tipo === 'tariffa' ? ' riga-tariffa' : '') +
         (sezione ? ' riga-sezione' : '') + '">' +
-      '<td' + (sezione ? ' colspan="6"' : '') + '><input type="text" value="' + perValore(r.descrizione) + '" ' +
+      '<td' + (sezione || corpo ? ' colspan="7"' : '') + '><input type="text" value="' + perValore(r.descrizione) + '" ' +
         'oninput="modificaRigaPreventivo(' + i + ', \'descrizione\', this.value)">' +
         '<div class="sotto-riga">' +
         '<span class="meta dal-campo">' + (r.lavorazione ? 'dal campo: ' + perValore(riassuntoLavorazione(r.lavorazione)) : '') + '</span>' +
@@ -3820,8 +3982,9 @@ function disegnaPreventivo() {
             (sol.id === r.soluzione ? ' selected' : '') + '>Solo in ' + perValore(sol.nome) + '</option>').join('') +
           '</select>' : '') +
         '</div></td>' +
-      (sezione ? '' :
-        '<td class="num">' + (r.tipo === 'tariffa' ? '<span class="meta">—</span>' :
+      (sezione || corpo ? '' :
+        '<td class="num ore"></td>' +
+        '<td class="num qta">' + (r.tipo === 'tariffa' ? '<span class="meta">—</span>' :
           '<input type="text" inputmode="decimal" class="stretto" value="' +
           perValore(formattaQuantita(r.quantita)) + '" ' +
           'oninput="modificaRigaPreventivo(' + i + ', \'quantita\', this.value)">') + '</td>' +
@@ -3835,15 +3998,15 @@ function disegnaPreventivo() {
           (imp == null ? '<span class="meta">—</span>' : formattaEuro(imp))) + '</td>') +
       '<td class="via-col"><button class="via" onclick="togliRigaPreventivo(' + i + ')" title="Togli">✕</button></td>' +
     '</tr>';
-    if (Array.isArray(r.componenti)) html += righeComponenti(r, i);
+    if (corpo) html += righeComponenti(r, i) + rigaTotaleACorpo(r, i);
   });
   if (t.unico) {
-    html += '<tr class="riga-totale"><td colspan="5">Totale (IVA inclusa)</td>' +
+    html += '<tr class="riga-totale"><td colspan="6">Totale (IVA inclusa)</td>' +
       '<td class="num importo" id="totale-preventivo">' + formattaEuro(t.unico.totale) + '</td><td></td></tr>';
   } else {
     // Un totale per soluzione, e si escludono: il cliente ne sceglie una sola.
     t.soluzioni.forEach(sol => {
-      html += '<tr class="riga-totale"><td colspan="5">' + perValore(sol.nome) +
+      html += '<tr class="riga-totale"><td colspan="6">' + perValore(sol.nome) +
         ' <span class="meta">· comprese le voci comuni</span>' +
         (d.stato === 'accettato' ? (d.scelta === sol.id ? ' <strong>— scelta</strong>' : '') :
           ' <button class="secondaria" onclick="accettaPreventivo(\'' + perOnclick(sol.id) +
@@ -4067,7 +4230,7 @@ function materialiDaOrdinare(righe) {
   };
   righe.forEach(({ r }) => {
     if (!Array.isArray(r.componenti) || !r.lavorazione || r.lavorazione.genere !== 'insieme') return;
-    r.componenti.filter(c => c.voceID !== VOCE_MANODOPERA).forEach(c => aggiungi(c.voce, c.quantita, c.unita));
+    r.componenti.filter(c => c.voceID !== VOCE_MANODOPERA && !c.soloOre).forEach(c => aggiungi(c.voce, c.quantita, c.unita));
   });
   return [...somma.values()];
 }
@@ -4093,8 +4256,10 @@ function costruisciSchedaCantiere(d) {
     '</div>' +
   '</div>';
 
+  // Niente «da dove»: «come la misura» e «da scegliere in ufficio» servono a chi
+  // fa il preventivo, non a chi pianta. In cantiere serve quanto, e quanto tempo.
   html += '<table><thead><tr><th>Lavorazione</th><th class="num">Q.tà</th><th>UM</th>' +
-    '<th>Da dove</th></tr></thead><tbody>';
+    '<th class="num">Ore</th></tr></thead><tbody>';
   righe.forEach(({ r, soluzione }) => {
     const l = r.lavorazione;
     html += '<tr class="riga-blocco"><td colspan="4">' + perValore(l ? l.nome : (r.descrizione || r.voce)) +
@@ -4108,13 +4273,14 @@ function costruisciSchedaCantiere(d) {
     if (Array.isArray(r.componenti)) {
       if (l && l.misura > 0 && l.genere !== 'manodopera') {
         html += '<tr><td>Misura</td><td class="num">' + scriviNumero(l.misura) + '</td><td>' +
-          perValore(l.unita) + '</td><td>' + (l.sesto > 0 ? 'sesto ' + scriviNumero(l.sesto) + ' m' : '') + '</td></tr>';
+          perValore(l.unita) + '</td><td></td></tr>';
       }
       r.componenti.forEach(k => {
-        html += '<tr><td>' + perValore(k.voce) + '</td>' +
-          '<td class="num">' + perValore(formattaQuantita(k.quantita)) + '</td>' +
+        html += '<tr><td>' + perValore(k.voce) +
+            (k.voceID === VOCE_PIANTE && k.sesto > 0 ? ' · sesto ' + scriviNumero(k.sesto) + ' m fra le piante' : '') + '</td>' +
+          '<td class="num">' + (k.soloOre ? '' : perValore(formattaQuantita(k.quantita))) + '</td>' +
           '<td>' + perValore(k.unita) + '</td>' +
-          '<td class="da-definire">' + perValore(k.calcolo || '') + '</td></tr>';
+          '<td class="num">' + (!k.manodoperaSettore && Number(k.ore) > 0 ? scriviNumero(k.ore) + ' h' : '') + '</td></tr>';
       });
     } else {
       html += '<tr><td>' + perValore(r.descrizione || r.voce) + '</td>' +

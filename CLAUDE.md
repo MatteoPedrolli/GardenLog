@@ -681,6 +681,23 @@ segue finché nessuno l'ha guardato; deciso, resta, e la somma gli sta accanto c
 «Usa la somma». Una voce a misura senza ore — il verde da smaltire — resta una riga
 a misura col suo prezzo unitario: spesso diventa una tariffa.
 
+**Il totale della riga sta in fondo**, sotto i componenti (`rigaTotaleACorpo()`):
+in testa resta la descrizione per il cliente, e il prezzo si legge dopo quello che
+lo compone. Le colonne sono Descrizione, **Ore**, Q.tà, UM, Prezzo, Importo.
+
+**In un settore ogni voce ha le sue ore**, scritte in ufficio (`ore` sul
+componente), e **la manodopera in fondo è una somma** (`manodoperaSettore()`): le
+**ore di cantiere** — quelle che non stanno in nessuna voce: scaricare, pulire —
+più le ore delle voci. Le ore di cantiere partono da quelle stimate in giardino e
+si correggono (`oreCantiere`, `oreCantiereMano`); la quantità della manodopera non
+si scrive, si fa, o la riga direbbe un numero e le voci un altro. **Una voce senza
+ore non è un errore**: certe lavorazioni sono questione di minuti, e non contano
+fra i componenti senza prezzo. Una lavorazione del settore **senza voce** — il
+livellamento — resta fra i componenti per le sue ore (`soloOre`), senza quantità
+né prezzo. Le ore scritte qui restano quando il campo rimanda il rilievo. Un
+preventivo di prima, con la manodopera in mezzo agli altri, all'apertura la porta
+in fondo con le sue ore come ore di cantiere (`preparaRigaSettore()`).
+
 Ogni componente dice **da dove esce la sua quantità** («24 m a sesto 0,4», «come la
 misura: 18 m²», «ore stimate in giardino»): fra sei mesi «61» da solo non dice niente. Una
 quantità ritoccata o un prezzo deciso in ufficio (`quantitaMano`, `prezzoMano`)
@@ -689,9 +706,11 @@ restano quando il campo rimanda il rilievo, come i prezzi delle righe.
 **Le piante si scelgono nella riga.** Il componente «Piante» arriva vuoto, con
 accanto «da scegliere in ufficio» e sopra, in «dal campo», piante e stile: qui si
 scrive quale pianta e quante, e per una siepe il **sesto**, da cui il numero esce da
-sé (metri / sesto + 1). **«+ Un'altra pianta»** ne aggiunge altre — un'aiuola è
+sé (metri / sesto + 1): «sesto [ ] m fra le piante», perché «sesto» da solo non
+dice di cosa. **«+ Un'altra pianta»** ne aggiunge altre — un'aiuola è
 lavanda, graminacee e un acero, ognuna col suo prezzo — e la somma fa il prezzo a
-corpo. Pianta, sesto e piante aggiunte (`piantaMano`, `sestoMano`, `aggiunta`)
+corpo. Il bottone sta **sotto l'ultima pianta**, non in fondo alla riga: lì era dopo
+telo e manodopera, lontano da quello che si stava scrivendo. Pianta, sesto e piante aggiunte (`piantaMano`, `sestoMano`, `aggiunta`)
 restano quando il campo rimanda il rilievo corretto: se la siepe si allunga, il
 numero segue il sesto scelto qui.
 
@@ -703,8 +722,10 @@ una misura da proporre, e il componente resta da scrivere. Quelle già scritte r
 in `listino.json`, non lette.
 
 **La scheda di cantiere** (`costruisciSchedaCantiere()`) è l'altro foglio che esce
-dal preventivo, e va a chi lavora: per ogni lavorazione misura, piante e stile, le piante scelte,
-materiali, ore, le note del campo; in fondo i **materiali da ordinare**, sommati fra
+dal preventivo, e va a chi lavora: per ogni lavorazione misura, piante e stile, le piante scelte
+col sesto, materiali, le ore di ogni voce, la manodopera, le note del campo. **Non dice
+da dove esce una quantità**: «come la misura» e «da scegliere in ufficio» servono a
+chi fa il preventivo, non a chi pianta. In fondo i **materiali da ordinare**, sommati fra
 le lavorazioni (due aiuole col telo sono un ordine solo), e le note del sopralluogo.
 **Niente prezzi**: gira in cantiere, e un prezzo lì sopra finisce dove non deve. Per
 la stessa ragione non aspetta i prezzi confermati — si stampa anche da un preventivo

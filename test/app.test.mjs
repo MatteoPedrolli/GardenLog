@@ -3591,11 +3591,11 @@ try {
   // loro riga: la regola generale dei campi stava sotto quella che li stringe, e un
   // «1» finiva in una casella larga mezzo schermo, con i componenti fuori colonna.
   const colonnePrev = await pagU.evaluate(() => {
-    const comp = document.querySelector('#pagina-preventivo tr.componenti');
-    let capo = comp && comp.previousElementSibling;
-    while (capo && capo.classList.contains('componenti')) capo = capo.previousElementSibling;
-    const q = capo && capo.querySelector('td.num input.stretto');
-    const qc = comp && comp.querySelector('td.num input.stretto');
+    // La quantità della riga a corpo sta nel suo totale, in fondo ai componenti.
+    const comp = document.querySelector('#pagina-preventivo tr.componenti:not(.somma)');
+    const tot = document.querySelector('#pagina-preventivo tr.componenti.somma');
+    const q = tot && tot.querySelector('td.qta input.stretto');
+    const qc = comp && comp.querySelector('td.qta input.stretto');
     if (!q || !qc) return null;
     const a = q.getBoundingClientRect(), b = qc.getBoundingClientRect();
     return { larga: Math.round(a.width), destra: Math.round(a.right), destraComp: Math.round(b.right) };
@@ -4377,6 +4377,94 @@ try {
     rilUff.pianteDopo === 'Piante – Lauro 80-100:76,Piante – Photinia:4' && rilUff.prezzo2 === 1500 &&
     rilUff.prezzoPhotinia === 30 && rilUff.paginaFine === 'preventivo',
     rilUff.pianteDopo + ', ' + rilUff.prezzo2 + ', ' + rilUff.prezzoPhotinia);
+
+  // ── LE ORE PER VOCE, E LA MANODOPERA CHE LE SOMMA ──
+  // In un settore ogni voce ha le sue ore, scritte in ufficio; la manodopera in
+  // fondo è le ore di cantiere — dal campo, correggibili — più quelle delle voci.
+  // Una voce senza ore non è un errore, e una lavorazione senza voce resta per le
+  // sue ore. Il totale della riga sta in fondo.
+  const oreVoce = await pagU.evaluate(() => {
+    const prima = PREVENTIVO;
+    const rilievo = leggiRilievo({ tipo: 'rilievo', versione: 1, id: 'ril-ore', revisione: 1, origine: 'ufficio',
+      creato: '2026-10-09T08:00:00Z', cliente: { nome: 'Prova Ore' }, lavorazioni: [{
+        id: 'p1', genere: 'insieme', nome: 'Siepe', unita: 'm', misura: 24, ore: 8, stile: 'lauro',
+        insieme: { id: 'siepe', nome: 'Siepe', componenti: [
+          { tipoID: 'piantumazione', nome: 'Piantumazione', voceID: 'piante', voce: 'Piante', unita: 'n' },
+          { tipoID: 'telo-pacciamante', nome: 'Telo pacciamante', voceID: 'telo-pacciamante', voce: 'Telo pacciamante', unita: 'm²' },
+          { tipoID: 'livellamento', nome: 'Livellamento terra', voceID: '', voce: '', unita: '' }] } }] });
+    const d = costruisciPreventivo(rilievo, null);
+    PREVENTIVO = { doc: d, file: '', anno: '' };
+    disegnaPreventivo();
+    const r = d.righe[0];
+    const chiavi = r.componenti.map(c => c.chiave).join();
+    const mano0 = { ...r.componenti[r.componenti.length - 1] };
+    const jTelo = r.componenti.findIndex(c => c.voceID === 'telo-pacciamante');
+    const jLiv = r.componenti.findIndex(c => c.soloOre);
+    const jMano = r.componenti.findIndex(c => c.manodoperaSettore);
+    const jPiante = r.componenti.findIndex(c => c.voceID === VOCE_PIANTE);
+    const righe = [...document.querySelectorAll('#pagina-preventivo tbody tr')];
+    const capo = righe.findIndex(x => x.classList.contains('riga-corpo'));
+    const blocco = righe.slice(capo, righe.findIndex(x => x.classList.contains('somma')) + 1);
+    const ultima = blocco[blocco.length - 1];
+    const dopoPiante = blocco[jPiante + 2];
+    const sesto = blocco[jPiante + 1].textContent;
+    // Livellamento senza ore e piante senza ore: nessun buco in più.
+    const mancanoSoloOre = sommaComponenti([r.componenti[jLiv]]).mancano;
+    modificaOreComponente(0, jTelo, '2');
+    modificaOreComponente(0, jLiv, '1,5');
+    const dopoVoci = { q: r.componenti[jMano].quantita, schermo: document.getElementById('qta-comp-0-' + jMano).textContent,
+      calcolo: document.getElementById('calc-comp-0-' + jMano).textContent };
+    modificaOreCantiere(0, jMano, '6');
+    const dopoCantiere = r.componenti[jMano].quantita;
+    const mezze = document.getElementById('mezze-preventivo').textContent;
+    const scheda = costruisciSchedaCantiere(d);
+    // Il campo rimanda il rilievo con la siepe più lunga: ore delle voci e ore di
+    // cantiere scritte in ufficio restano.
+    const d2 = costruisciPreventivo(leggiRilievo({ ...rilievo, revisione: 2,
+      lavorazioni: [{ ...rilievo.lavorazioni[0], misura: 30, ore: 12 }] }), d);
+    const r2 = d2.righe[0];
+    // Un preventivo di prima, con la manodopera fra gli altri componenti: aperto,
+    // la manodopera passa in fondo e le sue ore diventano quelle di cantiere.
+    const vecchio = JSON.parse(JSON.stringify(costruisciPreventivo(rilievo, null)));
+    const rv = vecchio.righe[0];
+    rv.componenti = rv.componenti.filter(c => !c.manodoperaSettore && !c.soloOre).map(c => { delete c.ore; return c; });
+    rv.componenti.splice(1, 0, { chiave: 'manodopera', voceID: 'manodopera', voce: 'Manodopera', unita: 'h', quantita: 9, quantitaMano: true, prezzo: '' });
+    PREVENTIVO = { doc: vecchio, file: '', anno: '' };
+    disegnaPreventivo();
+    const vecchioDopo = rv.componenti.map(c => c.chiave + ':' + c.quantita).join();
+    PREVENTIVO = prima;
+    disegnaPreventivo();
+    return {
+      chiavi, mano0: mano0.oreCantiere + '|' + mano0.quantita + '|' + mano0.calcolo,
+      totaleInFondo: !!(ultima && ultima.querySelector('#prezzo-riga-0') && ultima.querySelector('#imp-riga-0')) &&
+        !blocco[0].querySelector('#prezzo-riga-0'),
+      altraPianta: !!(dopoPiante && dopoPiante.classList.contains('altra-pianta')),
+      sesto, mancanoSoloOre, dopoVoci, dopoCantiere, mezze, scheda,
+      oreTelo2: r2.componenti.find(c => c.voceID === 'telo-pacciamante').ore,
+      mano2: r2.componenti.find(c => c.manodoperaSettore).quantita, vecchioDopo,
+    };
+  });
+  ok('in un settore la manodopera sta in fondo, dopo le voci e anche le lavorazioni senza voce',
+    oreVoce.chiavi === 'piante,telo-pacciamante,ore:livellamento,manodopera' &&
+    oreVoce.mano0 === '8|8|ore di cantiere', oreVoce.chiavi + ' / ' + oreVoce.mano0);
+  ok('il totale della riga sta in fondo, e «+ Un\'altra pianta» sotto l\'ultima pianta',
+    oreVoce.totaleInFondo && oreVoce.altraPianta, JSON.stringify(oreVoce));
+  ok('il sesto dice cos\'è: metri fra le piante', oreVoce.sesto.includes('m fra le piante'), oreVoce.sesto);
+  ok('una lavorazione senza voce e senza ore non è un buco', oreVoce.mancanoSoloOre === 0);
+  ok('le ore delle voci si sommano alla manodopera mentre si scrivono, e lo dice',
+    oreVoce.dopoVoci.q === 11.5 && oreVoce.dopoVoci.schermo === '11,5' &&
+    oreVoce.dopoVoci.calcolo === '8 h di cantiere + 3,5 h delle voci', JSON.stringify(oreVoce.dopoVoci));
+  ok('le ore di cantiere si correggono, e le mezze giornate seguono',
+    oreVoce.dopoCantiere === 9.5 && oreVoce.mezze.includes('2 mezze giornate') && oreVoce.mezze.includes('9,5 h'),
+    oreVoce.dopoCantiere + ' / ' + oreVoce.mezze);
+  ok('la scheda di cantiere ha le ore per voce e non dice da dove escono le quantità',
+    oreVoce.scheda.includes('Livellamento terra') && oreVoce.scheda.includes('1,5 h') &&
+    !oreVoce.scheda.includes('come la misura') && !oreVoce.scheda.includes('Da dove') &&
+    !oreVoce.scheda.includes('da scegliere in ufficio'), oreVoce.scheda.slice(0, 400));
+  ok('rimandato dal campo, ore delle voci e di cantiere scritte in ufficio restano',
+    oreVoce.oreTelo2 === 2 && oreVoce.mano2 === 9.5, oreVoce.oreTelo2 + ' / ' + oreVoce.mano2);
+  ok('un preventivo di prima porta la manodopera in fondo, con le sue ore come ore di cantiere',
+    oreVoce.vecchioDopo === 'piante:,telo-pacciamante:24,manodopera:9', oreVoce.vecchioDopo);
 
   // I settori del telefono in ufficio: letti dal file a ogni rilettura, nel
   // «Nuovo rilievo», con la loro unità e le loro lavorazioni.
