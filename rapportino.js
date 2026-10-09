@@ -604,6 +604,36 @@ function lavorazioneDalTelefono(l) {
   };
 }
 
+// Cosa manca a una lavorazione perché l'ufficio ci possa fare un preventivo. Sta
+// qui perché i rilievi si scrivono in due posti — in giardino e alla scrivania —
+// e due idee diverse di «completo» farebbero partire dall'ufficio quello che il
+// telefono avrebbe fermato. Lavora sulla forma del documento (`leggiLavorazione`).
+function lavorazioneIncompleta(l) {
+  const nome = l.nome || 'la lavorazione';
+  const conPiante = l.genere === 'insieme' && l.insieme &&
+    (l.insieme.componenti || []).some(c => c.voceID === VOCE_PIANTE || c.tipoID === 'piantumazione');
+  const misura = numeroDaTesto(l.misura), ore = numeroDaTesto(l.ore);
+  if ((l.genere === 'manodopera' || l.genere === 'libera') && !String(l.nome || '').trim()) {
+    return 'Scrivi cosa c\'è da fare nella lavorazione di sole ore';
+  }
+  if ((l.genere === 'insieme' || l.genere === 'voce') && !(misura > 0)) {
+    return `Scrivi quanto misura «${nome}»`;
+  }
+  if (conPiante && l.unita === 'm' && !(numeroDaTesto(l.sesto) > 0)) {
+    return `Scrivi il sesto d'impianto di «${nome}»`;
+  }
+  if (conPiante && l.unita !== 'm' && !(numeroDaTesto(l.piante) > 0)) {
+    return `Scrivi quante piante vanno in «${nome}»`;
+  }
+  if ((l.genere === 'insieme' || l.genere === 'manodopera') && !(ore > 0)) {
+    return `Scrivi le ore di «${nome}»`;
+  }
+  if (l.genere === 'libera' && !(misura > 0) && !(ore > 0)) {
+    return `Scrivi quanto misura «${nome}», o quante ore ci vogliono`;
+  }
+  return '';
+}
+
 function costruisciRilievo({ rilievo, cliente, voci }) {
   const perID = {};
   (voci || []).forEach(v => { perID[v.VoceID] = v; });
@@ -756,7 +786,7 @@ if (typeof module !== 'undefined' && module.exports) {
     mezzeDaOre, pianteDaSesto, pianteDellaLavorazione, GENERI_LAVORAZIONE,
     VERSIONE_SOPRALLUOGHI, costruisciSopralluoghi, leggiSopralluoghi,
     VERSIONE_RILIEVO, UNITA_RILIEVO,
-    costruisciRilievo, leggiRilievo, nomeFileRilievo,
+    costruisciRilievo, leggiRilievo, leggiLavorazione, lavorazioneIncompleta, nomeFileRilievo,
     dataISO, lunediDellaSettimana, lunediDellaPrimaSettimana, numeroSettimana, etichettaSettimana,
   };
 }

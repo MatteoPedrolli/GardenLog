@@ -4170,61 +4170,86 @@ try {
       return stampato && document.getElementById('foglio').innerHTML.includes('Scheda di cantiere');
     }));
 
-  // ── I RILIEVI DI PROVA ──
-  // Da casa la cartella vera non c'è: si collega una cartella vuota e un tasto ci
-  // scrive dei rilievi finti. Il tasto scrive in rilievi/, che è del telefono, e
-  // per questo nella cartella vera non deve esserci — né il bottone né la
-  // funzione chiamata a mano.
-  const provaVera = await pagU.evaluate(async () => {
+  // ── IL RILIEVO SCRITTO IN UFFICIO ──
+  // Chi telefona o passa in ufficio: il rilievo si scrive alla scrivania, con le
+  // stesse lavorazioni del telefono, e ne esce lo stesso preventivo. Uno arrivato
+  // dal telefono invece non si corregge da qui: un file, un solo autore.
+  const rilTelefono = await pagU.evaluate(() => {
     vaiA('preventivi');
-    const c = await window.RADICE.getDirectoryHandle('rilievi');
-    const prima = [...c._file.keys()].length;
-    const bottone = document.getElementById('pagina-preventivi').textContent.includes('Rilievo di prova');
-    await scriviRilievoDiProva();
-    return { bottone, prima, dopo: [...c._file.keys()].length, diProva: cartellaDiProva() };
+    return { bottone: document.getElementById('pagina-preventivi').textContent.includes('Nuovo rilievo'),
+      modificabile: RILIEVI.filter(r => r.doc.origine !== 'ufficio').some(r => rilievoDellUfficio(r.doc.id)) };
   });
-  ok('nella cartella vera il tasto dei rilievi di prova non c\'è',
-    !provaVera.bottone && !provaVera.diProva, JSON.stringify(provaVera));
-  ok('e chiamato a mano non scrive niente', provaVera.prima === provaVera.dopo, JSON.stringify(provaVera));
+  ok('in Preventivi c\'è «Nuovo rilievo»', rilTelefono.bottone);
+  ok('e un rilievo arrivato dal telefono non si corregge dall\'ufficio', !rilTelefono.modificabile);
 
-  const prova = await pagU.evaluate(async () => {
-    window.CASA = window.creaCartellaFinta('Prova');
+  const rilUff = await pagU.evaluate(async () => {
+    // Da casa, con una cartella vuota: nessun rilievo arrivato, nessun listino.
+    window.CASA = window.creaCartellaFinta('Casa');
     await usaCartella(window.CASA);
     vaiA('preventivi');
-    const bottone = [...document.querySelectorAll('#pagina-preventivi button')]
-      .find(b => b.textContent.includes('Rilievo di prova'));
-    if (!bottone) return { bottone: false };
-    bottone.click();
-    await new Promise(r => setTimeout(r, 100));
-    const primo = RILIEVI[0] && RILIEVI[0].doc;
-    const schermo = document.getElementById('pagina-preventivi').textContent;
-    const etichetta = !!document.querySelector('#pagina-preventivi .etichetta.prova');
-    const file = [...window.CASA._sotto.get('rilievi')._file.keys()].length;
-    for (let i = 0; i < 3; i++) await scriviRilievoDiProva();
-    const generi = new Set(RILIEVI.flatMap(r => r.doc.lavorazioni.map(l => l.genere)));
-    apriPreventivo(primo.id);
+    [...document.querySelectorAll('#pagina-preventivi button')].find(b => b.textContent.includes('Nuovo rilievo')).click();
+    const pagina = PAGINA;
+    const insiemi = insiemiPerRilievoUfficio().map(x => x.id).join();
+    await salvaRilievoUfficio();
+    const vuotoFermo = !window.CASA._sotto.has('rilievi');
+    CLIENTI.push({ id: 'cli-casa', nome: 'Bianchi Casa', indirizzo: 'Via dei Prati 3', citta: 'Lavis', telefono: '0461 111', email: '' });
+    scriviClienteRilievo('telefono', '333 999');
+    scriviClienteRilievo('nome', 'Bianchi Casa');
+    const cliente = { ...RILIEVO_UFFICIO.doc.cliente, campoCitta: document.getElementById('ril-uff-citta').value };
+    aggiungiLavorazioneUfficio('insieme:siepe-nuova');
+    modificaLavorazioneUfficio(0, 'misura', '24');
+    modificaLavorazioneUfficio(0, 'sesto', '0,40');
+    const pianteSchermo = document.getElementById('ril-uff-piante-0').textContent;
+    await salvaRilievoUfficio();
+    const senzaOreFermo = !window.CASA._sotto.has('rilievi') && PAGINA === 'rilievo';
+    modificaLavorazioneUfficio(0, 'ore', '10');
+    aggiungiLavorazioneUfficio('manodopera');
+    modificaLavorazioneUfficio(1, 'nome', 'Potatura arbusti');
+    modificaLavorazioneUfficio(1, 'ore', '5');
+    const oreSchermo = document.getElementById('ril-uff-ore').textContent;
+    await salvaRilievoUfficio();
+    const doc = RILIEVI[0] && RILIEVI[0].doc;
     const siepe = PREVENTIVO.doc.righe.find(r => (r.componenti || []).length);
-    const piante = siepe && siepe.componenti.find(c => c.voceID === VOCE_PIANTE);
+    const piante = siepe.componenti.find(c => c.voceID === VOCE_PIANTE).quantita;
+    const i = PREVENTIVO.doc.righe.indexOf(siepe);
+    modificaPrezzoRiga(i, '1500', null);
+    await salvaPreventivo();
+    const bottoneModifica = document.getElementById('pagina-preventivo').textContent.includes('Modifica il rilievo');
+    // La correzione: la siepe è più lunga. Stesso file, revisione nuova, prezzo tenuto.
+    modificaRilievoUfficio(doc.id);
+    const sestoRiletto = RILIEVO_UFFICIO.doc.lavorazioni[0].sesto;
+    modificaLavorazioneUfficio(0, 'misura', '30');
+    await salvaRilievoUfficio();
+    const dopo = PREVENTIVO.doc.righe.find(r => (r.componenti || []).length);
     return {
-      bottone: true, file,
-      nome: primo.cliente.nome, prova: primo.prova, ore: primo.ore, mezze: primo.mezze,
-      etichetta: etichetta && schermo.includes('Prova 1'),
-      quanti: RILIEVI.length, generi: [...generi].sort().join(), disegno: RILIEVI.some(r => r.doc.disegno),
-      piante: piante && piante.quantita, daRilievo: !!(PREVENTIVO.doc.daRilievo && PREVENTIVO.doc.daRilievo.prova),
-      ancoraProva: cartellaDiProva(),
+      pagina, insiemi, vuotoFermo, cliente, pianteSchermo, senzaOreFermo, oreSchermo,
+      origine: doc.origine, rev: doc.revisione, mezze: doc.mezze, piante, bottoneModifica, sestoRiletto,
+      file: [...window.CASA._sotto.get('rilievi')._file.keys()].length, rev2: RILIEVI[0].doc.revisione,
+      piante2: dopo.componenti.find(c => c.voceID === VOCE_PIANTE).quantita, prezzo2: dopo.prezzo,
+      rifare: rilieviDaPreventivare().length, paginaFine: PAGINA,
     };
   });
-  ok('in una cartella vuota il tasto c\'è, e scrive un rilievo in rilievi/',
-    prova.bottone && prova.file === 1, JSON.stringify(prova));
-  ok('il rilievo di prova si legge come uno del telefono, segnato come prova',
-    prova.prova === true && /^Prova 1 – /.test(prova.nome) && prova.ore === 10 && prova.mezze === 2,
-    JSON.stringify(prova));
-  ok('e fra gli aperti si vede, con la sua etichetta', prova.etichetta);
-  ok('a giro i rilievi di prova toccano tutti i generi di lavorazione, e uno aspetta il disegno',
-    prova.quanti === 4 && prova.generi === 'insieme,libera,manodopera,voce' && prova.disegno, prova.generi);
-  ok('il preventivo ne esce come da un rilievo vero: 24 m a sesto 0,40 sono 61 piante',
-    prova.piante === 61 && prova.daRilievo, String(prova.piante));
-  ok('e con i suoi rilievi la cartella resta di prova', prova.ancoraProva);
+  ok('«Nuovo rilievo» apre il modulo, anche da una cartella vuota con siepe e aiuola già pronte',
+    rilUff.pagina === 'rilievo' && rilUff.insiemi.includes('siepe-nuova') && rilUff.insiemi.includes('aiuola'),
+    JSON.stringify(rilUff));
+  ok('un rilievo senza nome e senza lavorazioni non si salva', rilUff.vuotoFermo);
+  ok('scegliendo un cliente dall\'anagrafica si riempie solo quello che manca',
+    rilUff.cliente.id === 'cli-casa' && rilUff.cliente.citta === 'Lavis' && rilUff.cliente.campoCitta === 'Lavis' &&
+    rilUff.cliente.telefono === '333 999', JSON.stringify(rilUff.cliente));
+  ok('mentre si scrive, il sesto dice le piante e le ore le mezze giornate',
+    rilUff.pianteSchermo === '61 piante' && /15 h · 2 mezze giornate/.test(rilUff.oreSchermo),
+    rilUff.pianteSchermo + ' / ' + rilUff.oreSchermo);
+  ok('le regole del telefono valgono anche qui: una siepe senza ore ferma il rilievo', rilUff.senzaOreFermo);
+  ok('salvato, il rilievo è dell\'ufficio e il preventivo ne esce come da uno del campo',
+    rilUff.origine === 'ufficio' && rilUff.rev === 1 && rilUff.mezze === 2 && rilUff.piante === 61,
+    JSON.stringify(rilUff));
+  ok('e dal preventivo si riapre per correggerlo, coi numeri scritti come si scrivono',
+    rilUff.bottoneModifica && rilUff.sestoRiletto === '0,4', String(rilUff.sestoRiletto));
+  ok('corretto, riscrive lo stesso file con una revisione nuova',
+    rilUff.file === 1 && rilUff.rev2 === 2, JSON.stringify(rilUff));
+  ok('e il preventivo segue la misura tenendo il prezzo già deciso',
+    rilUff.piante2 === 76 && rilUff.prezzo2 === 1500 && rilUff.paginaFine === 'preventivo',
+    rilUff.piante2 + ' piante, ' + rilUff.prezzo2);
 
   ok('nessun errore JavaScript nell\'app dell\'ufficio', erroriU.length === 0, erroriU.join(' | '));
   await ctxU.close();

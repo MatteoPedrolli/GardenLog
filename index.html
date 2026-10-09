@@ -3439,28 +3439,9 @@ function unitaPerLaRiga(unita) {
 // Cosa manca a una lavorazione per partire, detto con le parole di chi la
 // guarda. Una lavorazione senza misura o senza ore è un'aiuola senza stima: in
 // ufficio non si può più chiedere, e in lavagna il pomeriggio sembrerebbe libero.
+// Le regole stanno in rapportino.js, le stesse della scrivania dell'ufficio.
 function cosaMancaLavorazione(l) {
-  const nome = l.Nome || 'la lavorazione';
-  const conPiante = l.Genere === 'insieme' && (l.Componenti || []).some(componenteDiPiante);
-  if ((l.Genere === 'manodopera' || l.Genere === 'libera') && !String(l.Nome || '').trim()) {
-    return 'Scrivi cosa c\'è da fare nella lavorazione di sole ore';
-  }
-  if ((l.Genere === 'insieme' || l.Genere === 'voce') && !(numeroDaTesto(l.Misura) > 0)) {
-    return `Scrivi quanto misura «${nome}»`;
-  }
-  if (conPiante && l.Unita === 'm' && !(numeroDaTesto(l.Sesto) > 0)) {
-    return `Scrivi il sesto d'impianto di «${nome}»`;
-  }
-  if (conPiante && l.Unita !== 'm' && !(numeroDaTesto(l.Piante) > 0)) {
-    return `Scrivi quante piante vanno in «${nome}»`;
-  }
-  if ((l.Genere === 'insieme' || l.Genere === 'manodopera') && !(numeroDaTesto(l.Ore) > 0)) {
-    return `Scrivi le ore di «${nome}»`;
-  }
-  if (l.Genere === 'libera' && !(numeroDaTesto(l.Misura) > 0) && !(numeroDaTesto(l.Ore) > 0)) {
-    return `Scrivi quanto misura «${nome}», o quante ore ci vogliono`;
-  }
-  return '';
+  return lavorazioneIncompleta(lavorazioneDalTelefono(l));
 }
 
 function campoLavorazione(i, campo, etichetta, valore, { largo, unita, segnaposto } = {}) {

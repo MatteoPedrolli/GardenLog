@@ -594,19 +594,26 @@ Le note sono quello che si vede **solo stando lì** — accesso, dove resta il
 camion, il rubinetto, la pendenza. Sono anche la cosa che non si può più chiedere
 dopo, e quella che l'anagrafica non sa.
 
-In ufficio la pagina Rilievi **legge e non tocca**: un file, un solo autore, come
-`rapportini/`. Dice anche chi non è in anagrafica, perché telefono e mail — quello
+In ufficio un rilievo arrivato dal telefono **si legge e non si tocca**: un file, un
+solo autore, come `rapportini/`. Dice anche chi non è in anagrafica, perché telefono e mail — quello
 che serve per richiamare e mandare il preventivo — stanno solo lì.
 
-**L'unica eccezione sono i rilievi di prova**, ed è chiusa apposta. Per provare i
-preventivi da un PC che non vede la cartella vera si collega una cartella vuota, e
-in Preventivi un tasto scrive in `rilievi/` un rilievo finto (`scriviRilievoDiProva()`),
-fatto da `costruisciRilievo()` come quelli del telefono e segnato `prova: true`. Il
-tasto c'è **solo in una cartella di prova** (`cartellaDiProva()`: niente rapportini,
-niente archivio, nessun rilievo o preventivo vero), e la funzione lo ricontrolla al
-clic: nella cartella dell'ufficio un rilievo finto finirebbe fra i preventivi da fare,
-accettato andrebbe in lavagna e da lì nell'agenda del telefono — e da qui non si
-cancella. Nomi e contatti dei rilievi di prova sono finti, la mail su `.invalid`.
+**Un rilievo si scrive anche in ufficio** («＋ Nuovo rilievo» in Preventivi,
+`salvaRilievoUfficio()`): per chi telefona o passa con le misure su un foglio, e per
+provare i preventivi da un PC con una cartella vuota. Le lavorazioni sono quelle del
+telefono, e il preventivo ne esce uguale; le regole di cosa manca stanno in
+`rapportino.js` (`lavorazioneIncompleta()`) e il telefono le prende da lì, perché
+due idee di «completo» farebbero partire dalla scrivania quello che il giardino
+avrebbe fermato. Gli insiemi sono quelli che il campo ha usato, più siepe nuova e
+aiuola con la composizione di partenza del telefono (`INSIEMI_DI_PARTENZA`): un
+ufficio appena collegato non deve aspettare il primo rilievo per scriverne uno.
+
+Finisce in `rilievi/` accanto a quelli del telefono, con `origine: 'ufficio'`, e
+**un file resta di un solo autore**: quello scritto qui l'ufficio lo corregge
+(«Modifica il rilievo» dal preventivo) alzando la revisione come fa il telefono,
+nello stesso file, così il preventivo si rifà tenendo i prezzi decisi; quello
+arrivato dal telefono resta com'è arrivato. Nessuna versione alzata: `origine`
+assente vuol dire «dal telefono», che è quello che erano tutti prima.
 
 ## Il prezzo che aspetta di essere guardato
 

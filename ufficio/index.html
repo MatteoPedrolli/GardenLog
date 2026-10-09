@@ -126,7 +126,7 @@ tr.cosa-fascia td { color: var(--text-mid); font-size: 0.86rem; padding-top: 0; 
 }
 .etichetta.nuovo { background: var(--velo); color: var(--inchiostro); }
 .etichetta.corretto { background: #fdebd0; color: #9c5700; }
-.etichetta.prova { background: transparent; color: var(--inchiostro); border: 1px dashed currentColor; }
+.etichetta.ufficio { background: transparent; color: var(--inchiostro); border: 1px solid var(--border); }
 .etichetta.fatturato { background: var(--foglio); color: var(--inchiostro-tenue); }
 .etichetta.da-fatturare { background: var(--earth-light); color: var(--earth); }
 
@@ -643,6 +643,7 @@ input.vuoto { background: #fffdf5; border-color: #ecdca8; }
     <div class="pagina" id="pagina-lavoro"></div>
     <div class="pagina" id="pagina-preventivi"></div>
     <div class="pagina" id="pagina-preventivo"></div>
+    <div class="pagina" id="pagina-rilievo"></div>
     <div class="pagina" id="pagina-lavagna"></div>
     <div class="pagina" id="pagina-clienti"></div>
     <div class="pagina" id="pagina-archivio"></div>
@@ -1990,7 +1991,7 @@ function vaiA(pagina) {
   if (p) p.classList.add('attiva');
   document.querySelectorAll('.voce-barra').forEach(v => v.classList.remove('attiva'));
   // La schermata di un lavoro vive dentro "In arrivo": è da lì che ci si arriva.
-  const dentro = { lavoro: 'arrivi', preventivo: 'preventivi' };
+  const dentro = { lavoro: 'arrivi', preventivo: 'preventivi', rilievo: 'preventivi' };
   // Archivio e lavoro archiviato stanno sotto la voce della parte da cui si è
   // entrati: da pagare o pagati.
   const dellArchivio = pagina === 'archivio' || pagina === 'archiviato';
@@ -2025,6 +2026,7 @@ function disegna() {
   if (PAGINA === 'arrivi') disegnaArrivi();
   if (PAGINA === 'preventivi') disegnaPreventivi();
   if (PAGINA === 'preventivo') disegnaPreventivo();
+  if (PAGINA === 'rilievo') disegnaRilievoUfficio();
   if (PAGINA === 'lavoro') disegnaLavoro();
   if (PAGINA === 'lavagna') disegnaLavagna();
   if (PAGINA === 'clienti') disegnaClienti();
@@ -2146,9 +2148,10 @@ const NOVITA = [
   {
     versione: '2026-10-09.1',
     data: '2026-10-09',
-    titolo: 'Rilievi di prova',
+    titolo: 'Rilievi scritti in ufficio',
     righe: [
-      'Per provare i preventivi da un altro PC: collega una **cartella vuota** e in **Preventivi** compare **＋ Rilievo di prova**, che scrive un rilievo finto da preventivare. Nella cartella dell\'ufficio il tasto non c\'è.',
+      'In **Preventivi** c\'è **＋ Nuovo rilievo**: per chi chiama o passa in ufficio, il rilievo si scrive qui con le stesse lavorazioni del telefono, e il preventivo parte da lì.',
+      'Un rilievo scritto in ufficio **si corregge** dal suo preventivo, con «Modifica il rilievo»; quelli del telefono restano come sono arrivati.',
     ],
   },
   {
@@ -2382,10 +2385,10 @@ function chiudiNovita() {
 }
 
 // ── I RILIEVI CHE ARRIVANO DAL CAMPO ──
-// Il taccuino del preventivo, preso in giardino col cliente davanti. Qui si
-// legge e non si tocca: **un file, un solo autore**, come i rapportini. Il
-// telefono deposita in rilievi/ e l'ufficio non scrive lì nemmeno per segnare
-// che ha guardato.
+// Il taccuino del preventivo, preso in giardino col cliente davanti. Quelli del
+// telefono qui si leggono e non si toccano: **un file, un solo autore**, come i
+// rapportini, e l'ufficio non ci scrive nemmeno per segnare che ha guardato. In
+// rilievi/ scrive solo i suoi, quelli nati alla scrivania (più sotto).
 //
 // Quello che ancora non c'è è il preventivo: prezzare queste righe vuol dire
 // decidere il margine fra il costo che esce dal listino e il prezzo che va al
@@ -2407,99 +2410,269 @@ async function caricaRilievi() {
   return trovati.sort((a, b) => String(b.doc.creato).localeCompare(String(a.doc.creato)));
 }
 
-// ── I RILIEVI DI PROVA ──
-// Per provare i preventivi da un PC che la cartella vera non la vede: si collega
-// una cartella vuota, e un tasto ci scrive dentro un rilievo finto. Lo fa
-// costruisciRilievo(), la stessa funzione del telefono, così quello che si prova
-// è il documento che arriva davvero dal campo e non una sua imitazione.
+// ── IL RILIEVO SCRITTO IN UFFICIO ──
+// Un preventivo non nasce sempre in giardino: chi telefona, chi passa in ufficio
+// con le misure scritte su un foglio, chi richiama dopo il sopralluogo. Il
+// rilievo si scrive allora qui, con le stesse lavorazioni del telefono, e il
+// preventivo ne esce come da uno arrivato dal campo — stesse righe a corpo,
+// stessi componenti, stesse mezze giornate.
 //
-// Qui l'ufficio scrive in rilievi/, che è del telefono: è il motivo per cui il
-// tasto c'è **solo in una cartella di prova** — niente rapportini, niente archivio,
-// nessun rilievo o preventivo vero. Nella cartella dell'ufficio un rilievo finto
-// finirebbe fra i preventivi da fare, accetterlo lo metterebbe in lavagna e da lì
-// nell'agenda del telefono; e da qui non si cancella. Il controllo si rifà anche
-// al clic, non solo nel disegno del bottone.
-function cartellaDiProva() {
-  return !ARCHIVIO.length && !ARRIVI.length &&
-    RILIEVI.every(r => r.doc.prova) &&
-    PREVENTIVI.every(p => p.doc.daRilievo && p.doc.daRilievo.prova);
+// Va in rilievi/ accanto a quelli del telefono, e la regola resta **un file, un
+// solo autore**: un rilievo scritto qui (`origine: 'ufficio'`) lo corregge
+// l'ufficio, alzando la revisione come fa il telefono, così il preventivo si rifà
+// tenendo i prezzi già decisi; uno arrivato dal telefono resta com'è arrivato.
+let RILIEVO_UFFICIO = null;
+
+// Gli insiemi non si definiscono in ufficio: sono quelli che il campo ha usato,
+// con la loro composizione. Siepe nuova e aiuola ci sono anche prima che ne
+// arrivi una — sono i preventivi più frequenti, e un ufficio appena collegato non
+// deve aspettare il primo rilievo dal telefono per poterne scrivere uno. La loro
+// composizione è quella di partenza del telefono (TIPI_DEFAULT in index.html).
+const COMPONENTI_DI_PARTENZA = [
+  { tipoID: 'piantumazione', voceID: VOCE_PIANTE, voce: 'Piante', unita: 'n' },
+  { tipoID: 'pacciamatura', voceID: 'pacciamatura', voce: 'Pacciamatura', unita: 'q' },
+  { tipoID: 'ala-gocciolante', voceID: 'ala-gocciolante', voce: 'Ala gocciolante', unita: 'm' },
+  { tipoID: 'telo-pacciamante', voceID: 'telo-pacciamante', voce: 'Telo pacciamante', unita: 'm²' },
+];
+const INSIEMI_DI_PARTENZA = [
+  { id: 'siepe-nuova', nome: 'Siepe nuova', unita: 'm', componenti: COMPONENTI_DI_PARTENZA },
+  { id: 'aiuola', nome: 'Aiuola', unita: 'm²', componenti: COMPONENTI_DI_PARTENZA },
+];
+
+function insiemiPerRilievoUfficio() {
+  const visti = insiemiVisti();
+  INSIEMI_DI_PARTENZA.forEach(i => { if (!visti.some(v => v.id === i.id)) visti.push(i); });
+  return visti.sort((a, b) => a.nome.localeCompare(b.nome, 'it'));
 }
 
-// Quattro rilievi che a giro toccano tutti i generi di lavorazione: la siepe
-// misurata a metri col sesto, l'aiuola a m² col numero di piante, la voce a
-// misura, la manodopera, la riga libera, e un rilievo che aspetta il disegno.
-// Nomi e contatti sono finti apposta: il repository è pubblico, e la mail è su un
-// dominio che non esiste per nessuno, così «Manda per mail» si prova senza
-// scrivere a qualcuno.
-const COMPONENTI_PROVA = [
-  { TipoID: 'piantumazione', VoceID: VOCE_PIANTE, Voce: 'Piante', Unita: 'n' },
-  { TipoID: 'pacciamatura', VoceID: 'pacciamatura', Voce: 'Pacciamatura', Unita: 'q' },
-  { TipoID: 'ala-gocciolante', VoceID: 'ala-gocciolante', Voce: 'Ala gocciolante', Unita: 'm' },
-  { TipoID: 'telo-pacciamante', VoceID: 'telo-pacciamante', Voce: 'Telo pacciamante', Unita: 'm²' },
-];
-const RILIEVI_DI_PROVA = [
-  { cosa: 'siepe', citta: 'Lavis', note: 'Accesso dal cancello sul retro, il camion resta in strada.', lavorazioni: [
-    { Genere: 'insieme', TipoID: 'siepe-nuova', Nome: 'Siepe nuova', Misura: '24', Unita: 'm',
-      Pianta: 'Lauro 80-100', Sesto: '0,40', Ore: '10' },
-    { Genere: 'voce', VoceID: 'smaltimento-verde', Nome: 'Smaltimento verde', Misura: '300', Unita: 'kg' },
-  ] },
-  { cosa: 'aiuola', citta: 'Mezzocorona', note: 'Rubinetto in garage, chiedere le chiavi.', lavorazioni: [
-    { Genere: 'insieme', TipoID: 'aiuola', Nome: 'Aiuola', Misura: '18', Unita: 'm²',
-      Pianta: 'Graminacee miste', Piante: '25', Ore: '6' },
-    { Genere: 'manodopera', Nome: 'Potatura arbusti', Ore: '4' },
-    { Genere: 'libera', Nome: 'Elettrovalvola', Misura: '1', Unita: 'n' },
-  ] },
-  { cosa: 'prato', citta: 'Trento', disegno: true, note: 'Terreno in pendenza verso la strada.', lavorazioni: [
-    { Genere: 'voce', VoceID: 'asporto-terriccio', Nome: 'Asporto terriccio', Misura: '6', Unita: 'm³' },
-    { Genere: 'manodopera', Nome: 'Livellamento', Ore: '8' },
-    { Genere: 'libera', Nome: 'Prato in rotoli', Misura: '120', Unita: 'm²' },
-  ] },
-  { cosa: 'giardino nuovo', citta: 'Lavis', note: 'Il cliente vuole sapere anche il costo con la bordura in corten.', lavorazioni: [
-    { Genere: 'insieme', TipoID: 'siepe-nuova', Nome: 'Siepe nuova', Misura: '40', Unita: 'm',
-      Pianta: 'Photinia 100-125', Sesto: '0,50', Ore: '14' },
-    { Genere: 'insieme', TipoID: 'aiuola', Nome: 'Aiuola', Misura: '10', Unita: 'm²',
-      Pianta: 'Lavanda', Piante: '12', Ore: '3' },
-    { Genere: 'voce', VoceID: 'terra-vegetale', Nome: 'Terra vegetale', Misura: '3', Unita: 'm³' },
-  ] },
+function rilievoDellUfficio(id) {
+  const r = RILIEVI.find(x => x.doc.id === id);
+  return r && r.doc.origine === 'ufficio' ? r : null;
+}
+
+function nuovoRilievoUfficio() {
+  RILIEVO_UFFICIO = {
+    file: '',
+    doc: {
+      id: 'uff-' + Date.now().toString(36), revisione: 0,
+      cliente: { id: '', nome: '', indirizzo: '', citta: '', telefono: '', email: '' },
+      disegno: false, note: '', lavorazioni: [],
+    },
+  };
+  vaiA('rilievo');
+}
+
+function modificaRilievoUfficio(id) {
+  const r = rilievoDellUfficio(id);
+  if (!r) { avvisa('Questo rilievo è arrivato dal telefono: si corregge da lì', true); return; }
+  // Una copia: finché non si salva, il rilievo in cartella resta quello di prima.
+  const doc = JSON.parse(JSON.stringify(r.doc));
+  doc.lavorazioni.forEach(l => ['misura', 'sesto', 'piante', 'ore'].forEach(k => {
+    l[k] = l[k] > 0 ? scriviNumero(l[k]) : '';
+  }));
+  RILIEVO_UFFICIO = { file: r.nome, doc };
+  vaiA('rilievo');
+}
+
+const CAMPI_CLIENTE_RILIEVO = [
+  ['nome', 'Per chi'], ['indirizzo', 'Via'], ['citta', 'Paese'], ['telefono', 'Telefono'], ['email', 'Mail'],
 ];
 
-async function scriviRilievoDiProva() {
-  if (!CARTELLA) return;
-  if (!cartellaDiProva()) {
-    avvisa('Questa non è una cartella di prova: ci sono rapportini, conti o rilievi veri. I rilievi di prova si scrivono solo in una cartella vuota.', true);
-    return;
-  }
-  const n = RILIEVI.length + 1;
-  const es = RILIEVI_DI_PROVA[(n - 1) % RILIEVI_DI_PROVA.length];
-  const id = 'prova-' + Date.now().toString(36);
-  const doc = costruisciRilievo({
-    rilievo: {
-      RilievoID: id,
-      Anagrafica: { Cliente: 'Prova ' + n + ' – ' + es.cosa, Indirizzo: 'Via di prova ' + n, Citta: es.citta,
-        Telefono: '000 000 0000', Email: 'prova' + n + '@esempio.invalid' },
-      Disegno: !!es.disegno,
-      Note: es.note,
-      Lavorazioni: es.lavorazioni.map((l, i) => ({
-        LavID: id + '-' + i, Misura: '', Unita: '', Pianta: '', Sesto: '', Piante: '', Ore: '', Note: '',
-        TipoID: '', VoceID: '', ...l,
-        Componenti: l.Genere === 'insieme' ? COMPONENTI_PROVA.map(c => ({ ...c })) : [],
-      })),
-    },
-    cliente: null,
-    voci: [],
+function disegnaRilievoUfficio() {
+  const c = document.getElementById('pagina-rilievo');
+  if (!CARTELLA) { c.innerHTML = schermataBenvenuto(); return; }
+  if (!RILIEVO_UFFICIO) { c.innerHTML = '<div class="vuoto-elenco">Nessun rilievo aperto.</div>'; return; }
+  const d = RILIEVO_UFFICIO.doc;
+  let html = '<h2 class="titolo-pagina">' + (RILIEVO_UFFICIO.file ? 'Correggi il rilievo' : 'Nuovo rilievo') + '</h2>';
+  html += '<p class="sottotitolo">Quello che c\'è da fare e quanto misura: prezzi e descrizioni si scrivono nel preventivo</p>';
+
+  html += '<div class="scheda"><table class="elenco"><tbody>';
+  CAMPI_CLIENTE_RILIEVO.forEach(([k, etichetta]) => {
+    html += '<tr><td style="width:120px">' + etichetta + '</td><td><input type="text" id="ril-uff-' + k + '" value="' +
+      perValore(d.cliente[k]) + '"' + (k === 'nome' ? ' list="ril-uff-clienti" placeholder="Il nome basta"' : '') +
+      ' oninput="scriviClienteRilievo(\'' + k + '\', this.value)"></td></tr>';
   });
-  doc.prova = true;
+  html += '</tbody></table>' +
+    '<datalist id="ril-uff-clienti">' + CLIENTI.map(x => '<option value="' + perValore(x.nome) + '">').join('') + '</datalist>' +
+    '<label class="meta" style="display:block;margin-top:10px"><input type="checkbox"' + (d.disegno ? ' checked' : '') +
+      ' onchange="RILIEVO_UFFICIO.doc.disegno = this.checked"> Aspetta il disegno dal CAD</label></div>';
+
+  html += '<div class="scheda"><div class="titolo-sezione">Lavorazioni · <span id="ril-uff-ore">' + oreRilievoUfficio() + '</span></div>';
+  html += '<div id="ril-uff-lavorazioni">' + righeLavorazioniUfficio() + '</div>';
+  const insiemi = insiemiPerRilievoUfficio();
+  const voci = (LISTINO.voci || []).filter(v => v.voceID && v.voceID !== VOCE_MANODOPERA && !v.aCorpo && v.voce);
+  html += '<div class="bottoni"><select onchange="aggiungiLavorazioneUfficio(this.value); this.value=\'\'">' +
+    '<option value="">＋ Aggiungi una lavorazione…</option>' +
+    '<optgroup label="Lavorazioni">' + insiemi.map(i => '<option value="insieme:' + perValore(i.id) + '">' +
+      perValore(i.nome) + ' · a ' + perValore(i.unita) + '</option>').join('') + '</optgroup>' +
+    '<optgroup label="Solo ore"><option value="manodopera">Manodopera: potatura, pulizia…</option></optgroup>' +
+    (voci.length ? '<optgroup label="Voci a misura">' + voci.map(v => '<option value="voce:' + perValore(v.voceID) + '">' +
+      perValore(v.voce) + (v.unita ? ' · ' + perValore(v.unita) : '') + '</option>').join('') + '</optgroup>' : '') +
+    '<optgroup label="Altro"><option value="libera">Scritta a mano</option></optgroup>' +
+    '</select></div></div>';
+
+  html += '<div class="scheda"><div class="titolo-sezione">Note</div>' +
+    '<textarea rows="3" placeholder="Accesso, dove resta il camion, il rubinetto, la pendenza…" ' +
+    'oninput="RILIEVO_UFFICIO.doc.note = this.value">' + perValore(d.note) + '</textarea></div>';
+
+  html += '<div class="bottoni">' +
+    '<button class="principale" onclick="salvaRilievoUfficio()">Salva e fai il preventivo</button>' +
+    '<button class="secondaria" onclick="lasciaRilievoUfficio()">Lascia stare</button></div>';
+  c.innerHTML = html;
+}
+
+function lavorazioneConPiante(l) {
+  return l.genere === 'insieme' && l.insieme &&
+    (l.insieme.componenti || []).some(c => c.voceID === VOCE_PIANTE || c.tipoID === 'piantumazione');
+}
+
+function righeLavorazioniUfficio() {
+  const lav = RILIEVO_UFFICIO.doc.lavorazioni;
+  if (!lav.length) return '<div class="vuoto-elenco">Ancora niente. Aggiungi quello che c\'è da fare.</div>';
+  const campo = (i, k, valore, segnaposto, largo) => '<input type="text"' + (largo ? '' : ' inputmode="decimal" class="stretto"') +
+    ' value="' + perValore(valore) + '" placeholder="' + perValore(segnaposto || '') + '" ' +
+    'oninput="modificaLavorazioneUfficio(' + i + ', \'' + k + '\', this.value)" aria-label="' + k + '">';
+  let html = '<table class="elenco"><thead><tr><th>Lavorazione</th><th class="num">Misura</th><th>UM</th>' +
+    '<th>Pianta</th><th class="num">Sesto o piante</th><th class="num">Ore</th><th>Note</th><th></th></tr></thead><tbody>';
+  lav.forEach((l, i) => {
+    const nomeLibero = l.genere === 'manodopera' || l.genere === 'libera';
+    const conPiante = lavorazioneConPiante(l);
+    html += '<tr>' +
+      '<td>' + (nomeLibero
+        ? campo(i, 'nome', l.nome, l.genere === 'manodopera' ? 'Cosa: potatura, pulizia…' : 'Cosa c\'è da fare', true)
+        : perValore(l.nome) + (l.insieme && l.insieme.componenti.length
+          ? '<div class="meta">' + l.insieme.componenti.map(x => perValore(x.voce)).join(', ') + '</div>' : '')) + '</td>' +
+      '<td class="num">' + (l.genere === 'manodopera' ? '' : campo(i, 'misura', l.misura)) + '</td>' +
+      '<td>' + (l.genere === 'libera'
+        ? '<select onchange="modificaLavorazioneUfficio(' + i + ', \'unita\', this.value)" aria-label="unità">' +
+          UNITA_RILIEVO.map(u => '<option' + (u === l.unita ? ' selected' : '') + '>' + perValore(u) + '</option>').join('') + '</select>'
+        : perValore(l.unita)) + '</td>' +
+      '<td>' + (conPiante ? campo(i, 'pianta', l.pianta, 'lauro 80-100', true) : '') + '</td>' +
+      '<td class="num" style="padding-left:12px">' + (!conPiante ? '' : l.unita === 'm'
+        ? campo(i, 'sesto', l.sesto, 'sesto') + '<div class="meta" id="ril-uff-piante-' + i + '">' + pianteRilievoUfficio(l) + '</div>'
+        : campo(i, 'piante', l.piante, 'piante')) + '</td>' +
+      '<td class="num" style="padding-left:12px">' + (l.genere === 'voce' ? '' : campo(i, 'ore', l.ore)) + '</td>' +
+      '<td style="padding-left:12px">' + campo(i, 'note', l.note, '', true) + '</td>' +
+      '<td class="via-col"><button class="via" onclick="togliLavorazioneUfficio(' + i + ')" title="Togli">✕</button></td>' +
+    '</tr>';
+  });
+  return html + '</tbody></table>';
+}
+
+// Le piante che escono dal sesto, contate mentre si scrive: 24 m a 0,40 sono 61.
+function pianteRilievoUfficio(l) {
+  const n = pianteDellaLavorazione(leggiLavorazione(l));
+  return n ? n + ' piante' : '';
+}
+
+function oreRilievoUfficio() {
+  const ore = oreDelleLavorazioni(RILIEVO_UFFICIO.doc.lavorazioni.map(leggiLavorazione));
+  return ore > 0 ? scriviNumero(ore) + ' h · ' + etichettaMezze(mezzeDaOre(ore)) : 'senza ore';
+}
+
+function scriviClienteRilievo(k, valore) {
+  const cl = RILIEVO_UFFICIO.doc.cliente;
+  cl[k] = valore;
+  if (k !== 'nome') return;
+  // Scegliendo un nome dall'anagrafica si riempie solo quello che manca: quello
+  // già scritto qui vince, come sul telefono — è quello che il cliente ha detto.
+  const noto = CLIENTI.find(x => x.nome.trim().toLowerCase() === valore.trim().toLowerCase());
+  cl.id = noto ? noto.id : '';
+  if (!noto) return;
+  CAMPI_CLIENTE_RILIEVO.forEach(([campo]) => {
+    if (campo === 'nome' || cl[campo] || !noto[campo]) return;
+    cl[campo] = noto[campo];
+    const el = document.getElementById('ril-uff-' + campo);
+    if (el) el.value = noto[campo];
+  });
+}
+
+function aggiungiLavorazioneUfficio(valore) {
+  if (!valore) return;
+  const l = { id: 'lav-' + Date.now().toString(36) + '-' + RILIEVO_UFFICIO.doc.lavorazioni.length,
+    genere: 'libera', nome: '', insieme: null, voceID: '', misura: '', unita: '', pianta: '',
+    sesto: '', piante: '', ore: '', note: '' };
+  if (valore.startsWith('insieme:')) {
+    const ins = insiemiPerRilievoUfficio().find(x => x.id === valore.slice(8));
+    if (!ins) return;
+    Object.assign(l, { genere: 'insieme', nome: ins.nome, unita: ins.unita,
+      insieme: { id: ins.id, nome: ins.nome, componenti: ins.componenti.map(c => ({ ...c })) } });
+  } else if (valore.startsWith('voce:')) {
+    const v = (LISTINO.voci || []).find(x => x.voceID === valore.slice(5));
+    if (!v) return;
+    Object.assign(l, { genere: 'voce', voceID: v.voceID, nome: v.voce, unita: v.unita || '' });
+  } else if (valore === 'manodopera') {
+    l.genere = 'manodopera';
+  } else {
+    l.unita = UNITA_RILIEVO[0];
+  }
+  RILIEVO_UFFICIO.doc.lavorazioni.push(l);
+  document.getElementById('ril-uff-lavorazioni').innerHTML = righeLavorazioniUfficio();
+  document.getElementById('ril-uff-ore').textContent = oreRilievoUfficio();
+}
+
+// Non si ridisegna mentre si scrive: si aggiornano le ore e le piante, che sono
+// le due cose che seguono il numero sotto le dita.
+function modificaLavorazioneUfficio(i, k, valore) {
+  const l = RILIEVO_UFFICIO.doc.lavorazioni[i];
+  if (!l) return;
+  l[k] = valore;
+  document.getElementById('ril-uff-ore').textContent = oreRilievoUfficio();
+  const piante = document.getElementById('ril-uff-piante-' + i);
+  if (piante) piante.textContent = pianteRilievoUfficio(l);
+}
+
+function togliLavorazioneUfficio(i) {
+  RILIEVO_UFFICIO.doc.lavorazioni.splice(i, 1);
+  document.getElementById('ril-uff-lavorazioni').innerHTML = righeLavorazioniUfficio();
+  document.getElementById('ril-uff-ore').textContent = oreRilievoUfficio();
+}
+
+function lasciaRilievoUfficio() {
+  const d = RILIEVO_UFFICIO && RILIEVO_UFFICIO.doc;
+  if (d && (d.lavorazioni.length || d.cliente.nome) &&
+      !confirm('Lasciare stare il rilievo? Quello scritto qui ' +
+        (RILIEVO_UFFICIO.file ? 'dopo l\'ultimo salvataggio ' : '') + 'si perde.')) return;
+  RILIEVO_UFFICIO = null;
+  vaiA('preventivi');
+}
+
+async function salvaRilievoUfficio() {
+  const bozza = RILIEVO_UFFICIO && RILIEVO_UFFICIO.doc;
+  if (!bozza) return;
+  const cliente = Object.fromEntries(Object.entries(bozza.cliente).map(([k, v]) => [k, String(v || '').trim()]));
+  if (!cliente.nome) { avvisa('Scrivi per chi è il rilievo', true); return; }
+  // Un rilievo senza lavorazioni è un foglio bianco: non ne esce un preventivo.
+  if (!bozza.lavorazioni.length) { avvisa('Aggiungi almeno una lavorazione', true); return; }
+  const lavorazioni = bozza.lavorazioni.map(leggiLavorazione);
+  const manca = lavorazioni.map(lavorazioneIncompleta).find(x => x);
+  if (manca) { avvisa(manca, true); return; }
+  const ore = oreDelleLavorazioni(lavorazioni);
+  const doc = {
+    tipo: 'rilievo', versione: VERSIONE_RILIEVO, id: bozza.id,
+    // Come dal telefono: ogni salvataggio è una revisione, e il preventivo che
+    // rispondeva a quella di prima torna fra quelli da rifare.
+    revisione: (Number(bozza.revisione) || 0) + 1,
+    creato: new Date().toISOString(),
+    origine: 'ufficio',
+    cliente, sopralluogo: bozza.sopralluogo || '', disegno: !!bozza.disegno,
+    lavorazioni, ore, mezze: mezzeDaOre(ore), note: String(bozza.note || '').trim(),
+  };
   try {
+    leggiRilievo(JSON.stringify(doc));
     const cartella = await sottocartella(CARTELLA, CARTELLA_RILIEVI, true);
-    await scriviTesto(cartella, nomeFileRilievo(doc), JSON.stringify(doc, null, 2));
+    if (!cartella) throw new Error('non riesco a creare la cartella ' + CARTELLA_RILIEVI);
+    // Il nome del file resta quello di prima: un cliente corretto non deve fare
+    // due rilievi, e due preventivi.
+    await scriviTesto(cartella, RILIEVO_UFFICIO.file || nomeFileRilievo(doc), JSON.stringify(doc, null, 2));
     await ricarica();
   } catch (e) {
-    avvisa('Il rilievo di prova non si è scritto: ' + e.message, true);
+    avvisa('Non ho potuto salvare il rilievo: ' + e.message, true);
     return;
   }
-  GRUPPO_PREVENTIVI = 'aperti';
-  disegna();
-  avvisa('Rilievo di prova scritto: «' + doc.cliente.nome + '», fra gli aperti');
+  RILIEVO_UFFICIO = null;
+  apriPreventivo(doc.id);
+  avvisa('Rilievo salvato' + (doc.revisione > 1 ? ' (rev ' + doc.revisione + '): il preventivo tiene i prezzi già decisi' : ''));
 }
 
 // ── IL PREVENTIVO ──
@@ -3511,6 +3684,7 @@ function disegnaPreventivo() {
     '<button class="secondaria" onclick="stampaPreventivo()">Stampa o salva in PDF</button>' +
     '<button class="secondaria" onclick="stampaSchedaCantiere()">Scheda di cantiere</button>' +
     '<button class="secondaria" onclick="inviaPreventivo()">Manda per mail</button>' +
+    (rilievoDellUfficio(d.id) ? '<button class="secondaria" onclick="modificaRilievoUfficio(\'' + perOnclick(d.id) + '\')">Modifica il rilievo</button>' : '') +
     (d.stato === 'bozza' ? '<button class="secondaria" onclick="segnaMandato()">Consegnato a mano</button>' : '') +
     (d.stato === 'accettato' || soluzioni.length ? '' :
       '<button class="secondaria" onclick="accettaPreventivo()">Il cliente ha detto sì</button>') +
@@ -3895,9 +4069,10 @@ function disegnaPreventivi() {
       html += '<div class="scheda cliccabile" onclick="apriPreventivo(\'' + perOnclick(d.id) + '\')">' +
         '<div class="riga-scheda">' +
           '<span class="nome-cliente">' + perValore(d.cliente.nome || 'senza nome') + '</span>' +
-          (rifare ? '<span class="etichetta corretto">corretto dal campo · rev ' + d.revisione + '</span>'
+          (rifare ? '<span class="etichetta corretto">corretto' + (d.origine === 'ufficio' ? '' : ' dal campo') +
+                    ' · rev ' + d.revisione + '</span>'
                   : '<span class="etichetta nuovo">nuovo</span>') +
-          (d.prova ? '<span class="etichetta prova">prova</span>' : '') +
+          (d.origine === 'ufficio' ? '<span class="etichetta ufficio">scritto in ufficio</span>' : '') +
           '<span class="meta" style="margin-left:auto">' + formattaData(d.creato) + '</span>' +
         '</div>' +
         '<div class="meta" style="margin-top:6px">' +
@@ -3929,7 +4104,6 @@ function disegnaPreventivi() {
       '<div class="riga-scheda">' +
         '<span class="nome-cliente">' + perValore(d.cliente.nome || 'senza nome') + '</span>' +
         '<span class="etichetta ' + (d.stato === 'accettato' ? 'corretto' : 'nuovo') + '">' + etichetta + '</span>' +
-        (d.daRilievo && d.daRilievo.prova ? '<span class="etichetta prova">prova</span>' : '') +
         // Con le alternative il totale è più d'uno: si dice da quanto a quanto,
         // che è quello che si risponde al telefono prima che il cliente scelga.
         '<span class="meta" style="margin-left:auto">' + forchettaPreventivo(d) + '</span>' +
@@ -3944,7 +4118,7 @@ function disegnaPreventivi() {
   });
 
   html += '<div class="bottoni"><button class="secondaria" onclick="ricontrolla()">Ricontrolla la cartella</button>' +
-    (cartellaDiProva() ? '<button class="secondaria" onclick="scriviRilievoDiProva()">＋ Rilievo di prova</button>' : '') +
+    '<button class="secondaria" onclick="nuovoRilievoUfficio()">＋ Nuovo rilievo</button>' +
     '</div>';
   c.innerHTML = html;
 }
