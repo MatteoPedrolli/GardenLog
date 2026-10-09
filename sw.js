@@ -2,7 +2,7 @@
 // Da quando i dati stanno sul dispositivo e non su un server, l'unica cosa che
 // ancora richiede la rete è il caricamento della pagina: senza questo file
 // l'app aperta in giardino senza campo non partirebbe nemmeno.
-const CACHE = 'giardinolog-v64';
+const CACHE = 'giardinolog-v65';
 
 const GUSCIO = [
   './',
@@ -35,6 +35,15 @@ self.addEventListener('activate', e => {
     await Promise.all(nomi.filter(n => n !== CACHE).map(n => caches.delete(n)));
     await self.clients.claim();
   })());
+});
+
+// La versione, a chi la chiede: è il numero di CACHE, e la pagina non ha un
+// altro modo di sapere da quale copia è stata servita. Impostazioni la mostra, e
+// all'avvio serve a dire «app aggiornata».
+self.addEventListener('message', e => {
+  if (e.data && e.data.tipo === 'versione' && e.ports && e.ports[0]) {
+    e.ports[0].postMessage({ versione: CACHE.replace(/^giardinolog-/, '') });
+  }
 });
 
 self.addEventListener('fetch', e => {

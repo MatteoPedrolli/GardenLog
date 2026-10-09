@@ -1679,6 +1679,39 @@ try {
   await page.goto(BASE, { waitUntil: 'load' });
   await page.waitForTimeout(400);
 
+  // ── la versione, e «Cerca aggiornamenti» ──
+  // Senza un segno non si sa se quello che si vede è già la versione nuova: la
+  // versione è il numero di CACHE, e la dice il service worker che ha servito la
+  // pagina.
+  {
+    const { readFileSync } = await import('node:fs');
+    const attesa = readFileSync(resolve(RADICE, 'sw.js'), 'utf8').match(/giardinolog-(v\d+)/)[1];
+    const versione = await page.evaluate(async () => {
+      await new Promise(r => setTimeout(r, 300));
+      navTo('dati');
+      return { inUso: VERSIONE_IN_USO, scritta: document.getElementById('dati-versione').textContent };
+    });
+    ok('Impostazioni dice la versione installata, quella del service worker',
+      versione.inUso === attesa && versione.scritta === 'Versione ' + attesa, JSON.stringify(versione) + ' attesa ' + attesa);
+    await page.click('#btn-cerca-aggiornamenti');
+    await page.waitForFunction(() => /ultima versione/.test(document.getElementById('toast').textContent), null, { timeout: 8000 })
+      .catch(() => {});
+    ok('«Cerca aggiornamenti» senza niente di nuovo lo dice, con la versione',
+      (await page.textContent('#toast')).includes('Hai già l\'ultima versione (' + attesa + ')'), await page.textContent('#toast'));
+    // Al primo avvio con una versione diversa da quella vista l'ultima volta, un
+    // avviso dice che l'app si è aggiornata.
+    await page.evaluate(() => localStorage.setItem(CHIAVE_VERSIONE_VISTA, 'v1'));
+    await page.reload({ waitUntil: 'load' });
+    await page.waitForFunction(() => /aggiornata/.test(document.getElementById('toast').textContent), null, { timeout: 8000 })
+      .catch(() => {});
+    ok('dopo un aggiornamento, all\'avvio un avviso dice la versione nuova',
+      (await page.textContent('#toast')).includes('App aggiornata alla versione ' + attesa) &&
+      await page.evaluate(() => localStorage.getItem(CHIAVE_VERSIONE_VISTA)) === attesa, await page.textContent('#toast'));
+    await page.reload({ waitUntil: 'load' });
+    await page.waitForTimeout(800);
+    ok('e non lo ripete all\'avvio dopo', !(await page.textContent('#toast')).includes('aggiornata'));
+  }
+
   // Tornare online: setOffline(false) da solo non basta, perché la pagina se ne
   // accorge un momento dopo — e chi guarda navigator.onLine si fermerebbe prima
   // di provare, facendo passare le verifiche per il motivo sbagliato.

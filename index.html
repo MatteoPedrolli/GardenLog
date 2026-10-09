@@ -771,6 +771,12 @@ select.form-control { background-image: url("data:image/svg+xml,%3Csvg xmlns='ht
 
     <!-- DATI E BACKUP -->
     <div id="page-dati" class="page">
+      <div class="section-title">App</div>
+      <div class="card" style="padding:14px">
+        <div id="dati-versione" class="dati-nota" style="color:var(--text-mid)"></div>
+        <button class="btn btn-secondary" id="btn-cerca-aggiornamenti" onclick="cercaAggiornamenti()">🔄 Cerca aggiornamenti</button>
+      </div>
+
       <div class="section-title">Backup</div>
       <div class="card" style="padding:14px">
         <div class="dati-nota">I dati stanno solo su questo dispositivo. Il file di backup è l'unica copia che sopravvive a un telefono perso, formattato o cambiato: esportalo ogni tanto e tienilo dove tieni le cose che contano.</div>
@@ -4311,6 +4317,7 @@ function salvaImpostazione(chiave, valore) {
 }
 
 function renderDati() {
+  mostraVersione();
   const stato = document.getElementById('stato-backup');
   if (stato) {
     const modifiche = META.modificheDalBackup || 0;
@@ -4655,6 +4662,89 @@ function registraServiceWorker() {
   navigator.serviceWorker.addEventListener('message', e => {
     if (e.data?.tipo === 'aggiornamento') mostraAggiornamento();
   });
+  controllaVersione();
+}
+
+// La versione è quella del service worker che ha servito questa pagina, chiesta
+// all'avvio: dopo, un service worker nuovo può prendere il posto del vecchio
+// mentre la pagina resta quella di prima, e chiederla allora direbbe una versione
+// che non sta girando.
+let VERSIONE_IN_USO = '';
+const CHIAVE_VERSIONE_VISTA = 'giardino-versione-vista';
+
+function chiediVersione(sw) {
+  return new Promise(ok => {
+    if (!sw) { ok(''); return; }
+    const canale = new MessageChannel();
+    canale.port1.onmessage = e => ok((e.data && e.data.versione) || '');
+    try { sw.postMessage({ tipo: 'versione' }, [canale.port2]); } catch (e) { ok(''); return; }
+    setTimeout(() => ok(''), 3000);
+  });
+}
+
+// Un aggiornamento arriva senza che nessuno lo annunci, e al secondo avvio la
+// schermata è diversa: senza un segno non si sa se quello che si vede è già la
+// versione nuova o se bisogna ancora chiudere e riaprire. Dice *che* è cambiata,
+// non *cosa*: il telefono lo usa chi le modifiche le ha chieste.
+async function controllaVersione() {
+  // Alla prima apertura in assoluto la pagina arriva dalla rete e nessun service
+  // worker la controlla ancora: vale quello che si sta installando, che è la
+  // stessa versione appena scaricata.
+  let sw = navigator.serviceWorker.controller;
+  if (!sw) {
+    const pronto = await Promise.race([navigator.serviceWorker.ready, new Promise(ok => setTimeout(() => ok(null), 5000))]);
+    sw = pronto && pronto.active;
+  }
+  VERSIONE_IN_USO = await chiediVersione(sw);
+  mostraVersione();
+  if (!VERSIONE_IN_USO) return;
+  let vista = '';
+  try { vista = localStorage.getItem(CHIAVE_VERSIONE_VISTA) || ''; } catch (e) { /* navigazione privata */ }
+  if (vista && vista !== VERSIONE_IN_USO) showToast('🔄 App aggiornata alla versione ' + VERSIONE_IN_USO);
+  try { localStorage.setItem(CHIAVE_VERSIONE_VISTA, VERSIONE_IN_USO); } catch (e) { /* pazienza */ }
+}
+
+function mostraVersione() {
+  const el = document.getElementById('dati-versione');
+  if (el) el.textContent = VERSIONE_IN_USO ? 'Versione ' + VERSIONE_IN_USO
+    : 'Versione non disponibile: l\'app non sta girando dal suo service worker.';
+}
+
+// Senza dover chiudere e riaprire due volte: chiede subito se c'è una versione
+// nuova, aspetta che sia scaricata e ricarica. Quella che il controllo in
+// sottofondo ha già scaricato — la barra «C'è una versione nuova» — vale lo stesso.
+async function cercaAggiornamenti() {
+  const aperto = document.querySelector('.overlay.open');
+  if (aperto && !confirm('Hai una scheda aperta: ricaricando perdi quello che non hai ancora salvato.\n\nCercare lo stesso?')) return;
+  const bottone = document.getElementById('btn-cerca-aggiornamenti');
+  if (!('serviceWorker' in navigator) || location.protocol === 'file:') { location.reload(); return; }
+  if (bottone) { bottone.disabled = true; bottone.textContent = '🔄 Cerco…'; }
+  try {
+    const reg = await navigator.serviceWorker.getRegistration();
+    if (!reg) { location.reload(); return; }
+    await reg.update();
+    const nuovo = reg.installing || reg.waiting;
+    if (nuovo) {
+      showToast('⬇️ Scarico la versione nuova…');
+      await new Promise(ok => {
+        const fine = () => ok();
+        navigator.serviceWorker.addEventListener('controllerchange', fine, { once: true });
+        nuovo.addEventListener('statechange', () => { if (nuovo.state === 'activated' || nuovo.state === 'redundant') fine(); });
+        // Se qualcosa si incastra, si ricarica lo stesso: al peggio si rivede la
+        // versione di prima, e il bottone si può ripremere.
+        setTimeout(fine, 20000);
+      });
+      location.reload();
+      return;
+    }
+    const attiva = await chiediVersione(navigator.serviceWorker.controller);
+    if (attiva && VERSIONE_IN_USO && attiva !== VERSIONE_IN_USO) { location.reload(); return; }
+    showToast('✅ Hai già l\'ultima versione' + (VERSIONE_IN_USO ? ' (' + VERSIONE_IN_USO + ')' : ''));
+  } catch (e) {
+    showToast('⚠️ Non riesco a controllare: serve la rete. Riprova quando c\'è campo.');
+  } finally {
+    if (bottone) { bottone.disabled = false; bottone.textContent = '🔄 Cerca aggiornamenti'; }
+  }
 }
 
 // Prima era un toast che diceva "chiudi e riapri": spariva in due secondi, e

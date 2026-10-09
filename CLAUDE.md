@@ -1197,6 +1197,16 @@ primo. Due trappole ci sono già costate un giro a vuoto:
   compare una **barra che resta** con un bottone che ricarica, invece di un
   toast che dice "chiudi e riapri" e sparisce in due secondi.
 
+**Sul telefono la versione si vede, e si può cercare a mano.** Impostazioni dice la
+versione installata — il numero di `CACHE`, chiesto al service worker che ha servito
+la pagina (`chiediVersione()`), perché la pagina non ha altro modo di saperlo — e
+**«Cerca aggiornamenti»** (`cercaAggiornamenti()`) chiede subito se ce n'è una
+nuova, aspetta che sia scaricata e ricarica: senza, bisognava chiudere e riaprire
+due volte senza sapere quale delle due fosse quella buona. Al primo avvio con una
+versione diversa dall'ultima vista (`giardino-versione-vista` in `localStorage`)
+un avviso dice **«App aggiornata alla versione …»**: *che* è cambiata, non *cosa*,
+per la stessa ragione per cui sul telefono il pannello delle novità non c'è.
+
 Dopo aver pubblicato, controllare sempre l'esito della pubblicazione su GitHub
 prima di dire che è in linea: una volta è fallita per un timeout loro e il sito
 ha continuato a servire la versione di tre mesi prima.
