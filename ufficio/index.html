@@ -205,6 +205,9 @@ table.elenco tr.componenti input[type=text] { padding: 4px 8px; font-size: 0.82r
 table.elenco tr.componenti input[type=text].nome-pianta { width: 190px; }
 table.elenco tr.componenti input[type=text].sesto-pianta { width: 64px; }
 .riga-pianta { display: inline-flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+.spunte-settore { display: flex; flex-wrap: wrap; gap: 4px 14px; margin-top: 6px; font-size: 0.85rem; }
+.spunte-settore label { display: inline-flex; align-items: center; gap: 5px; cursor: pointer; }
+.spunte-settore input { margin: 0; accent-color: var(--inchiostro-tenue); }
 tr.componenti.somma button.piccola { margin: 2px 0 6px; }
 table.elenco tr.componenti.somma td { border-bottom: 1px solid var(--border); padding-bottom: 10px; }
 .somma-componenti { margin: 4px 0 0; }
@@ -711,11 +714,11 @@ const VERSIONE_LAVAGNA = 2;
 const FILE_CLIENTI = 'clienti.json';
 const FILE_ANAGRAFICA = 'anagrafica-dal-telefono.json';
 const FILE_PRODOTTI = 'prodotti-dal-telefono.json';
-// Le lavorazioni complesse — siepe nuova, aiuola, prato — si definiscono sul
-// telefono, in Archivi: le decide chi lavora. L'ufficio non le copia nel suo
-// listino: le legge da questo file a ogni rilettura, perché qui non si
+// I settori — Prato, Aiuole, Siepe… con le loro lavorazioni — si definiscono sul
+// telefono, in Archivi: li decide chi lavora. L'ufficio non li copia nel suo
+// listino: li legge da questo file a ogni rilettura, perché qui non si
 // modificano e una copia invecchierebbe senza dirlo.
-const FILE_LAVORAZIONI = 'lavorazioni-dal-telefono.json';
+const FILE_SETTORI = 'settori-dal-telefono.json';
 
 // ORE_MEZZA — quante ore di manodopera stanno in una mezza giornata — sta in
 // rapportino.js: la usano tutte e due le app, la lavagna per la larghezza di un
@@ -760,7 +763,7 @@ let TRASCINATO = null;
 let MOSTRA_FUTURI = false;
 let ARRIVI = [];
 let RILIEVI = [];
-let LAVORAZIONI_TELEFONO = null;
+let SETTORI_TELEFONO = null;
 let PREVENTIVI = [];
 let PREVENTIVO = null;
 
@@ -941,7 +944,7 @@ async function ricarica() {
   ARCHIVIO = await caricaArchivio();
   ARRIVI = await caricaArrivi();
   RILIEVI = await caricaRilievi();
-  LAVORAZIONI_TELEFONO = await caricaLavorazioniTelefono();
+  SETTORI_TELEFONO = await caricaSettoriTelefono();
   PREVENTIVI = await caricaPreventivi();
   await assorbiAppuntamenti();
   await rinfrescaAgenda();
@@ -1750,32 +1753,6 @@ function modificaVoce(voceID, campo, valore) {
   segnalaListinoDaSalvare();
 }
 
-// Gli insiemi che il campo ha usato, dai rilievi e dai preventivi già fatti: la
-// composizione è quella che viaggia col rilievo, perché in ufficio gli insiemi
-// non si definiscono — li crea chi lavora, da Archivi sul telefono.
-function insiemiVisti() {
-  const visti = new Map();
-  const guarda = l => {
-    if (l && l.genere === 'insieme' && l.insieme && l.insieme.id && !visti.has(l.insieme.id)) {
-      visti.set(l.insieme.id, { id: l.insieme.id, nome: l.insieme.nome || l.nome,
-        unita: l.unita || 'm²', componenti: l.insieme.componenti || [] });
-    }
-  };
-  RILIEVI.forEach(r => (r.doc.lavorazioni || []).forEach(guarda));
-  PREVENTIVI.forEach(p => (p.doc.righe || []).forEach(r => guarda(r.lavorazione)));
-  return [...visti.values()].sort((a, b) => a.nome.localeCompare(b.nome, 'it'));
-}
-
-function modificaRicetta(insiemeID, voceID, valore) {
-  if (!LISTINO.ricette) LISTINO.ricette = {};
-  if (!LISTINO.ricette[insiemeID]) LISTINO.ricette[insiemeID] = {};
-  const n = numeroScritto(valore);
-  if (n === '') delete LISTINO.ricette[insiemeID][voceID];
-  else LISTINO.ricette[insiemeID][voceID] = n;
-  LISTINO_DA_SALVARE = true;
-  segnalaListinoDaSalvare();
-}
-
 function segnaACorpo(voceID, si) {
   const v = voceInListino(voceID);
   if (!v) return;
@@ -2175,12 +2152,21 @@ function riassuntoRicontrolla() {
 // non si legge, e quello che non si legge tanto vale non scriverlo.
 const NOVITA = [
   {
+    versione: '2026-10-09.4',
+    data: '2026-10-09',
+    titolo: 'I rilievi per settori',
+    righe: [
+      'Nel **Nuovo rilievo** si sceglie un **settore** (Prato, Aiuole, Siepe…) e si **spuntano** le sue lavorazioni, come nella visita. «Aiuola» e «Siepe nuova» non ci sono più: erano i settori detti due volte.',
+      'Niente più ricette in **Listino**: nel preventivo telo, ala e gli altri materiali partono **quanto la misura** (18 m² di aiuola, 18 m² di telo), e si correggono lì.',
+      'I settori arrivano dal telefono: **⚙️ Dati › Esporta settori**, e il file nella cartella GiardinoApp.',
+    ],
+  },
+  {
     versione: '2026-10-09.3',
     data: '2026-10-09',
     titolo: 'Le piante si scelgono in ufficio',
     righe: [
       'Dal campo per siepi e aiuole arrivano la misura e **piante e stile**. Nel preventivo il componente «Piante» arriva vuoto: scrivi **quale pianta**, per una siepe il **sesto** (il numero esce da sé), e con **+ Un\'altra pianta** ne aggiungi altre, ognuna col suo prezzo.',
-      'Le lavorazioni del telefono (siepe nuova, aiuola…) arrivano anche qui: sul telefono **⚙️ Dati › Esporta lavorazioni**, e il file nella cartella GiardinoApp. Le trovi nel **Nuovo rilievo** e in **Listino › Lavorazioni**.',
     ],
   },
   {
@@ -2470,68 +2456,77 @@ async function caricaRilievi() {
 // tenendo i prezzi già decisi; uno arrivato dal telefono resta com'è arrivato.
 let RILIEVO_UFFICIO = null;
 
-// Gli insiemi non si definiscono in ufficio: sono quelli che il campo ha usato,
-// con la loro composizione. Siepe nuova e aiuola ci sono anche prima che ne
-// arrivi una — sono i preventivi più frequenti, e un ufficio appena collegato non
-// deve aspettare il primo rilievo dal telefono per poterne scrivere uno. La loro
-// composizione è quella di partenza del telefono (TIPI_DEFAULT in index.html).
-const COMPONENTI_DI_PARTENZA = [
-  { tipoID: 'piantumazione', voceID: VOCE_PIANTE, voce: 'Piante', unita: 'n' },
-  { tipoID: 'pacciamatura', voceID: 'pacciamatura', voce: 'Pacciamatura', unita: 'q' },
-  { tipoID: 'ala-gocciolante', voceID: 'ala-gocciolante', voce: 'Ala gocciolante', unita: 'm' },
-  { tipoID: 'telo-pacciamante', voceID: 'telo-pacciamante', voce: 'Telo pacciamante', unita: 'm²' },
-];
-const INSIEMI_DI_PARTENZA = [
-  { id: 'siepe-nuova', nome: 'Siepe nuova', unita: 'm', componenti: COMPONENTI_DI_PARTENZA },
-  { id: 'aiuola', nome: 'Aiuola', unita: 'm²', componenti: COMPONENTI_DI_PARTENZA },
+// I settori non si definiscono in ufficio: arrivano dal telefono col file
+// esportato. Prato, aiuole e siepe ci sono anche prima — sono i preventivi più
+// frequenti, e un ufficio appena collegato non deve aspettare il telefono per
+// poterne scrivere uno. Sono quelli di partenza del telefono (SETTORI_DEFAULT in
+// index.html), con le voci che le loro lavorazioni si portano dietro.
+const lavorazionePartenza = (tipoID, nome, voceID = '', voce = '', unita = '') => ({ tipoID, nome, voceID, voce, unita });
+const SETTORI_DI_PARTENZA = [
+  { id: 'prato', nome: 'Prato', unita: 'm²', libero: false, lavorazioni: [
+    lavorazionePartenza('asporto-terriccio', 'Asporto terriccio', 'asporto-terriccio', 'Asporto terriccio', 'm³'),
+    lavorazionePartenza('apporto-terra-vegetale', 'Apporto terra vegetale', 'terra-vegetale', 'Terra vegetale', 'm³'),
+    lavorazionePartenza('livellamento', 'Livellamento terra'),
+    lavorazionePartenza('semina', 'Semina', 'semente', 'Semente', 'kg'),
+    lavorazionePartenza('posa-tappeto-erboso', 'Posa tappeto erboso', 'tappeto-erboso', 'Tappeto erboso', 'm²'),
+  ] },
+  { id: 'aiuole', nome: 'Aiuole', unita: 'm²', libero: false, lavorazioni: [
+    lavorazionePartenza('telo-pacciamante', 'Telo pacciamante', 'telo-pacciamante', 'Telo pacciamante', 'm²'),
+    lavorazionePartenza('ala-gocciolante', 'Ala gocciolante', 'ala-gocciolante', 'Ala gocciolante', 'm'),
+    lavorazionePartenza('piantumazione', 'Piantumazione', VOCE_PIANTE, 'Piante', 'n'),
+    lavorazionePartenza('pacciamatura', 'Pacciamatura', 'pacciamatura', 'Pacciamatura', 'q'),
+  ] },
+  { id: 'siepe', nome: 'Siepe', unita: 'm', libero: false, lavorazioni: [
+    lavorazionePartenza('piantumazione', 'Piantumazione', VOCE_PIANTE, 'Piante', 'n'),
+    lavorazionePartenza('ala-gocciolante', 'Ala gocciolante', 'ala-gocciolante', 'Ala gocciolante', 'm'),
+    lavorazionePartenza('bordura', 'Bordura', 'bordura', 'Bordura', 'm'),
+    lavorazionePartenza('telo-pacciamante', 'Telo pacciamante', 'telo-pacciamante', 'Telo pacciamante', 'm²'),
+    lavorazionePartenza('pacciamatura', 'Pacciamatura', 'pacciamatura', 'Pacciamatura', 'q'),
+  ] },
 ];
 
-// Le lavorazioni che l'ufficio conosce: prima quelle esportate dal telefono, che
-// dicono la composizione di adesso; poi quelle viste nei rilievi e non più
-// nell'elenco del telefono, perché un rilievo vecchio si deve poter ricalcolare;
-// infine siepe e aiuola di partenza, se nessuno le ha ancora mandate.
-function insiemiConosciuti() {
-  const tutti = ((LAVORAZIONI_TELEFONO && LAVORAZIONI_TELEFONO.insiemi) || []).map(i => ({ ...i }));
-  insiemiVisti().concat(INSIEMI_DI_PARTENZA).forEach(i => { if (!tutti.some(v => v.id === i.id)) tutti.push(i); });
-  return tutti.sort((a, b) => a.nome.localeCompare(b.nome, 'it'));
+// I settori che l'ufficio conosce: quelli esportati dal telefono, nel loro
+// ordine; se il file non c'è, quelli di partenza.
+function settoriConosciuti() {
+  return (SETTORI_TELEFONO && SETTORI_TELEFONO.settori.length) ? SETTORI_TELEFONO.settori : SETTORI_DI_PARTENZA;
 }
 
-async function caricaLavorazioniTelefono() {
+async function caricaSettoriTelefono() {
   let testo;
-  try { testo = await leggiTesto(CARTELLA, FILE_LAVORAZIONI); }
-  catch (e) { return null; }  // non ancora esportate: vale quello che c'è
+  try { testo = await leggiTesto(CARTELLA, FILE_SETTORI); }
+  catch (e) { return null; }  // non ancora esportati: valgono quelli di partenza
   try {
-    return leggiLavorazioniTelefono(testo);
+    return leggiSettoriTelefono(testo);
   } catch (e) {
-    ILLEGGIBILI.push({ nome: FILE_LAVORAZIONI, motivo: e.message });
+    ILLEGGIBILI.push({ nome: FILE_SETTORI, motivo: e.message });
     return null;
   }
 }
 
-function leggiLavorazioniTelefono(grezzo) {
+function leggiSettoriTelefono(grezzo) {
   let doc;
   try { doc = JSON.parse(grezzo); }
   catch (e) { throw new Error('Il file non è leggibile: non è JSON valido'); }
-  if (!doc || doc.tipo !== 'lavorazioni') throw new Error('Questo file non è un elenco di lavorazioni');
-  if (Number(doc.versione) !== 1) throw new Error('Lavorazioni della versione ' + (doc.versione || '?') + ': questa app legge la 1');
+  if (!doc || doc.tipo !== 'settori') throw new Error('Questo file non è un elenco di settori');
+  if (Number(doc.versione) !== 1) throw new Error('Settori della versione ' + (doc.versione || '?') + ': questa app legge la 1');
   return {
     esportato: doc.esportato || '',
-    insiemi: (Array.isArray(doc.insiemi) ? doc.insiemi : []).filter(i => i && i.id && i.nome).map(i => ({
-      id: String(i.id), nome: String(i.nome), unita: i.unita || 'm²',
-      componenti: (Array.isArray(i.componenti) ? i.componenti : []).map(c => ({
-        tipoID: c.tipoID || '', voceID: c.voceID || '', voce: c.voce || '', unita: c.unita || '',
+    settori: (Array.isArray(doc.settori) ? doc.settori : []).filter(x => x && x.id && x.nome).map(x => ({
+      id: String(x.id), nome: String(x.nome), unita: x.unita || '', libero: !!x.libero,
+      lavorazioni: (Array.isArray(x.lavorazioni) ? x.lavorazioni : []).map(c => ({
+        tipoID: c.tipoID || '', nome: c.nome || '', voceID: c.voceID || '', voce: c.voce || '', unita: c.unita || '',
       })),
     })),
   };
 }
 
-// Da dove vengono le lavorazioni che si vedono: detto dove si scelgono, o una
-// lavorazione nuova creata sul telefono sembrerebbe non arrivare mai.
-function provenienzaLavorazioni() {
-  return LAVORAZIONI_TELEFONO
-    ? 'Le lavorazioni sono quelle del telefono, esportate il ' + formattaData(LAVORAZIONI_TELEFONO.esportato) +
-      '. Se ne hai create o cambiate, riesportale da ⚙️ Dati sul telefono.'
-    : 'Per avere qui le lavorazioni del telefono: ⚙️ Dati › Esporta lavorazioni, e metti il file nella cartella GiardinoApp.';
+// Da dove vengono i settori che si vedono: detto dove si cambiano, o un settore
+// nuovo creato sul telefono sembrerebbe non arrivare mai.
+function provenienzaSettori() {
+  return SETTORI_TELEFONO
+    ? 'I settori sono quelli del telefono, esportati il ' + formattaData(SETTORI_TELEFONO.esportato) +
+      '. Se li hai cambiati, riesportali da ⚙️ Dati sul telefono.'
+    : 'Sono i settori di partenza. Per avere quelli del telefono: ⚙️ Dati › Esporta settori, e metti il file nella cartella GiardinoApp.';
 }
 
 function rilievoDellUfficio(id) {
@@ -2588,17 +2583,18 @@ function disegnaRilievoUfficio() {
 
   html += '<div class="scheda"><div class="titolo-sezione">Lavorazioni · <span id="ril-uff-ore">' + oreRilievoUfficio() + '</span></div>';
   html += '<div id="ril-uff-lavorazioni">' + righeLavorazioniUfficio() + '</div>';
-  const insiemi = insiemiConosciuti();
+  const settori = settoriConosciuti();
   const voci = (LISTINO.voci || []).filter(v => v.voceID && v.voceID !== VOCE_MANODOPERA && !v.aCorpo && v.voce);
   html += '<div class="bottoni"><select onchange="aggiungiLavorazioneUfficio(this.value); this.value=\'\'">' +
     '<option value="">＋ Aggiungi una lavorazione…</option>' +
-    '<optgroup label="Lavorazioni">' + insiemi.map(i => '<option value="insieme:' + perValore(i.id) + '">' +
-      perValore(i.nome) + ' · a ' + perValore(i.unita) + '</option>').join('') + '</optgroup>' +
+    '<optgroup label="Settori">' + settori.map(x => '<option value="settore:' + perValore(x.id) + '">' +
+      perValore(x.nome) + (x.libero ? ' · scritta a mano' : (x.unita ? ' · a ' + perValore(x.unita) : ' · solo ore')) +
+      '</option>').join('') + '</optgroup>' +
     '<optgroup label="Solo ore"><option value="manodopera">Manodopera: potatura, pulizia…</option></optgroup>' +
     (voci.length ? '<optgroup label="Voci a misura">' + voci.map(v => '<option value="voce:' + perValore(v.voceID) + '">' +
       perValore(v.voce) + (v.unita ? ' · ' + perValore(v.unita) : '') + '</option>').join('') + '</optgroup>' : '') +
     '<optgroup label="Altro"><option value="libera">Scritta a mano</option></optgroup>' +
-    '</select></div><p class="meta">' + perValore(provenienzaLavorazioni()) + '</p></div>';
+    '</select></div><p class="meta">' + perValore(provenienzaSettori()) + '</p></div>';
 
   html += '<div class="scheda"><div class="titolo-sezione">Note</div>' +
     '<textarea rows="3" placeholder="Accesso, dove resta il camion, il rubinetto, la pendenza…" ' +
@@ -2608,6 +2604,35 @@ function disegnaRilievoUfficio() {
     '<button class="principale" onclick="salvaRilievoUfficio()">Salva e fai il preventivo</button>' +
     '<button class="secondaria" onclick="lasciaRilievoUfficio()">Lascia stare</button></div>';
   c.innerHTML = html;
+}
+
+// Le lavorazioni del settore si spuntano, come sul telefono e nella visita. Un
+// rilievo di prima, fatto con un insieme, mostra di cosa era fatto e basta.
+function spunteSettoreUfficio(l, i) {
+  const settore = l.insieme ? settoriConosciuti().find(x => x.id === l.insieme.id) : null;
+  if (!settore) {
+    return l.insieme && l.insieme.componenti.length
+      ? '<div class="meta">' + l.insieme.componenti.map(x => perValore(x.nome || x.voce)).join(', ') + '</div>' : '';
+  }
+  const spuntati = new Set(l.insieme.componenti.map(c => c.tipoID));
+  return '<div class="spunte-settore">' + settore.lavorazioni.map(t =>
+    '<label><input type="checkbox"' + (spuntati.has(t.tipoID) ? ' checked' : '') +
+      ' onchange="spuntaLavorazioneUfficio(' + i + ', \'' + perOnclick(t.tipoID) + '\', this.checked)"> ' +
+      perValore(t.nome) + '</label>').join('') + '</div>';
+}
+
+function spuntaLavorazioneUfficio(i, tipoID, acceso) {
+  const l = RILIEVO_UFFICIO.doc.lavorazioni[i];
+  const settore = l && l.insieme ? settoriConosciuti().find(x => x.id === l.insieme.id) : null;
+  const t = settore && settore.lavorazioni.find(x => x.tipoID === tipoID);
+  if (!t) return;
+  const ordine = c => settore.lavorazioni.findIndex(x => x.tipoID === c.tipoID);
+  l.insieme.componenti = l.insieme.componenti.filter(c => c.tipoID !== tipoID);
+  if (acceso) l.insieme.componenti.push({ ...t });
+  l.insieme.componenti.sort((a, b) => ordine(a) - ordine(b));
+  // Ridisegnare va bene: si è toccata una casella, non si sta scrivendo. Compare
+  // o sparisce «piante e stile».
+  document.getElementById('ril-uff-lavorazioni').innerHTML = righeLavorazioniUfficio();
 }
 
 function lavorazioneConPiante(l) {
@@ -2629,9 +2654,8 @@ function righeLavorazioniUfficio() {
     html += '<tr>' +
       '<td>' + (nomeLibero
         ? campo(i, 'nome', l.nome, l.genere === 'manodopera' ? 'Cosa: potatura, pulizia…' : 'Cosa c\'è da fare', true)
-        : perValore(l.nome) + (l.insieme && l.insieme.componenti.length
-          ? '<div class="meta">' + l.insieme.componenti.map(x => perValore(x.voce)).join(', ') + '</div>' : '')) + '</td>' +
-      '<td class="num">' + (l.genere === 'manodopera' ? '' : campo(i, 'misura', l.misura)) + '</td>' +
+        : perValore(l.nome) + spunteSettoreUfficio(l, i)) + '</td>' +
+      '<td class="num">' + (l.genere === 'manodopera' || (l.genere === 'insieme' && !l.unita) ? '' : campo(i, 'misura', l.misura)) + '</td>' +
       '<td>' + (l.genere === 'libera'
         ? '<select onchange="modificaLavorazioneUfficio(' + i + ', \'unita\', this.value)" aria-label="unità">' +
           UNITA_RILIEVO.map(u => '<option' + (u === l.unita ? ' selected' : '') + '>' + perValore(u) + '</option>').join('') + '</select>'
@@ -2675,11 +2699,13 @@ function aggiungiLavorazioneUfficio(valore) {
   const l = { id: 'lav-' + Date.now().toString(36) + '-' + RILIEVO_UFFICIO.doc.lavorazioni.length,
     genere: 'libera', nome: '', insieme: null, voceID: '', misura: '', unita: '', pianta: '',
     sesto: '', piante: '', stile: '', ore: '', note: '' };
-  if (valore.startsWith('insieme:')) {
-    const ins = insiemiConosciuti().find(x => x.id === valore.slice(8));
-    if (!ins) return;
-    Object.assign(l, { genere: 'insieme', nome: ins.nome, unita: ins.unita,
-      insieme: { id: ins.id, nome: ins.nome, componenti: ins.componenti.map(c => ({ ...c })) } });
+  if (valore.startsWith('settore:')) {
+    const st = settoriConosciuti().find(x => x.id === valore.slice(8));
+    if (!st) return;
+    // L'irrigazione cambia ogni volta: una riga scritta a mano, col nome già messo.
+    if (st.libero) Object.assign(l, { genere: 'libera', nome: st.nome, unita: 'n' });
+    else Object.assign(l, { genere: 'insieme', nome: st.nome, unita: st.unita,
+      insieme: { id: st.id, nome: st.nome, componenti: [] } });
   } else if (valore.startsWith('voce:')) {
     const v = (LISTINO.voci || []).find(x => x.voceID === valore.slice(5));
     if (!v) return;
@@ -2864,15 +2890,6 @@ function forchettaPreventivo(d) {
 
 const alCentesimoUfficio = n => Math.round(n * 100) / 100;
 
-// Quanto materiale per ogni unità di misura di un insieme: «1 m² di telo per
-// metro di siepe». Sta nel listino perché è un dato dell'azienda come i prezzi,
-// e si decide in un posto solo invece che a ogni preventivo.
-function ricetta(insiemeID, voceID) {
-  const r = (LISTINO.ricette || {})[insiemeID];
-  const n = r ? Number(String(r[voceID] ?? '').replace(',', '.')) : NaN;
-  return n > 0 ? n : null;
-}
-
 function prezzoDiListino(voceID) {
   const v = voceID ? voceInListino(voceID) : null;
   return v && v.prezzo !== '' && v.prezzo != null ? Number(v.prezzo) : '';
@@ -2943,11 +2960,16 @@ function componentiLavorazione(l, vecchi) {
         prima.filter(x => x.aggiunta).forEach(x => metti(componentePianta(l, { ...x, base: x.base || 'Piante' })));
         return;
       }
-      const k = ricetta(l.insieme.id, c.voceID);
+      // Una lavorazione senza voce è manodopera, già contata dalle ore.
+      if (!c.voceID || c.voceID === VOCE_MANODOPERA) return;
+      // Nessuna regola di quanto materiale per metro: si propone quanto la misura —
+      // 18 m² di aiuola, 18 m² di telo — e l'ufficio corregge. Le ricette per
+      // settore erano un elenco in più da tenere, per un numero che va guardato
+      // comunque.
       metti({ chiave: c.voceID, voceID: c.voceID, voce: c.voce, unita: c.unita,
-        quantita: k ? alCentesimoUfficio(k * l.misura) : '',
-        calcolo: k ? scriviNumero(k) + ' ' + c.unita + ' per ' + l.unita
-          : 'manca la ricetta: Listino › Lavorazioni' });
+        quantita: l.unita && l.misura > 0 ? l.misura : '',
+        calcolo: l.unita && l.misura > 0 ? 'come la misura: ' + scriviNumero(l.misura) + ' ' + l.unita
+          : 'da scrivere in ufficio' });
     });
   } else if (l.genere === 'voce' || l.genere === 'libera') {
     if (l.misura > 0) {
@@ -3349,6 +3371,9 @@ function apriPreventivo(id) {
 function riassuntoLavorazione(l) {
   const parti = [];
   if (l.misura > 0) parti.push(scriviNumero(l.misura) + ' ' + l.unita);
+  if (l.genere === 'insieme' && l.insieme && l.insieme.componenti.length) {
+    parti.push(l.insieme.componenti.map(c => (c.nome || c.voce || '').toLowerCase()).filter(Boolean).join(', '));
+  }
   if (l.pianta) parti.push(l.pianta);
   if (l.stile) parti.push(l.stile);
   if (l.sesto > 0) parti.push('sesto ' + scriviNumero(l.sesto));
@@ -4066,6 +4091,10 @@ function costruisciSchedaCantiere(d) {
     const l = r.lavorazione;
     html += '<tr class="riga-blocco"><td colspan="4">' + perValore(l ? l.nome : (r.descrizione || r.voce)) +
       (soluzione ? ' <span class="da-definire">· solo in ' + perValore(soluzione) + '</span>' : '') +
+      // Cosa c'è da fare, anche quello che non lascia materiali — il livellamento,
+      // una potatura — e in cantiere va saputo lo stesso.
+      (l && l.genere === 'insieme' && l.insieme && l.insieme.componenti.length
+        ? ' <span class="da-definire">· ' + perValore(l.insieme.componenti.map(c => c.nome || c.voce).filter(Boolean).join(', ')) + '</span>' : '') +
       (l && l.stile ? ' <span class="da-definire">· ' + perValore(l.stile) + '</span>' : '') +
       (l && l.note ? ' <span class="da-definire">· ' + perValore(l.note) + '</span>' : '') + '</td></tr>';
     if (Array.isArray(r.componenti)) {
@@ -5870,30 +5899,6 @@ function disegnaListino() {
     '<button class="secondaria" onclick="importaProdotti()">Importa i prodotti dal telefono</button>' +
     '<button class="principale" onclick="salvaListino()">Salva il listino</button>' +
   '</div></div>';
-
-  // ── le ricette delle lavorazioni: quanto materiale per metro, o per m² ──
-  const insiemi = insiemiConosciuti();
-  html += '<div class="scheda"><div class="titolo-sezione">Lavorazioni</div>';
-  html += '<p class="meta">Quanto materiale chiede una lavorazione per ogni metro, o m², misurato in ' +
-    'giardino. Da qui il preventivo conta telo, ala e pacciamatura da solo; le piante le scegli nel ' +
-    'preventivo e le ore arrivano dal rilievo.</p>';
-  html += '<p class="meta">' + perValore(provenienzaLavorazioni()) + '</p>';
-  insiemi.forEach(ins => {
-    html += '<table class="elenco"><thead><tr><th colspan="3">' + perValore(ins.nome) +
-      ' <span class="meta">· si misura a ' + perValore(ins.unita) + '</span></th></tr></thead><tbody>';
-    const materiali = ins.componenti.filter(c => c.voceID !== VOCE_PIANTE && c.tipoID !== 'piantumazione');
-    if (!materiali.length) html += '<tr><td colspan="3" class="meta">Solo piante: si scelgono nel preventivo.</td></tr>';
-    materiali.forEach(c => {
-      const valore = ((LISTINO.ricette || {})[ins.id] || {})[c.voceID];
-      html += '<tr><td>' + perValore(c.voce) + '</td>' +
-        '<td class="num"><input type="text" inputmode="decimal" class="stretto" value="' +
-          perValore(valore == null ? '' : formattaQuantita(valore)) + '" ' +
-          'oninput="modificaRicetta(\'' + perOnclick(ins.id) + '\', \'' + perOnclick(c.voceID) + '\', this.value)"></td>' +
-        '<td class="meta">' + perValore(c.unita) + ' per ' + perValore(ins.unita) + '</td></tr>';
-    });
-    html += '</tbody></table>';
-  });
-  html += '<div class="bottoni"><button class="principale" onclick="salvaListino()">Salva il listino</button></div></div>';
 
   // Quelli visti nei rapportini che non hanno ancora un prezzo: senza questo
   // elenco te ne accorgeresti solo da un totale più basso del dovuto.

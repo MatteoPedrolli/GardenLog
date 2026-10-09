@@ -589,8 +589,10 @@ function lavorazioneDalTelefono(l) {
     insieme: l.Genere === 'insieme' ? {
       id: l.TipoID || '',
       nome: l.Nome || '',
+      // Le lavorazioni spuntate del settore, con il loro nome: anche quelle senza
+      // voce, che sono manodopera, dicono all'ufficio cosa c'è da fare.
       componenti: (l.Componenti || []).map(c => ({
-        tipoID: c.TipoID || '', voceID: c.VoceID || '', voce: c.Voce || '', unita: c.Unita || '',
+        tipoID: c.TipoID || '', nome: c.Nome || '', voceID: c.VoceID || '', voce: c.Voce || '', unita: c.Unita || '',
       })),
     } : null,
     voceID: l.Genere === 'voce' ? (l.VoceID || '') : '',
@@ -620,7 +622,12 @@ function lavorazioneIncompleta(l) {
   if ((l.genere === 'manodopera' || l.genere === 'libera') && !String(l.nome || '').trim()) {
     return 'Scrivi cosa c\'è da fare nella lavorazione di sole ore';
   }
-  if ((l.genere === 'insieme' || l.genere === 'voce') && !(misura > 0)) {
+  // Un settore senza niente di spuntato non dice cosa c'è da fare.
+  if (l.genere === 'insieme' && !(l.insieme && (l.insieme.componenti || []).length)) {
+    return `Spunta cosa c'è da fare in «${nome}»`;
+  }
+  // Un settore senza unità — le potature — si stima in ore, e non si misura.
+  if (((l.genere === 'insieme' && l.unita) || l.genere === 'voce') && !(misura > 0)) {
     return `Scrivi quanto misura «${nome}»`;
   }
   // Quante piante e quali le decide l'ufficio: dal campo partono la misura e una
@@ -718,7 +725,7 @@ function leggiLavorazione(l) {
     insieme: ins ? {
       id: ins.id || '', nome: ins.nome || '',
       componenti: (Array.isArray(ins.componenti) ? ins.componenti : []).map(c => ({
-        tipoID: c.tipoID || '', voceID: c.voceID || '', voce: c.voce || '', unita: c.unita || '',
+        tipoID: c.tipoID || '', nome: c.nome || '', voceID: c.voceID || '', voce: c.voce || '', unita: c.unita || '',
       })),
     } : null,
     voceID: l.voceID || '',

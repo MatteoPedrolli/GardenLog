@@ -669,16 +669,32 @@ try {
   // Dal giardino partono **lavorazioni**, non righe di preventivo: un fatto
   // misurato per cosa da fare. Il testo per il cliente e i materiali li fa
   // l'ufficio — scriverli qui era la voce, e sotto la stessa parola un'altra volta.
+  // Le lavorazioni si scelgono per settore, gli stessi della visita: gli insiemi
+  // erano un elenco in più che diceva la stessa cosa.
   const opzioniRil = await page.evaluate(() =>
-    [...document.querySelectorAll('#f-ril-voce optgroup[label="Insiemi"] option')].map(o => o.value + '=' + o.textContent));
-  ok('fra le lavorazioni ci sono gli insiemi, con la misura che chiedono',
-    opzioniRil.some(o => o.startsWith('insieme:aiuola=Aiuola · a m²')) &&
-    opzioniRil.some(o => o.startsWith('insieme:siepe-nuova=Siepe nuova · a m')), opzioniRil.join(' | '));
-  ok('e la siepe nuova c\'è anche su un telefono che aveva già il suo archivio',
-    await page.evaluate(() => DEFAULT_ARRIVATI_DOPO.tipiOperazione.includes('siepe-nuova') &&
-      DB.tipiOperazione.some(t => t.TipoID === 'siepe-nuova')));
-  await page.selectOption('#f-ril-voce', 'insieme:siepe-nuova');
+    [...document.querySelectorAll('#f-ril-voce optgroup[label="Settori"] option')].map(o => o.value + '=' + o.textContent));
+  ok('fra le lavorazioni ci sono i settori, con la misura che chiedono',
+    opzioniRil.includes('settore:aiuole=Aiuole · a m²') && opzioniRil.includes('settore:siepe=Siepe · a m') &&
+    opzioniRil.includes('settore:potature=Potature · solo ore') &&
+    opzioniRil.includes('settore:irrigazione=Irrigazione · scritta a mano'), opzioniRil.join(' | '));
+  ok('e gli insiemi non ci sono più, né fra i valori di partenza né da creare',
+    await page.evaluate(() => !DEFAULT_ARRIVATI_DOPO.tipiOperazione.includes('siepe-nuova') &&
+      !TIPI_DEFAULT.some(t => t.dettaglio === 'insieme') &&
+      !ARCHIVI.tipiOperazione.campi.find(c => c.k === 'dettaglio').opzioni.some(o => o.v === 'insieme')));
+  await page.selectOption('#f-ril-voce', 'settore:siepe');
   await page.waitForTimeout(150);
+  const spunteSiepe = await page.evaluate(() =>
+    [...document.querySelectorAll('#ril-righe .lav-riga:nth-child(1) .lav-spunta')].map(l => l.textContent.trim()));
+  ok('scelto un settore, le sue lavorazioni si spuntano, come nella visita',
+    spunteSiepe.includes('Piantumazione') && spunteSiepe.includes('Telo pacciamante') && spunteSiepe.includes('Bordura'),
+    spunteSiepe.join(', '));
+  await page.click('#overlay-rilievo .btn-primary');
+  await page.waitForTimeout(300);
+  ok('un settore senza niente di spuntato non parte, e lo dice',
+    await page.evaluate(() => DB.rilievi.length) === 0 &&
+    (await page.textContent('#toast')).includes('Spunta cosa c\'è da fare in «Siepe»'), await page.textContent('#toast'));
+  await page.check('#ril-righe .lav-riga:nth-child(1) .lav-spunta:has-text("Piantumazione") input');
+  await page.check('#ril-righe .lav-riga:nth-child(1) .lav-spunta:has-text("Telo pacciamante") input');
   // Una siepe si misura in metri, e dal campo partono la misura e una
   // descrizione di piante e stile: quali piante e quante, col sesto, le decide
   // l'ufficio.
@@ -686,46 +702,58 @@ try {
   const campiSiepe = await page.evaluate(() => {
     const carta = document.querySelector('#ril-righe .lav-riga');
     return { stile: !!carta.querySelector('[aria-label="Piante e stile"]'),
-      sesto: !!carta.querySelector('[aria-label="Sesto"]'), piante: !!carta.querySelector('[aria-label="Piante"]') };
+      sesto: !!carta.querySelector('[aria-label="Sesto"]'), piante: !!carta.querySelector('[aria-label="Piante"]'),
+      spuntate: lavorazioniRilievo[0].Componenti.map(c => c.TipoID).join() };
   });
-  ok('la siepe chiede misura e piante e stile, non il sesto né il numero di piante',
-    campiSiepe.stile && !campiSiepe.sesto && !campiSiepe.piante, JSON.stringify(campiSiepe));
+  ok('spuntata la piantumazione, la siepe chiede piante e stile, non il sesto né il numero',
+    campiSiepe.stile && !campiSiepe.sesto && !campiSiepe.piante && campiSiepe.spuntate === 'piantumazione,telo-pacciamante',
+    JSON.stringify(campiSiepe));
   await page.click('#overlay-rilievo .btn-primary');
   await page.waitForTimeout(300);
   ok('senza piante e stile il rilievo non parte, e lo dice',
     await page.evaluate(() => DB.rilievi.length) === 0 &&
-    (await page.textContent('#toast')).includes('piante e stile di «Siepe nuova»'), await page.textContent('#toast'));
+    (await page.textContent('#toast')).includes('piante e stile di «Siepe»'), await page.textContent('#toast'));
   await page.fill('#ril-righe .lav-riga:nth-child(1) [aria-label="Piante e stile"]', 'lauro, fitta, alta 1,8 m');
   const cartaSiepe = await page.evaluate(() => {
     const carta = document.querySelector('#ril-righe .lav-riga');
     return { testo: carta.textContent,
-      // La voce non si ripete in una casella di testo sotto di sé: è il doppione
+      // Il nome non si ripete in una casella di testo sotto di sé: è il doppione
       // che c'era, e la descrizione per il cliente la scrive l'ufficio.
-      doppione: [...carta.querySelectorAll('input')].some(i => i.value === 'Siepe nuova') };
+      doppione: [...carta.querySelectorAll('input[type=text]')].some(i => i.value === 'Siepe') };
   });
-  ok('dice di cosa è fatta, e che le quantità le conta l\'ufficio, senza ripetere il nome',
-    cartaSiepe.testo.includes('Telo pacciamante') && cartaSiepe.testo.includes('le conta l\'ufficio') &&
-    !cartaSiepe.doppione, cartaSiepe.testo.slice(0, 160));
+  ok('dice che le quantità le scrive l\'ufficio, senza ripetere il nome',
+    cartaSiepe.testo.includes('le scrive l\'ufficio') && !cartaSiepe.doppione, cartaSiepe.testo.slice(0, 160));
   await page.click('#overlay-rilievo .btn-primary');
   await page.waitForTimeout(300);
   // Senza ore non parte: le mezze giornate verrebbero più corte del lavoro, e in
   // lavagna il pomeriggio sembrerebbe libero.
   ok('una siepe senza ore ferma il rilievo, e dice quale',
     await page.evaluate(() => DB.rilievi.length) === 0 &&
-    (await page.textContent('#toast')).includes('ore di «Siepe nuova»'), await page.textContent('#toast'));
-  // Un'aiuola si misura in m², e anche lì dal campo partono piante e stile:
-  // quante e quali le sceglie l'ufficio.
+    (await page.textContent('#toast')).includes('ore di «Siepe»'), await page.textContent('#toast'));
+  // Un'aiuola si misura in m², e anche lì dal campo partono piante e stile; le
+  // potature non si misurano, si stimano in ore.
   const aiuolaRil = await page.evaluate(() => {
-    scegliDaElencoRilievo('insieme:aiuola');
+    scegliDaElencoRilievo('settore:aiuole');
+    spuntaLavorazioneRilievo(1, 'piantumazione', true);
     const carta = document.querySelector('#ril-righe .lav-riga:nth-child(2)');
+    scegliDaElencoRilievo('settore:potature');
+    const potature = document.querySelector('#ril-righe .lav-riga:nth-child(3)');
     const r = { sesto: !!carta.querySelector('[aria-label="Sesto"]'), piante: !!carta.querySelector('[aria-label="Piante"]'),
-      stile: !!carta.querySelector('[aria-label="Piante e stile"]'), unita: lavorazioniRilievo[1].Unita };
+      stile: !!document.querySelector('#ril-righe .lav-riga:nth-child(2) [aria-label="Piante e stile"]'),
+      unita: lavorazioniRilievo[1].Unita, misuraPotature: !!potature.querySelector('[aria-label="Misura"]') };
+    togliRigaRilievo(2);
     togliRigaRilievo(1);
     togliRigaRilievo(0);
     return r;
   });
-  ok('un\'aiuola si misura in m² e chiede piante e stile, non il numero',
-    aiuolaRil.unita === 'm²' && aiuolaRil.stile && !aiuolaRil.piante && !aiuolaRil.sesto, JSON.stringify(aiuolaRil));
+  ok('un\'aiuola si misura in m² e chiede piante e stile; le potature solo le ore',
+    aiuolaRil.unita === 'm²' && aiuolaRil.stile && !aiuolaRil.piante && !aiuolaRil.sesto && !aiuolaRil.misuraPotature,
+    JSON.stringify(aiuolaRil));
+  // Un settore nato prima del campo Unità vale quello di sempre, e il modulo di
+  // Archivi lo mostra: salvarlo con la casella vuota lo farebbe «solo ore».
+  ok('un settore senza unità scritta vale quella di sempre, anche nel modulo di Archivi',
+    await page.evaluate(() => misuraSettore({ SettoreID: 'prato' }) === 'm²' && misuraSettore({ SettoreID: 'siepe', Unita: '' }) === '' &&
+      ARCHIVI.settori.campi.find(c => c.k === 'Unita').valore({ SettoreID: 'aiuole' }) === 'm²'));
 
   await page.selectOption('#f-ril-voce', 'tappeto-erboso');
   await page.waitForTimeout(150);
@@ -773,14 +801,16 @@ try {
     await page.evaluate(() => Array.isArray(normalizzaDB({}).rilievi) &&
       normalizzaDB({}).rilievi.length === 0 && VERSIONE_DATI === 13));
 
-  // Le lavorazioni complesse si definiscono qui, e l'ufficio le legge da un file:
-  // la composizione deve viaggiare intera, perché lì non c'è un archivio dei tipi.
-  const docLavorazioni = await page.evaluate(() => lavorazioniPerUfficio());
-  const siepeEsportata = docLavorazioni.insiemi.find(i => i.id === 'siepe-nuova');
-  ok('il telefono esporta le lavorazioni complesse con la loro composizione',
-    docLavorazioni.tipo === 'lavorazioni' && docLavorazioni.versione === 1 && !!siepeEsportata &&
-    siepeEsportata.unita === 'm' && siepeEsportata.componenti.some(c => c.voceID === 'piante') &&
-    siepeEsportata.componenti.some(c => c.voceID === 'telo-pacciamante'), JSON.stringify(siepeEsportata));
+  // I settori si definiscono qui, e l'ufficio li legge da un file: le lavorazioni
+  // devono viaggiare con nome e voce, perché lì non c'è un archivio dei tipi.
+  const docSettori = await page.evaluate(() => settoriPerUfficio());
+  const siepeEsportata = docSettori.settori.find(x => x.id === 'siepe');
+  ok('il telefono esporta i settori con la loro unità e le loro lavorazioni',
+    docSettori.tipo === 'settori' && docSettori.versione === 1 && !!siepeEsportata &&
+    siepeEsportata.unita === 'm' && siepeEsportata.lavorazioni.some(c => c.voceID === 'piante' && c.nome === 'Piantumazione') &&
+    docSettori.settori.some(x => x.id === 'irrigazione' && x.libero) &&
+    docSettori.settori.some(x => x.id === 'potature' && x.unita === ''),
+    JSON.stringify(siepeEsportata));
 
   const docRilievo = await page.evaluate(() => {
     const r = DB.rilievi[0];
@@ -1373,28 +1403,26 @@ try {
   ok('e nessun altro prezzo, nemmeno quelli rimasti sui conti di prima',
     piante.doc.righe.find(r => r.voce === 'Noleggio rullo').prezzo == null);
 
-  // ── un insieme di operazioni: l'aiuola ──
-  // Piante, pacciamatura, ala gocciolante e telo: spuntarle una per una era
-  // lavoro ripetuto a ogni aiuola.
+  // ── i tipi arrivati dopo: pacciamatura, ala, telo ──
   const aiuola = await page.evaluate(() => {
     const r = {};
-    r.nuovi = ['pacciamatura', 'ala-gocciolante', 'telo-pacciamante', 'aiuola'].every(id => !!tipoDi(id)) &&
+    r.nuovi = ['pacciamatura', 'ala-gocciolante', 'telo-pacciamante'].every(id => !!tipoDi(id)) &&
       ['pacciamatura', 'ala-gocciolante', 'telo-pacciamante'].every(id => DB.voci.some(v => v.VoceID === id));
     r.unita = ['pacciamatura', 'ala-gocciolante', 'telo-pacciamante'].map(id => tipoDi(id).Unita).join(',');
     // un archivio di prima, senza i tipi nuovi: si aggiungono una volta sola
-    const prova = { tipiOperazione: DB.tipiOperazione.filter(t => !['pacciamatura', 'aiuola'].includes(t.TipoID)).map(t => ({ ...t })),
+    const prova = { tipiOperazione: DB.tipiOperazione.filter(t => !['pacciamatura', 'bordura'].includes(t.TipoID)).map(t => ({ ...t })),
       voci: DB.voci.map(v => ({ ...v })), defaultAggiunti: [] };
     aggiungiDefaultArrivatiDopo(prova);
-    r.aggiunti = prova.tipiOperazione.some(t => t.TipoID === 'aiuola') && prova.tipiOperazione.some(t => t.TipoID === 'pacciamatura');
+    r.aggiunti = prova.tipiOperazione.some(t => t.TipoID === 'bordura') && prova.tipiOperazione.some(t => t.TipoID === 'pacciamatura');
     r.nonDoppi = prova.tipiOperazione.filter(t => t.TipoID === 'telo-pacciamante').length === 1;
-    prova.tipiOperazione = prova.tipiOperazione.filter(t => t.TipoID !== 'aiuola');
+    prova.tipiOperazione = prova.tipiOperazione.filter(t => t.TipoID !== 'bordura');
     aggiungiDefaultArrivatiDopo(prova);
-    r.cancellatoResta = !prova.tipiOperazione.some(t => t.TipoID === 'aiuola');
+    r.cancellatoResta = !prova.tipiOperazione.some(t => t.TipoID === 'bordura');
 
     closeDrawer('overlay-visita');
     return r;
   });
-  ok('ci sono pacciamatura, ala gocciolante, telo pacciamante e l\'insieme «Aiuola»', aiuola.nuovi);
+  ok('ci sono pacciamatura, ala gocciolante e telo pacciamante', aiuola.nuovi);
   ok('in quintali, metri e metri quadri', aiuola.unita === 'q,m,m²', aiuola.unita);
   ok('su un telefono che ha già il suo archivio si aggiungono da soli, senza doppioni',
     aiuola.aggiunti && aiuola.nonDoppi, JSON.stringify(aiuola));
@@ -1512,26 +1540,22 @@ try {
       return ok;
     }));
 
-  // Gli insiemi si creano da Archivi: domani «Siepe di confine» non chiede a nessuno.
-  const insiemeNuovo = await page.evaluate(async () => {
-    openVoceArchivio('tipiOperazione');
-    document.getElementById('f-arch-Nome').value = 'Siepe di confine';
-    document.getElementById('f-arch-dettaglio').value = 'insieme';
-    document.querySelectorAll('#f-arch-Insieme input').forEach(i => { i.checked = ['piantumazione', 'telo-pacciamante'].includes(i.value); });
+  // Un settore nuovo si crea da Archivi, con la sua unità: domani «Giardino
+  // roccioso» non chiede a nessuno, e il rilievo lo trova.
+  const settoreNuovo = await page.evaluate(async () => {
+    openVoceArchivio('settori');
+    document.getElementById('f-arch-Nome').value = 'Giardino roccioso';
+    document.getElementById('f-arch-Unita').value = 'm²';
+    document.querySelectorAll('#f-arch-Tipi input').forEach(i => { i.checked = ['piantumazione', 'telo-pacciamante'].includes(i.value); });
     await salvaVoceArchivio();
-    const t = DB.tipiOperazione.find(x => x.Nome === 'Siepe di confine');
-    const r = { insieme: t && t.Insieme, dettaglio: t && t.dettaglio,
-      // un insieme non può contenere altri insiemi, né sé stesso
-      senzaInsiemi: (() => { openVoceArchivio('tipiOperazione', t.TipoID);
-        const v = [...document.querySelectorAll('#f-arch-Insieme input')].map(i => i.value);
-        closeDrawer('overlay-archivio'); return !v.includes('aiuola') && !v.includes(t.TipoID); })() };
-    DB.tipiOperazione = DB.tipiOperazione.filter(x => x !== t);
+    const st = settoriPerRilievo().find(x => x.Nome === 'Giardino roccioso');
+    const s0 = DB.settori.find(x => x.Nome === 'Giardino roccioso');
+    DB.settori = DB.settori.filter(x => x !== s0);
     await salvaDB();
-    return r;
+    return st && st.Unita + '|' + st.lavorazioni.map(t => t.TipoID).join();
   });
-  ok('un insieme nuovo si crea da Archivi scegliendo cosa accende',
-    insiemeNuovo.dettaglio === 'insieme' && insiemeNuovo.insieme === 'piantumazione,telo-pacciamante', JSON.stringify(insiemeNuovo));
-  ok('e fra le cose da accendere non ci sono altri insiemi', insiemeNuovo.senzaInsiemi);
+  ok('un settore nuovo si crea da Archivi con la sua unità, e il rilievo lo trova',
+    settoreNuovo === 'm²|piantumazione,telo-pacciamante', String(settoreNuovo));
 
   // ── rinumerare una fascia si porta dietro i clienti ──
   await page.click('#nav-dati');
@@ -4109,9 +4133,10 @@ try {
     avvisoSalvato);
 
   // ── DALLA SIEPE MISURATA ALLA RIGA A CORPO, E ALLA SCHEDA DI CANTIERE ──
-  // Dal campo arriva «Siepe nuova · 24 m · lauro · sesto 0,40 · 10 h»; qui i conti
-  // li fa l'ufficio: 61 piante dal sesto, telo e ala dalla ricetta del listino, le
-  // ore. Al cliente una riga a corpo; in cantiere una scheda senza prezzi.
+  // Un rilievo di prima: «Siepe nuova · 24 m · lauro · sesto 0,40 · 10 h», fatto
+  // con un insieme, si legge ancora. 61 piante dal sesto, telo e ala proposti
+  // quanto la misura, le ore. Al cliente una riga a corpo; in cantiere una scheda
+  // senza prezzi.
   const siepe = await pagU.evaluate(() => {
     const rilievo = leggiRilievo({ tipo: 'rilievo', versione: 1, id: 'ril-siepe', revisione: 1,
       creato: '2026-10-02T08:00:00Z', cliente: { nome: 'Carla Bianchi', indirizzo: 'Via Roma 1', citta: 'Lavis', telefono: '333 1112223' },
@@ -4122,9 +4147,6 @@ try {
           { tipoID: 'piantumazione', voceID: 'piante', voce: 'Piante', unita: 'n' },
           { tipoID: 'telo-pacciamante', voceID: 'telo-pacciamante', voce: 'Telo pacciamante', unita: 'm²' },
           { tipoID: 'ala-gocciolante', voceID: 'ala-gocciolante', voce: 'Ala gocciolante', unita: 'm' }] } }] });
-    // Il telo ha una ricetta, l'ala ancora no: tutti e due i casi.
-    const tenute = JSON.stringify(LISTINO.ricette || {});
-    LISTINO.ricette = { 'siepe-nuova': { 'telo-pacciamante': 1.2 } };
     const d = costruisciPreventivo(rilievo, null);
     const r = d.righe[0];
     // Una copia, presa prima di toccare niente: sotto si corregge il telo a mano.
@@ -4140,13 +4162,9 @@ try {
     const r2 = d2.righe[0];
     const comp2 = Object.fromEntries(r2.componenti.map(c => [c.voceID, c]));
     const scheda = costruisciSchedaCantiere(d2);
-    // La sezione Lavorazioni del listino nasce dagli insiemi che il campo ha usato.
-    RILIEVI.push({ doc: rilievo, file: 'x.json' });
-    const visti = insiemiVisti().map(x => x.id + ':' + x.unita);
+    // Le ricette non ci sono più: il listino ha solo voci e prodotti.
     vaiA('listino');
     const listino = document.getElementById('pagina-listino').textContent;
-    RILIEVI.pop();
-    LISTINO.ricette = JSON.parse(tenute);
     vaiA('preventivo');
     return {
       unita: r.unita, descrizione0: d.righe[0] && costruisciPreventivo(rilievo, null).righe[0].descrizione,
@@ -4156,7 +4174,7 @@ try {
       alaCalcolo: comp['ala-gocciolante'].calcolo, ore: comp.manodopera && comp.manodopera.quantita,
       piante2: comp2.piante.quantita, telo2: comp2['telo-pacciamante'].quantita,
       prezzo2: r2.prezzo, proposto2: r2.proposto, descrizione2: r2.descrizione,
-      mezze: mezzePreventivo(d).mezze, scheda, visti, listino,
+      mezze: mezzePreventivo(d).mezze, scheda, listino,
     };
   });
   ok('la siepe diventa una riga a corpo, con la descrizione da correggere',
@@ -4165,8 +4183,8 @@ try {
   ok('le piante escono dal sesto, col perché accanto',
     siepe.piante === 61 && siepe.pianteCalcolo === '24 m a sesto 0,4' && siepe.pianteVoce === 'Piante – lauro 80-100',
     JSON.stringify([siepe.piante, siepe.pianteCalcolo, siepe.pianteVoce]));
-  ok('il telo dalla ricetta del listino, l\'ala senza ricetta resta da scrivere e lo dice',
-    siepe.telo === 28.8 && siepe.ala === '' && siepe.alaCalcolo.includes('Listino'),
+  ok('telo e ala proposti quanto la misura, e lo dicono',
+    siepe.telo === 24 && siepe.ala === 24 && siepe.alaCalcolo === 'come la misura: 24 m',
     JSON.stringify([siepe.telo, siepe.ala, siepe.alaCalcolo]));
   ok('le ore stanno fra i componenti, e fanno le mezze giornate',
     siepe.ore === 10 && siepe.mezze === 2, JSON.stringify([siepe.ore, siepe.mezze]));
@@ -4186,10 +4204,8 @@ try {
     siepe.scheda.includes('333 1112223'));
   ok('e senza un prezzo',
     !/€|999|prezzo/i.test(siepe.scheda), (siepe.scheda.match(/.{40}(€|999|prezzo).{40}/i) || [''])[0]);
-  ok('il listino ha le ricette delle lavorazioni che il campo ha usato',
-    siepe.visti.includes('siepe-nuova:m') && siepe.listino.includes('Lavorazioni') &&
-    siepe.listino.includes('Telo pacciamante') && siepe.listino.includes('m² per m'),
-    siepe.visti.join());
+  ok('e il listino non ha più le ricette: un elenco in meno',
+    !siepe.listino.includes('per ogni metro') && !siepe.listino.includes('m² per m'), siepe.listino.slice(0, 200));
   ok('la scheda di cantiere si stampa anche coi prezzi ancora da guardare',
     await pagU.evaluate(() => {
       let stampato = false;
@@ -4223,16 +4239,22 @@ try {
     vaiA('preventivi');
     [...document.querySelectorAll('#pagina-preventivi button')].find(b => b.textContent.includes('Nuovo rilievo')).click();
     const pagina = PAGINA;
-    const insiemi = insiemiConosciuti().map(x => x.id).join();
+    const insiemi = settoriConosciuti().map(x => x.id).join();
     await salvaRilievoUfficio();
     const vuotoFermo = !window.CASA._sotto.has('rilievi');
     CLIENTI.push({ id: 'cli-casa', nome: 'Bianchi Casa', indirizzo: 'Via dei Prati 3', citta: 'Lavis', telefono: '0461 111', email: '' });
     scriviClienteRilievo('telefono', '333 999');
     scriviClienteRilievo('nome', 'Bianchi Casa');
     const cliente = { ...RILIEVO_UFFICIO.doc.cliente, campoCitta: document.getElementById('ril-uff-citta').value };
-    aggiungiLavorazioneUfficio('insieme:siepe-nuova');
+    aggiungiLavorazioneUfficio('settore:siepe');
     modificaLavorazioneUfficio(0, 'misura', '24');
+    const spunteModulo = [...document.querySelectorAll('#ril-uff-lavorazioni .spunte-settore label')].map(l => l.textContent.trim()).join();
+    await salvaRilievoUfficio();
+    const senzaSpunteFermo = !window.CASA._sotto.has('rilievi') && PAGINA === 'rilievo';
+    spuntaLavorazioneUfficio(0, 'piantumazione', true);
+    spuntaLavorazioneUfficio(0, 'telo-pacciamante', true);
     const campoSesto = !!document.querySelector('#ril-uff-lavorazioni [aria-label="sesto"]');
+    const campoStile = !!document.querySelector('#ril-uff-lavorazioni [aria-label="stile"]');
     await salvaRilievoUfficio();
     const senzaStileFermo = !window.CASA._sotto.has('rilievi') && PAGINA === 'rilievo';
     modificaLavorazioneUfficio(0, 'stile', 'lauro, fitta');
@@ -4249,6 +4271,8 @@ try {
     const i = PREVENTIVO.doc.righe.indexOf(siepe);
     const j = siepe.componenti.findIndex(c => c.voceID === VOCE_PIANTE);
     const primaDelSesto = { ...siepe.componenti[j] };
+    const siepeComp = siepe.componenti.map(c => c.voceID + ':' + c.quantita).join();
+    const riassuntoSiepe = riassuntoLavorazione(siepe.lavorazione);
     // In ufficio si sceglie la pianta e il sesto, e dal sesto escono le piante.
     modificaPiantaComponente(i, j, 'Lauro 80-100');
     modificaSestoComponente(i, j, '0,40');
@@ -4275,6 +4299,8 @@ try {
     const pianteDopo = dopo.componenti.filter(c => c.voceID === VOCE_PIANTE);
     return {
       pagina, insiemi, vuotoFermo, cliente, campoSesto, senzaStileFermo, senzaOreFermo, oreSchermo,
+      spunteModulo, senzaSpunteFermo, campoStile,
+      componentiSiepe: siepeComp, riassuntoSiepe,
       origine: doc.origine, rev: doc.revisione, mezze: doc.mezze, stile: doc.lavorazioni[0].stile,
       primaDelSesto: primaDelSesto.quantita + '|' + primaDelSesto.calcolo, piante, qtaSchermo, pianteRighe, calcoloSeconda,
       schedaPiante: scheda.includes('Piante – Lauro 80-100') && scheda.includes('Piante – Photinia') && scheda.includes('lauro, fitta'),
@@ -4284,15 +4310,20 @@ try {
       prezzoPhotinia: (pianteDopo[1] || {}).prezzo, paginaFine: PAGINA,
     };
   });
-  ok('«Nuovo rilievo» apre il modulo, anche da una cartella vuota con siepe e aiuola già pronte',
-    rilUff.pagina === 'rilievo' && rilUff.insiemi.includes('siepe-nuova') && rilUff.insiemi.includes('aiuola'),
-    JSON.stringify(rilUff));
+  ok('«Nuovo rilievo» apre il modulo, anche da una cartella vuota con prato, aiuole e siepe già pronti',
+    rilUff.pagina === 'rilievo' && rilUff.insiemi === 'prato,aiuole,siepe', JSON.stringify(rilUff));
+  ok('scelto un settore, le sue lavorazioni si spuntano, e senza spunte non si salva',
+    rilUff.spunteModulo.includes('Piantumazione') && rilUff.spunteModulo.includes('Bordura') && rilUff.senzaSpunteFermo,
+    rilUff.spunteModulo);
+  ok('in preventivo le lavorazioni spuntate partono quanto la misura, e il campo le dice tutte',
+    rilUff.componentiSiepe === 'piante:,telo-pacciamante:24,manodopera:10' &&
+    rilUff.riassuntoSiepe.includes('piantumazione, telo pacciamante'), rilUff.componentiSiepe + ' / ' + rilUff.riassuntoSiepe);
   ok('un rilievo senza nome e senza lavorazioni non si salva', rilUff.vuotoFermo);
   ok('scegliendo un cliente dall\'anagrafica si riempie solo quello che manca',
     rilUff.cliente.id === 'cli-casa' && rilUff.cliente.citta === 'Lavis' && rilUff.cliente.campoCitta === 'Lavis' &&
     rilUff.cliente.telefono === '333 999', JSON.stringify(rilUff.cliente));
   ok('il modulo chiede piante e stile, non il sesto, e le ore dicono le mezze giornate',
-    !rilUff.campoSesto && /15 h · 2 mezze giornate/.test(rilUff.oreSchermo), rilUff.oreSchermo);
+    rilUff.campoStile && !rilUff.campoSesto && /15 h · 2 mezze giornate/.test(rilUff.oreSchermo), rilUff.oreSchermo);
   ok('le regole del telefono valgono anche qui: senza piante e stile, e senza ore, la siepe ferma il rilievo',
     rilUff.senzaStileFermo && rilUff.senzaOreFermo);
   ok('salvato, il rilievo è dell\'ufficio e porta piante e stile',
@@ -4314,35 +4345,33 @@ try {
     rilUff.prezzoPhotinia === 30 && rilUff.paginaFine === 'preventivo',
     rilUff.pianteDopo + ', ' + rilUff.prezzo2 + ', ' + rilUff.prezzoPhotinia);
 
-  // Le lavorazioni del telefono in ufficio: lette dal file a ogni rilettura, nel
-  // «Nuovo rilievo» e fra le ricette del listino, con la loro composizione.
-  const lavTel = await pagU.evaluate(async doc => {
-    doc.insiemi.push({ id: 'prato-rotoli', nome: 'Prato in rotoli', unita: 'm²',
-      componenti: [{ tipoID: 'posa-tappeto-erboso', voceID: 'tappeto-erboso', voce: 'Tappeto erboso', unita: 'm²' }] });
-    await scriviTesto(window.CASA, 'lavorazioni-dal-telefono.json', JSON.stringify(doc));
+  // I settori del telefono in ufficio: letti dal file a ogni rilettura, nel
+  // «Nuovo rilievo», con la loro unità e le loro lavorazioni.
+  const setTel = await pagU.evaluate(async doc => {
+    doc.settori.push({ id: 'giardino-roccioso', nome: 'Giardino roccioso', unita: 'm²', libero: false,
+      lavorazioni: [{ tipoID: 'telo-pacciamante', nome: 'Telo pacciamante', voceID: 'telo-pacciamante', voce: 'Telo pacciamante', unita: 'm²' }] });
+    await scriviTesto(window.CASA, 'settori-dal-telefono.json', JSON.stringify(doc));
     await ricarica();
-    const ins = insiemiConosciuti();
-    const prato = ins.find(i => i.id === 'prato-rotoli');
-    vaiA('listino');
-    const listino = document.getElementById('pagina-listino').textContent;
+    const roccioso = settoriConosciuti().find(x => x.id === 'giardino-roccioso');
     nuovoRilievoUfficio();
     const modulo = document.getElementById('pagina-rilievo').textContent;
-    const opzione = !!document.querySelector('#pagina-rilievo option[value="insieme:prato-rotoli"]');
+    const opzione = !!document.querySelector('#pagina-rilievo option[value="settore:giardino-roccioso"]');
+    const irrigazione = !!document.querySelector('#pagina-rilievo option[value="settore:irrigazione"]');
     RILIEVO_UFFICIO = null;
     // Un file rovinato si vede, come un rapportino troncato.
-    await scriviTesto(window.CASA, 'lavorazioni-dal-telefono.json', '{"tipo":"lavorazioni"');
+    await scriviTesto(window.CASA, 'settori-dal-telefono.json', '{"tipo":"settori"');
     await ricarica();
-    const rotto = ILLEGGIBILI.some(f => f.nome === 'lavorazioni-dal-telefono.json');
-    const restano = insiemiConosciuti().some(i => i.id === 'siepe-nuova');
+    const rotto = ILLEGGIBILI.some(f => f.nome === 'settori-dal-telefono.json');
+    const restano = settoriConosciuti().some(x => x.id === 'siepe');
     vaiA('preventivi');
-    return { prato: prato && prato.componenti.map(c => c.voceID).join(), listino: listino.includes('Prato in rotoli'),
-      dice: listino.includes('quelle del telefono') && modulo.includes('quelle del telefono'), opzione, rotto, restano };
-  }, docLavorazioni);
-  ok('le lavorazioni esportate dal telefono si leggono in ufficio, con la composizione',
-    lavTel.prato === 'tappeto-erboso', JSON.stringify(lavTel));
-  ok('e si scelgono nel «Nuovo rilievo» e hanno la loro ricetta nel listino',
-    lavTel.opzione && lavTel.listino && lavTel.dice, JSON.stringify(lavTel));
-  ok('un file delle lavorazioni rovinato si vede, e siepe e aiuola restano', lavTel.rotto && lavTel.restano);
+    return { roccioso: roccioso && roccioso.lavorazioni.map(c => c.voceID).join(), opzione, irrigazione,
+      dice: modulo.includes('quelli del telefono'), rotto, restano };
+  }, docSettori);
+  ok('i settori esportati dal telefono si leggono in ufficio, con le loro lavorazioni',
+    setTel.roccioso === 'telo-pacciamante', JSON.stringify(setTel));
+  ok('e si scelgono nel «Nuovo rilievo», che dice da dove vengono',
+    setTel.opzione && setTel.irrigazione && setTel.dice, JSON.stringify(setTel));
+  ok('un file dei settori rovinato si vede, e restano quelli di partenza', setTel.rotto && setTel.restano);
 
   ok('nessun errore JavaScript nell\'app dell\'ufficio', erroriU.length === 0, erroriU.join(' | '));
   await ctxU.close();

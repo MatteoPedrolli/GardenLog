@@ -280,7 +280,7 @@ Tre cose decise lì che vale la pena non rifare:
   fatto misurato una volta sola, e il conto sta in `rapportino.js` perché lo fanno
   entrambe le app;
 - **una lavorazione è una riga a corpo**, col prezzo proposto dalla somma dei suoi
-  componenti — le piante scelte in ufficio (dal sesto, per una siepe), materiali dalla ricetta, ore — che al cliente non
+  componenti — le piante scelte in ufficio (dal sesto, per una siepe), i materiali delle lavorazioni spuntate proposti quanto la misura, ore — che al cliente non
   arrivano. È il foglio della segretaria per la siepe nuova, fatto dall'app;
 - **il rilievo che aspetta il disegno lo dichiara**, con una casella: l'ufficio lo
   ripete nell'elenco, o un rilievo si apre credendolo finito. Erano due dei
@@ -336,10 +336,9 @@ I quattro animali qui sopra sono **modi di arrivare al prezzo**, ed è lì che
 servono: a capire cosa costruire. Per un po' sono stati anche un campo da scegliere
 sul rilievo, e non funzionava: un'etichetta e un avviso, nient'altro, e una scelta
 sola per lavori che nella realtà stanno insieme. Del campo è rimasto solo «aspetta
-il disegno dal CAD»; le lavorazioni collegate le portano gli **insiemi** (come
-«Aiuola»), che si creano da Archivi. Se un giorno servisse un modello di preventivo
-più grande — un giardino nuovo con siepe, prato e irrigazione già impostati — si
-costruisce con lo stesso meccanismo, solo con un insieme più grande.
+il disegno dal CAD»; le lavorazioni collegate le portano i **settori** della visita
+(Aiuole, Siepe, Prato), dove si spuntano. Erano gli «insiemi», un elenco in più che
+diceva la stessa cosa dei settori, e non ci sono più.
 
 ### Il giro dal sopralluogo
 

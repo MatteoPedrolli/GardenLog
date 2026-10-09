@@ -508,6 +508,9 @@ select.form-control { background-image: url("data:image/svg+xml,%3Csvg xmlns='ht
 .scelte-arch { display: flex; flex-direction: column; gap: 6px; font-size: 0.9rem; }
 .scelte-arch label { display: flex; align-items: center; gap: 8px; }
 .op-insieme { font-size: 0.72rem; color: var(--text-light); }
+.lav-spunte { display: flex; flex-wrap: wrap; gap: 6px 14px; margin: 6px 0 2px; }
+.lav-spunta { display: inline-flex; align-items: center; gap: 6px; font-size: 0.85rem; }
+.lav-spunta input { width: 18px; height: 18px; margin: 0; accent-color: var(--inchiostro-tenue); }
 /* I settori della visita: una testata che si apre, e chiusa dice cosa c'è di
    spuntato dentro. Il conteggio è una pastiglia, la freccia dice da che parte va. */
 .settore-testa { display: flex; align-items: center; gap: 10px; padding: 12px 2px;
@@ -805,13 +808,13 @@ select.form-control { background-image: url("data:image/svg+xml,%3Csvg xmlns='ht
 
       <div class="section-title">Per l'ufficio</div>
       <div class="card" style="padding:14px">
-        <div class="dati-nota">L'anagrafica, l'elenco dei prodotti e le lavorazioni (siepe nuova, aiuola…)
+        <div class="dati-nota">L'anagrafica, l'elenco dei prodotti e i settori con le loro lavorazioni
           che hai qui, nel formato che l'app dell'ufficio legge. I file vanno messi nella cartella <strong>GiardinoApp</strong> su Drive.
           L'ufficio aggiunge quello che sa lui — telefoni, mail, prezzi — e importare non glielo cancella.</div>
         <div style="display:flex; gap:8px; flex-wrap:wrap">
           <button class="btn btn-secondary btn-sm" onclick="esportaAnagrafica()">Esporta anagrafica clienti</button>
           <button class="btn btn-secondary btn-sm" onclick="esportaProdotti()">Esporta prodotti</button>
-          <button class="btn btn-secondary btn-sm" onclick="esportaLavorazioni()">Esporta lavorazioni</button>
+          <button class="btn btn-secondary btn-sm" onclick="esportaSettori()">Esporta settori</button>
         </div>
       </div>
 
@@ -1253,17 +1256,9 @@ const TIPI_DEFAULT = [
   { TipoID:'livellamento',            Nome:'Livellamento terra',       dettaglio:'niente',      Unita:'',      Prato:'',   Siepe:'',   VoceID:'',                  Ordine:19 },
   { TipoID:'bordura',                 Nome:'Bordura',                  dettaglio:'quantita',    Unita:'m',     Prato:'',   Siepe:'',   VoceID:'bordura',           Ordine:20, ChiedeCosa:'Sì' },
   { TipoID:'potatura-alberature',     Nome:'Potatura alberature con piattaforma', dettaglio:'niente', Unita:'', Prato:'', Siepe:'',  VoceID:'',                  Ordine:21 },
-  // Un insieme non è un'operazione: spuntarlo accende in un colpo quelle che un
-  // lavoro di quel genere chiede sempre. Un'aiuola vuol dire piante,
-  // pacciamatura, ala gocciolante e telo, e spuntarle una per una era lavoro
-  // ripetuto a ogni aiuola.
-  { TipoID:'aiuola',                  Nome:'Aiuola',                   dettaglio:'insieme',     Unita:'',      Prato:'',   Siepe:'',   VoceID:'',
-    Insieme:'piantumazione,pacciamatura,ala-gocciolante,telo-pacciamante', Ordine:12 },
-  // La siepe nuova è il preventivo più frequente, e si misura in metri: è una
-  // fila, e dal sesto escono le piante. Per un insieme l'unità dice come si
-  // misura nel rilievo — l'aiuola a m², la siepe a metri.
-  { TipoID:'siepe-nuova',             Nome:'Siepe nuova',              dettaglio:'insieme',     Unita:'m',     Prato:'',   Siepe:'',   VoceID:'',
-    Insieme:'piantumazione,pacciamatura,ala-gocciolante,telo-pacciamante', Ordine:13 },
+  // Gli insiemi — «Aiuola», «Siepe nuova» — non ci sono più: dicevano la stessa
+  // cosa dei settori della visita, in un elenco in più da tenere allineato. Nel
+  // rilievo si sceglie il settore e si spuntano le sue lavorazioni.
 ];
 
 // Tipi e voci arrivati dopo che qualcuno aveva già il suo archivio sul telefono.
@@ -1272,7 +1267,7 @@ const TIPI_DEFAULT = [
 // non se lo deve ritrovare al giro dopo. È un'aggiunta, non una conversione:
 // niente di quello che c'è viene toccato, e VERSIONE_DATI resta com'è.
 const DEFAULT_ARRIVATI_DOPO = {
-  tipiOperazione: ['pacciamatura', 'ala-gocciolante', 'telo-pacciamante', 'aiuola', 'siepe-nuova',
+  tipiOperazione: ['pacciamatura', 'ala-gocciolante', 'telo-pacciamante',
     'asporto-terriccio', 'apporto-terra-vegetale', 'livellamento', 'bordura', 'potatura-alberature'],
   voci: ['pacciamatura', 'ala-gocciolante', 'telo-pacciamante', 'asporto-terriccio', 'terra-vegetale', 'bordura'],
   settori: ['prato', 'aiuole', 'potature', 'siepe', 'irrigazione', 'piantumazione', 'trattamenti'],
@@ -1331,17 +1326,17 @@ const VOCI_DEFAULT = [
 // righe scritte a mano — cosa, quanti, unità — per i lavori dove le voci cambiano
 // ogni volta, come l'irrigazione.
 const SETTORI_DEFAULT = [
-  { SettoreID:'prato',         Nome:'Prato',         Ordine:1, Libero:'',
+  { SettoreID:'prato',         Nome:'Prato',         Ordine:1, Unita:'m²', Libero:'',
     Tipi:'asporto-terriccio,apporto-terra-vegetale,livellamento,semina,arieggiatura,taglio-prato,concimazione,apporto-terriccio,diserbo-selettivo,diserbo-totale,posa-tappeto-erboso' },
-  { SettoreID:'aiuole',        Nome:'Aiuole',        Ordine:2, Libero:'',
+  { SettoreID:'aiuole',        Nome:'Aiuole',        Ordine:2, Unita:'m²', Libero:'',
     Tipi:'diserbo-totale,asporto-terriccio,apporto-terra-vegetale,telo-pacciamante,ala-gocciolante,piantumazione,pacciamatura' },
-  { SettoreID:'potature',      Nome:'Potature',      Ordine:3, Libero:'',
+  { SettoreID:'potature',      Nome:'Potature',      Ordine:3, Unita:'', Libero:'',
     Tipi:'potatura-arbusti,potatura-siepi,potatura-alberature,scarico-verde' },
-  { SettoreID:'siepe',         Nome:'Siepe',         Ordine:4, Libero:'',
+  { SettoreID:'siepe',         Nome:'Siepe',         Ordine:4, Unita:'m', Libero:'',
     Tipi:'piantumazione,ala-gocciolante,bordura,telo-pacciamante,pacciamatura' },
-  { SettoreID:'irrigazione',   Nome:'Irrigazione',   Ordine:5, Libero:'Sì', Tipi:'' },
-  { SettoreID:'piantumazione', Nome:'Piantumazione', Ordine:6, Libero:'',   Tipi:'piantumazione' },
-  { SettoreID:'trattamenti',   Nome:'Trattamenti',   Ordine:7, Libero:'',   Tipi:'trattamento-fitosanitario' },
+  { SettoreID:'irrigazione',   Nome:'Irrigazione',   Ordine:5, Unita:'', Libero:'Sì', Tipi:'' },
+  { SettoreID:'piantumazione', Nome:'Piantumazione', Ordine:6, Unita:'', Libero:'',   Tipi:'piantumazione' },
+  { SettoreID:'trattamenti',   Nome:'Trattamenti',   Ordine:7, Unita:'', Libero:'',   Tipi:'trattamento-fitosanitario' },
 ];
 
 // Quale voce di conto nasce da quale lavoro. Potature, taglio prato e
@@ -3317,46 +3312,45 @@ function mostraMezzeRilievo() {
     : 'Nessuna ora di manodopera<div class="meno">In lavagna andrà largo una mezza giornata, il minimo.</div>';
 }
 
-// Come si misura un insieme: lo dice il suo campo Unità in Archivi. «Aiuola» è
-// nata senza, prima che servisse, e un'aiuola si misura in m².
-function misuraInsieme(t) {
-  return (t && t.Unita) || 'm²';
+// Come si misura un settore nel rilievo: lo dice il suo campo Unità in Archivi.
+// I settori nati prima del campo non ce l'hanno, e valgono quelli di sempre: il
+// prato e le aiuole a m², la siepe a metri. Vuoto vuol dire solo ore — una
+// potatura non si misura.
+const MISURA_DEI_SETTORI = { prato: 'm²', aiuole: 'm²', siepe: 'm' };
+function misuraSettore(s) {
+  if (!s) return '';
+  return s.Unita !== undefined ? String(s.Unita || '') : (MISURA_DEI_SETTORI[s.SettoreID] || '');
 }
 
 const componenteDiPiante = c => c && (c.VoceID === 'piante' || c.TipoID === 'piantumazione');
 
-// Gli insiemi della visita servono anche qui: un'aiuola chiede sempre piante,
-// pacciamatura, ala gocciolante e telo, in un preventivo come in un lavoro
-// finito. Sono gli stessi, creati da Archivi senza toccare il codice — così le
-// lavorazioni collegate sono quelle che si decidono qui, non una lista scritta
-// da chi programma. La composizione parte col rilievo: le quantità le conta
-// l'ufficio, e deve sapere di cosa è fatta quell'aiuola anche se l'insieme poi
-// cambia. Un tipo senza voce è manodopera, ed è già nelle ore.
-function insiemiPerRilievo() {
-  return (DB.tipiOperazione || [])
-    .filter(t => t.dettaglio === 'insieme' && t.Insieme)
-    .map(t => ({
-      ...t,
-      componenti: String(t.Insieme).split(',').map(x => x.trim()).filter(x => x)
-        .map(id => (DB.tipiOperazione || []).find(o => o.TipoID === id))
-        .filter(o => o && o.VoceID && o.VoceID !== VOCE_MANODOPERA)
-        .map(o => {
-          const v = DB.voci.find(x => x.VoceID === o.VoceID);
-          return v ? { TipoID: o.TipoID, VoceID: v.VoceID, Voce: v.Nome, Unita: v.Unita || o.Unita || '' } : null;
-        })
-        .filter(Boolean),
+// Nel rilievo si sceglie un settore — Aiuole, Siepe, Prato — e si spuntano le sue
+// lavorazioni, come nella visita. Erano gli «insiemi», un elenco a parte che
+// diceva la stessa cosa dei settori; adesso l'elenco è uno. Ogni lavorazione
+// spuntata parte con la sua voce, se ce l'ha: le quantità le scrive l'ufficio, e
+// deve sapere di cosa è fatta quell'aiuola anche se il settore poi cambia. Un
+// tipo senza voce è manodopera, ed è già nelle ore.
+function settoriPerRilievo() {
+  return [...(DB.settori || [])]
+    .sort((a, b) => (Number(a.Ordine) || 99) - (Number(b.Ordine) || 99))
+    .map(s => ({
+      SettoreID: s.SettoreID, Nome: s.Nome, Unita: misuraSettore(s), Libero: isSi(s.Libero),
+      lavorazioni: tipiDelSettore(s).map(t => {
+        const v = t.VoceID && t.VoceID !== VOCE_MANODOPERA ? DB.voci.find(x => x.VoceID === t.VoceID) : null;
+        return { TipoID: t.TipoID, Nome: t.Nome, VoceID: v ? v.VoceID : '', Voce: v ? v.Nome : '',
+          Unita: v ? (v.Unita || t.Unita || '') : '' };
+      }),
     }));
 }
 
 function popolaVociRilievo() {
   const sel = document.getElementById('f-ril-voce');
   if (!sel) return;
-  // La manodopera è in testa alle voci: è il lavoro che non sta in nessun
-  // insieme e non lascia materiali — una potatura, una pulizia.
-  const insiemi = insiemiPerRilievo();
+  const settori = settoriPerRilievo();
   sel.innerHTML = '<option value="">+ Aggiungi una lavorazione…</option>' +
-    (insiemi.length ? '<optgroup label="Insiemi">' +
-      insiemi.map(t => `<option value="insieme:${perValore(t.TipoID)}">${perValore(t.Nome)} · a ${perValore(misuraInsieme(t))}</option>`).join('') +
+    (settori.length ? '<optgroup label="Settori">' +
+      settori.map(s => `<option value="settore:${perValore(s.SettoreID)}">${perValore(s.Nome)}${
+        s.Libero ? ' · scritta a mano' : (s.Unita ? ' · a ' + perValore(s.Unita) : ' · solo ore')}</option>`).join('') +
       '</optgroup>' : '') +
     `<optgroup label="Solo ore"><option value="${VOCE_MANODOPERA}">Manodopera: potatura, pulizia…</option></optgroup>` +
     '<optgroup label="Voci a misura">' +
@@ -3374,15 +3368,31 @@ function nuovaLavorazione(campi) {
   };
 }
 
+// Spuntare ridisegna le righe: compare o sparisce «piante e stile», e non si sta
+// scrivendo dentro niente.
+function spuntaLavorazioneRilievo(i, tipoID, acceso) {
+  const l = lavorazioniRilievo[i];
+  const st = l && settoriPerRilievo().find(x => x.SettoreID === l.TipoID);
+  const t = st && st.lavorazioni.find(x => x.TipoID === tipoID);
+  if (!t) return;
+  l.Componenti = (l.Componenti || []).filter(c => c.TipoID !== tipoID);
+  if (acceso) l.Componenti.push({ ...t });
+  // Nell'ordine del settore, non in quello dei tocchi.
+  l.Componenti.sort((a, b) => st.lavorazioni.findIndex(x => x.TipoID === a.TipoID) -
+    st.lavorazioni.findIndex(x => x.TipoID === b.TipoID));
+  renderRilievoRighe();
+}
+
 function scegliDaElencoRilievo(valore) {
   if (!valore) return;
-  if (valore.startsWith('insieme:')) {
-    const t = insiemiPerRilievo().find(x => x.TipoID === valore.slice(8));
-    if (!t) return;
-    lavorazioniRilievo.push(nuovaLavorazione({
-      Genere: 'insieme', TipoID: t.TipoID, Nome: t.Nome, Unita: misuraInsieme(t),
-      Componenti: t.componenti,
-    }));
+  if (valore.startsWith('settore:')) {
+    const st = settoriPerRilievo().find(x => x.SettoreID === valore.slice(8));
+    if (!st) return;
+    // L'irrigazione cambia ogni volta: è una riga scritta a mano, col nome del
+    // settore già messo.
+    lavorazioniRilievo.push(st.Libero
+      ? nuovaLavorazione({ Genere: 'libera', Nome: st.Nome, Unita: 'n' })
+      : nuovaLavorazione({ Genere: 'insieme', TipoID: st.SettoreID, Nome: st.Nome, Unita: st.Unita, Componenti: [] }));
   } else if (valore === VOCE_MANODOPERA) {
     lavorazioniRilievo.push(nuovaLavorazione({ Genere: 'manodopera' }));
   } else {
@@ -3457,8 +3467,17 @@ function renderRilievoRighe() {
   el.innerHTML = lavorazioniRilievo.map((l, i) => {
     const conPiante = l.Genere === 'insieme' && (l.Componenti || []).some(componenteDiPiante);
     const nomeLibero = l.Genere === 'manodopera' || l.Genere === 'libera';
-    const dentro = l.Genere === 'insieme' && l.Componenti.length
-      ? `<div class="op-insieme" style="margin-top:2px">${l.Componenti.map(c => perValore(c.Voce)).join(', ')}: le quantità le conta l'ufficio</div>` : '';
+    // Le lavorazioni del settore si spuntano, come nella visita. Un rilievo di
+    // prima, fatto con un insieme, mostra di cosa era fatto e basta.
+    const settore = l.Genere === 'insieme' ? settoriPerRilievo().find(x => x.SettoreID === l.TipoID) : null;
+    const spuntati = new Set((l.Componenti || []).map(c => c.TipoID));
+    const dentro = settore
+      ? `<div class="lav-spunte">${settore.lavorazioni.map(t =>
+          `<label class="lav-spunta"><input type="checkbox" ${spuntati.has(t.TipoID) ? 'checked' : ''}
+             onchange="spuntaLavorazioneRilievo(${i}, '${perOnclick(t.TipoID)}', this.checked)"> ${perValore(t.Nome)}</label>`).join('')}</div>`
+        + (l.Componenti.length ? '<div class="op-insieme">Le quantità le scrive l\'ufficio</div>' : '')
+      : (l.Genere === 'insieme' && l.Componenti.length
+        ? `<div class="op-insieme" style="margin-top:2px">${l.Componenti.map(c => perValore(c.Nome || c.Voce)).join(', ')}: le quantità le scrive l'ufficio</div>` : '');
     return `<div class="conto-riga lav-riga">
       <div class="conto-voce">
         ${nomeLibero
@@ -3476,7 +3495,7 @@ function renderRilievoRighe() {
                <select onchange="modificaLavorazione(${i}, 'Unita', this.value)" aria-label="unità">
                  ${unitaPerLaRiga(l.Unita).map(u => `<option value="${perValore(u)}"${u === l.Unita ? ' selected' : ''}>${perValore(u)}</option>`).join('')}
                </select></span></label>`
-          : campoLavorazione(i, 'Misura', 'Misura', l.Misura, { unita: l.Unita }))}
+          : (l.Genere === 'insieme' && !l.Unita ? '' : campoLavorazione(i, 'Misura', 'Misura', l.Misura, { unita: l.Unita })))}
         ${campoLavorazione(i, 'Ore', 'Ore', l.Ore, { unita: 'h' })}
       </div>
       ${conPiante ? `<div class="lav-campi">
@@ -3997,12 +4016,8 @@ const ARCHIVI = {
         { v:'semente',     label:'Una semente e la quantità' },
         { v:'fitofarmaco', label:'Un fitofarmaco e la quantità' },
         { v:'quantita',    label:'Solo una quantità' },
-        { v:'insieme',     label:'Un insieme: accende altre operazioni' },
       ] },
-      { k:'Insieme', label:'Se è un insieme, quali operazioni accende', tipo:'scelte', opzioni: () =>
-        DB.tipiOperazione.filter(t => !eInsieme(t) && String(t.TipoID) !== String(archivioVoceId))
-          .map(t => ({ v: t.TipoID, label: t.Nome })) },
-      { k:'Unita', label:'Unità di misura (kg, l, n, m², sacchi…) — per un insieme, come si misura nel rilievo (m, m²)' },
+      { k:'Unita', label:'Unità di misura (kg, l, n, m², sacchi…)' },
       { k:'ChiedeCosa', label:'Chiede anche "cosa" (la specie, il materiale)', tipo:'flag' },
       { k:'Prato', label:'Riguarda il prato', tipo:'flag' },
       { k:'Siepe', label:'Riguarda la siepe', tipo:'flag' },
@@ -4024,6 +4039,9 @@ const ARCHIVI = {
       { k:'Tipi', label:'Le lavorazioni che ci stanno dentro', tipo:'scelte', opzioni: () =>
         DB.tipiOperazione.filter(t => !eInsieme(t)).map(t => ({ v: t.TipoID, label: t.Nome })) },
       { k:'Libero', label:'Anche righe scritte a mano: cosa, quanti, unità', tipo:'flag' },
+      // Mostra l'unità che vale davvero, anche per un settore nato prima del campo:
+      // salvarlo con la casella vuota lo farebbe diventare «solo ore».
+      { k:'Unita', label:'Come si misura nel rilievo (m, m²); vuoto: solo ore', valore: s => misuraSettore(s) },
       { k:'Ordine', label:'Posizione in elenco', tipo:'number' },
     ],
     riga: s => {
@@ -4407,30 +4425,30 @@ async function esportaProdotti() {
     : `🧪 ${doc.prodotti.length} prodotti pronti per l'ufficio`);
 }
 
-// Le lavorazioni complesse con la loro composizione, per il «Nuovo rilievo» e le
-// ricette dell'ufficio. Si creano qui, in Archivi, e l'ufficio non le cambia:
-// le legge da questo file così com'è.
-function lavorazioniPerUfficio() {
+// I settori con la loro unità e le loro lavorazioni, per il «Nuovo rilievo»
+// dell'ufficio. Si decidono qui, in Archivi, e l'ufficio non li cambia: li legge
+// da questo file così com'è.
+function settoriPerUfficio() {
   return {
-    tipo: 'lavorazioni', versione: 1, esportato: new Date().toISOString(),
-    insiemi: insiemiPerRilievo().map(t => ({
-      id: t.TipoID, nome: t.Nome, unita: misuraInsieme(t),
-      componenti: t.componenti.map(c => ({ tipoID: c.TipoID, voceID: c.VoceID, voce: c.Voce, unita: c.Unita })),
+    tipo: 'settori', versione: 1, esportato: new Date().toISOString(),
+    settori: settoriPerRilievo().map(st => ({
+      id: st.SettoreID, nome: st.Nome, unita: st.Unita, libero: st.Libero,
+      lavorazioni: st.lavorazioni.map(t => ({ tipoID: t.TipoID, nome: t.Nome, voceID: t.VoceID, voce: t.Voce, unita: t.Unita })),
     })),
   };
 }
 
-async function esportaLavorazioni() {
-  const doc = lavorazioniPerUfficio();
-  if (!doc.insiemi.length) { showToast('⚠️ Non c\'è ancora nessuna lavorazione complessa'); return; }
+async function esportaSettori() {
+  const doc = settoriPerUfficio();
+  if (!doc.settori.length) { showToast('⚠️ Non c\'è ancora nessun settore'); return; }
   const file = new File([JSON.stringify(doc, null, 2)],
-    'lavorazioni-dal-telefono.json', { type: 'application/json' });
+    'settori-dal-telefono.json', { type: 'application/json' });
   let esito;
   try { esito = await consegnaFile(file); }
   catch (e) { showToast('❌ Non riuscito: ' + (e.message || e)); return; }
   showToast(esito === 'annullato'
     ? '↩️ Annullato: il file non è uscito'
-    : `🌿 ${doc.insiemi.length} lavorazioni pronte per l'ufficio`);
+    : `🗂 ${doc.settori.length} settori pronti per l'ufficio`);
 }
 
 async function esportaAnagrafica() {
@@ -4500,7 +4518,7 @@ function openVoceArchivio(tipo, id) {
   document.getElementById('drawer-archivio-title').textContent =
     voce ? 'Modifica ' + def.singolare : def.articolo + ' ' + def.singolare;
   document.getElementById('archivio-campi').innerHTML = def.campi.map(campo => {
-    const valore = voce ? (voce[campo.k] ?? '') : '';
+    const valore = voce ? (campo.valore ? campo.valore(voce) : (voce[campo.k] ?? '')) : '';
     if (campo.tipo === 'flag') {
       return `<div class="form-group" style="display:flex; align-items:center; justify-content:space-between; gap:12px">
           <label class="form-label" style="margin:0">${campo.label}</label>
