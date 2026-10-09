@@ -723,13 +723,13 @@ try {
   });
   ok('dice che le quantità le scrive l\'ufficio, senza ripetere il nome',
     cartaSiepe.testo.includes('le scrive l\'ufficio') && !cartaSiepe.doppione, cartaSiepe.testo.slice(0, 160));
-  await page.click('#overlay-rilievo .btn-primary');
-  await page.waitForTimeout(300);
-  // Senza ore non parte: le mezze giornate verrebbero più corte del lavoro, e in
-  // lavagna il pomeriggio sembrerebbe libero.
-  ok('una siepe senza ore ferma il rilievo, e dice quale',
-    await page.evaluate(() => DB.rilievi.length) === 0 &&
-    (await page.textContent('#toast')).includes('ore di «Siepe»'), await page.textContent('#toast'));
+  // Misura e ore non si chiedono: spesso escono dopo, dalle misure o dal disegno,
+  // e in giardino fermare il rilievo voleva dire inventare un numero.
+  ok('una siepe senza misura e senza ore parte lo stesso',
+    await page.evaluate(() => {
+      const l = { ...lavorazioniRilievo[0], Misura: '', Ore: '' };
+      return cosaMancaLavorazione(l) === '' && cosaMancaLavorazione({ ...l, Stile: '' }).includes('piante e stile');
+    }));
   // Un'aiuola si misura in m², e anche lì dal campo partono piante e stile; le
   // potature non si misurano, si stimano in ore.
   const aiuolaRil = await page.evaluate(() => {
@@ -4291,8 +4291,8 @@ try {
     await salvaRilievoUfficio();
     const senzaStileFermo = !window.CASA._sotto.has('rilievi') && PAGINA === 'rilievo';
     modificaLavorazioneUfficio(0, 'stile', 'lauro, fitta');
-    await salvaRilievoUfficio();
-    const senzaOreFermo = !window.CASA._sotto.has('rilievi') && PAGINA === 'rilievo';
+    // Misura e ore non sono obbligatorie: con piante e stile la siepe parte.
+    const senzaOreParte = lavorazioneIncompleta(leggiLavorazione({ ...RILIEVO_UFFICIO.doc.lavorazioni[0], misura: '', ore: '' })) === '';
     modificaLavorazioneUfficio(0, 'ore', '10');
     aggiungiLavorazioneUfficio('manodopera');
     modificaLavorazioneUfficio(1, 'nome', 'Potatura arbusti');
@@ -4331,7 +4331,7 @@ try {
     const dopo = PREVENTIVO.doc.righe.find(r => (r.componenti || []).length);
     const pianteDopo = dopo.componenti.filter(c => c.voceID === VOCE_PIANTE);
     return {
-      pagina, insiemi, vuotoFermo, cliente, campoSesto, senzaStileFermo, senzaOreFermo, oreSchermo,
+      pagina, insiemi, vuotoFermo, cliente, campoSesto, senzaStileFermo, senzaOreParte, oreSchermo,
       spunteModulo, senzaSpunteFermo, campoStile,
       componentiSiepe: siepeComp, riassuntoSiepe,
       origine: doc.origine, rev: doc.revisione, mezze: doc.mezze, stile: doc.lavorazioni[0].stile,
@@ -4357,8 +4357,8 @@ try {
     rilUff.cliente.telefono === '333 999', JSON.stringify(rilUff.cliente));
   ok('il modulo chiede piante e stile, non il sesto, e le ore dicono le mezze giornate',
     rilUff.campoStile && !rilUff.campoSesto && /15 h · 2 mezze giornate/.test(rilUff.oreSchermo), rilUff.oreSchermo);
-  ok('le regole del telefono valgono anche qui: senza piante e stile, e senza ore, la siepe ferma il rilievo',
-    rilUff.senzaStileFermo && rilUff.senzaOreFermo);
+  ok('le regole del telefono valgono anche qui: senza piante e stile la siepe si ferma, senza misura e ore no',
+    rilUff.senzaStileFermo && rilUff.senzaOreParte);
   ok('salvato, il rilievo è dell\'ufficio e porta piante e stile',
     rilUff.origine === 'ufficio' && rilUff.rev === 1 && rilUff.mezze === 2 && rilUff.stile === 'lauro, fitta',
     JSON.stringify(rilUff));

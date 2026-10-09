@@ -585,10 +585,12 @@ dentro; conta la voce `manodopera`, non l'unità: un noleggio a ore non occupa l
 lavagna.
 
 Una lavorazione **incompleta ferma il rilievo** e dice cosa manca
-(`cosaMancaLavorazione()`): un settore senza niente di spuntato, senza misura, senza piante e stile o senza ore, una
-manodopera senza nome. In ufficio non si può più chiedere, e in lavagna il
-pomeriggio sembrerebbe libero. Un rilievo senza ore (sola fornitura) parte, lo
-dice, e in lavagna va largo il minimo. Il documento porta `ore` e `mezze` già
+(`cosaMancaLavorazione()`): un settore senza niente di spuntato, senza piante e stile,
+una manodopera o una riga a mano senza nome — quello che dice *cosa* c'è da fare, e
+che in ufficio non si può più chiedere. **Misura e ore no**: erano obbligatorie, e
+spesso escono dopo, dalle misure prese col metro o dal disegno; fermare il rilievo in
+giardino voleva dire inventarle. In ufficio un componente senza misura resta da
+scrivere e lo dice, e un rilievo senza ore lo dice e in lavagna va largo il minimo. Il documento porta `ore` e `mezze` già
 calcolate; un rilievo di prima ha solo `mezze`, contate a mano, e valgono ancora.
 
 **Non c'è un «tipo di lavoro».** C'era: quattro tipi da scegliere (manutenzione,

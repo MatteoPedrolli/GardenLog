@@ -618,7 +618,6 @@ function lavorazioneIncompleta(l) {
   const nome = l.nome || 'la lavorazione';
   const conPiante = l.genere === 'insieme' && l.insieme &&
     (l.insieme.componenti || []).some(c => c.voceID === VOCE_PIANTE || c.tipoID === 'piantumazione');
-  const misura = numeroDaTesto(l.misura), ore = numeroDaTesto(l.ore);
   if ((l.genere === 'manodopera' || l.genere === 'libera') && !String(l.nome || '').trim()) {
     return 'Scrivi cosa c\'è da fare nella lavorazione di sole ore';
   }
@@ -626,21 +625,16 @@ function lavorazioneIncompleta(l) {
   if (l.genere === 'insieme' && !(l.insieme && (l.insieme.componenti || []).length)) {
     return `Spunta cosa c'è da fare in «${nome}»`;
   }
-  // Un settore senza unità — le potature — si stima in ore, e non si misura.
-  if (((l.genere === 'insieme' && l.unita) || l.genere === 'voce') && !(misura > 0)) {
-    return `Scrivi quanto misura «${nome}»`;
-  }
+  // Misura e ore non si chiedono: spesso escono dopo, dalle misure prese col
+  // metro o dal disegno, e fermare il rilievo in giardino per un numero che non
+  // c'è ancora voleva dire inventarlo. In ufficio i componenti senza misura restano
+  // da scrivere, e un lavoro senza ore va in lavagna largo il minimo: tutti e due
+  // lo dicono.
   // Quante piante e quali le decide l'ufficio: dal campo partono la misura e una
   // descrizione di piante e stile, ed è quella che non si può più chiedere dopo.
   // Un rilievo di prima, con la pianta scritta, vale ancora.
   if (conPiante && !String(l.stile || '').trim() && !String(l.pianta || '').trim()) {
     return `Scrivi piante e stile di «${nome}»`;
-  }
-  if ((l.genere === 'insieme' || l.genere === 'manodopera') && !(ore > 0)) {
-    return `Scrivi le ore di «${nome}»`;
-  }
-  if (l.genere === 'libera' && !(misura > 0) && !(ore > 0)) {
-    return `Scrivi quanto misura «${nome}», o quante ore ci vogliono`;
   }
   return '';
 }

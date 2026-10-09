@@ -3444,8 +3444,7 @@ function unitaPerLaRiga(unita) {
 }
 
 // Cosa manca a una lavorazione per partire, detto con le parole di chi la
-// guarda. Una lavorazione senza misura o senza ore è un'aiuola senza stima: in
-// ufficio non si può più chiedere, e in lavagna il pomeriggio sembrerebbe libero.
+// guarda: cosa c'è da fare, non quanto — misura e ore possono arrivare dopo.
 // Le regole stanno in rapportino.js, le stesse della scrivania dell'ufficio.
 function cosaMancaLavorazione(l) {
   return lavorazioneIncompleta(lavorazioneDalTelefono(l));
