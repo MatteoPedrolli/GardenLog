@@ -126,6 +126,7 @@ tr.cosa-fascia td { color: var(--text-mid); font-size: 0.86rem; padding-top: 0; 
 }
 .etichetta.nuovo { background: var(--velo); color: var(--inchiostro); }
 .etichetta.corretto { background: #fdebd0; color: #9c5700; }
+.etichetta.prova { background: transparent; color: var(--inchiostro); border: 1px dashed currentColor; }
 .etichetta.fatturato { background: var(--foglio); color: var(--inchiostro-tenue); }
 .etichetta.da-fatturare { background: var(--earth-light); color: var(--earth); }
 
@@ -2143,6 +2144,14 @@ function riassuntoRicontrolla() {
 // non si legge, e quello che non si legge tanto vale non scriverlo.
 const NOVITA = [
   {
+    versione: '2026-10-09.1',
+    data: '2026-10-09',
+    titolo: 'Rilievi di prova',
+    righe: [
+      'Per provare i preventivi da un altro PC: collega una **cartella vuota** e in **Preventivi** compare **＋ Rilievo di prova**, che scrive un rilievo finto da preventivare. Nella cartella dell\'ufficio il tasto non c\'è.',
+    ],
+  },
+  {
     versione: '2026-10-06.3',
     data: '2026-10-06',
     titolo: 'Niente somme in archivio',
@@ -2396,6 +2405,101 @@ async function caricaRilievi() {
     }
   }
   return trovati.sort((a, b) => String(b.doc.creato).localeCompare(String(a.doc.creato)));
+}
+
+// ── I RILIEVI DI PROVA ──
+// Per provare i preventivi da un PC che la cartella vera non la vede: si collega
+// una cartella vuota, e un tasto ci scrive dentro un rilievo finto. Lo fa
+// costruisciRilievo(), la stessa funzione del telefono, così quello che si prova
+// è il documento che arriva davvero dal campo e non una sua imitazione.
+//
+// Qui l'ufficio scrive in rilievi/, che è del telefono: è il motivo per cui il
+// tasto c'è **solo in una cartella di prova** — niente rapportini, niente archivio,
+// nessun rilievo o preventivo vero. Nella cartella dell'ufficio un rilievo finto
+// finirebbe fra i preventivi da fare, accetterlo lo metterebbe in lavagna e da lì
+// nell'agenda del telefono; e da qui non si cancella. Il controllo si rifà anche
+// al clic, non solo nel disegno del bottone.
+function cartellaDiProva() {
+  return !ARCHIVIO.length && !ARRIVI.length &&
+    RILIEVI.every(r => r.doc.prova) &&
+    PREVENTIVI.every(p => p.doc.daRilievo && p.doc.daRilievo.prova);
+}
+
+// Quattro rilievi che a giro toccano tutti i generi di lavorazione: la siepe
+// misurata a metri col sesto, l'aiuola a m² col numero di piante, la voce a
+// misura, la manodopera, la riga libera, e un rilievo che aspetta il disegno.
+// Nomi e contatti sono finti apposta: il repository è pubblico, e la mail è su un
+// dominio che non esiste per nessuno, così «Manda per mail» si prova senza
+// scrivere a qualcuno.
+const COMPONENTI_PROVA = [
+  { TipoID: 'piantumazione', VoceID: VOCE_PIANTE, Voce: 'Piante', Unita: 'n' },
+  { TipoID: 'pacciamatura', VoceID: 'pacciamatura', Voce: 'Pacciamatura', Unita: 'q' },
+  { TipoID: 'ala-gocciolante', VoceID: 'ala-gocciolante', Voce: 'Ala gocciolante', Unita: 'm' },
+  { TipoID: 'telo-pacciamante', VoceID: 'telo-pacciamante', Voce: 'Telo pacciamante', Unita: 'm²' },
+];
+const RILIEVI_DI_PROVA = [
+  { cosa: 'siepe', citta: 'Lavis', note: 'Accesso dal cancello sul retro, il camion resta in strada.', lavorazioni: [
+    { Genere: 'insieme', TipoID: 'siepe-nuova', Nome: 'Siepe nuova', Misura: '24', Unita: 'm',
+      Pianta: 'Lauro 80-100', Sesto: '0,40', Ore: '10' },
+    { Genere: 'voce', VoceID: 'smaltimento-verde', Nome: 'Smaltimento verde', Misura: '300', Unita: 'kg' },
+  ] },
+  { cosa: 'aiuola', citta: 'Mezzocorona', note: 'Rubinetto in garage, chiedere le chiavi.', lavorazioni: [
+    { Genere: 'insieme', TipoID: 'aiuola', Nome: 'Aiuola', Misura: '18', Unita: 'm²',
+      Pianta: 'Graminacee miste', Piante: '25', Ore: '6' },
+    { Genere: 'manodopera', Nome: 'Potatura arbusti', Ore: '4' },
+    { Genere: 'libera', Nome: 'Elettrovalvola', Misura: '1', Unita: 'n' },
+  ] },
+  { cosa: 'prato', citta: 'Trento', disegno: true, note: 'Terreno in pendenza verso la strada.', lavorazioni: [
+    { Genere: 'voce', VoceID: 'asporto-terriccio', Nome: 'Asporto terriccio', Misura: '6', Unita: 'm³' },
+    { Genere: 'manodopera', Nome: 'Livellamento', Ore: '8' },
+    { Genere: 'libera', Nome: 'Prato in rotoli', Misura: '120', Unita: 'm²' },
+  ] },
+  { cosa: 'giardino nuovo', citta: 'Lavis', note: 'Il cliente vuole sapere anche il costo con la bordura in corten.', lavorazioni: [
+    { Genere: 'insieme', TipoID: 'siepe-nuova', Nome: 'Siepe nuova', Misura: '40', Unita: 'm',
+      Pianta: 'Photinia 100-125', Sesto: '0,50', Ore: '14' },
+    { Genere: 'insieme', TipoID: 'aiuola', Nome: 'Aiuola', Misura: '10', Unita: 'm²',
+      Pianta: 'Lavanda', Piante: '12', Ore: '3' },
+    { Genere: 'voce', VoceID: 'terra-vegetale', Nome: 'Terra vegetale', Misura: '3', Unita: 'm³' },
+  ] },
+];
+
+async function scriviRilievoDiProva() {
+  if (!CARTELLA) return;
+  if (!cartellaDiProva()) {
+    avvisa('Questa non è una cartella di prova: ci sono rapportini, conti o rilievi veri. I rilievi di prova si scrivono solo in una cartella vuota.', true);
+    return;
+  }
+  const n = RILIEVI.length + 1;
+  const es = RILIEVI_DI_PROVA[(n - 1) % RILIEVI_DI_PROVA.length];
+  const id = 'prova-' + Date.now().toString(36);
+  const doc = costruisciRilievo({
+    rilievo: {
+      RilievoID: id,
+      Anagrafica: { Cliente: 'Prova ' + n + ' – ' + es.cosa, Indirizzo: 'Via di prova ' + n, Citta: es.citta,
+        Telefono: '000 000 0000', Email: 'prova' + n + '@esempio.invalid' },
+      Disegno: !!es.disegno,
+      Note: es.note,
+      Lavorazioni: es.lavorazioni.map((l, i) => ({
+        LavID: id + '-' + i, Misura: '', Unita: '', Pianta: '', Sesto: '', Piante: '', Ore: '', Note: '',
+        TipoID: '', VoceID: '', ...l,
+        Componenti: l.Genere === 'insieme' ? COMPONENTI_PROVA.map(c => ({ ...c })) : [],
+      })),
+    },
+    cliente: null,
+    voci: [],
+  });
+  doc.prova = true;
+  try {
+    const cartella = await sottocartella(CARTELLA, CARTELLA_RILIEVI, true);
+    await scriviTesto(cartella, nomeFileRilievo(doc), JSON.stringify(doc, null, 2));
+    await ricarica();
+  } catch (e) {
+    avvisa('Il rilievo di prova non si è scritto: ' + e.message, true);
+    return;
+  }
+  GRUPPO_PREVENTIVI = 'aperti';
+  disegna();
+  avvisa('Rilievo di prova scritto: «' + doc.cliente.nome + '», fra gli aperti');
 }
 
 // ── IL PREVENTIVO ──
@@ -3793,6 +3897,7 @@ function disegnaPreventivi() {
           '<span class="nome-cliente">' + perValore(d.cliente.nome || 'senza nome') + '</span>' +
           (rifare ? '<span class="etichetta corretto">corretto dal campo · rev ' + d.revisione + '</span>'
                   : '<span class="etichetta nuovo">nuovo</span>') +
+          (d.prova ? '<span class="etichetta prova">prova</span>' : '') +
           '<span class="meta" style="margin-left:auto">' + formattaData(d.creato) + '</span>' +
         '</div>' +
         '<div class="meta" style="margin-top:6px">' +
@@ -3824,6 +3929,7 @@ function disegnaPreventivi() {
       '<div class="riga-scheda">' +
         '<span class="nome-cliente">' + perValore(d.cliente.nome || 'senza nome') + '</span>' +
         '<span class="etichetta ' + (d.stato === 'accettato' ? 'corretto' : 'nuovo') + '">' + etichetta + '</span>' +
+        (d.daRilievo && d.daRilievo.prova ? '<span class="etichetta prova">prova</span>' : '') +
         // Con le alternative il totale è più d'uno: si dice da quanto a quanto,
         // che è quello che si risponde al telefono prima che il cliente scelga.
         '<span class="meta" style="margin-left:auto">' + forchettaPreventivo(d) + '</span>' +
@@ -3837,7 +3943,9 @@ function disegnaPreventivi() {
     '</div>';
   });
 
-  html += '<div class="bottoni"><button class="secondaria" onclick="ricontrolla()">Ricontrolla la cartella</button></div>';
+  html += '<div class="bottoni"><button class="secondaria" onclick="ricontrolla()">Ricontrolla la cartella</button>' +
+    (cartellaDiProva() ? '<button class="secondaria" onclick="scriviRilievoDiProva()">＋ Rilievo di prova</button>' : '') +
+    '</div>';
   c.innerHTML = html;
 }
 

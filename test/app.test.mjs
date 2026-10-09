@@ -4170,6 +4170,62 @@ try {
       return stampato && document.getElementById('foglio').innerHTML.includes('Scheda di cantiere');
     }));
 
+  // ── I RILIEVI DI PROVA ──
+  // Da casa la cartella vera non c'è: si collega una cartella vuota e un tasto ci
+  // scrive dei rilievi finti. Il tasto scrive in rilievi/, che è del telefono, e
+  // per questo nella cartella vera non deve esserci — né il bottone né la
+  // funzione chiamata a mano.
+  const provaVera = await pagU.evaluate(async () => {
+    vaiA('preventivi');
+    const c = await window.RADICE.getDirectoryHandle('rilievi');
+    const prima = [...c._file.keys()].length;
+    const bottone = document.getElementById('pagina-preventivi').textContent.includes('Rilievo di prova');
+    await scriviRilievoDiProva();
+    return { bottone, prima, dopo: [...c._file.keys()].length, diProva: cartellaDiProva() };
+  });
+  ok('nella cartella vera il tasto dei rilievi di prova non c\'è',
+    !provaVera.bottone && !provaVera.diProva, JSON.stringify(provaVera));
+  ok('e chiamato a mano non scrive niente', provaVera.prima === provaVera.dopo, JSON.stringify(provaVera));
+
+  const prova = await pagU.evaluate(async () => {
+    window.CASA = window.creaCartellaFinta('Prova');
+    await usaCartella(window.CASA);
+    vaiA('preventivi');
+    const bottone = [...document.querySelectorAll('#pagina-preventivi button')]
+      .find(b => b.textContent.includes('Rilievo di prova'));
+    if (!bottone) return { bottone: false };
+    bottone.click();
+    await new Promise(r => setTimeout(r, 100));
+    const primo = RILIEVI[0] && RILIEVI[0].doc;
+    const schermo = document.getElementById('pagina-preventivi').textContent;
+    const etichetta = !!document.querySelector('#pagina-preventivi .etichetta.prova');
+    const file = [...window.CASA._sotto.get('rilievi')._file.keys()].length;
+    for (let i = 0; i < 3; i++) await scriviRilievoDiProva();
+    const generi = new Set(RILIEVI.flatMap(r => r.doc.lavorazioni.map(l => l.genere)));
+    apriPreventivo(primo.id);
+    const siepe = PREVENTIVO.doc.righe.find(r => (r.componenti || []).length);
+    const piante = siepe && siepe.componenti.find(c => c.voceID === VOCE_PIANTE);
+    return {
+      bottone: true, file,
+      nome: primo.cliente.nome, prova: primo.prova, ore: primo.ore, mezze: primo.mezze,
+      etichetta: etichetta && schermo.includes('Prova 1'),
+      quanti: RILIEVI.length, generi: [...generi].sort().join(), disegno: RILIEVI.some(r => r.doc.disegno),
+      piante: piante && piante.quantita, daRilievo: !!(PREVENTIVO.doc.daRilievo && PREVENTIVO.doc.daRilievo.prova),
+      ancoraProva: cartellaDiProva(),
+    };
+  });
+  ok('in una cartella vuota il tasto c\'è, e scrive un rilievo in rilievi/',
+    prova.bottone && prova.file === 1, JSON.stringify(prova));
+  ok('il rilievo di prova si legge come uno del telefono, segnato come prova',
+    prova.prova === true && /^Prova 1 – /.test(prova.nome) && prova.ore === 10 && prova.mezze === 2,
+    JSON.stringify(prova));
+  ok('e fra gli aperti si vede, con la sua etichetta', prova.etichetta);
+  ok('a giro i rilievi di prova toccano tutti i generi di lavorazione, e uno aspetta il disegno',
+    prova.quanti === 4 && prova.generi === 'insieme,libera,manodopera,voce' && prova.disegno, prova.generi);
+  ok('il preventivo ne esce come da un rilievo vero: 24 m a sesto 0,40 sono 61 piante',
+    prova.piante === 61 && prova.daRilievo, String(prova.piante));
+  ok('e con i suoi rilievi la cartella resta di prova', prova.ancoraProva);
+
   ok('nessun errore JavaScript nell\'app dell\'ufficio', erroriU.length === 0, erroriU.join(' | '));
   await ctxU.close();
 

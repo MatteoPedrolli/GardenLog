@@ -598,6 +598,16 @@ In ufficio la pagina Rilievi **legge e non tocca**: un file, un solo autore, com
 `rapportini/`. Dice anche chi non è in anagrafica, perché telefono e mail — quello
 che serve per richiamare e mandare il preventivo — stanno solo lì.
 
+**L'unica eccezione sono i rilievi di prova**, ed è chiusa apposta. Per provare i
+preventivi da un PC che non vede la cartella vera si collega una cartella vuota, e
+in Preventivi un tasto scrive in `rilievi/` un rilievo finto (`scriviRilievoDiProva()`),
+fatto da `costruisciRilievo()` come quelli del telefono e segnato `prova: true`. Il
+tasto c'è **solo in una cartella di prova** (`cartellaDiProva()`: niente rapportini,
+niente archivio, nessun rilievo o preventivo vero), e la funzione lo ricontrolla al
+clic: nella cartella dell'ufficio un rilievo finto finirebbe fra i preventivi da fare,
+accettato andrebbe in lavagna e da lì nell'agenda del telefono — e da qui non si
+cancella. Nomi e contatti dei rilievi di prova sono finti, la mail su `.invalid`.
+
 ## Il prezzo che aspetta di essere guardato
 
 **Il margine fra costo e prezzo non è una regola.** Dipende dal lavoro, dal
