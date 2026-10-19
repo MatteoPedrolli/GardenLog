@@ -263,6 +263,11 @@ function costruisciAppuntamento({ prenotazione, cliente }) {
     // non è un sopralluogo, ed è quello che erano tutti prima.
     sopralluogo: prenotazione.Sopralluogo === 'Sì' || prenotazione.Sopralluogo === true,
     note: prenotazione.Note || '',
+    // Chi ha prenotato, col nome scritto nelle impostazioni della sua app: in
+    // lavagna il cartellino dice «prenotato da Matteo», e chi pianifica sa a chi
+    // chiedere. Arrivato dopo, senza alzare la versione: un appuntamento che non
+    // lo porta dice solo «prenotato».
+    prenotatoDa: String(prenotazione.PrenotatoDa || '').trim(),
   };
 }
 
@@ -289,7 +294,16 @@ function leggiAppuntamento(grezzo) {
     settimana: doc.settimana || '',
     requisiti: Array.isArray(doc.requisiti) ? doc.requisiti : [],
     sopralluogo: !!doc.sopralluogo,
+    prenotatoDa: String(doc.prenotatoDa || '').trim(),
   };
+}
+
+// Come si legge sul cartellino. «Prenotato dal cantiere» e «dal capo» dicevano un
+// ruolo e non una persona, e a chi lo leggeva suonava male: adesso c'è il nome, e
+// senza nome solo «prenotato».
+function origineDellaPrenotazione(doc) {
+  const chi = String((doc && doc.prenotatoDa) || '').trim();
+  return chi ? 'prenotato da ' + chi : 'prenotato';
 }
 
 function nomeFileAppuntamento(doc) {
@@ -786,7 +800,7 @@ function nomeFileRilievo(doc) {
 if (typeof module !== 'undefined' && module.exports) {
   module.exports = {
     VERSIONE_RAPPORTINO, costruisciRapportino, leggiRapportino, nomeFileRapportino,
-    VERSIONE_APPUNTAMENTO, costruisciAppuntamento, leggiAppuntamento, nomeFileAppuntamento,
+    VERSIONE_APPUNTAMENTO, costruisciAppuntamento, leggiAppuntamento, nomeFileAppuntamento, origineDellaPrenotazione,
     VERSIONE_AGENDA, APPUNTAMENTI_IN_AGENDA, costruisciAgenda, leggiAgenda, etichettaMezzaGiornata,
     ORE_MEZZA, VOCE_MANODOPERA, VOCE_PIANTE, numeroDaTesto, oreManodopera, oreDelleLavorazioni,
     mezzeDaOre, pianteDaSesto, pianteDellaLavorazione, GENERI_LAVORAZIONE,

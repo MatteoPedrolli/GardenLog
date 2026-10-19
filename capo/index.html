@@ -124,7 +124,7 @@ footer button { background: none; border: none; color: var(--text-light); text-d
   <div class="sezione" id="da-consegnare-titolo" style="display:none"><h2>Da consegnare</h2></div>
   <div id="da-consegnare"></div>
 
-  <footer><button onclick="apriImpostazioni()">Indirizzo di consegna</button></footer>
+  <footer><button onclick="apriImpostazioni()">Impostazioni</button></footer>
 </main>
 
 <button id="prenota" onclick="apriPrenotazione()">＋ Prenota un appuntamento</button>
@@ -172,16 +172,21 @@ footer button { background: none; border: none; color: var(--text-light); text-d
 
 <div class="velo" id="velo-impostazioni" onclick="if (event.target === this) chiudi('velo-impostazioni')">
   <div class="pannello">
-    <h3>Indirizzo di consegna</h3>
-    <p class="nota" style="margin-bottom:12px">È l'indirizzo dello script dell'ufficio, lo stesso del telefono del
-      cantiere: da lì arriva quello che è in programma e lì partono le prenotazioni.</p>
+    <h3>Impostazioni</h3>
     <div class="campo">
-      <label for="i-indirizzo">Indirizzo</label>
+      <label for="i-nome">Come ti chiami</label>
+      <input type="text" id="i-nome" placeholder="Es. Chiara" autocomplete="off">
+      <div class="eco">Sulla lavagna dell'ufficio le tue prenotazioni dicono «prenotato da» e questo nome.</div>
+    </div>
+    <div class="campo">
+      <label for="i-indirizzo">Indirizzo di consegna</label>
+      <div class="eco" style="margin:0 0 6px">È l'indirizzo dello script dell'ufficio, lo stesso del telefono del
+        cantiere: da lì arriva quello che è in programma e lì partono le prenotazioni.</div>
       <input type="url" id="i-indirizzo" placeholder="https://script.google.com/macros/s/…/exec" autocomplete="off">
     </div>
     <div class="bottoni">
       <button class="bottone" onclick="chiudi('velo-impostazioni')">Lascia stare</button>
-      <button class="bottone principale" onclick="salvaIndirizzo(document.getElementById('i-indirizzo').value)">Salva</button>
+      <button class="bottone principale" onclick="salvaImpostazioni()">Salva</button>
     </div>
   </div>
 </div>
@@ -199,14 +204,14 @@ footer button { background: none; border: none; color: var(--text-light); text-d
 //
 // Parla con l'ufficio con gli stessi due documenti del telefono, dallo stesso
 // script: legge l'agenda e manda appuntamenti. Nessun documento nuovo, nessuna
-// riga in più in CARTELLE. L'appuntamento porta `da: 'capo'`, arrivato senza
-// alzare VERSIONE_APPUNTAMENTO, perché in lavagna il cartellino dica «prenotato
-// dal capo» e non «dal cantiere»: chi pianifica deve sapere a chi chiedere.
+// riga in più in CARTELLE. L'appuntamento porta il nome scritto in Impostazioni,
+// e in lavagna il cartellino dice «prenotato da Chiara»: chi pianifica deve sapere
+// a chi chiedere.
 
 // Tutto in localStorage: sono quattro cose piccole — l'indirizzo, l'agenda
 // scaricata, la coda — e nessuna è l'unica copia di un lavoro fatto. Una
 // prenotazione resta qui solo finché non arriva in ufficio.
-const CHIAVI = { indirizzo: 'capo-indirizzo', agenda: 'capo-agenda', coda: 'capo-coda' };
+const CHIAVI = { indirizzo: 'capo-indirizzo', nome: 'capo-nome', agenda: 'capo-agenda', coda: 'capo-coda' };
 
 function leggi(chiave, predefinito) {
   try {
@@ -243,10 +248,12 @@ function chiudi(id) { document.getElementById(id).classList.remove('aperto'); }
 // Letto, sparisce dalla barra, così il link salvato fra i preferiti non lo
 // rimette ogni volta. Resta modificabile in fondo alla pagina.
 function indirizzo() { return String(leggi(CHIAVI.indirizzo, '') || '').trim(); }
+function nome() { return String(leggi(CHIAVI.nome, '') || '').trim(); }
 
-function salvaIndirizzo(valore) {
-  const url = String(valore || '').trim();
+function salvaImpostazioni() {
+  const url = document.getElementById('i-indirizzo').value.trim();
   if (url && !/^https:\/\//.test(url)) { avvisa('L\'indirizzo deve cominciare con https://', true); return false; }
+  if (!scrivi(CHIAVI.nome, document.getElementById('i-nome').value.trim())) return false;
   if (!scrivi(CHIAVI.indirizzo, url)) return false;
   chiudi('velo-impostazioni');
   disegna();
@@ -255,15 +262,19 @@ function salvaIndirizzo(valore) {
 }
 
 function apriImpostazioni() {
+  document.getElementById('i-nome').value = nome();
   document.getElementById('i-indirizzo').value = indirizzo();
   document.getElementById('velo-impostazioni').classList.add('aperto');
 }
 
+// Anche il nome può arrivare col link (…&nome=Chiara): chi lo manda lo sa già.
 function indirizzoDalLink() {
   const parametri = new URLSearchParams(location.search);
   const url = parametri.get('indirizzo');
-  if (!url) return;
-  if (/^https:\/\//.test(url.trim())) scrivi(CHIAVI.indirizzo, url.trim());
+  const chi = parametri.get('nome');
+  if (!url && !chi) return;
+  if (url && /^https:\/\//.test(url.trim())) scrivi(CHIAVI.indirizzo, url.trim());
+  if (chi && chi.trim()) scrivi(CHIAVI.nome, chi.trim());
   history.replaceState(null, '', location.pathname);
 }
 
@@ -359,8 +370,8 @@ let salvataggioInCorso = false;
 async function salvaPrenotazione() {
   if (salvataggioInCorso) return;
   const valore = id => document.getElementById(id).value.trim();
-  const nome = valore('p-cliente');
-  if (!nome) { avvisa('Scrivi il nome del cliente', true); return; }
+  const cliente = valore('p-cliente');
+  if (!cliente) { avvisa('Scrivi il nome del cliente', true); return; }
   const note = valore('p-note');
   if (!note) { avvisa('Scrivi cosa c\'è da fare', true); return; }
   const prenotazione = {
@@ -372,8 +383,9 @@ async function salvaPrenotazione() {
     Requisiti: valore('p-requisiti'),
     Sopralluogo: document.getElementById('p-sopralluogo').checked ? 'Sì' : '',
     Note: note,
+    PrenotatoDa: nome(),
   };
-  const doc = { ...costruisciAppuntamento({ prenotazione, cliente: { Cliente: nome, Citta: valore('p-paese') } }), da: 'capo' };
+  const doc = costruisciAppuntamento({ prenotazione, cliente: { Cliente: cliente, Citta: valore('p-paese') } });
   salvataggioInCorso = true;
   try {
     // Prima sul telefono, poi verso l'ufficio: al contrario, una consegna riuscita
@@ -469,12 +481,14 @@ function disegnaCoda() {
 function disegna() {
   document.getElementById('oggi').textContent = new Date().toLocaleDateString('it-IT',
     { weekday: 'long', day: 'numeric', month: 'long' });
-  const manca = !indirizzo();
+  // Senza indirizzo non arriva e non parte niente; senza nome le prenotazioni
+  // partono, ma in lavagna dicono solo «prenotato». Tutte e due si chiedono qui.
+  const manca = !indirizzo() ? 'l\'indirizzo di consegna dell\'ufficio: apri il link che ti hanno mandato, o scrivilo qui'
+    : !nome() ? 'il tuo nome, perché in ufficio sappiano chi ha prenotato' : '';
   const el = document.getElementById('impostare');
   el.style.display = manca ? 'block' : 'none';
-  el.innerHTML = manca ? '<div class="card"><div class="nota">Per cominciare serve l\'indirizzo di consegna ' +
-    'dell\'ufficio: apri il link che ti hanno mandato, o scrivilo qui.</div>' +
-    '<button class="bottone principale" style="margin-top:10px" onclick="apriImpostazioni()">Scrivi l\'indirizzo</button></div>' : '';
+  el.innerHTML = manca ? '<div class="card"><div class="nota">Per cominciare serve ' + manca + '.</div>' +
+    '<button class="bottone principale" style="margin-top:10px" onclick="apriImpostazioni()">Impostazioni</button></div>' : '';
   disegnaAgenda();
   disegnaCoda();
 }

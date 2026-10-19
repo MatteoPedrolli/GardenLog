@@ -1012,9 +1012,7 @@ async function assorbiAppuntamenti() {
       ore: doc.ore,
       note: doc.note || '',
       settimana: doc.settimana || '',
-      // Dal telefono del capo il documento porta `da: 'capo'`: chi pianifica
-      // deve sapere a chi chiedere se le note non bastano.
-      origine: doc.da === 'capo' ? 'prenotato dal capo' : 'prenotato dal cantiere',
+      origine: origineDellaPrenotazione(doc),
       requisiti: doc.requisiti,
       sopralluogo: doc.sopralluogo,
       stato: 'lista',
@@ -1192,7 +1190,9 @@ function sistemaLavoro(l) {
     // Non un giorno preciso: il giorno lo decide chi pianifica trascinandolo,
     // e prometterlo prima vorrebbe dire spostarlo tre volte.
     settimana: l.settimana ? lunediDellaSettimana(l.settimana) : '',
-    origine: l.origine || '',
+    // I cartellini entrati prima del nome dicevano «dal cantiere» o «dal capo»: un
+    // ruolo, e suonava male. Il nome non si può recuperare, e restano «prenotato».
+    origine: /^prenotato dal (cantiere|capo)$/.test(l.origine || '') ? 'prenotato' : (l.origine || ''),
     requisiti: Array.isArray(l.requisiti) ? l.requisiti.filter(r => r) : [],
     // Cosa c'è da fare e cosa c'è da ricordare: «potatura siepe di lauro»,
     // «chiedere della chiave del cancello». Un campo solo, perché erano due
@@ -2176,12 +2176,20 @@ function riassuntoRicontrolla() {
 // non si legge, e quello che non si legge tanto vale non scriverlo.
 const NOVITA = [
   {
+    versione: '2026-10-19.3',
+    data: '2026-10-19',
+    titolo: 'Chi ha prenotato',
+    righe: [
+      'Sui cartellini delle prenotazioni c\'è il **nome di chi ha prenotato** — «prenotato da Matteo», «prenotato da Chiara» — preso dalle impostazioni della sua app. Al posto di «dal cantiere» e «dal capo».',
+    ],
+  },
+  {
     versione: '2026-10-19.2',
     data: '2026-10-19',
     titolo: 'L\'app del capo',
     righe: [
       'Il capo ha un\'app sua, all\'indirizzo dell\'app con **/capo/** in fondo: vede quello che è **in programma** sulla lavagna e **prenota** appuntamenti.',
-      'Le sue prenotazioni entrano in lavagna come quelle del cantiere, con **«prenotato dal capo»** sul cartellino.',
+      'Le sue prenotazioni entrano in lavagna come quelle del cantiere.',
     ],
   },
   {

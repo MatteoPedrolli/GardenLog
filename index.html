@@ -796,9 +796,10 @@ select.form-control { background-image: url("data:image/svg+xml,%3Csvg xmlns='ht
                  oninput="salvaImpostazione('UrlRapportini', this.value)">
         </div>
         <div class="form-group">
-          <label class="form-label">Come firmarti</label>
-          <input type="text" class="form-control" id="f-imp-firma"
+          <label class="form-label">Come ti chiami</label>
+          <input type="text" class="form-control" id="f-imp-firma" placeholder="Es. Matteo"
                  oninput="salvaImpostazione('NomeMittente', this.value)">
+          <div class="dati-nota" style="margin:4px 0 0">Sulla lavagna dell'ufficio le tue prenotazioni dicono «prenotato da» e questo nome.</div>
         </div>
         <div class="form-group">
           <label class="form-label">Chiave dei sopralluoghi</label>
@@ -3191,6 +3192,8 @@ async function salvaPrenotazione() {
     Requisiti: document.getElementById('f-pren-requisiti').value.trim(),
     Sopralluogo: document.getElementById('f-pren-sopralluogo').checked ? 'Sì' : '',
     Note: note,
+    // Il nome di «Come ti chiami»: in lavagna il cartellino dice «prenotato da …».
+    PrenotatoDa: (DB.impostazioni?.NomeMittente || '').trim(),
     Creata: new Date().toISOString(),
     Consegnata: '',
   };

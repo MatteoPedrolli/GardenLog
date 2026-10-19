@@ -96,15 +96,17 @@ Per collegarla basta mandare al capo un link solo, con l'indirizzo dello script
 dentro:
 
 ```
-https://<indirizzo dell'app>/capo/?indirizzo=<indirizzo dello script>
+https://<indirizzo dell'app>/capo/?indirizzo=<indirizzo dello script>&nome=<il suo nome>
 ```
 
-Aperto il link, l'indirizzo resta salvato sul suo telefono e sparisce dalla barra;
-da lì si aggiunge alla schermata home come l'app del cantiere. Se serve cambiarlo,
-c'è «Indirizzo di consegna» in fondo alla pagina.
+Aperto il link, indirizzo e nome restano salvati sul suo telefono e spariscono
+dalla barra; da lì si aggiunge alla schermata home come l'app del cantiere. Per
+cambiarli c'è «Impostazioni» in fondo alla pagina.
 
-Le sue prenotazioni entrano in lavagna come quelle del cantiere, con «prenotato
-dal capo» accanto.
+Le sue prenotazioni entrano in lavagna come quelle del cantiere. Ogni cartellino
+dice chi l'ha prenotato col nome scritto nelle impostazioni della sua app —
+«prenotato da Chiara», «prenotato da Matteo» — e solo «prenotato» se il nome
+non c'è.
 
 ## Due pezzi da installare, una volta sola
 

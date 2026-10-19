@@ -430,6 +430,9 @@ try {
   // Un campo solo per cosa c'è da fare e cosa ricordare: erano due caselle per
   // dire la stessa cosa, e una restava sempre indietro.
   await page.fill('#f-pren-note', 'Potatura siepe di lauro\nchiedere della chiave del cancello');
+  // Il nome di «Come ti chiami» viaggia con la prenotazione: in lavagna il
+  // cartellino dice «prenotato da Matteo».
+  await page.evaluate(() => { DB.impostazioni.NomeMittente = 'Matteo'; });
   await page.click('#overlay-prenotazione .btn-primary');
   await page.waitForTimeout(500);
 
@@ -443,6 +446,8 @@ try {
   ok('il documento è un appuntamento, non un rapportino',
     docAppuntamento.tipo === 'appuntamento' && docAppuntamento.versione === 3,
     docAppuntamento.tipo + ' v' + docAppuntamento.versione);
+  ok('e dice chi ha prenotato, col nome delle impostazioni',
+    docAppuntamento.prenotatoDa === 'Matteo', JSON.stringify(docAppuntamento.prenotatoDa));
   // Da quando il prossimo intervento non si scrive più in fondo alla visita, le
   // note della prenotazione sono il posto dove va cosa c'è da fare e cosa
   // ricordare. Sono anche l'unica cosa che fa il giro completo.
@@ -3149,7 +3154,7 @@ try {
     return LAVAGNA.lavori.find(l => l.da === d.id) || null;
   }, docAppuntamento);
   ok('la prenotazione depositata compare sulla lavagna senza premere niente',
-    !!prenotata && prenotata.origine === 'prenotato dal cantiere',
+    !!prenotata && prenotata.origine === 'prenotato da Matteo',
     JSON.stringify(prenotata && prenotata.origine));
   ok('con la settimana, non con un giorno inventato',
     prenotata && prenotata.settimana === '2027-03-15' && !prenotata.giorno,
@@ -3163,7 +3168,7 @@ try {
     const testo = document.getElementById('pagina-lavagna').textContent;
     MOSTRA_FUTURI = prima;
     vaiA('lavagna');
-    return { fascia: /prenotazion[ei] arrivat[ae]/.test(testo), cartellino: testo.includes('prenotato dal cantiere') };
+    return { fascia: /prenotazion[ei] arrivat[ae]/.test(testo), cartellino: testo.includes('prenotato da Matteo') };
   });
   ok('in lavagna niente fascia delle prenotazioni arrivate, ma il cartellino dice da dove viene',
     !fasciaPrenotati.fascia && fasciaPrenotati.cartellino, JSON.stringify(fasciaPrenotati));
@@ -3512,18 +3517,18 @@ try {
   pagC.on('pageerror', e => erroriJS.push('capo: ' + e));
   pagC.on('console', m => { if (m.type() === 'error' && !m.text().includes('Failed to load resource')) erroriJS.push('capo console: ' + m.text()); });
   pagC.on('response', r => { if (r.status() >= 400) risorseKO.push(`${r.url()} (HTTP ${r.status()})`); });
-  await pagC.goto(BASE + 'capo/?indirizzo=' + encodeURIComponent(CONSEGNA), { waitUntil: 'load' });
+  await pagC.goto(BASE + 'capo/?indirizzo=' + encodeURIComponent(CONSEGNA) + '&nome=Chiara', { waitUntil: 'load' });
   await pagC.waitForFunction(() => document.querySelectorAll('#agenda .card .cliente').length > 0, null, { timeout: 5000 }).catch(() => {});
   const capoAvvio = await pagC.evaluate(a => {
     const oggi = dataISO(new Date());
     const attesi = JSON.parse(a).appuntamenti.filter(x => x.giorno >= oggi);
     const testo = document.getElementById('agenda').textContent;
-    return { cerca: location.search, indirizzo: indirizzo(), carte: document.querySelectorAll('#agenda .card .cliente').length,
+    return { cerca: location.search, indirizzo: indirizzo(), nome: nome(), carte: document.querySelectorAll('#agenda .card .cliente').length,
       attesi: attesi.length, primo: attesi[0] && testo.includes(attesi[0].cliente),
       niente: !document.body.textContent.match(/Visite|Rilievi|Clienti/) };
   }, agendaScritta);
   ok('l\'app del capo prende l\'indirizzo dal link e lo toglie dalla barra',
-    capoAvvio.cerca === '' && capoAvvio.indirizzo === CONSEGNA, JSON.stringify(capoAvvio));
+    capoAvvio.cerca === '' && capoAvvio.indirizzo === CONSEGNA && capoAvvio.nome === 'Chiara', JSON.stringify(capoAvvio));
   ok('e mostra quello che è in lavagna da oggi in avanti, come la pagina Prossimi del telefono',
     capoAvvio.attesi > 0 && capoAvvio.carte === capoAvvio.attesi && capoAvvio.primo && capoAvvio.niente, JSON.stringify(capoAvvio));
 
@@ -3549,8 +3554,8 @@ try {
   await pagC.click('#p-salva');
   await pagC.waitForTimeout(500);
   const docCapo = consegneCapo[0] || {};
-  ok('con le note parte verso l\'ufficio: un appuntamento come quelli del telefono, che dice di venire dal capo',
-    docCapo.tipo === 'appuntamento' && docCapo.da === 'capo' && docCapo.cliente?.nome === 'Ester Rossi' &&
+  ok('con le note parte verso l\'ufficio: un appuntamento come quelli del telefono, col nome di chi ha prenotato',
+    docCapo.tipo === 'appuntamento' && docCapo.prenotatoDa === 'Chiara' && docCapo.cliente?.nome === 'Ester Rossi' &&
     docCapo.cliente?.citta === 'Lavis' && docCapo.settimana === '2026-11-09' && docCapo.ore === 4.5 &&
     docCapo.sopralluogo === true && docCapo.note === 'Guardare la siepe lato strada' &&
     String(docCapo.id).startsWith('pren-capo-'), JSON.stringify(docCapo));
@@ -3606,9 +3611,16 @@ try {
     await cartella.removeEntry(nome);
     return r;
   }, docCapo);
-  ok('in lavagna la prenotazione del capo dice «prenotato dal capo»',
-    daCapo && daCapo.origine === 'prenotato dal capo' && daCapo.cliente === 'Ester Rossi' && daCapo.luogo === 'Lavis',
+  ok('in lavagna la prenotazione del capo dice «prenotato da Chiara»',
+    daCapo && daCapo.origine === 'prenotato da Chiara' && daCapo.cliente === 'Ester Rossi' && daCapo.luogo === 'Lavis',
     JSON.stringify(daCapo));
+  // Senza nome solo «prenotato», e i cartellini di prima perdono il ruolo: «dal
+  // cantiere» e «dal capo» suonavano male, e il nome non si può recuperare.
+  ok('senza nome il cartellino dice solo «prenotato», e quelli di prima anche',
+    await pagU.evaluate(() => origineDellaPrenotazione({ prenotatoDa: '  ' }) === 'prenotato' &&
+      sistemaLavoro({ cliente: 'X', origine: 'prenotato dal cantiere' }).origine === 'prenotato' &&
+      sistemaLavoro({ cliente: 'X', origine: 'prenotato dal capo' }).origine === 'prenotato' &&
+      sistemaLavoro({ cliente: 'X', origine: 'telefonata' }).origine === 'telefonata'));
   await ctx.unroute(CONSEGNA);
   await pagC.close();
 

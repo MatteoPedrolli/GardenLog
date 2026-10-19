@@ -454,22 +454,31 @@ l'agenda che arriva dall'ufficio e «＋ Prenota un appuntamento».
 **Nessun documento nuovo.** Legge l'agenda e manda appuntamenti dallo stesso script
 del telefono, con le stesse regole della coda (solo `status: "ok"`, niente
 Content-Type, il servizio che non risponde ferma la fila, un documento respinto no).
-L'appuntamento porta `da: 'capo'`, arrivato senza alzare `VERSIONE_APPUNTAMENTO`, e
-in lavagna il cartellino dice **«prenotato dal capo»**: chi pianifica deve sapere a
-chi chiedere se le note non bastano. L'identificativo comincia con `pren-capo-`,
-così due telefoni che prenotano nello stesso istante non scrivono lo stesso file.
+L'identificativo comincia con `pren-capo-`, così due telefoni che prenotano nello
+stesso istante non scrivono lo stesso file.
+
+**Ogni prenotazione dice chi l'ha fatta, col nome.** Il documento porta
+`prenotatoDa`, preso da «Come ti chiami» nelle impostazioni di chi prenota — sul
+telefono `NomeMittente`, che c'era già e non serviva a niente; sul capo un campo
+suo, che può arrivare anche col link (`&nome=Chiara`). In lavagna il cartellino
+dice **«prenotato da Matteo»** (`origineDellaPrenotazione()`, in `rapportino.js`).
+Diceva «prenotato dal cantiere» e «dal capo»: un ruolo e non una persona, e a chi
+lo leggeva suonava male. Senza nome dice solo «prenotato», e i cartellini entrati
+prima perdono il ruolo allo stesso modo (`sistemaLavoro()`): il nome non è mai
+stato scritto, e inventarlo sarebbe peggio. Il campo è arrivato senza alzare
+`VERSIONE_APPUNTAMENTO`.
 
 **Il cliente si scrive**, con il paese accanto: sul telefono del capo non c'è
 un'anagrafica, e portarcela vorrebbe dire far viaggiare indirizzi per un indirizzo
 pubblico. I suggerimenti sono i nomi già visti in agenda e nelle sue prenotazioni.
 L'ufficio lo riconosce dal nome, come fa con le prenotazioni del cantiere.
 
-**L'indirizzo dello script arriva con un link** (`capo/?indirizzo=…`): incollarne
+**L'indirizzo dello script arriva con un link** (`capo/?indirizzo=…&nome=…`): incollarne
 uno così lungo sul telefono è il modo migliore di sbagliarne una lettera. Letto,
 sparisce dalla barra. Non serve la chiave: l'agenda si legge senza, e i
 sopralluoghi coi contatti qui non ci sono.
 
-Sta in `localStorage` e basta — indirizzo, agenda scaricata, coda — perché nessuna
+Sta in `localStorage` e basta — indirizzo, nome, agenda scaricata, coda — perché nessuna
 di queste è l'unica copia di un lavoro fatto: una prenotazione resta lì solo finché
 non arriva in ufficio. Un salvataggio fallito si dice comunque a chiaro schermo.
 
