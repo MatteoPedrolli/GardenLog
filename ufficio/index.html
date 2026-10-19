@@ -142,6 +142,9 @@ button.secondaria:hover, label.secondaria:hover { border-color: var(--ocra); col
 button.pericolo { background: var(--white); color: var(--red); border-color: #f2d4d0; }
 button.piccola { padding: 6px 12px; font-size: 0.82rem; }
 button.secondaria[disabled] { opacity: 0.55; cursor: default; border-color: var(--border); color: var(--text-light); }
+/* Anche il bottone scuro, da spento, deve sembrarlo: «Stampa insieme» in attesa
+   di sapere a chi intestare il conto restava scuro e pareva pronto. */
+button.principale[disabled], button.principale[disabled]:hover { opacity: 0.45; cursor: default; background: var(--inchiostro-tenue); }
 .bottoni { display: flex; gap: 10px; flex-wrap: wrap; margin-top: 18px; }
 
 table.elenco { width: 100%; border-collapse: collapse; }
@@ -258,6 +261,9 @@ tr.dentro-gruppo td { font-size: 0.82rem; color: var(--text-light); padding-top:
   border-radius: var(--radius-sm); background: var(--white); border: 1px solid var(--ocra);
   box-shadow: var(--shadow); font-size: 0.9rem;
 }
+/* Clienti diversi nello stesso conto: si può, ma si vede, e accanto c'è la scelta. */
+.avviso-misti { display: inline-flex; align-items: center; gap: 8px; font-weight: 600; color: var(--inchiostro); }
+.avviso-misti select { width: auto; margin: 0; padding: 4px 8px; font-size: 0.85rem; }
 .scheda.scelta { border-color: var(--ocra); background: var(--foglio); }
 input.scegli { width: 18px; height: 18px; margin: 0; cursor: pointer; align-self: center; accent-color: var(--inchiostro-tenue); }
 .solo-cliente {
@@ -1786,6 +1792,12 @@ function segnalaListinoDaSalvare() {
 // rapportini, un conto solo. Ogni lavoro resta un blocco con la sua data e il suo
 // subtotale — il cliente deve poter vedere cosa è stato fatto quando — e il totale
 // in fondo li somma. Con un lavoro solo il foglio è quello di sempre.
+// Il lavoro di un altro cliente in un conto intestato a qualcun altro lo dice
+// nel suo blocco: chi paga deve sapere per chi sta pagando.
+function perContoDi(intestatario, l) {
+  return l.cliente && !stessoCliente(intestatario, l.cliente) ? (l.cliente.nome || '') : '';
+}
+
 function costruisciFoglio({ cliente, data, righe, lavori, senzaIntestazione }) {
   const blocchi = lavori || [{ data, righe }];
   const piu = blocchi.length > 1;
@@ -1820,7 +1832,8 @@ function costruisciFoglio({ cliente, data, righe, lavori, senzaIntestazione }) {
   html += '<table><thead><tr><th>Voce</th><th class="num">Quantità</th>' +
     '<th>Unità</th><th class="num">Prezzo</th><th class="num">Importo</th></tr></thead><tbody>';
   blocchi.forEach(b => {
-  if (piu) html += '<tr class="riga-blocco"><td colspan="5">Lavoro del ' + formattaData(b.data) + '</td></tr>';
+  if (piu) html += '<tr class="riga-blocco"><td colspan="5">Lavoro del ' + formattaData(b.data) +
+    (b.perConto ? ' · per ' + perValore(b.perConto) : '') + '</td></tr>';
   (b.righe || []).forEach(r => {
     const imp = importoRiga(r);
     html += '<tr>' +
@@ -1856,9 +1869,10 @@ function stampaConto(origine, id, senzaIntestazione) {
   if (origine === 'insieme') {
     const scelti = lavoriScelti();
     if (scelti.length < 2) return;
-    cliente = scelti[0].cliente || {};
+    cliente = intestatarioScelti();
+    if (!cliente) { avvisa('Lavori di clienti diversi: scegli a chi intestare il conto', true); return; }
     data = scelti[0].data;
-    lavori = scelti.map(l => ({ data: l.data, righe: l.righe }));
+    lavori = scelti.map(l => ({ data: l.data, righe: l.righe, perConto: perContoDi(cliente, l) }));
   } else if (origine === 'lavoro') {
     if (!LAVORO) return;
     cliente = LAVORO.doc.cliente; data = LAVORO.doc.data; righe = LAVORO.righe;
@@ -2159,6 +2173,16 @@ function riassuntoRicontrolla() {
 // La più recente per prima. Le righe sono poche e corte apposta: un elenco lungo
 // non si legge, e quello che non si legge tanto vale non scriverlo.
 const NOVITA = [
+  {
+    versione: '2026-10-19.1',
+    data: '2026-10-19',
+    titolo: 'Un conto per più clienti',
+    righe: [
+      'In **Da pagare** si possono spuntare insieme lavori di **clienti diversi**: compare un avviso e si sceglie **a chi intestare il conto**. Stampa e posta partono dopo la scelta.',
+      'Nel conto, il lavoro di un altro cliente dice **per chi era**.',
+      'In **Lavagna** non c\'è più la fascia «prenotazioni arrivate dal cantiere»: lo dice già ogni cartellino.',
+    ],
+  },
   {
     versione: '2026-10-09.7',
     data: '2026-10-09',
@@ -4825,9 +4849,13 @@ function modificaArchiviato(id) {
 
 let FILTRO_ARCHIVIO = '';
 let CLIENTE_ARCHIVIO = null;
-// I lavori spuntati per un conto unico. Solo dello stesso cliente: unire due
-// clienti vorrebbe dire mandare a uno il conto dell'altro.
+// I lavori spuntati per un conto unico. Di solito dello stesso cliente; a volte
+// no — il condominio e il suo amministratore, due fratelli nella stessa casa — e
+// rifiutarlo costringeva a rifare il conto a mano. Si lascia fare, ma lo si dice,
+// e il conto non parte finché non si è scelto a chi intestarlo: mandare a uno il
+// conto dell'altro senza accorgersene è il guasto da evitare, non l'unione.
 let SCELTI_ARCHIVIO = new Set();
+let INTESTATARIO_SCELTI = '';
 
 const stessoNome = (a, b) => !!String(a || '').trim() &&
   String(a || '').trim().toLowerCase() === String(b || '').trim().toLowerCase();
@@ -4838,17 +4866,41 @@ function lavoriScelti() {
     .sort((a, b) => String(a.data).localeCompare(String(b.data)));
 }
 
+// I clienti dei lavori spuntati, una volta ciascuno, nell'ordine delle date.
+function clientiScelti() {
+  const clienti = [];
+  lavoriScelti().forEach(l => {
+    const c = l.cliente || {};
+    if (!clienti.some(x => stessoCliente(x, c))) clienti.push(c);
+  });
+  return clienti;
+}
+
+const chiaveCliente = c => (c && c.id) || String((c && c.nome) || '').trim().toLowerCase();
+
+// A chi va il conto unico: il cliente, se è uno solo; con più clienti quello
+// scelto, o nessuno finché non lo si sceglie.
+function intestatarioScelti() {
+  const clienti = clientiScelti();
+  if (clienti.length === 1) return clienti[0];
+  return clienti.find(c => chiaveCliente(c) === INTESTATARIO_SCELTI) || null;
+}
+
+function intestaContoA(chiave) {
+  INTESTATARIO_SCELTI = chiave;
+  const el = document.getElementById('elenco-archivio');
+  if (el) el.innerHTML = righeArchivio();
+}
+
 function scegliLavoro(id, acceso) {
   const l = ARCHIVIO.find(x => x.id === id);
   if (!l) return;
   if (acceso) {
     const altro = lavoriScelti()[0];
     if (altro && !stessoCliente(altro.cliente, l.cliente)) {
-      avvisa('Un conto unico è per un cliente solo: hai già scelto un lavoro di ' +
-        ((altro.cliente && altro.cliente.nome) || 'un altro cliente'), true);
-    } else {
-      SCELTI_ARCHIVIO.add(id);
+      avvisa('Attenzione: lavori di clienti diversi. Scegli a chi intestare il conto prima di stamparlo o mandarlo');
     }
+    SCELTI_ARCHIVIO.add(id);
   } else {
     SCELTI_ARCHIVIO.delete(id);
   }
@@ -4858,6 +4910,7 @@ function scegliLavoro(id, acceso) {
 
 function annullaScelta() {
   SCELTI_ARCHIVIO.clear();
+  INTESTATARIO_SCELTI = '';
   const el = document.getElementById('elenco-archivio');
   if (el) el.innerHTML = righeArchivio();
 }
@@ -4866,16 +4919,29 @@ function barraScelti() {
   const scelti = lavoriScelti();
   if (!scelti.length) return '';
   const { totale } = totaleConteggio(scelti.flatMap(l => l.righe || []));
-  const nome = (scelti[0].cliente && scelti[0].cliente.nome) || 'senza nome';
+  const clienti = clientiScelti();
+  const misti = clienti.length > 1;
+  const intestatario = intestatarioScelti();
+  const nome = misti ? clienti.length + ' clienti' : ((clienti[0] && clienti[0].nome) || 'senza nome');
   const due = scelti.length > 1;
+  // Con più clienti stampa e posta aspettano la scelta: il conto deve avere un
+  // nome solo in testa, e deve essere quello voluto.
+  const pronto = due && !!intestatario;
   return '<div class="barra-scelti">' +
     '<span><b>' + scelti.length + (due ? ' lavori' : ' lavoro') + '</b> di ' + perValore(nome) +
       ' · ' + formattaEuro(totale) + '</span>' +
-    (due ? '' : '<span class="meta">spuntane un altro dello stesso cliente per un conto unico</span>') +
+    (due ? '' : '<span class="meta">spuntane un altro per un conto unico</span>') +
+    (misti ? '<span class="avviso-misti">⚠ Clienti diversi · intesta il conto a ' +
+      '<select onchange="intestaContoA(this.value)" aria-label="intesta il conto a">' +
+        '<option value="">— scegli —</option>' +
+        clienti.map(c => '<option value="' + perValore(chiaveCliente(c)) + '"' +
+          (intestatario && chiaveCliente(intestatario) === chiaveCliente(c) ? ' selected' : '') + '>' +
+          perValore(c.nome || 'senza nome') + '</option>').join('') +
+      '</select></span>' : '') +
     '<span style="margin-left:auto; display:flex; gap:8px; flex-wrap:wrap">' +
-      '<button class="principale piccola" onclick="stampaConto(\'insieme\')"' + (due ? '' : ' disabled') + '>Stampa insieme</button>' +
-      '<button class="secondaria piccola" onclick="stampaConto(\'insieme\', \'\', true)"' + (due ? '' : ' disabled') + '>Insieme senza intestazione</button>' +
-      '<button class="secondaria piccola" onclick="inviaInsieme()"' + (due ? '' : ' disabled') + '>Manda insieme</button>' +
+      '<button class="principale piccola" onclick="stampaConto(\'insieme\')"' + (pronto ? '' : ' disabled') + '>Stampa insieme</button>' +
+      '<button class="secondaria piccola" onclick="stampaConto(\'insieme\', \'\', true)"' + (pronto ? '' : ' disabled') + '>Insieme senza intestazione</button>' +
+      '<button class="secondaria piccola" onclick="inviaInsieme()"' + (pronto ? '' : ' disabled') + '>Manda insieme</button>' +
       '<button class="secondaria piccola" onclick="fatturaInsieme()">Segna pagat' + (due ? 'i' : 'o') + '</button>' +
       '<button class="secondaria piccola" onclick="annullaScelta()">Annulla</button>' +
     '</span></div>';
@@ -5178,16 +5244,17 @@ function testoConto(l) { return testoConti([l]); }
 
 // Come il foglio: più lavori dello stesso cliente in un messaggio solo, ognuno
 // con la sua data e il suo subtotale, e il totale in fondo.
-function testoConti(lavori) {
+function testoConti(lavori, intestatario) {
   const piu = lavori.length > 1;
+  const aChi = intestatario || lavori[0].cliente || {};
   const { totale, escluse } = totaleConteggio(lavori.flatMap(l => l.righe || []));
   const righe = [];
   righe.push('CONTO DEI LAVORI');
-  righe.push((lavori[0].cliente && lavori[0].cliente.nome) || '');
+  righe.push(aChi.nome || '');
   if (!piu && lavori[0].data) righe.push(formattaData(lavori[0].data));
   lavori.forEach(l => {
   righe.push('');
-  if (piu) righe.push('Lavoro del ' + formattaData(l.data));
+  if (piu) righe.push('Lavoro del ' + formattaData(l.data) + (perContoDi(aChi, l) ? ' · per ' + perContoDi(aChi, l) : ''));
   (l.righe || []).forEach(r => {
     const imp = importoRiga(r);
     const quantita = formattaQuantita(r.quantita);
@@ -5274,7 +5341,8 @@ async function aggiornaArchiviato(l, campi) {
 async function inviaInsieme() {
   const scelti = lavoriScelti();
   if (scelti.length < 2) return;
-  const cl = scelti[0].cliente || {};
+  const cl = intestatarioScelti();
+  if (!cl) { avvisa('Lavori di clienti diversi: scegli a chi intestare il conto', true); return; }
   const cliente = CLIENTI.find(c => c.id === cl.id) ||
     CLIENTI.find(c => stessoNome(c.nome, cl.nome));
   const indirizzo = (cliente && cliente.email) || '';
@@ -5290,8 +5358,9 @@ async function inviaInsieme() {
   const oggetto = 'Conto dei lavori del ' + scelti.map(l => formattaData(l.data)).join(', ');
   apriPosta('mailto:' + encodeURIComponent(indirizzo) +
     '?subject=' + encodeURIComponent(oggetto) +
-    '&body=' + encodeURIComponent(testoConti(scelti)));
+    '&body=' + encodeURIComponent(testoConti(scelti, cl)));
   SCELTI_ARCHIVIO.clear();
+  INTESTATARIO_SCELTI = '';
   disegna();
 }
 
@@ -5302,6 +5371,7 @@ async function fatturaInsieme() {
     if (errore) { avvisa('Non ho potuto salvare: ' + errore.message, true); disegna(); return; }
   }
   SCELTI_ARCHIVIO.clear();
+  INTESTATARIO_SCELTI = '';
   disegna();
   avvisa(scelti.length === 1 ? 'Segnato come pagato' : scelti.length + ' lavori segnati come pagati');
 }
@@ -5742,12 +5812,10 @@ function disegnaLavagna() {
   const piuAvanti = tuttaLaCoda.filter(l => perPiuAvanti(l, settimanaMostrata));
   const inCoda = MOSTRA_FUTURI ? tuttaLaCoda : tuttaLaCoda.filter(l => !perPiuAvanti(l, settimanaMostrata));
   const rimasti = inCoda.filter(l => l.rimandato).length;
-  const prenotati = inCoda.filter(l => l.origine === 'prenotato dal cantiere' && !l.rimandato).length;
+  // Niente fascia «prenotazioni arrivate dal cantiere»: c'era, e diceva quanti
+  // cartellini in coda erano prenotati — cosa che ogni cartellino dice già da sé,
+  // accanto all'origine. Una fascia che non si toglie e non chiede niente è rumore.
   coda += '<section class="coda coda-sotto">';
-  if (prenotati) {
-    coda += '<div class="rimasti" style="background:var(--foglio); border-color:var(--ocra); color:var(--inchiostro)">' +
-      '📨 ' + prenotati + (prenotati === 1 ? ' prenotazione arrivata' : ' prenotazioni arrivate') + ' dal cantiere</div>';
-  }
   if (rimasti) {
     coda += '<div class="rimasti">⚠ ' + rimasti +
       (rimasti === 1 ? ' lavoro è slittato' : ' lavori sono slittati') +

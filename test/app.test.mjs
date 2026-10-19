@@ -2988,7 +2988,8 @@ try {
 
   // ── due lavori dello stesso cliente in un conto unico ──
   // Due giornate, due rapportini, un foglio solo: un blocco per lavoro con la sua
-  // data e il suo subtotale, il totale in fondo. E mai due clienti insieme.
+  // data e il suo subtotale, il totale in fondo. Due clienti insieme si possono
+  // unire, ma l'app lo dice e il conto non parte finché non si sceglie a chi va.
   const insieme = await pagU.evaluate(async a => {
     const archivio = await window.RADICE.getDirectoryHandle('archivio', { create: true });
     const anno = await archivio.getDirectoryHandle(a, { create: true });
@@ -3006,7 +3007,24 @@ try {
     const altroCliente = ARCHIVIO.find(l => l.id !== 'altro-lavoro' && l.id !== 'secondo-verdi');
     scegliLavoro('altro-lavoro', true);
     scegliLavoro(altroCliente.id, true);
-    r.rifiutaAltroCliente = SCELTI_ARCHIVIO.size === 1 && document.getElementById('avviso').classList.contains('brutto');
+    const avviso = document.getElementById('avviso');
+    const bottoni = () => [...document.querySelectorAll('.barra-scelti button')].filter(b => /insieme/i.test(b.textContent));
+    r.misti = { entrambi: SCELTI_ARCHIVIO.size === 2,
+      avviso: avviso.textContent.includes('clienti diversi') && !avviso.classList.contains('brutto'),
+      scelta: !!document.querySelector('.barra-scelti select[aria-label="intesta il conto a"]'),
+      bloccati: bottoni().length === 3 && bottoni().every(b => b.disabled) };
+    document.getElementById('foglio').innerHTML = '';
+    stampaConto('insieme');
+    r.misti.senzaScelta = !document.getElementById('foglio').textContent.includes('Conto dei lavori');
+    const altroNome = altroCliente.cliente.nome;
+    intestaContoA(chiaveCliente(ARCHIVIO.find(l => l.id === 'altro-lavoro').cliente));
+    r.misti.sbloccati = bottoni().every(b => !b.disabled);
+    stampaConto('insieme');
+    const fogliMisto = document.getElementById('foglio').textContent;
+    r.misti.foglio = fogliMisto.includes('Giuseppe Verdi') && fogliMisto.includes('per ' + altroNome);
+    r.misti.mail = testoConti(lavoriScelti(), intestatarioScelti());
+    r.misti.altroNome = altroNome;
+    scegliLavoro(altroCliente.id, false);
     scegliLavoro('secondo-verdi', true);
     r.scelti = [...SCELTI_ARCHIVIO].sort().join(',');
     r.barra = document.getElementById('elenco-archivio').innerHTML.includes('Stampa insieme');
@@ -3029,7 +3047,14 @@ try {
     await ricarica();
     return r;
   }, annoLavoro);
-  ok('un conto unico non mette insieme due clienti, e lo dice', insieme.rifiutaAltroCliente, JSON.stringify(insieme));
+  ok('due clienti diversi si spuntano insieme, con un avviso e la scelta di a chi intestare il conto',
+    insieme.misti.entrambi && insieme.misti.avviso && insieme.misti.scelta, JSON.stringify(insieme.misti));
+  ok('finché non si sceglie, stampa e posta non partono',
+    insieme.misti.bloccati && insieme.misti.senzaScelta, JSON.stringify(insieme.misti));
+  ok('scelto, il conto è intestato a lui e il lavoro dell\'altro dice per chi era',
+    insieme.misti.sbloccati && insieme.misti.foglio &&
+    insieme.misti.mail.split('\n')[1] === 'Giuseppe Verdi' && insieme.misti.mail.includes('· per ' + insieme.misti.altroNome),
+    insieme.misti.mail.slice(0, 300));
   ok('due lavori dello stesso cliente si spuntano insieme', insieme.scelti === 'altro-lavoro,secondo-verdi' && insieme.barra, insieme.scelti);
   ok('il foglio unico ha un blocco e un subtotale per lavoro',
     insieme.foglio.blocchi === 2 && insieme.foglio.sub === 2 && insieme.foglio.date, JSON.stringify(insieme.foglio));
@@ -3129,6 +3154,19 @@ try {
   ok('con la settimana, non con un giorno inventato',
     prenotata && prenotata.settimana === '2027-03-15' && !prenotata.giorno,
     prenotata && prenotata.settimana + ' / ' + prenotata.giorno);
+  // La fascia «prenotazioni arrivate dal cantiere» non c'è più: lo dice già ogni
+  // cartellino accanto all'origine, e una fascia che non chiede niente è rumore.
+  const fasciaPrenotati = await pagU.evaluate(() => {
+    const prima = MOSTRA_FUTURI;
+    MOSTRA_FUTURI = true;
+    vaiA('lavagna');
+    const testo = document.getElementById('pagina-lavagna').textContent;
+    MOSTRA_FUTURI = prima;
+    vaiA('lavagna');
+    return { fascia: /prenotazion[ei] arrivat[ae]/.test(testo), cartellino: testo.includes('prenotato dal cantiere') };
+  });
+  ok('in lavagna niente fascia delle prenotazioni arrivate, ma il cartellino dice da dove viene',
+    !fasciaPrenotati.fascia && fasciaPrenotati.cartellino, JSON.stringify(fasciaPrenotati));
   // Era un difetto vero: le note del cantiere venivano lette e buttate via, e
   // sono proprio la cosa che deve tornare in giardino. Sulla lavagna «cosa c'è da
   // fare» e «cosa ricordare» sono un campo solo — due caselle per dire la stessa

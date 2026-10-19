@@ -1122,9 +1122,16 @@ l'app lo dice.
 rapportini e due file in archivio, e restano tali; si spuntano, e «Stampa insieme»
 e «Manda insieme» fanno un foglio o una mail soli. Dentro, **un blocco per lavoro**
 con la sua data e il suo subtotale, e il totale in fondo: il cliente deve poter
-vedere cosa è stato fatto quando, e sommare le voci uguali lo nasconderebbe. Si
-uniscono **solo lavori dello stesso cliente** (stesso `id` o stesso nome intero):
-unire due clienti vorrebbe dire mandare a uno il conto dell'altro. Mandando insieme
+vedere cosa è stato fatto quando, e sommare le voci uguali lo nasconderebbe.
+**Lavori di clienti diversi si possono unire**, ma non di nascosto. Si univa solo lo
+stesso cliente (stesso `id` o stesso nome intero), e il condominio col suo
+amministratore o due fratelli nella stessa casa costringevano a rifare il conto a
+mano. Adesso spuntando un cliente diverso compare un avviso, la barra dice «Clienti
+diversi» con un menù **«intesta il conto a»**, e stampa e posta restano spente
+finché non si sceglie (`intestatarioScelti()`). Il guasto da evitare era mandare a
+uno il conto dell'altro **senza accorgersene**, non l'unione. Nel foglio e nella mail
+il blocco di un lavoro di un altro cliente dice **per chi era** («Lavoro del 12/10 ·
+per Rossi»), perché chi paga deve sapere per chi sta pagando. Mandando insieme
 si segnano *in posta* tutti prima di aprire la posta, e se uno non si riesce a
 segnare la posta non si apre: una mail per due lavori di cui l'archivio ne ricorda
 uno è il doppione del mese dopo.
