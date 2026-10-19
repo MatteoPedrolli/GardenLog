@@ -85,6 +85,27 @@ correggerlo — per quello si rimanda il rapportino dal cantiere — ma al lavor
 non ci doveva stare. La conferma dice cosa succede: se il rapportino è ancora in
 `rapportini/` torna fra quelli in arrivo, altrimenti quel file era l'unica copia.
 
+## L'app del capo
+
+Sta in `capo/`, e si apre dallo stesso indirizzo dell'app del cantiere con `/capo/`
+in fondo. È la pagina Prossimi del telefono e basta: quello che è in programma
+sulla lavagna, e un bottone per prenotare. Legge l'agenda e manda prenotazioni
+dallo **stesso script**, quindi non c'è niente da installare in più.
+
+Per collegarla basta mandare al capo un link solo, con l'indirizzo dello script
+dentro:
+
+```
+https://<indirizzo dell'app>/capo/?indirizzo=<indirizzo dello script>
+```
+
+Aperto il link, l'indirizzo resta salvato sul suo telefono e sparisce dalla barra;
+da lì si aggiunge alla schermata home come l'app del cantiere. Se serve cambiarlo,
+c'è «Indirizzo di consegna» in fondo alla pagina.
+
+Le sue prenotazioni entrano in lavagna come quelle del cantiere, con «prenotato
+dal capo» accanto.
+
 ## Due pezzi da installare, una volta sola
 
 **1. Lo script che riceve** — `ricevi-rapportini.gs`, da incollare in

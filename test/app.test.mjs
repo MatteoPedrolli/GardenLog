@@ -3492,6 +3492,126 @@ try {
       return esito === false && DB.agenda?.appuntamenti.length === 10;
     }));
 
+  // ── l'app del capo: la pagina Prossimi e nient'altro ──
+  // Quello che l'ufficio ha messo in lavagna e il modo di prenotarne altri, dallo
+  // stesso script del telefono e con gli stessi due documenti. Il cliente si
+  // scrive a mano: sul telefono del capo non c'è un'anagrafica.
+  tipoAgenda = 'application/json';
+  agendaDalServizio = agendaScritta;
+  await tornaOnline();
+  const consegneCapo = [];
+  let capoRisponde = 'ok';
+  await ctx.route(CONSEGNA, r => {
+    if (r.request().method() !== 'POST') return r.fallback();
+    consegneCapo.push(JSON.parse(r.request().postData() || '{}'));
+    return capoRisponde === 'html'
+      ? r.fulfill({ status: 200, contentType: 'text/html', body: '<html>Errore</html>' })
+      : r.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ status: 'ok' }) });
+  });
+  const pagC = await ctx.newPage();
+  pagC.on('pageerror', e => erroriJS.push('capo: ' + e));
+  pagC.on('console', m => { if (m.type() === 'error' && !m.text().includes('Failed to load resource')) erroriJS.push('capo console: ' + m.text()); });
+  pagC.on('response', r => { if (r.status() >= 400) risorseKO.push(`${r.url()} (HTTP ${r.status()})`); });
+  await pagC.goto(BASE + 'capo/?indirizzo=' + encodeURIComponent(CONSEGNA), { waitUntil: 'load' });
+  await pagC.waitForFunction(() => document.querySelectorAll('#agenda .card .cliente').length > 0, null, { timeout: 5000 }).catch(() => {});
+  const capoAvvio = await pagC.evaluate(a => {
+    const oggi = dataISO(new Date());
+    const attesi = JSON.parse(a).appuntamenti.filter(x => x.giorno >= oggi);
+    const testo = document.getElementById('agenda').textContent;
+    return { cerca: location.search, indirizzo: indirizzo(), carte: document.querySelectorAll('#agenda .card .cliente').length,
+      attesi: attesi.length, primo: attesi[0] && testo.includes(attesi[0].cliente),
+      niente: !document.body.textContent.match(/Visite|Rilievi|Clienti/) };
+  }, agendaScritta);
+  ok('l\'app del capo prende l\'indirizzo dal link e lo toglie dalla barra',
+    capoAvvio.cerca === '' && capoAvvio.indirizzo === CONSEGNA, JSON.stringify(capoAvvio));
+  ok('e mostra quello che è in lavagna da oggi in avanti, come la pagina Prossimi del telefono',
+    capoAvvio.attesi > 0 && capoAvvio.carte === capoAvvio.attesi && capoAvvio.primo && capoAvvio.niente, JSON.stringify(capoAvvio));
+
+  // Il modulo si riapre se si è chiuso: se un difetto lo facesse partire senza
+  // note, la prova deve fallire e il giro andare avanti.
+  const compilaCapo = async campi => {
+    if (!await pagC.evaluate(() => document.getElementById('velo-prenotazione').classList.contains('aperto'))) {
+      await pagC.click('#prenota');
+    }
+    for (const [id, v] of Object.entries(campi)) {
+      if (v === true) await pagC.check(id); else await pagC.fill(id, v);
+    }
+  };
+  const ester = { '#p-cliente': 'Ester Rossi', '#p-paese': 'Lavis', '#p-settimana': '2026-11-12', '#p-ore': '4,5', '#p-sopralluogo': true };
+  await compilaCapo(ester);
+  await pagC.click('#p-salva');
+  await pagC.waitForTimeout(300);
+  ok('senza note la prenotazione del capo non parte, e lo dice',
+    consegneCapo.length === 0 && (await pagC.textContent('#avviso')).includes('cosa c\'è da fare'),
+    await pagC.textContent('#avviso'));
+  consegneCapo.length = 0;
+  await compilaCapo({ ...ester, '#p-note': 'Guardare la siepe lato strada' });
+  await pagC.click('#p-salva');
+  await pagC.waitForTimeout(500);
+  const docCapo = consegneCapo[0] || {};
+  ok('con le note parte verso l\'ufficio: un appuntamento come quelli del telefono, che dice di venire dal capo',
+    docCapo.tipo === 'appuntamento' && docCapo.da === 'capo' && docCapo.cliente?.nome === 'Ester Rossi' &&
+    docCapo.cliente?.citta === 'Lavis' && docCapo.settimana === '2026-11-09' && docCapo.ore === 4.5 &&
+    docCapo.sopralluogo === true && docCapo.note === 'Guardare la siepe lato strada' &&
+    String(docCapo.id).startsWith('pren-capo-'), JSON.stringify(docCapo));
+  ok('e arrivata, non resta fra quelle da consegnare',
+    await pagC.evaluate(() => leggi(CHIAVI.coda, []).length === 0 &&
+      document.getElementById('da-consegnare-titolo').style.display === 'none'));
+
+  // Apps Script che risponde con una pagina HTML: la prenotazione resta, col suo
+  // errore accanto, anche ricaricando la pagina.
+  capoRisponde = 'html';
+  await compilaCapo({ '#p-cliente': 'Bruno Neri', '#p-note': 'Taglio prato' });
+  await pagC.click('#p-salva');
+  await pagC.waitForTimeout(500);
+  await pagC.reload({ waitUntil: 'load' });
+  await pagC.waitForTimeout(400);
+  const capoFermo = await pagC.evaluate(() => ({ coda: leggi(CHIAVI.coda, []).length,
+    testo: document.getElementById('da-consegnare').textContent,
+    titolo: document.getElementById('da-consegnare-titolo').style.display }));
+  ok('una prenotazione non partita resta sul telefono del capo, col perché accanto',
+    capoFermo.coda === 1 && capoFermo.titolo !== 'none' && capoFermo.testo.includes('Bruno Neri') &&
+    capoFermo.testo.includes('Non è partita'), JSON.stringify(capoFermo));
+  capoRisponde = 'ok';
+  await pagC.click('#da-consegnare .errore');
+  await pagC.waitForTimeout(500);
+  ok('e toccandola riparte',
+    await pagC.evaluate(() => leggi(CHIAVI.coda, []).length) === 0 &&
+    consegneCapo.filter(d => d.cliente?.nome === 'Bruno Neri').length >= 2);
+
+  // Senza campo si apre lo stesso, con quello scaricato l'ultima volta.
+  await pagC.evaluate(() => navigator.serviceWorker.ready);
+  await pagC.reload({ waitUntil: 'load' });
+  await pagC.waitForTimeout(300);
+  await ctx.setOffline(true);
+  // Senza service worker la ricarica offline fallisce: deve diventare una prova
+  // fallita, non un giro interrotto.
+  const capoOffline = await pagC.reload({ waitUntil: 'load', timeout: 5000 })
+    .then(() => pagC.waitForTimeout(500))
+    .then(() => pagC.evaluate(() => document.querySelectorAll('#agenda .card .cliente').length))
+    .catch(e => 'non si apre: ' + e.message.split('\n')[0]);
+  ok('senza rete l\'app del capo si apre con l\'agenda di prima', capoOffline === capoAvvio.carte, String(capoOffline));
+  await tornaOnline();
+
+  // In ufficio arriva in lavagna come le altre, e dice da chi viene.
+  const daCapo = await pagU.evaluate(async d => {
+    const cartella = await window.RADICE.getDirectoryHandle('appuntamenti', { create: true });
+    const nome = nomeFileAppuntamento(d);
+    await scriviTesto(cartella, nome, JSON.stringify(d));
+    await ricarica();
+    const l = LAVAGNA.lavori.find(x => x.da === d.id);
+    const r = l ? { origine: l.origine, cliente: l.cliente, luogo: l.luogo, settimana: l.settimana } : null;
+    LAVAGNA.lavori = LAVAGNA.lavori.filter(x => x.da !== d.id);
+    await salvaLavagna();
+    await cartella.removeEntry(nome);
+    return r;
+  }, docCapo);
+  ok('in lavagna la prenotazione del capo dice «prenotato dal capo»',
+    daCapo && daCapo.origine === 'prenotato dal capo' && daCapo.cliente === 'Ester Rossi' && daCapo.luogo === 'Lavis',
+    JSON.stringify(daCapo));
+  await ctx.unroute(CONSEGNA);
+  await pagC.close();
+
   // ── il conto si salva da solo, e uno da pagare si corregge dall'archivio ──
   // Col solo bottone capitava di correggere i prezzi e passare ad altro: in
   // archivio restavano gli importi di prima, e in ufficio si credeva il conto giusto.

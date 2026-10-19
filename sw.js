@@ -2,7 +2,7 @@
 // Da quando i dati stanno sul dispositivo e non su un server, l'unica cosa che
 // ancora richiede la rete è il caricamento della pagina: senza questo file
 // l'app aperta in giardino senza campo non partirebbe nemmeno.
-const CACHE = 'giardinolog-v69';
+const CACHE = 'giardinolog-v70';
 
 const GUSCIO = [
   './',
@@ -58,6 +58,9 @@ self.addEventListener('fetch', e => {
   // telefono — che si vedono al secondo avvio — e, offline, rispondere con la
   // home del cantiere al posto suo.
   if (url.origin === self.location.origin && url.pathname.includes('/ufficio/')) return;
+  // L'app del capo ha il suo service worker, con regole sue: sul telefono di chi
+  // ha installato tutte e due, questa cache non deve rispondere al posto suo.
+  if (url.origin === self.location.origin && url.pathname.includes('/capo/')) return;
   const nostra = url.origin === self.location.origin
     || url.hostname.endsWith('googleapis.com')
     || url.hostname.endsWith('gstatic.com');

@@ -1,0 +1,497 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<meta name="theme-color" content="#24211c">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Appuntamenti">
+<title>Appuntamenti</title>
+<link rel="manifest" href="manifest.json">
+<link rel="icon" type="image/png" href="../icon-192.png">
+<link rel="apple-touch-icon" href="../apple-touch-icon.png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+/* La stessa carta e lo stesso inchiostro delle altre due app: è la stessa
+   azienda, e chi passa dall'una all'altra non deve reimparare dove guardare. */
+:root {
+  --inchiostro: #24211c;
+  --inchiostro-tenue: #4a443a;
+  --ocra: #a8894a;
+  --foglio: #f3efe4;
+  --cream: #faf7f0;
+  --white: #ffffff;
+  --text: #1f1c17;
+  --text-mid: #4a443a;
+  --text-light: #8a8175;
+  --border: #e2dccd;
+  --red: #b03a2e;
+  --radius: 16px;
+  --radius-sm: 10px;
+  --shadow: 0 4px 24px rgba(36,33,28,0.10);
+  --font-body: 'DM Sans', sans-serif;
+}
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+html, body { background: var(--cream); font-family: var(--font-body); color: var(--text); }
+body { min-height: 100dvh; padding-bottom: calc(96px + env(safe-area-inset-bottom)); }
+
+/* Con «black-translucent» l'orologio dell'iPhone è bianco: la fascia scura in
+   cima gli fa da fondo, come sul telefono del cantiere. */
+header {
+  background: var(--inchiostro); color: var(--white);
+  padding: calc(env(safe-area-inset-top) + 14px) 18px 14px;
+}
+header h1 { font-size: 1.15rem; font-weight: 600; }
+header .oggi { font-size: 0.8rem; opacity: 0.75; margin-top: 2px; }
+
+main { padding: 16px; max-width: 640px; margin: 0 auto; }
+.sezione { display: flex; align-items: baseline; gap: 8px; margin: 18px 0 8px; }
+.sezione h2 { font-size: 0.78rem; font-weight: 600; letter-spacing: 0.08em; text-transform: uppercase; color: var(--text-mid); }
+.sezione .quando { font-size: 0.75rem; color: var(--text-light); }
+.sezione button { margin-left: auto; }
+
+.card { background: var(--white); border: 1px solid var(--border); border-radius: var(--radius-sm); padding: 12px 14px; margin-bottom: 8px; }
+.card .giorno { font-size: 0.78rem; font-weight: 600; color: var(--inchiostro-tenue); }
+.card .cliente { font-weight: 600; margin-top: 2px; }
+.card .note { font-size: 0.85rem; color: var(--text-mid); margin-top: 4px; white-space: pre-line; }
+.card .meta { font-size: 0.76rem; color: var(--text-light); margin-top: 4px; }
+.etichetta { font-size: 0.7rem; font-weight: 600; color: var(--text-light); }
+.nota { font-size: 0.85rem; color: var(--text-mid); line-height: 1.45; }
+.errore { margin-top: 8px; padding: 8px 10px; border-radius: 8px; background: #f8e6e3; color: var(--red); font-size: 0.8rem; cursor: pointer; }
+
+button { font-family: var(--font-body); cursor: pointer; }
+.bottone { border: 1px solid var(--border); background: var(--white); color: var(--text-mid);
+  border-radius: var(--radius-sm); padding: 8px 14px; font-size: 0.85rem; font-weight: 500; }
+.bottone.principale { background: var(--inchiostro); border-color: var(--inchiostro); color: var(--white); }
+.bottone[disabled] { opacity: 0.5; cursor: default; }
+
+/* Il bottone di tutti i giorni sta dove arriva il pollice, e sopra la linea per
+   tornare alla home dell'iPhone. */
+#prenota {
+  position: fixed; left: 16px; right: 16px; bottom: calc(16px + env(safe-area-inset-bottom));
+  max-width: 608px; margin: 0 auto; padding: 15px; font-size: 1rem; font-weight: 600;
+  border: none; border-radius: var(--radius); background: var(--inchiostro); color: var(--white); box-shadow: var(--shadow);
+}
+
+/* Il modulo della prenotazione, a pannello dal basso come sul telefono. */
+.velo { position: fixed; inset: 0; background: rgba(36,33,28,0.45); display: none; align-items: flex-end; z-index: 10; }
+.velo.aperto { display: flex; }
+.pannello { background: var(--cream); width: 100%; max-width: 640px; margin: 0 auto; max-height: 92dvh; overflow-y: auto;
+  border-radius: var(--radius) var(--radius) 0 0; padding: 18px 16px calc(18px + env(safe-area-inset-bottom)); }
+.pannello h3 { font-size: 1.05rem; margin-bottom: 12px; }
+.campo { margin-bottom: 12px; }
+.campo label { display: block; font-size: 0.78rem; font-weight: 600; color: var(--text-mid); margin-bottom: 4px; }
+.campo input[type=text], .campo input[type=date], .campo input[type=url], .campo textarea {
+  width: 100%; font: inherit; font-size: 16px; padding: 10px 12px; border: 1px solid var(--border);
+  border-radius: var(--radius-sm); background: var(--white); color: var(--text); }
+.campo textarea { min-height: 96px; resize: vertical; }
+.campo .eco { font-size: 0.78rem; color: var(--text-light); margin-top: 4px; }
+.riga { display: flex; gap: 10px; }
+.riga .campo { flex: 1; min-width: 0; }
+.spunta { display: flex; align-items: center; gap: 8px; font-size: 0.9rem; margin-bottom: 14px; }
+.spunta input { width: 20px; height: 20px; accent-color: var(--inchiostro-tenue); }
+.bottoni { display: flex; gap: 10px; margin-top: 6px; }
+.bottoni .bottone { flex: 1; padding: 12px; font-size: 0.95rem; }
+
+#avviso {
+  position: fixed; left: 16px; right: 16px; bottom: calc(84px + env(safe-area-inset-bottom)); z-index: 20;
+  max-width: 608px; margin: 0 auto; padding: 10px 14px; border-radius: var(--radius-sm);
+  background: var(--inchiostro); color: var(--white); font-size: 0.88rem; text-align: center; display: none;
+}
+#avviso.brutto { background: var(--red); }
+footer { text-align: center; font-size: 0.75rem; color: var(--text-light); margin: 22px 0 8px; }
+footer button { background: none; border: none; color: var(--text-light); text-decoration: underline; font-size: 0.75rem; }
+</style>
+</head>
+<body>
+<header>
+  <h1>Appuntamenti</h1>
+  <div class="oggi" id="oggi"></div>
+</header>
+
+<main>
+  <div id="impostare" style="display:none"></div>
+
+  <div class="sezione">
+    <h2>In programma</h2><span class="quando" id="agenda-quando"></span>
+    <button class="bottone" id="aggiorna" onclick="scaricaAgenda({ avvisa: true })">Aggiorna</button>
+  </div>
+  <div id="agenda"></div>
+
+  <div class="sezione" id="da-consegnare-titolo" style="display:none"><h2>Da consegnare</h2></div>
+  <div id="da-consegnare"></div>
+
+  <footer><button onclick="apriImpostazioni()">Indirizzo di consegna</button></footer>
+</main>
+
+<button id="prenota" onclick="apriPrenotazione()">＋ Prenota un appuntamento</button>
+
+<div class="velo" id="velo-prenotazione" onclick="if (event.target === this) chiudi('velo-prenotazione')">
+  <div class="pannello">
+    <h3>Prenota un appuntamento</h3>
+    <div class="riga">
+      <div class="campo">
+        <label for="p-cliente">Cliente</label>
+        <input type="text" id="p-cliente" list="p-clienti" autocomplete="off" placeholder="Nome e cognome">
+        <datalist id="p-clienti"></datalist>
+      </div>
+      <div class="campo" style="flex:0.7">
+        <label for="p-paese">Paese</label>
+        <input type="text" id="p-paese" autocomplete="off" placeholder="Facoltativo">
+      </div>
+    </div>
+    <div class="riga">
+      <div class="campo">
+        <label for="p-settimana">In che settimana</label>
+        <input type="date" id="p-settimana" oninput="mostraSettimana()">
+        <div class="eco" id="p-settimana-eco"></div>
+      </div>
+      <div class="campo" style="flex:0.6">
+        <label for="p-ore">Stima ore</label>
+        <input type="text" inputmode="decimal" id="p-ore" placeholder="Es. 4">
+      </div>
+    </div>
+    <div class="campo">
+      <label for="p-requisiti">Manca qualcosa? (blocca il lavoro)</label>
+      <input type="text" id="p-requisiti" placeholder="Es. serve la piattaforma">
+    </div>
+    <label class="spunta"><input type="checkbox" id="p-sopralluogo"> È un sopralluogo, si va a guardare</label>
+    <div class="campo">
+      <label for="p-note">Cosa c'è da fare, e cosa ricordare</label>
+      <textarea id="p-note" placeholder="Es. potatura siepe lato strada, il cancello si apre dal retro"></textarea>
+    </div>
+    <div class="bottoni">
+      <button class="bottone" onclick="chiudi('velo-prenotazione')">Lascia stare</button>
+      <button class="bottone principale" id="p-salva" onclick="salvaPrenotazione()">Prenota</button>
+    </div>
+  </div>
+</div>
+
+<div class="velo" id="velo-impostazioni" onclick="if (event.target === this) chiudi('velo-impostazioni')">
+  <div class="pannello">
+    <h3>Indirizzo di consegna</h3>
+    <p class="nota" style="margin-bottom:12px">È l'indirizzo dello script dell'ufficio, lo stesso del telefono del
+      cantiere: da lì arriva quello che è in programma e lì partono le prenotazioni.</p>
+    <div class="campo">
+      <label for="i-indirizzo">Indirizzo</label>
+      <input type="url" id="i-indirizzo" placeholder="https://script.google.com/macros/s/…/exec" autocomplete="off">
+    </div>
+    <div class="bottoni">
+      <button class="bottone" onclick="chiudi('velo-impostazioni')">Lascia stare</button>
+      <button class="bottone principale" onclick="salvaIndirizzo(document.getElementById('i-indirizzo').value)">Salva</button>
+    </div>
+  </div>
+</div>
+
+<div id="avviso"></div>
+
+<script src="../rapportino.js"></script>
+<script>
+// ── L'APP DEL CAPO ──
+// La pagina Prossimi del telefono e niente altro: quello che l'ufficio ha messo
+// in lavagna, e il modo di prenotarne altri. Il capo non registra visite, non
+// misura giardini e non ha un'anagrafica: per lui l'app serve a sapere dove si va
+// e a fissare un lavoro mentre è al telefono con un cliente, senza passare
+// dall'ufficio a voce.
+//
+// Parla con l'ufficio con gli stessi due documenti del telefono, dallo stesso
+// script: legge l'agenda e manda appuntamenti. Nessun documento nuovo, nessuna
+// riga in più in CARTELLE. L'appuntamento porta `da: 'capo'`, arrivato senza
+// alzare VERSIONE_APPUNTAMENTO, perché in lavagna il cartellino dica «prenotato
+// dal capo» e non «dal cantiere»: chi pianifica deve sapere a chi chiedere.
+
+// Tutto in localStorage: sono quattro cose piccole — l'indirizzo, l'agenda
+// scaricata, la coda — e nessuna è l'unica copia di un lavoro fatto. Una
+// prenotazione resta qui solo finché non arriva in ufficio.
+const CHIAVI = { indirizzo: 'capo-indirizzo', agenda: 'capo-agenda', coda: 'capo-coda' };
+
+function leggi(chiave, predefinito) {
+  try {
+    const t = localStorage.getItem(chiave);
+    return t == null ? predefinito : JSON.parse(t);
+  } catch (e) { return predefinito; }
+}
+
+// Un salvataggio fallito si dice a chiaro schermo: una prenotazione che si crede
+// partita e invece non è nemmeno sul telefono è un cliente che aspetta invano.
+function scrivi(chiave, valore) {
+  try { localStorage.setItem(chiave, JSON.stringify(valore)); return true; }
+  catch (e) { avvisa('Non riesco a salvare sul telefono: ' + (e.message || e), true); return false; }
+}
+
+const perValore = s => String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/</g, '&lt;')
+  .replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+
+let tempoAvviso = null;
+function avvisa(testo, brutto) {
+  const el = document.getElementById('avviso');
+  el.textContent = testo;
+  el.classList.toggle('brutto', !!brutto);
+  el.style.display = 'block';
+  clearTimeout(tempoAvviso);
+  tempoAvviso = setTimeout(() => { el.style.display = 'none'; }, brutto ? 6000 : 3000);
+}
+
+function chiudi(id) { document.getElementById(id).classList.remove('aperto'); }
+
+// ── L'INDIRIZZO DELLO SCRIPT ──
+// Arriva con un link — ?indirizzo=… — mandato dall'ufficio: incollare a mano un
+// indirizzo lungo così sul telefono è il modo migliore di sbagliarne una lettera.
+// Letto, sparisce dalla barra, così il link salvato fra i preferiti non lo
+// rimette ogni volta. Resta modificabile in fondo alla pagina.
+function indirizzo() { return String(leggi(CHIAVI.indirizzo, '') || '').trim(); }
+
+function salvaIndirizzo(valore) {
+  const url = String(valore || '').trim();
+  if (url && !/^https:\/\//.test(url)) { avvisa('L\'indirizzo deve cominciare con https://', true); return false; }
+  if (!scrivi(CHIAVI.indirizzo, url)) return false;
+  chiudi('velo-impostazioni');
+  disegna();
+  if (url) { scaricaAgenda({ avvisa: true }); svuotaCoda(); }
+  return true;
+}
+
+function apriImpostazioni() {
+  document.getElementById('i-indirizzo').value = indirizzo();
+  document.getElementById('velo-impostazioni').classList.add('aperto');
+}
+
+function indirizzoDalLink() {
+  const parametri = new URLSearchParams(location.search);
+  const url = parametri.get('indirizzo');
+  if (!url) return;
+  if (/^https:\/\//.test(url.trim())) scrivi(CHIAVI.indirizzo, url.trim());
+  history.replaceState(null, '', location.pathname);
+}
+
+// ── L'AGENDA ──
+// La stessa del telefono, scaricata dallo stesso indirizzo: le mezze giornate già
+// piazzate in lavagna, da oggi in avanti. Una che non si scarica non cancella
+// quella di prima: vecchia di un giorno è un'informazione, il vuoto no.
+let agendaInCorso = false;
+
+async function scaricaAgenda({ avvisa: dillo = false } = {}) {
+  const url = indirizzo();
+  if (!url) { if (dillo) avvisa('Manca l\'indirizzo di consegna', true); return false; }
+  if (agendaInCorso) return false;
+  if (!navigator.onLine) { if (dillo) avvisa('Nessuna rete: resta quello scaricato prima'); return false; }
+  agendaInCorso = true;
+  document.getElementById('aggiorna').disabled = true;
+  try {
+    // Apps Script risponde 200 con una pagina HTML quando fallisce: un testo che
+    // non è un'agenda non è un'agenda, e leggiAgenda() lo dice.
+    const r = await fetch(url + (url.includes('?') ? '&' : '?') + 'documento=agenda', { cache: 'no-store' });
+    const agenda = leggiAgenda(await r.text());
+    scrivi(CHIAVI.agenda, agenda);
+    disegnaAgenda();
+    if (dillo) avvisa(agenda.appuntamenti.length ? 'Aggiornato dall\'ufficio' : 'Aggiornato: niente in programma');
+    return true;
+  } catch (e) {
+    if (dillo) avvisa('Non aggiornato: ' + (e.message || e), true);
+    return false;
+  } finally {
+    agendaInCorso = false;
+    document.getElementById('aggiorna').disabled = false;
+  }
+}
+
+function disegnaAgenda() {
+  const el = document.getElementById('agenda');
+  const quando = document.getElementById('agenda-quando');
+  const agenda = leggi(CHIAVI.agenda, null);
+  quando.textContent = agenda && agenda.aggiornata
+    ? '· dall\'ufficio il ' + new Date(agenda.aggiornata).toLocaleDateString('it-IT', { day: 'numeric', month: 'long' }) : '';
+  if (!agenda) {
+    el.innerHTML = '<div class="card"><div class="nota">' + (indirizzo()
+      ? 'Ancora niente: tocca «Aggiorna» quando c\'è rete. Quello che arriva resta anche senza campo.'
+      : 'Prima serve l\'indirizzo di consegna: in fondo alla pagina.') + '</div></div>';
+    return;
+  }
+  // Da oggi, non dal giorno in cui l'ufficio l'ha scritta: un'agenda scaricata
+  // lunedì, giovedì mostrava ancora lunedì.
+  const oggi = dataISO(new Date());
+  const davanti = agenda.appuntamenti.filter(a => a.giorno >= oggi);
+  if (!davanti.length) {
+    el.innerHTML = '<div class="card"><div class="nota">Niente in programma da oggi in avanti sulla lavagna dell\'ufficio.</div></div>';
+    return;
+  }
+  el.innerHTML = davanti.map(a => '<div class="card">' +
+    '<div class="giorno">' + perValore(etichettaMezzaGiornata(a.giorno, a.mezza)) + (a.ora ? ' · ore ' + perValore(a.ora) : '') + '</div>' +
+    '<div class="cliente">' + perValore(a.cliente || 'senza cliente') +
+      (a.sopralluogo ? ' <span class="etichetta">· sopralluogo</span>' : '') + '</div>' +
+    (a.note ? '<div class="note">' + perValore(a.note) + '</div>' : '') +
+  '</div>').join('');
+}
+
+// ── PRENOTARE ──
+// Come sul telefono: cliente, settimana, ore, cosa manca, se è un sopralluogo, e
+// le note — obbligatorie, perché un cartellino col solo nome non dice niente a
+// chi pianifica. Il cliente si scrive: qui non c'è un'anagrafica, e l'ufficio lo
+// riconosce dal nome come fa con le prenotazioni del cantiere.
+function apriPrenotazione() {
+  ['p-cliente', 'p-paese', 'p-settimana', 'p-ore', 'p-requisiti', 'p-note']
+    .forEach(id => { document.getElementById(id).value = ''; });
+  document.getElementById('p-sopralluogo').checked = false;
+  mostraSettimana();
+  // Fra i suggerimenti i nomi che si sono già visti: in agenda e nelle
+  // prenotazioni fatte da qui. Scriverli uguali aiuta l'ufficio a riconoscerli.
+  const nomi = new Set();
+  (leggi(CHIAVI.agenda, null)?.appuntamenti || []).forEach(a => a.cliente && nomi.add(a.cliente));
+  leggi(CHIAVI.coda, []).forEach(v => v.doc?.cliente?.nome && nomi.add(v.doc.cliente.nome));
+  document.getElementById('p-clienti').innerHTML = [...nomi].sort((a, b) => a.localeCompare(b))
+    .map(n => '<option value="' + perValore(n) + '">').join('');
+  document.getElementById('velo-prenotazione').classList.add('aperto');
+  document.getElementById('p-cliente').focus();
+}
+
+// Si sceglie un giorno qualunque e conta la sua settimana; sotto compare quale, o
+// si finisce per credere di aver fissato una data.
+function mostraSettimana() {
+  const scelto = document.getElementById('p-settimana').value;
+  document.getElementById('p-settimana-eco').textContent = scelto ? etichettaSettimana(lunediDellaSettimana(scelto)) : '';
+}
+
+let salvataggioInCorso = false;
+
+async function salvaPrenotazione() {
+  if (salvataggioInCorso) return;
+  const valore = id => document.getElementById(id).value.trim();
+  const nome = valore('p-cliente');
+  if (!nome) { avvisa('Scrivi il nome del cliente', true); return; }
+  const note = valore('p-note');
+  if (!note) { avvisa('Scrivi cosa c\'è da fare', true); return; }
+  const prenotazione = {
+    // «capo» dentro l'identificativo: due telefoni che prenotano nello stesso
+    // istante non devono poter scrivere lo stesso file in ufficio.
+    PrenotazioneID: 'pren-capo-' + Date.now().toString(36),
+    Ore: String(valore('p-ore')).replace(',', '.'),
+    Settimana: valore('p-settimana') ? lunediDellaSettimana(valore('p-settimana')) : '',
+    Requisiti: valore('p-requisiti'),
+    Sopralluogo: document.getElementById('p-sopralluogo').checked ? 'Sì' : '',
+    Note: note,
+  };
+  const doc = { ...costruisciAppuntamento({ prenotazione, cliente: { Cliente: nome, Citta: valore('p-paese') } }), da: 'capo' };
+  salvataggioInCorso = true;
+  try {
+    // Prima sul telefono, poi verso l'ufficio: al contrario, una consegna riuscita
+    // su un salvataggio fallito non lascerebbe traccia qui di cosa si è prenotato.
+    const coda = leggi(CHIAVI.coda, []);
+    coda.push({ docID: doc.id, tipo: doc.tipo, doc, creato: new Date().toISOString(), tentativi: 0, errore: '' });
+    if (!scrivi(CHIAVI.coda, coda)) return;
+    chiudi('velo-prenotazione');
+    avvisa('Prenotazione in consegna');
+    disegnaCoda();
+    svuotaCoda({ avvisa: true });
+  } finally {
+    salvataggioInCorso = false;
+  }
+}
+
+// ── LA CODA ──
+// La stessa regola del telefono: si accetta solo `status: "ok"`, la richiesta
+// parte senza Content-Type (o scatta il controllo CORS che Apps Script non sa
+// gestire), il servizio che non risponde ferma la fila e un documento respinto
+// no — resta col suo errore e gli altri passano.
+async function consegna(doc) {
+  const url = indirizzo();
+  if (!url) throw new Error('Manca l\'indirizzo di consegna');
+  const r = await fetch(url, { method: 'POST', body: JSON.stringify(doc) });
+  let risposta;
+  try { risposta = JSON.parse(await r.text()); }
+  catch (e) { throw new Error('Il servizio ha risposto con un errore, non con una conferma'); }
+  if (risposta && risposta.status === 'error') {
+    const errore = new Error(risposta.msg || 'errore dal servizio');
+    errore.rifiutato = true;
+    throw errore;
+  }
+  if (!risposta || risposta.status !== 'ok') throw new Error('Risposta inattesa dal servizio');
+}
+
+let invioInCorso = false;
+
+async function svuotaCoda({ avvisa: dillo = false } = {}) {
+  if (invioInCorso) return;
+  let coda = leggi(CHIAVI.coda, []);
+  if (!coda.length) return;
+  if (!navigator.onLine) { if (dillo) avvisa('Nessuna rete: parte appena torna'); return; }
+  invioInCorso = true;
+  let consegnate = 0, ultimoErrore = '';
+  try {
+    for (const voce of [...coda]) {
+      try {
+        await consegna(voce.doc);
+        coda = coda.filter(v => v.docID !== voce.docID);
+        consegnate++;
+      } catch (e) {
+        voce.tentativi = (voce.tentativi || 0) + 1;
+        voce.errore = e.message || String(e);
+        ultimoErrore = voce.errore;
+        if (e.rifiutato) continue;
+        break;
+      }
+    }
+    scrivi(CHIAVI.coda, coda);
+    disegnaCoda();
+    if (consegnate && dillo) avvisa(consegnate === 1 ? 'Arrivata in ufficio' : consegnate + ' prenotazioni arrivate in ufficio');
+    if (ultimoErrore && dillo) avvisa('Non partita: ' + ultimoErrore, true);
+  } finally {
+    invioInCorso = false;
+  }
+}
+
+// Solo quello ancora da consegnare: quello arrivato si guarda sulla lavagna e
+// torna con l'agenda quando l'ufficio lo piazza. Una prenotazione ferma dice
+// accanto a sé perché, e chi è in fila dietro un'altra lo dice anche lui.
+function disegnaCoda() {
+  const coda = leggi(CHIAVI.coda, []);
+  document.getElementById('da-consegnare-titolo').style.display = coda.length ? '' : 'none';
+  document.getElementById('da-consegnare').innerHTML = coda.map((v, i) => {
+    const d = v.doc || {};
+    const davanti = i > 0 ? coda.slice(0, i).find(x => x.errore) : null;
+    return '<div class="card">' +
+      '<div class="cliente">' + perValore(d.cliente?.nome || '') +
+        (d.cliente?.citta ? ' <span class="etichetta">· ' + perValore(d.cliente.citta) + '</span>' : '') +
+        (d.sopralluogo ? ' <span class="etichetta">· sopralluogo</span>' : '') + '</div>' +
+      '<div class="note">' + perValore(d.note) + '</div>' +
+      '<div class="meta">' + (d.ore ? String(d.ore).replace('.', ',') + ' h · ' : '') +
+        (d.settimana ? perValore(etichettaSettimana(d.settimana)) + ' · ' : '') + '📤 da consegnare</div>' +
+      (v.errore ? '<div class="errore" onclick="svuotaCoda({ avvisa: true })"><b>⚠️ Non è partita: ' + perValore(v.errore) +
+        '</b><br>tocca per riprovare adesso</div>'
+        : davanti ? '<div class="errore" onclick="svuotaCoda({ avvisa: true })"><b>⏳ In fila dietro un\'altra prenotazione</b><br>' +
+          perValore(davanti.errore) + '</div>' : '') +
+    '</div>';
+  }).join('');
+}
+
+function disegna() {
+  document.getElementById('oggi').textContent = new Date().toLocaleDateString('it-IT',
+    { weekday: 'long', day: 'numeric', month: 'long' });
+  const manca = !indirizzo();
+  const el = document.getElementById('impostare');
+  el.style.display = manca ? 'block' : 'none';
+  el.innerHTML = manca ? '<div class="card"><div class="nota">Per cominciare serve l\'indirizzo di consegna ' +
+    'dell\'ufficio: apri il link che ti hanno mandato, o scrivilo qui.</div>' +
+    '<button class="bottone principale" style="margin-top:10px" onclick="apriImpostazioni()">Scrivi l\'indirizzo</button></div>' : '';
+  disegnaAgenda();
+  disegnaCoda();
+}
+
+indirizzoDalLink();
+disegna();
+scaricaAgenda();
+svuotaCoda();
+// Al ritorno della rete e ogni due minuti mentre l'app è aperta, come sul
+// telefono del cantiere: abbastanza spesso da non far aspettare, abbastanza raro
+// da non scaldare il telefono.
+window.addEventListener('online', () => { svuotaCoda(); scaricaAgenda(); });
+setInterval(() => svuotaCoda(), 120000);
+
+if ('serviceWorker' in navigator) {
+  navigator.serviceWorker.register('sw.js').catch(() => {});
+}
+</script>
+</body>
+</html>

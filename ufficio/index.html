@@ -1012,7 +1012,9 @@ async function assorbiAppuntamenti() {
       ore: doc.ore,
       note: doc.note || '',
       settimana: doc.settimana || '',
-      origine: 'prenotato dal cantiere',
+      // Dal telefono del capo il documento porta `da: 'capo'`: chi pianifica
+      // deve sapere a chi chiedere se le note non bastano.
+      origine: doc.da === 'capo' ? 'prenotato dal capo' : 'prenotato dal cantiere',
       requisiti: doc.requisiti,
       sopralluogo: doc.sopralluogo,
       stato: 'lista',
@@ -2173,6 +2175,15 @@ function riassuntoRicontrolla() {
 // La più recente per prima. Le righe sono poche e corte apposta: un elenco lungo
 // non si legge, e quello che non si legge tanto vale non scriverlo.
 const NOVITA = [
+  {
+    versione: '2026-10-19.2',
+    data: '2026-10-19',
+    titolo: 'L\'app del capo',
+    righe: [
+      'Il capo ha un\'app sua, all\'indirizzo dell\'app con **/capo/** in fondo: vede quello che è **in programma** sulla lavagna e **prenota** appuntamenti.',
+      'Le sue prenotazioni entrano in lavagna come quelle del cantiere, con **«prenotato dal capo»** sul cartellino.',
+    ],
+  },
   {
     versione: '2026-10-19.1',
     data: '2026-10-19',

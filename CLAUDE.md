@@ -8,6 +8,7 @@ persona sola, quasi sempre dal telefono, spesso in giardino senza campo.
 
 - `index.html` — l'app del cantiere: stili, markup e codice in un file solo
 - `ufficio/index.html` — l'app dell'ufficio, stessa forma, un file solo
+- `capo/index.html` — l'app del capo: solo la pagina Prossimi, con il suo service worker
 - `rapportino.js` — il documento che le due app si scambiano, caricato da entrambe
 - `sw.js` — service worker, serve l'app dalla cache così si apre offline
 - `manifest.json` + icone — installazione sulla schermata home
@@ -442,6 +443,43 @@ prima. Un file, un solo autore — il telefono deposita, l'ufficio legge, e l'ag
 `LEGGIBILI` e da `RISERVATI`, non dalla richiesta: un nome che arriva da chi chiama
 farebbe di quel `?documento=` un modo per leggersi il listino o l'anagrafica. Le
 liste sono corte e vanno tenute così.
+
+## L'app del capo: la pagina Prossimi e nient'altro
+
+Il capo non registra visite, non misura giardini e non ha un'anagrafica: gli serve
+sapere dove si va e fissare un lavoro mentre è al telefono con un cliente, senza
+passare dall'ufficio a voce. `capo/` è **la pagina Prossimi del telefono da sola**:
+l'agenda che arriva dall'ufficio e «＋ Prenota un appuntamento».
+
+**Nessun documento nuovo.** Legge l'agenda e manda appuntamenti dallo stesso script
+del telefono, con le stesse regole della coda (solo `status: "ok"`, niente
+Content-Type, il servizio che non risponde ferma la fila, un documento respinto no).
+L'appuntamento porta `da: 'capo'`, arrivato senza alzare `VERSIONE_APPUNTAMENTO`, e
+in lavagna il cartellino dice **«prenotato dal capo»**: chi pianifica deve sapere a
+chi chiedere se le note non bastano. L'identificativo comincia con `pren-capo-`,
+così due telefoni che prenotano nello stesso istante non scrivono lo stesso file.
+
+**Il cliente si scrive**, con il paese accanto: sul telefono del capo non c'è
+un'anagrafica, e portarcela vorrebbe dire far viaggiare indirizzi per un indirizzo
+pubblico. I suggerimenti sono i nomi già visti in agenda e nelle sue prenotazioni.
+L'ufficio lo riconosce dal nome, come fa con le prenotazioni del cantiere.
+
+**L'indirizzo dello script arriva con un link** (`capo/?indirizzo=…`): incollarne
+uno così lungo sul telefono è il modo migliore di sbagliarne una lettera. Letto,
+sparisce dalla barra. Non serve la chiave: l'agenda si legge senza, e i
+sopralluoghi coi contatti qui non ci sono.
+
+Sta in `localStorage` e basta — indirizzo, agenda scaricata, coda — perché nessuna
+di queste è l'unica copia di un lavoro fatto: una prenotazione resta lì solo finché
+non arriva in ufficio. Un salvataggio fallito si dice comunque a chiaro schermo.
+
+**Il suo service worker va prima in rete**, al contrario di quello del telefono:
+lì una modifica si vede al secondo avvio e ci sono una barra e un bottone per non
+perderla; qui non ci sono, e il capo non deve sapere che esistono versioni. Con la
+rete prende la pagina nuova, senza (o dopo quattro secondi di campo debole) apre
+quella di prima. Per questo `CACHE` di `capo/sw.js` **non si alza** a ogni
+modifica. Il service worker del telefono lascia stare `/capo/`, come lascia stare
+`/ufficio/`.
 
 ## I sopralluoghi: i contatti solo con la chiave
 

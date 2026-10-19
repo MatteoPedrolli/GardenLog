@@ -1,0 +1,16 @@
+{
+  "name": "Appuntamenti",
+  "short_name": "Appuntamenti",
+  "description": "Gli interventi in programma e le prenotazioni, per il capo",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#24211c",
+  "theme_color": "#24211c",
+  "icons": [
+    { "src": "../icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
+    { "src": "../icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any" },
+    { "src": "../icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+  ]
+}
