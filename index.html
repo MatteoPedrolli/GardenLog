@@ -749,7 +749,7 @@ select.form-control { background-image: url("data:image/svg+xml,%3Csvg xmlns='ht
     <div id="page-prossimi" class="page">
       <div class="section-title">In programma <span id="agenda-quando" class="agenda-quando"></span></div>
       <div id="agenda-list"></div>
-      <button class="btn btn-secondary" style="margin:0 14px; width:calc(100% - 28px)" onclick="scaricaAgenda({ avvisa: true })">🔄 Aggiorna dall'ufficio</button>
+      <button class="btn btn-secondary" style="margin:0 14px; width:calc(100% - 28px)" onclick="scaricaAgenda({ avvisa: true }); scaricaSopralluoghi()">🔄 Aggiorna dall'ufficio</button>
 
       <div class="section-title">Prenota un appuntamento</div>
       <div class="card" style="padding:14px">
@@ -1635,7 +1635,7 @@ function navTo(page) {
   // Aprendo la pagina si riprova a scaricare l'agenda, ma non a ogni tocco: in
   // ufficio la lavagna cambia qualche volta al giorno, e una richiesta per ogni
   // occhiata sarebbe traffico per niente.
-  if (page === 'prossimi' && Date.now() - agendaScaricataA > 300000) scaricaAgenda();
+  if (page === 'prossimi' && Date.now() - agendaScaricataA > 300000) { scaricaAgenda(); scaricaSopralluoghi(); }
   // I sopralluoghi si cercano dalla pagina Rilievi, ed è lì che si riaggiornano.
   if (page === 'rilievi') {
     renderSopralluoghi();
@@ -3728,6 +3728,7 @@ async function scaricaSopralluoghi({ avvisa = false } = {}) {
     sopralluoghiErrore = '';
     await salvaDB({ conta: false });
     renderSopralluoghi();
+    renderAgenda();
     if (avvisa) showToast('📍 Sopralluoghi aggiornati');
     return true;
   } catch (e) {
@@ -3891,11 +3892,23 @@ function renderAgenda() {
       Niente in programma da oggi in avanti sulla lavagna dell'ufficio.</div></div>`;
     return;
   }
-  el.innerHTML = davanti.map(a => `<div class="card" style="padding:12px">
+  // Via e telefono non stanno nell'agenda, che si legge senza chiave: arrivano col
+  // file dei sopralluoghi, e si ritrovano per codice. Senza chiave non ci sono, e
+  // la pagina lo dice una volta in fondo invece di lasciar credere che manchino.
+  const contatti = (DB.sopralluoghi && DB.sopralluoghi.contatti) || [];
+  const conChiave = !!(DB.impostazioni?.ChiaveLettura || '').trim();
+  el.innerHTML = davanti.map(a => {
+    const c = a.id ? contatti.find(x => x.id === a.id) : null;
+    const dove = c ? [c.via, c.paese].filter(Boolean).join(', ') : '';
+    return `<div class="card" style="padding:12px">
     <div style="font-size:0.78rem; color:var(--primary); font-weight:600">${perValore(etichettaMezzaGiornata(a.giorno, a.mezza))}${a.ora ? ' · ore ' + perValore(a.ora) : ''}</div>
     <div style="font-weight:600">${perValore(a.cliente || 'senza cliente')}</div>
+    ${dove ? `<div class="agenda-dove" style="font-size:0.82rem; color:var(--text-mid)">📍 ${perValore(dove)}</div>` : ''}
+    ${c && c.telefono ? `<div class="agenda-telefono" style="font-size:0.82rem"><a href="tel:${perValore(c.telefono.replace(/[^\d+]/g, ''))}">📞 ${perValore(c.telefono)}</a></div>` : ''}
     ${a.note ? `<div style="font-size:0.82rem; color:var(--text-mid); margin-top:4px">${perValore(a.note)}</div>` : ''}
-  </div>`).join('');
+  </div>`;
+  }).join('') + (conChiave ? '' : `<div class="dati-nota" style="margin:4px 14px">Via e telefono arrivano
+    con la chiave dei sopralluoghi (Impostazioni › Rapportino).</div>`);
 }
 
 function renderPrenotazioni() {

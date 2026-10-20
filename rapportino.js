@@ -374,13 +374,19 @@ function primaLaMattina(mezza) {
 // Prende i lavori della lavagna e ne ricava l'agenda. Solo quelli che hanno un
 // giorno: un lavoro ancora in colonna non ha un momento suo, e metterlo in agenda
 // vorrebbe dire prometterlo.
-function costruisciAgenda(lavori, oggi) {
-  const da = oggi ? dataISO(oggi) : dataISO(new Date());
-  const voci = (lavori || [])
+// Quali lavori finiscono in agenda: in un posto solo, perché i contatti che
+// viaggiano coi sopralluoghi devono essere quelli degli stessi appuntamenti.
+function lavoriInAgenda(lavori, da) {
+  return (lavori || [])
     .filter(l => l && l.giorno && l.giorno >= da)
     .sort((a, b) => (a.giorno + primaLaMattina(a.mezza) + (a.ora || '')).localeCompare(
       b.giorno + primaLaMattina(b.mezza) + (b.ora || '')))
-    .slice(0, APPUNTAMENTI_IN_AGENDA)
+    .slice(0, APPUNTAMENTI_IN_AGENDA);
+}
+
+function costruisciAgenda(lavori, oggi) {
+  const da = oggi ? dataISO(oggi) : dataISO(new Date());
+  const voci = lavoriInAgenda(lavori, da)
     .map(l => ({
       giorno: l.giorno,
       mezza: l.mezza === 'pomeriggio' ? 'pomeriggio' : 'mattina',
@@ -389,9 +395,11 @@ function costruisciAgenda(lavori, oggi) {
       note: l.note || '',
       // Se è un sopralluogo, e quale. Non dicono niente di nessuno — un sì/no e
       // un codice — e servono al telefono per elencare i sopralluoghi anche
-      // senza la chiave. Arrivati dopo, senza alzare VERSIONE_AGENDA.
+      // senza la chiave. Arrivati dopo, senza alzare VERSIONE_AGENDA. Il codice
+      // ora ce l'hanno tutti: è quello con cui il telefono ritrova via e telefono
+      // di un appuntamento nel file che arriva con la chiave.
       sopralluogo: !!l.sopralluogo,
-      id: l.sopralluogo ? (l.id || '') : '',
+      id: l.id || '',
     }));
   return {
     tipo: 'agenda',
@@ -450,7 +458,21 @@ function leggiAgenda(grezzo) {
 // non ha un momento suo.
 const VERSIONE_SOPRALLUOGHI = 1;
 
-function costruisciSopralluoghi(lavori, oggi) {
+// `anagrafica` sono i clienti dell'ufficio ({nome, indirizzo, citta, telefono}):
+// un lavoro normale non porta i contatti con sé, e il telefono li cerca lì.
+function contattiAppuntamento(l, anagrafica) {
+  const nome = String(l.cliente || '').trim().toLowerCase();
+  const c = nome ? (anagrafica || []).find(x => x && String(x.nome || '').trim().toLowerCase() === nome) : null;
+  // Quello scritto sul lavoro vince: è l'ultimo detto al telefono.
+  return {
+    id: l.id || '',
+    via: l.via || (c && c.indirizzo) || '',
+    paese: l.luogo || (c && c.citta) || '',
+    telefono: l.telefono || (c && c.telefono) || '',
+  };
+}
+
+function costruisciSopralluoghi(lavori, oggi, anagrafica) {
   const da = oggi ? dataISO(oggi) : dataISO(new Date());
   return {
     tipo: 'sopralluoghi',
@@ -474,6 +496,15 @@ function costruisciSopralluoghi(lavori, oggi) {
         email: l.email || '',
         note: l.note || '',
       })),
+    // Via e telefono di tutti gli appuntamenti in agenda, non solo dei
+    // sopralluoghi: in giardino servono anche per un cliente di sempre, se il
+    // telefono non lo ha in anagrafica o il cancello è chiuso. Stanno qui e non
+    // nell'agenda per la stessa ragione dei sopralluoghi: questo file esce solo
+    // con la chiave. Arrivati dopo, senza alzare VERSIONE_SOPRALLUOGHI.
+    contatti: lavoriInAgenda(lavori, da)
+      .filter(l => l.id)
+      .map(l => contattiAppuntamento(l, anagrafica))
+      .filter(c => c.via || c.telefono),
   };
 }
 
@@ -506,6 +537,10 @@ function leggiSopralluoghi(grezzo) {
         cliente: x.cliente || '', paese: x.paese || '', via: x.via || '',
         telefono: x.telefono || '', email: x.email || '', note: x.note || '',
       })),
+    // Un file di prima non li ha: vuol dire nessun contatto, non un errore.
+    contatti: (Array.isArray(doc.contatti) ? doc.contatti : [])
+      .filter(x => x && x.id)
+      .map(x => ({ id: String(x.id), via: x.via || '', paese: x.paese || '', telefono: x.telefono || '' })),
   };
 }
 

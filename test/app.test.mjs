@@ -2872,6 +2872,60 @@ try {
   ok('e la data finisce sul file, non solo a schermo',
     await pagU.evaluate(async () => { await ricarica(); return !!ARCHIVIO.find(l => l.inPosta); }));
 
+  // L'IBAN esce sotto il totale, sul foglio e nella mail, anche senza
+  // intestazione: è dove pagare, e la carta intestata non lo dice.
+  const iban = await pagU.evaluate(() => {
+    const prima = IMPOSTAZIONI.iban;
+    IMPOSTAZIONI.iban = 'it60x0542811101000000123456';
+    const l = ARCHIVIO.find(x => x.id !== 'altro-lavoro');
+    const foglio = costruisciFoglio({ cliente: l.cliente, data: l.data, righe: l.righe, senzaIntestazione: true });
+    const testo = testoConto(l);
+    IMPOSTAZIONI.iban = '';
+    const senza = testoConto(l);
+    IMPOSTAZIONI.iban = prima;
+    return { foglio: foglio.includes('IT60 X054 2811 1010 0000 0123 456'),
+      mail: testo.includes('IBAN IT60 X054 2811 1010 0000 0123 456'), senza: senza.includes('IBAN') };
+  });
+  ok('l\'IBAN esce sul conto stampato, a gruppi di quattro, anche senza intestazione', iban.foglio, JSON.stringify(iban));
+  ok('e nella mail; vuoto non esce', iban.mail && !iban.senza, JSON.stringify(iban));
+
+  // Il mittente: un mailto non sa sceglierlo, quindi con un indirizzo la posta si
+  // apre in Gmail da quell'account; con più d'uno si sceglie, e annullando non si
+  // segna niente.
+  const mittente = await pagU.evaluate(async () => {
+    window.apriPosta = url => { window.__posta = url; };
+    const prima = IMPOSTAZIONI.mittenti;
+    const l = ARCHIVIO.find(x => x.id !== 'altro-lavoro');
+    IMPOSTAZIONI.mittenti = 'conti@azienda.it';
+    window.__posta = '';
+    await inviaConto(l.id);
+    const uno = window.__posta;
+    IMPOSTAZIONI.mittenti = 'conti@azienda.it\ninfo@azienda.it';
+    window.__posta = '';
+    const inPostaPrima = l.inPosta;
+    const attesa = inviaConto(l.id);
+    await new Promise(r => setTimeout(r, 50));
+    const pannello = document.getElementById('scelta-mittente');
+    const aperto = pannello.classList.contains('aperto') && pannello.textContent.includes('info@azienda.it');
+    __sceltaMittente(null);
+    await attesa;
+    const annullato = { posta: window.__posta, inPosta: l.inPosta === inPostaPrima };
+    const attesa2 = inviaConto(l.id);
+    await new Promise(r => setTimeout(r, 50));
+    __sceltaMittente('info@azienda.it');
+    await attesa2;
+    const due = window.__posta;
+    IMPOSTAZIONI.mittenti = prima;
+    return { uno, aperto, annullato, due };
+  });
+  ok('con un mittente la posta si apre in Gmail da quell\'account, col destinatario',
+    mittente.uno.startsWith('https://mail.google.com/mail/?authuser=conti%40azienda.it') &&
+    mittente.uno.includes('to=cliente%40esempio.it') && decodeURIComponent(mittente.uno).includes('TOTALE (IVA inclusa)'),
+    mittente.uno.slice(0, 90));
+  ok('con più mittenti si sceglie, e annullando non si apre la posta né si segna',
+    mittente.aperto && mittente.annullato.posta === '' && mittente.annullato.inPosta, JSON.stringify(mittente.annullato));
+  ok('e la posta parte dall\'indirizzo scelto', mittente.due.includes('authuser=info%40azienda.it'), mittente.due.slice(0, 70));
+
   ok('senza email il conto si manda lo stesso, ma lo dice',
     await pagU.evaluate(async () => {
       const l = ARCHIVIO.find(x => x.id !== 'altro-lavoro');
@@ -3340,6 +3394,28 @@ try {
     !conSopralluogo.sop.includes('Ancora in coda'));
   ok('i lavori normali nel file dei sopralluoghi non ci sono',
     sopScritti.sopralluoghi?.every(x => x.id.startsWith('sop')));
+  // Via e telefono di ogni appuntamento in agenda viaggiano lì, a parte: dal lavoro
+  // o dall'anagrafica dell'ufficio. Nell'agenda, che si legge senza chiave, mai.
+  const contattiAgenda = await pagU.evaluate(async () => {
+    CLIENTI.push({ id: 'cli-contatti', nome: 'Paolo Neri', indirizzo: 'Via dei Campi 9', citta: 'Mezzocorona',
+      telefono: '0461 555 123', email: '' });
+    LAVAGNA.lavori.push(sistemaLavoro({ id: 'lav-contatti', cliente: 'paolo neri ', stato: 'confermato',
+      giorno: window.GIORNI.dopo, mezza: 'pomeriggio', note: 'taglio' }));
+    await salvaLavagna();
+    const sop = JSON.parse(await leggiTesto(window.RADICE, 'sopralluoghi.json'));
+    const agenda = await window.leggiAgendaScritta();
+    LAVAGNA.lavori = LAVAGNA.lavori.filter(l => l.id !== 'lav-contatti');
+    CLIENTI = CLIENTI.filter(c => c.id !== 'cli-contatti');
+    await salvaLavagna();
+    return { contatti: sop.contatti || [], agenda };
+  });
+  ok('il file dei sopralluoghi porta via e telefono anche degli altri appuntamenti, dall\'anagrafica',
+    contattiAgenda.contatti.some(c => c.id === 'lav-contatti' && c.via === 'Via dei Campi 9' &&
+      c.paese === 'Mezzocorona' && c.telefono === '0461 555 123') &&
+    contattiAgenda.contatti.some(c => c.id === 'sop-1' && c.telefono === '333 9876543'), JSON.stringify(contattiAgenda.contatti));
+  ok('e nell\'agenda resta il solo codice, senza via né telefono',
+    JSON.parse(contattiAgenda.agenda).appuntamenti.some(a => a.id === 'lav-contatti') &&
+    !contattiAgenda.agenda.includes('0461 555 123') && !contattiAgenda.agenda.includes('Via dei Campi'));
   // Nel modulo i contatti compaiono solo per un sopralluogo: su un lavoro
   // normale sarebbero tre caselle vuote in più.
   const moduloContatti = await pagU.evaluate(() => {
@@ -3381,6 +3457,34 @@ try {
   ok('anche dall\'ufficio un lavoro si etichetta, e la lavagna lo mostra in coda',
     tipiUfficio.tipi === 'potature,prato' && tipiUfficio.tag === 'Potature,Prato' && tipiUfficio.legenda,
     JSON.stringify(tipiUfficio));
+  // Un appuntamento già piazzato si corregge senza toglierlo dal suo giorno, e il
+  // bottone per aggiungerne uno sta fra la settimana e la coda.
+  const piazzatoCorretto = await pagU.evaluate(async () => {
+    vaiA('lavagna');
+    SETTIMANA = lunediDi(new Date(window.GIORNI.dopo + 'T12:00:00'));
+    disegnaLavagna();
+    const carta = [...document.querySelectorAll('#pagina-lavagna .giorni article.cartellino')]
+      .find(a => a.textContent.includes('Anna Verdi'));
+    const matita = carta && [...carta.querySelectorAll('button')].find(b => b.title === 'Modifica');
+    const stato = LAVAGNA.lavori.find(l => l.id === 'sop-1').stato;
+    if (matita) matita.click();
+    const modulo = document.getElementById('n-cliente');
+    const nome = modulo && modulo.value;
+    document.getElementById('n-note').value = 'vuole una siepe sul confine, portare il metro';
+    await salvaModuloLavoro();
+    const l = LAVAGNA.lavori.find(x => x.id === 'sop-1');
+    const giorni = document.querySelector('#pagina-lavagna .giorni');
+    const aggiungi = document.querySelector('#pagina-lavagna .aggiungi-lavagna');
+    const coda = document.querySelector('#pagina-lavagna .coda-sotto');
+    return { matita: !!matita, nome, note: l.note, giorno: l.giorno === window.GIORNI.dopo, stato: l.stato === stato,
+      ordine: !!(giorni && aggiungi && coda) && giorni.nextElementSibling === aggiungi && aggiungi.nextElementSibling === coda,
+      testo: aggiungi ? aggiungi.textContent : '' };
+  });
+  ok('un appuntamento già in lavagna ha la ✎ e si corregge restando al suo giorno',
+    piazzatoCorretto.matita && piazzatoCorretto.nome === 'Anna Verdi' && piazzatoCorretto.note.includes('portare il metro') &&
+    piazzatoCorretto.giorno && piazzatoCorretto.stato, JSON.stringify(piazzatoCorretto));
+  ok('«+ Aggiungi appuntamento» sta subito sotto la settimana, sopra la coda',
+    piazzatoCorretto.ordine && piazzatoCorretto.testo.includes('Aggiungi appuntamento'), JSON.stringify(piazzatoCorretto));
   ok('e correggendolo le spunte ci sono, e si tolgono',
     tipiUfficio.spunte === 'potature:true,prato:true' && tipiUfficio.dopo === 'potature', JSON.stringify(tipiUfficio));
 
@@ -3420,6 +3524,30 @@ try {
   });
   ok('sul telefono l\'agenda parte da oggi, non dal giorno in cui è stata scritta',
     !daOggi.passato && daOggi.futuri, JSON.stringify(daOggi));
+
+  // Con la chiave, accanto a ogni appuntamento via e telefono, da toccare per
+  // chiamare. Senza, la pagina dice da dove arrivano.
+  const agendaContatti = await page.evaluate(() => {
+    const prima = { agenda: DB.agenda, sop: DB.sopralluoghi, chiave: DB.impostazioni.ChiaveLettura };
+    const a = DB.agenda.appuntamenti[0];
+    DB.agenda = { ...prima.agenda, appuntamenti: [{ ...a, id: 'lav-x' }] };
+    DB.sopralluoghi = { sopralluoghi: [], contatti: [{ id: 'lav-x', via: 'Via dei Campi 9', paese: 'Mezzocorona', telefono: '0461 555 123' }] };
+    DB.impostazioni.ChiaveLettura = 'segreta';
+    renderAgenda();
+    const con = document.getElementById('agenda-list').innerHTML;
+    DB.sopralluoghi = null;
+    DB.impostazioni.ChiaveLettura = '';
+    renderAgenda();
+    const senza = document.getElementById('agenda-list').innerHTML;
+    DB.agenda = prima.agenda; DB.sopralluoghi = prima.sop; DB.impostazioni.ChiaveLettura = prima.chiave;
+    renderAgenda();
+    return { con, senza };
+  });
+  ok('con la chiave l\'agenda del telefono mostra via e telefono, e il numero si chiama',
+    agendaContatti.con.includes('Via dei Campi 9, Mezzocorona') && agendaContatti.con.includes('href="tel:0461555123"'),
+    agendaContatti.con.slice(0, 300));
+  ok('senza la chiave non ci sono, e la pagina dice che arrivano con la chiave',
+    !agendaContatti.senza.includes('0461') && agendaContatti.senza.includes('arrivano'), agendaContatti.senza.slice(-200));
 
   // ── IL TELEFONO LEGGE I SOPRALLUOGHI ──
   // Con la chiave arrivano completi; senza, si vedono lo stesso dall'agenda col
@@ -3815,6 +3943,9 @@ try {
   // guardano i valori, o la prova passerebbe anche con la tabella vuota.
   const campiPrev = await pagU.evaluate(() =>
     [...document.querySelectorAll('#pagina-preventivo input')].map(i => i.value).join('|'));
+  const trasf = await pagU.evaluate(() => PREVENTIVO.doc.righe.filter(r => r.voceID === 'trasferimento')
+    .map(r => r.descrizione + ':' + r.quantita + ':' + r.chiave).join());
+  ok('un preventivo nuovo ha già la riga del trasferimento, come riga dell\'ufficio', trasf === 'Trasferimento:1:', trasf);
   ok('il preventivo porta le righe del rilievo, con quantità e prezzo',
     campiPrev.includes('240') && schermoPrev.includes('m²'),
     campiPrev + ' § ' + schermoPrev.slice(0, 120));
@@ -4218,10 +4349,11 @@ try {
   // Una sezione è un titolo: niente da sommare, e non è una riga senza prezzo.
   const conSezione = await pagU.evaluate(() => {
     const prima = totaliPreventivo(PREVENTIVO.doc).soluzioni[0];
+    const esclusePrima = prima.escluse;
     aggiungiSezionePreventivo();
     PREVENTIVO.doc.righe[PREVENTIVO.doc.righe.length - 1].descrizione = 'Zona davanti casa';
     const dopo = totaliPreventivo(PREVENTIVO.doc).soluzioni[0];
-    return { prima: prima.totale, dopo: dopo.totale, escluse: dopo.escluse,
+    return { prima: prima.totale, dopo: dopo.totale, escluse: dopo.escluse - esclusePrima,
       daConfermare: prezziDaConfermare(PREVENTIVO.doc.righe),
       foglio: costruisciFoglioPreventivo(PREVENTIVO.doc) };
   });
@@ -4627,6 +4759,51 @@ try {
     rilUff.pianteDopo === 'Piante – Lauro 80-100:76,Piante – Photinia:4' && rilUff.prezzo2 === 1500 &&
     rilUff.prezzoPhotinia === 30 && rilUff.paginaFine === 'preventivo',
     rilUff.pianteDopo + ', ' + rilUff.prezzo2 + ', ' + rilUff.prezzoPhotinia);
+
+  // Il cestino: un preventivo si elimina, e la conferma dice cosa succede dopo —
+  // un rilievo scritto in ufficio se ne va con lui, uno del telefono resta e il
+  // preventivo torna da fare. Il preventivo che c'era resta aperto per le prove dopo.
+  const cestino = await pagU.evaluate(async () => {
+    const prima = PREVENTIVO;
+    const contaRilievi = () => [...window.CASA._sotto.get('rilievi')._file.keys()].length;
+    const contaPreventivi = () => [...window.CASA._sotto.get('preventivi')._sotto.values()]
+      .reduce((n, c) => n + c._file.size, 0);
+    nuovoRilievoUfficio();
+    scriviClienteRilievo('nome', 'Da buttare');
+    aggiungiLavorazioneUfficio('manodopera');
+    modificaLavorazioneUfficio(0, 'nome', 'Prova');
+    modificaLavorazioneUfficio(0, 'ore', '2');
+    await salvaRilievoUfficio();
+    await salvaPreventivo();
+    const r0 = contaRilievi(), p0 = contaPreventivi();
+    const bottone = [...document.querySelectorAll('#pagina-preventivo button.pericolo')].some(b => b.textContent.includes('🗑'));
+    const chieste = [];
+    const vero = window.confirm;
+    window.confirm = t => { chieste.push(t); return false; };
+    await eliminaPreventivo();
+    const annullato = contaRilievi() === r0 && contaPreventivi() === p0;
+    window.confirm = t => { chieste.push(t); return true; };
+    await eliminaPreventivo();
+    const tolti = { rilievi: r0 - contaRilievi(), preventivi: p0 - contaPreventivi(), pagina: PAGINA,
+      ancora: PREVENTIVI.some(p => p.doc.cliente && p.doc.cliente.nome === 'Da buttare') };
+    // Un rilievo del telefono: la conferma lo dice, e il lavoro in lavagna resta.
+    RILIEVI.push({ nome: 'finto.json', doc: { id: 'ril-tel', origine: '' } });
+    PREVENTIVO = { doc: { id: 'ril-tel', cliente: { nome: 'Dal campo' }, stato: 'accettato', righe: [] }, file: 'x.json', anno: '2026' };
+    window.confirm = t => { chieste.push(t); return false; };
+    await eliminaPreventivo();
+    RILIEVI.pop();
+    window.confirm = vero;
+    PREVENTIVO = prima;
+    return { bottone, annullato, tolti, testi: chieste };
+  });
+  ok('il preventivo ha il bottone rosso col cestino', cestino.bottone);
+  ok('annullando non si cancella niente', cestino.annullato, JSON.stringify(cestino.tolti));
+  ok('confermando se ne va, e il rilievo scritto in ufficio con lui',
+    cestino.tolti.rilievi === 1 && cestino.tolti.preventivi === 1 && cestino.tolti.pagina === 'preventivi' && !cestino.tolti.ancora,
+    JSON.stringify(cestino.tolti));
+  ok('la conferma dice cosa succede: col rilievo del telefono torna fra gli aperti, e la lavagna resta',
+    cestino.testi[0].includes('se ne va con lui') && cestino.testi[2].includes('torna fra gli aperti') &&
+    cestino.testi[2].includes('lavagna resta'), cestino.testi.join(' § '));
 
   // ── LE ORE PER VOCE, E LA MANODOPERA CHE LE SOMMA ──
   // In un settore ogni voce ha le sue ore, scritte in ufficio; la manodopera in

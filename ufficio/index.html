@@ -317,6 +317,12 @@ input.vuoto { background: #fffdf5; border-color: #ecdca8; }
   display: none; align-items: center; justify-content: center; padding: 24px; z-index: 200;
 }
 #novita.aperto { display: flex; }
+#scelta-mittente {
+  position: fixed; inset: 0; background: rgba(36,33,28,0.5);
+  display: none; align-items: center; justify-content: center; padding: 24px; z-index: 210;
+}
+#scelta-mittente.aperto { display: flex; }
+#scelta-mittente .bottoni { flex-direction: column; align-items: stretch; }
 .scheda-novita {
   background: var(--white); border-radius: var(--radius); padding: 26px 30px;
   max-width: 620px; max-height: 80vh; overflow-y: auto; box-shadow: 0 18px 50px rgba(0,0,0,0.25);
@@ -383,7 +389,8 @@ input.vuoto { background: #fffdf5; border-color: #ecdca8; }
 .coda-lista.pronti { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); align-items: start; }
 .coda-lista.pronti > .vuoto-mezza { grid-column: 1 / -1; }
 .coda-lista.fermi, .coda-lista.sopralluoghi { min-height: 160px; }
-.coda-sotto #nuovo-lavoro { max-width: 480px; }
+.aggiungi-lavagna { margin-top: 12px; }
+.aggiungi-lavagna #nuovo-lavoro { max-width: 480px; }
 @media (max-width: 900px) {
   .coda-lista.pronti { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 }
@@ -590,7 +597,7 @@ input.vuoto { background: #fffdf5; border-color: #ecdca8; }
 #foglio { display: none; }
 
 @media print {
-  #app, #avviso, #novita { display: none !important; }
+  #app, #avviso, #novita, #scelta-mittente { display: none !important; }
   #foglio { display: block; }
   body { background: var(--white); color: #000; font-size: 11pt; }
   /* Margine zero, così Chrome non ha dove scrivere data, titolo e indirizzo
@@ -707,6 +714,7 @@ input.vuoto { background: #fffdf5; border-color: #ecdca8; }
 <div id="foglio"></div>
 <div id="avviso"></div>
 <div id="novita"></div>
+<div id="scelta-mittente"></div>
 
 <script src="../rapportino.js"></script>
 <script>
@@ -771,6 +779,13 @@ const IMPOSTAZIONI_VUOTE = {
   // Dopo quanti giorni senza risposta un preventivo mandato passa fra i
   // rifiutati, come «scaduto». Tenerlo uguale a quello scritto nelle condizioni.
   validita: '30',
+  // Dove pagare il conto: esce sotto il totale, sul foglio e nella mail.
+  iban: '', intestatarioIban: '',
+  // Gli indirizzi da cui mandare conti e preventivi, uno per riga. Vuoto vuol
+  // dire il programma di posta del PC, come sempre; con un indirizzo la posta si
+  // apre in Gmail da quell'account, perché un link mailto: non sa scegliere il
+  // mittente — lo decide il programma che lo apre.
+  mittenti: '',
 };
 
 let CARTELLA = null;
@@ -1135,6 +1150,9 @@ async function salvaClienti() {
     return false;
   }
   CLIENTI_DA_SALVARE = false;
+  // Via e telefono degli appuntamenti in agenda si prendono da qui: un numero
+  // corretto in anagrafica deve arrivare in giardino senza aspettare la lavagna.
+  await salvaAgenda();
   disegna();
   avvisa('Anagrafica salvata');
   return true;
@@ -1284,7 +1302,7 @@ async function salvaAgenda() {
     // sopralluogo e passa al successivo, e un file da aggiornare a mano è un file
     // che in giardino dice il giorno sbagliato.
     await scriviTesto(CARTELLA, FILE_SOPRALLUOGHI,
-      JSON.stringify(costruisciSopralluoghi(LAVAGNA.lavori), null, 2));
+      JSON.stringify(costruisciSopralluoghi(LAVAGNA.lavori, null, CLIENTI), null, 2));
     return true;
   } catch (e) {
     // Non blocca la pianificazione — la lavagna è già salvata — ma non si tace:
@@ -1876,10 +1894,25 @@ function costruisciFoglio({ cliente, data, righe, lavori, senzaIntestazione }) {
       (escluse === 1 ? ' voce resta da valutare e non è compresa' : ' voci restano da valutare e non sono comprese') +
       ' nel totale qui sopra.</div>';
   }
+  // L'IBAN esce anche senza intestazione: la carta intestata dice chi è
+  // l'azienda, non dove pagarla, ed è la prima cosa che chi riceve il conto cerca.
+  if (ibanScritto()) {
+    html += '<div class="pagamento-sotto">Pagamento con bonifico sull\'IBAN <strong>' +
+      perValore(ibanScritto()) + '</strong>' +
+      (IMPOSTAZIONI.intestatarioIban ? ' intestato a ' + perValore(IMPOSTAZIONI.intestatarioIban) : '') +
+    '</div>';
+  }
   if (IMPOSTAZIONI.nota) {
     html += '<div class="nota-sotto">' + perValore(IMPOSTAZIONI.nota) + '</div>';
   }
   return html;
+}
+
+// A gruppi di quattro, come lo stampano le banche: trenta caratteri attaccati si
+// ricopiano sbagliati, ed è un bonifico che finisce da un'altra parte.
+function ibanScritto() {
+  const nudo = String(IMPOSTAZIONI.iban || '').replace(/\s+/g, '').toUpperCase();
+  return nudo.replace(/(.{4})(?=.)/g, '$1 ');
 }
 
 function stampaConto(origine, id, senzaIntestazione) {
@@ -2191,6 +2224,18 @@ function riassuntoRicontrolla() {
 // La più recente per prima. Le righe sono poche e corte apposta: un elenco lungo
 // non si legge, e quello che non si legge tanto vale non scriverlo.
 const NOVITA = [
+  {
+    versione: '2026-10-20.2',
+    data: '2026-10-20',
+    titolo: 'Appuntamenti, IBAN, preventivi e mittente',
+    righe: [
+      'Sulla lavagna **✎ c\'è anche sui cartellini già piazzati**: si corregge un appuntamento senza toglierlo dal suo giorno. **«+ Aggiungi appuntamento»** sta subito sotto la settimana, non più in fondo alla coda.',
+      'Nell\'agenda del telefono, con la chiave dei sopralluoghi, compaiono **via e telefono** di ogni appuntamento: dal lavoro, o dall\'anagrafica di qui.',
+      'In Impostazioni › **Pagamento** si scrive l\'**IBAN**: esce sotto il totale del conto, stampato e nella mail.',
+      'In Impostazioni › **Da dove partono le mail** si scrivono gli indirizzi: con uno la mail si apre in **Gmail** da quello, con più d\'uno si sceglie a ogni invio. Vuoto, si usa il programma di posta come prima.',
+      'Un preventivo si **elimina** col bottone rosso **🗑** in fondo. Un preventivo nuovo ha già la riga **Trasferimento**.',
+    ],
+  },
   {
     versione: '2026-10-20.1',
     data: '2026-10-20',
@@ -2942,6 +2987,9 @@ async function salvaRilievoUfficio() {
 // della visita, qui blocca la stampa — perché è la stampa che esce di qui.
 const VERSIONE_PREVENTIVO = 1;
 const CARTELLA_PREVENTIVI = 'preventivi';
+// La voce che ogni preventivo nuovo porta già: è lo stesso identificativo del
+// telefono, dove il trasferimento compare in ogni conto.
+const VOCE_TRASFERIMENTO = 'trasferimento';
 
 // Una riga sta nel totale, oppure è una **tariffa**: un prezzo per una cosa che
 // forse servirà — il conferimento a discarica, il costo orario — che si dichiara
@@ -3306,7 +3354,8 @@ function costruisciPreventivo(rilievo, precedente) {
     // Vuoto è il caso normale: quasi tutti i preventivi hanno un totale solo.
     soluzioni: (precedente && Array.isArray(precedente.soluzioni)) ? precedente.soluzioni : [],
     scelta: (precedente && precedente.scelta) || '',
-    righe: righePreventivo(rilievo, precedente ? precedente.righe : null),
+    righe: precedente ? righePreventivo(rilievo, precedente.righe)
+      : righePreventivo(rilievo, null).concat(rigaTrasferimento()),
     note: (precedente && precedente.note) || '',
     // Il rilievo ci viaggia dentro per intero: fra due anni questo file deve
     // raccontare da solo da dove viene quel prezzo, anche se la cartella dei
@@ -3467,6 +3516,10 @@ async function inviaPreventivo() {
     avvisa('Manca la mail di ' + ((d.cliente && d.cliente.nome) || 'questo cliente') +
       ': la posta si apre lo stesso, il destinatario va scritto a mano', true);
   }
+  // Il mittente si sceglie prima di segnare: annullare lì non deve lasciare un
+  // preventivo «mandato» che non è mai uscito.
+  const mittente = await scegliMittente();
+  if (mittente === null) return;
   const prima = { stato: d.stato, mandato: d.mandato };
   d.stato = 'mandato';
   d.mandato = new Date().toISOString();
@@ -3475,9 +3528,8 @@ async function inviaPreventivo() {
     d.mandato = prima.mandato;
     return;
   }
-  apriPosta('mailto:' + encodeURIComponent(indirizzo) +
-    '?subject=' + encodeURIComponent('Preventivo' + (IMPOSTAZIONI.azienda ? ' ' + IMPOSTAZIONI.azienda : '')) +
-    '&body=' + encodeURIComponent(testoPreventivo(d)));
+  apriPosta(indirizzoPosta(indirizzo, 'Preventivo' + (IMPOSTAZIONI.azienda ? ' ' + IMPOSTAZIONI.azienda : ''),
+    testoPreventivo(d), mittente));
   disegnaPreventivo();
 }
 
@@ -3975,18 +4027,33 @@ function cambiaSoluzioneRiga(i, soluzione) {
   disegnaPreventivo();
 }
 
-function aggiungiRigaPreventivo(voceID, descrizione) {
+function rigaVocePreventivo(voceID, descrizione) {
   const v = voceID ? voceInListino(voceID) : null;
   const corpo = !!(v && v.aCorpo);
-  PREVENTIVO.doc.righe.push({
+  return {
     chiave: '', voceID: v ? v.voceID : '', voce: v ? v.voce : '',
     descrizione: descrizione || (v ? v.voce : ''), quantita: corpo ? 1 : '', unita: v && !corpo ? (v.unita || '') : '',
     prezzo: v && v.prezzo !== '' && v.prezzo != null ? Number(v.prezzo) : '',
     proposto: !!(v && v.prezzo !== '' && v.prezzo != null),
     tipo: 'totale',
     soluzione: '',
-  });
+  };
+}
+
+function aggiungiRigaPreventivo(voceID, descrizione) {
+  PREVENTIVO.doc.righe.push(rigaVocePreventivo(voceID, descrizione));
   disegnaPreventivo();
+}
+
+// Il trasferimento c'è a ogni lavoro, come nel conto del telefono: doverlo
+// aggiungere a mano era il modo migliore per dimenticarlo. Entra una volta, nel
+// preventivo nuovo, come riga dell'ufficio: chi lo toglie apposta non se lo
+// ritrova al giro dopo. Senza la voce in listino resta una riga col solo nome, e
+// il prezzo è un buco da riempire.
+function rigaTrasferimento() {
+  const riga = rigaVocePreventivo(VOCE_TRASFERIMENTO, 'Trasferimento');
+  if (!riga.voceID) Object.assign(riga, { voceID: VOCE_TRASFERIMENTO, voce: 'Trasferimento', quantita: 1 });
+  return riga;
 }
 
 // Una singola operazione nel preventivo: la riga della sua voce col nome
@@ -4244,6 +4311,8 @@ function disegnaPreventivo() {
     (d.stato === 'bozza' || d.stato === 'mandato'
       ? '<button class="secondaria" onclick="rifiutaPreventivo()">Il cliente ha detto no</button>' : '') +
     '<button class="secondaria" onclick="vaiA(\'preventivi\')">Torna all\'elenco</button>' +
+    (PREVENTIVO.file || rilievoDellUfficio(d.id)
+      ? '<button class="pericolo" style="margin-left:auto" onclick="eliminaPreventivo()" title="Elimina il preventivo">🗑 Elimina</button>' : '') +
     '</div>';
   c.innerHTML = html;
   aggiornaCodaPreventivo();
@@ -4275,6 +4344,48 @@ async function salvaPreventivo() {
   // la somma è proprio la cifra che non esiste.
   avvisa('Preventivo salvato · ' + forchettaPreventivo(d));
   return true;
+}
+
+// Per quello che non ci doveva stare: una prova, un doppione, un cliente che ha
+// cambiato idea prima ancora del preventivo. La conferma dice cosa succede dopo,
+// perché non è sempre la stessa cosa: un rilievo del telefono resta in rilievi/ —
+// l'ha scritto lui, e l'ufficio non lo tocca — quindi il preventivo torna da fare;
+// uno scritto qui se ne va insieme, o tornerebbe a chiederlo; senza rilievo,
+// questo file è l'unica copia di quello che il campo aveva misurato.
+async function eliminaPreventivo() {
+  if (!PREVENTIVO) return;
+  const d = PREVENTIVO.doc;
+  const chi = (d.cliente && d.cliente.nome) || 'senza nome';
+  const dellUfficio = rilievoDellUfficio(d.id);
+  const delCampo = !dellUfficio && RILIEVI.find(r => r.doc.id === d.id);
+  const cosaSuccede = dellUfficio
+    ? 'Il rilievo l\'avete scritto in ufficio, e se ne va con lui.'
+    : delCampo
+      ? 'Il rilievo arrivato dal telefono resta in ' + CARTELLA_RILIEVI + '/, quindi il preventivo torna fra gli aperti, da rifare.'
+      : 'Il rilievo non c\'è più in ' + CARTELLA_RILIEVI + '/: questo file è l\'unica copia che resta, e non torna.';
+  const inLavagna = d.stato === 'accettato' ? '\n\nIl lavoro già messo in lavagna resta dov\'è.' : '';
+  if (!confirm('Eliminare il preventivo di «' + chi + '»?\n\n' + cosaSuccede + inLavagna)) return;
+  try {
+    if (PREVENTIVO.file) {
+      const radice = await sottocartella(CARTELLA, CARTELLA_PREVENTIVI, false);
+      const cartellaAnno = radice && await sottocartella(radice, PREVENTIVO.anno, false);
+      if (!cartellaAnno) throw new Error('non trovo la cartella ' + CARTELLA_PREVENTIVI + '/' + PREVENTIVO.anno);
+      await cartellaAnno.removeEntry(PREVENTIVO.file);
+    }
+    if (dellUfficio) {
+      const cartella = await sottocartella(CARTELLA, CARTELLA_RILIEVI, false);
+      if (cartella) await cartella.removeEntry(dellUfficio.nome);
+    }
+  } catch (e) {
+    // Se restasse in console, si crederebbe eliminato un preventivo ancora lì.
+    avvisa('Non ho potuto eliminare: ' + e.message, true);
+    return;
+  }
+  PREVENTIVO = null;
+  vaiA('preventivi');
+  await ricarica();
+  disegna();
+  avvisa('Preventivo eliminato: ' + chi + (delCampo ? ' — il rilievo è tornato fra gli aperti' : ''));
 }
 
 function stampaPreventivo() {
@@ -5321,6 +5432,10 @@ function testoConti(lavori, intestatario) {
     righe.push('  (' + escluse + (escluse === 1 ? ' voce resta' : ' voci restano') +
       ' da valutare e non ' + (escluse === 1 ? 'è compresa' : 'sono comprese') + ' nel totale)');
   }
+  if (ibanScritto()) {
+    righe.push('', 'Pagamento con bonifico sull\'IBAN ' + ibanScritto() +
+      (IMPOSTAZIONI.intestatarioIban ? ' intestato a ' + IMPOSTAZIONI.intestatarioIban : ''));
+  }
   if (IMPOSTAZIONI.nota) righe.push('', IMPOSTAZIONI.nota);
   if (IMPOSTAZIONI.azienda) righe.push('', IMPOSTAZIONI.azienda);
   return righe.join('\n');
@@ -5341,6 +5456,8 @@ async function inviaConto(id) {
       ': mettila in Clienti, o scrivila a mano nella posta', true);
   }
 
+  const mittente = await scegliMittente();
+  if (mittente === null) return;
   const aggiornato = { ...l, inPosta: new Date().toISOString() };
   delete aggiornato.anno;
   delete aggiornato.file;
@@ -5355,9 +5472,7 @@ async function inviaConto(id) {
   l.inPosta = aggiornato.inPosta;
 
   const oggetto = 'Conto dei lavori' + (l.data ? ' del ' + formattaData(l.data) : '');
-  apriPosta('mailto:' + encodeURIComponent(indirizzo) +
-    '?subject=' + encodeURIComponent(oggetto) +
-    '&body=' + encodeURIComponent(testoConto(l)));
+  apriPosta(indirizzoPosta(indirizzo, oggetto, testoConto(l), mittente));
   disegna();
 }
 
@@ -5394,15 +5509,15 @@ async function inviaInsieme() {
     avvisa('Manca l\'email di ' + (cl.nome || 'questo cliente') +
       ': mettila in Clienti, o scrivila a mano nella posta', true);
   }
+  const mittente = await scegliMittente();
+  if (mittente === null) return;
   const quando = new Date().toISOString();
   for (const l of scelti) {
     const errore = await aggiornaArchiviato(l, { inPosta: quando });
     if (errore) { avvisa('Non ho potuto segnare l\'invio: ' + errore.message, true); disegna(); return; }
   }
   const oggetto = 'Conto dei lavori del ' + scelti.map(l => formattaData(l.data)).join(', ');
-  apriPosta('mailto:' + encodeURIComponent(indirizzo) +
-    '?subject=' + encodeURIComponent(oggetto) +
-    '&body=' + encodeURIComponent(testoConti(scelti, cl)));
+  apriPosta(indirizzoPosta(indirizzo, oggetto, testoConti(scelti, cl), mittente));
   SCELTI_ARCHIVIO.clear();
   INTESTATARIO_SCELTI = '';
   disegna();
@@ -5422,8 +5537,53 @@ async function fatturaInsieme() {
 
 // L'unico punto che porta fuori dall'app. Sta da solo per lo stesso motivo per
 // cui ci sta usaCartella: aprire la posta è una cosa che un test non può fare.
+// Gmail si apre in una scheda sua: nella stessa, l'app dell'ufficio sparirebbe.
 function apriPosta(url) {
-  window.location.href = url;
+  if (/^https:/.test(url)) window.open(url, '_blank');
+  else window.location.href = url;
+}
+
+function elencoMittenti() {
+  return String(IMPOSTAZIONI.mittenti || '').split(/[\n,;]+/).map(x => x.trim()).filter(x => x.includes('@'));
+}
+
+// Senza mittenti, il mailto: di sempre e il programma di posta del PC. Con un
+// mittente, la finestra di scrittura di Gmail aperta su quell'account: è l'unico
+// modo che un link ha per dire da chi parte la mail.
+function indirizzoPosta(a, oggetto, testo, mittente) {
+  if (!mittente) {
+    return 'mailto:' + encodeURIComponent(a) +
+      '?subject=' + encodeURIComponent(oggetto) + '&body=' + encodeURIComponent(testo);
+  }
+  return 'https://mail.google.com/mail/?authuser=' + encodeURIComponent(mittente) +
+    '&view=cm&fs=1&to=' + encodeURIComponent(a) +
+    '&su=' + encodeURIComponent(oggetto) + '&body=' + encodeURIComponent(testo);
+}
+
+// Con un indirizzo solo non si chiede niente: è quello. Con più d'uno si sceglie
+// ogni volta, perché dipende da cosa si manda e a chi. Risponde '' per il
+// programma di posta, l'indirizzo scelto, o null se si è annullato.
+function scegliMittente() {
+  const mittenti = elencoMittenti();
+  if (!mittenti.length) return Promise.resolve('');
+  if (mittenti.length === 1) return Promise.resolve(mittenti[0]);
+  const pannello = document.getElementById('scelta-mittente');
+  return new Promise(risolvi => {
+    window.__sceltaMittente = valore => {
+      pannello.classList.remove('aperto');
+      pannello.innerHTML = '';
+      delete window.__sceltaMittente;
+      risolvi(valore);
+    };
+    pannello.innerHTML = '<div class="scheda-novita" style="min-width:320px">' +
+      '<div class="titolo-novita">Da quale indirizzo?</div>' +
+      '<div class="bottoni" style="margin-top:14px">' +
+        mittenti.map((m, i) => '<button class="' + (i ? 'secondaria' : 'principale') + '"' +
+          ' onclick="__sceltaMittente(\'' + perOnclick(m) + '\')">' + perValore(m) + '</button>').join('') +
+        '<button class="secondaria" onclick="__sceltaMittente(null)">Annulla</button>' +
+      '</div></div>';
+    pannello.classList.add('aperto');
+  });
 }
 
 // ── PAGINA CLIENTI ──
@@ -5825,9 +5985,11 @@ function cartellino(l) {
         (l.inserito ? ' il ' + perValore(giornoMese(l.inserito)) : '') + '</span>'
         : inLista && l.inserito ? '<span class="origine-cart">inserito il ' +
           perValore(giornoMese(l.inserito)) + '</span>' : '') +
-      (inLista ? '<button type="button" class="bottone-cart" style="margin-left:auto"' +
+      // Si corregge anche un lavoro già piazzato: un numero sbagliato o una nota
+      // da aggiungere non sono un motivo per toglierlo dal suo giorno.
+      '<button type="button" class="bottone-cart" style="margin-left:auto"' +
         ' onclick="event.stopPropagation(); apriModuloLavoro(\'' + id + '\')" title="Modifica">✎</button>' +
-        '<button type="button" class="bottone-cart"' +
+      (inLista ? '<button type="button" class="bottone-cart"' +
         ' onclick="event.stopPropagation(); togliDallaLavagna(\'' + id + '\')" title="Togli dalla lavagna">✕</button>' : '') +
     '</div>' +
     (ultimoGiorno && ultimoGiorno > sabato ? '<div class="sconfina-cart">continua la settimana prossima</div>' : '') +
@@ -5912,11 +6074,14 @@ function disegnaLavagna() {
       '<button class="bottone-cart" style="margin-left:auto" onclick="mostraFuturi()">' +
       (MOSTRA_FUTURI ? 'Nascondi' : 'Mostra') + '</button></div>';
   }
-  coda += '<div class="bottoni">' +
-    '<button class="secondaria piccola" onclick="apriModuloLavoro()">+ Aggiungi</button>' +
-  '</div>';
-  coda += '<div id="nuovo-lavoro"></div>';
   coda += '</section>';
+
+  // Il bottone sta fra la settimana e la coda, non in fondo: con la coda piena
+  // per arrivarci bisognava scorrere tutti i cartellini, ed è la cosa che si fa
+  // a ogni telefonata. Lo stesso modulo serve a correggere un lavoro già piazzato.
+  const aggiungi = '<div class="aggiungi-lavagna"><div class="bottoni">' +
+    '<button class="secondaria piccola" onclick="apriModuloLavoro()">+ Aggiungi appuntamento</button>' +
+  '</div><div id="nuovo-lavoro"></div></div>';
 
   // ── la settimana ──
   html += '<section class="giorni">';
@@ -5951,7 +6116,7 @@ function disegnaLavagna() {
         '<b>' + formattaQuantita(oreGiorno) + ' h</b></div>' +
     '</div>';
   });
-  html += '</section>' + coda + '</div>';
+  html += '</section>' + aggiungi + coda + '</div>';
 
   // In fondo: serve quando non ti ricordi cosa vuol dire un tratteggio, e chi non
   // se lo sta chiedendo non deve scavalcarla per arrivare alla lavagna.
@@ -6144,6 +6309,7 @@ function apriModuloLavoro(id) {
       '<button class="secondaria piccola" onclick="chiudiModuloLavoro()">Annulla</button>' +
     '</div></div>';
   document.getElementById('n-cliente').focus();
+  if (c.scrollIntoView) c.scrollIntoView({ block: 'nearest' });
 }
 
 function mostraContattiSopralluogo() {
@@ -6459,6 +6625,21 @@ function disegnaImpostazioni() {
       'onchange="caricaLogo(this.files[0])" style="display:none"></label>' +
     (IMPOSTAZIONI.logo ? '<button class="secondaria" onclick="togliLogo()">Togli</button>' : '') +
   '</div>';
+  html += '<div class="titolo-sezione" style="margin-top:18px">Pagamento</div>';
+  html += '<table class="elenco"><tbody>' +
+    '<tr><td style="width:180px">IBAN per il bonifico</td><td><input type="text" id="imp-iban" value="' +
+      perValore(IMPOSTAZIONI.iban) + '" placeholder="IT60 X054 2811 1010 0000 0123 456"' +
+      ' oninput="modificaImpostazione(\'iban\', this.value)"></td></tr>' +
+    '<tr><td>Intestato a</td><td><input type="text" value="' + perValore(IMPOSTAZIONI.intestatarioIban) +
+      '" placeholder="se non è il nome dell\'azienda" oninput="modificaImpostazione(\'intestatarioIban\', this.value)"></td></tr>' +
+  '</tbody></table>';
+  html += '<div class="meta">Esce sotto il totale del conto, stampato e nella mail. Vuoto, non esce.</div>';
+  html += '<div class="titolo-sezione" style="margin-top:18px">Da dove partono le mail</div>';
+  html += '<textarea rows="2" oninput="modificaImpostazione(\'mittenti\', this.value)" ' +
+    'placeholder="un indirizzo per riga, es. info@azienda.it">' + perValore(IMPOSTAZIONI.mittenti) + '</textarea>';
+  html += '<div class="meta">Vuoto: conti e preventivi si aprono nel programma di posta del PC, che decide lui ' +
+    'il mittente. Con uno o più indirizzi si aprono in <b>Gmail</b>, dall\'account scelto — con più indirizzi ' +
+    'lo chiede a ogni invio. L\'account dev\'essere aperto in questo browser.</div>';
   html += '<div class="titolo-sezione" style="margin-top:18px">Nota in fondo al foglio</div>';
   html += '<textarea rows="3" oninput="modificaImpostazione(\'nota\', this.value)">' +
     perValore(IMPOSTAZIONI.nota) + '</textarea>';

@@ -402,8 +402,9 @@ la legge il telefono.
 
 **L'agenda porta cinque campi che dicono qualcosa e non uno di più**: giorno,
 mezza giornata, ora, cliente, note. Più due che non dicono niente di nessuno — se è
-un sopralluogo, e il suo codice — perché il telefono sappia elencarli anche senza
-la chiave. Non è economia di formato, è la ragione per cui esiste così: è l'unico
+un sopralluogo, e il codice del lavoro — perché il telefono sappia elencarli anche senza
+la chiave, e ritrovi via e telefono di ogni appuntamento nel file che arriva con la
+chiave (sotto). Non è economia di formato, è la ragione per cui esiste così: è l'unico
 documento che si *legge* dall'indirizzo dello script, che è pubblico per chi lo
 conosce. Indirizzi, telefoni, stime ore, requisiti e prezzi restano in ufficio, e chi
 aggiunge un campo a `costruisciAgenda()` lo pubblica là. L'ora è arrivata dopo,
@@ -525,6 +526,17 @@ elenco vuoto. Come l'agenda, quelli scaricati restano per quando il campo manca
 
 Solo quelli **piazzati su una mezza giornata**, da oggi in avanti: la regola
 dell'agenda, e per la stessa ragione.
+
+**Con la chiave, via e telefono di tutti gli appuntamenti.** In giardino servono
+anche per un cliente di sempre — il cancello chiuso, il telefono che non lo ha in
+anagrafica — e la regola resta quella: nell'agenda no. Viaggiano nello stesso
+`sopralluoghi.json`, in `contatti` (codice, via, paese, telefono: niente mail), per gli
+stessi appuntamenti dell'agenda (`lavoriInAgenda()`, in un posto solo), e il telefono
+li ritrova per codice sotto ogni appuntamento, col numero da toccare. Vengono dal
+lavoro e, dove manca, dall'anagrafica dell'ufficio per nome intero: per questo il file
+si riscrive anche salvando l'anagrafica. Senza chiave la pagina dice da dove
+arrivano. Campo arrivato senza alzare `VERSIONE_SOPRALLUOGHI` né rifare la
+distribuzione dello script: il file è già fra i `RISERVATI`.
 
 **La consegna passa da una coda.** Il rapportino si salva sempre in locale e
 parte quando c'è rete: in giardino il campo spesso non c'è, e se l'invio fosse
@@ -868,6 +880,18 @@ per riga e le alternative dette a parole; si segna mandato **prima** di aprirla,
 se il segno non riesce la posta non si apre. Stampare non lo segna — l'app non sa
 se quel foglio è andato al cliente — e c'è «Consegnato a mano».
 
+**Un preventivo nuovo ha già il trasferimento**, come il conto del telefono: c'è a
+ogni lavoro, e doverlo aggiungere era il modo per dimenticarlo. Entra una volta,
+quando il preventivo nasce (`rigaTrasferimento()`), come riga dell'ufficio: chi lo
+toglie non se lo ritrova riaprendo; senza prezzo in listino è un buco, non una proposta.
+
+**Un preventivo si elimina**, col bottone rosso 🗑 (`eliminaPreventivo()`), per la
+prova o il doppione. La conferma dice cosa succede dopo, perché non è sempre lo
+stesso: il rilievo del telefono resta in `rilievi/` — non è dell'ufficio — e il
+preventivo torna fra gli aperti da rifare; uno scritto in ufficio se ne va con lui, o
+tornerebbe a chiederlo; senza rilievo, il file era l'ultima copia. Un lavoro già messo
+in lavagna da un sì resta dov'è.
+
 **Dal preventivo all'anagrafica**: chi non c'è si aggiunge con un clic, a chi c'è
 si riempie **solo quello che manca**. Il numero corretto in ufficio non lo riscrive
 un rilievo, come non lo riscrive un'importazione. Il riquadro sta in cima, coi
@@ -1091,6 +1115,12 @@ dell'appuntamento. Le note sono anche l'unica cosa che fa il giro completo, quin
 quel campo è il posto dove scrivere le operazioni: da lì partono per l'agenda e
 tornano in giardino.
 
+**Un lavoro si corregge anche già piazzato**: la ✎ sta su tutti i cartellini, e il
+modulo è lo stesso della coda. Un numero sbagliato o una nota in più non sono un
+motivo per toglierlo dal suo giorno; giorno, mezza e penna il modulo non li tocca.
+**«+ Aggiungi appuntamento»** sta fra la settimana e la coda, col suo modulo: in fondo
+alla coda, con la coda piena, per arrivarci si scorrevano tutti i cartellini.
+
 **Quanto è largo un lavoro lo dice chi pianifica**, non la stima ore: `mezze` si
 alza e si abbassa di uno con `+` e `−`. Dedurlo dalle ore legava la lavagna a un
 numero messo a occhio, e chi pianifica sa cose che la stima non sa. Le ore seguono:
@@ -1179,6 +1209,21 @@ stanno lì — oggetto e conto già scritti. Il lavoro si segna *in posta* e non
 prima di aprirla, o una mail mandata resterebbe senza traccia in archivio. Senza
 email il conto si manda lo stesso, con il destinatario da scrivere a mano, ma
 l'app lo dice.
+
+**Il mittente un link `mailto:` non lo sa dire**: lo decide il programma di posta che
+lo apre. Per scegliere da quale indirizzo parte, in Impostazioni si scrivono gli
+indirizzi (`IMPOSTAZIONI.mittenti`), e allora la posta si apre nella finestra di
+scrittura di **Gmail** su quell'account (`indirizzoPosta()`, `authuser`), in una
+scheda sua; con più d'uno si sceglie a ogni invio (`scegliMittente()`), **prima** di
+segnare *in posta*, così annullare non lascia un conto segnato e mai uscito. Vale per
+conti, conti insieme e preventivi. Vuoto, il `mailto:` di sempre. L'account dev'essere
+aperto in quel browser; un alias «invia come» dentro un account solo non si sceglie
+così.
+
+**L'IBAN esce sotto il totale**, sul foglio e nella mail (`ibanScritto()`, a gruppi di
+quattro: trenta caratteri attaccati si ricopiano sbagliati). Esce anche senza
+intestazione: la carta intestata dice chi è l'azienda, non dove pagarla. Sta in
+Impostazioni con l'intestazione, ed è solo del conto: il preventivo ha le condizioni.
 
 **Più lavori, un conto solo.** Due giornate dallo stesso cliente sono due
 rapportini e due file in archivio, e restano tali; si spuntano, e «Stampa insieme»
