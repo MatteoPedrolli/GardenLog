@@ -318,12 +318,12 @@ input.vuoto { background: #fffdf5; border-color: #ecdca8; }
   display: none; align-items: center; justify-content: center; padding: 24px; z-index: 200;
 }
 #novita.aperto { display: flex; }
-#scelta-mittente {
+#pannello-posta {
   position: fixed; inset: 0; background: rgba(36,33,28,0.5);
   display: none; align-items: center; justify-content: center; padding: 24px; z-index: 210;
 }
-#scelta-mittente.aperto { display: flex; }
-#scelta-mittente .bottoni { flex-direction: column; align-items: stretch; }
+#pannello-posta.aperto { display: flex; }
+#pannello-posta .bottoni { flex-direction: column; align-items: stretch; }
 .scheda-novita {
   background: var(--white); border-radius: var(--radius); padding: 26px 30px;
   max-width: 620px; max-height: 80vh; overflow-y: auto; box-shadow: 0 18px 50px rgba(0,0,0,0.25);
@@ -605,7 +605,7 @@ input.vuoto { background: #fffdf5; border-color: #ecdca8; }
 #foglio { display: none; }
 
 @media print {
-  #app, #avviso, #novita, #scelta-mittente { display: none !important; }
+  #app, #avviso, #novita, #pannello-posta { display: none !important; }
   #foglio { display: block; }
   body { background: var(--white); color: #000; font-size: 11pt; }
   /* Margine zero, così Chrome non ha dove scrivere data, titolo e indirizzo
@@ -723,7 +723,7 @@ input.vuoto { background: #fffdf5; border-color: #ecdca8; }
 <div id="foglio"></div>
 <div id="avviso"></div>
 <div id="novita"></div>
-<div id="scelta-mittente"></div>
+<div id="pannello-posta"></div>
 
 <script src="../rapportino.js"></script>
 <script>
@@ -2049,9 +2049,12 @@ function stampaConto(origine, id, senzaIntestazione) {
     window.removeEventListener('afterprint', ripristina);
   };
   window.addEventListener('afterprint', ripristina);
-  document.title = 'Conto ' + (String(data || '').slice(0, 10) || 'senza-data') +
+  const nomeFile = 'Conto ' + (String(data || '').slice(0, 10) || 'senza-data') +
     ' ' + ((cliente && cliente.nome) || 'cliente');
+  document.title = nomeFile;
   window.print();
+  // Il nome serve a chi manda per mail, per dire quale PDF allegare.
+  return nomeFile;
 }
 
 // ── FORMATI ──
@@ -2351,6 +2354,15 @@ function riassuntoRicontrolla() {
 // La più recente per prima. Le righe sono poche e corte apposta: un elenco lungo
 // non si legge, e quello che non si legge tanto vale non scriverlo.
 const NOVITA = [
+  {
+    versione: '2026-10-20.5',
+    data: '2026-10-20',
+    titolo: 'Per mail parte il PDF',
+    righe: [
+      '**«Invia al cliente»**, **«Manda insieme»** e **«Manda per mail»** del preventivo aprono prima la **stampa**: scegli «Salva come PDF», il nome è già pronto.',
+      'Poi **«Apri la mail»**: si apre con due righe di saluto, senza il conto scritto dentro. **Trascina il PDF** nella mail come allegato e manda.',
+    ],
+  },
   {
     versione: '2026-10-20.4',
     data: '2026-10-20',
@@ -3647,8 +3659,8 @@ function prezziGuardati(d, perFare) {
 }
 
 // ── IL PREVENTIVO PER MAIL ──
-// Come il conto: l'app apre la posta già scritta e non manda niente da sola. Si
-// segna *mandato* **prima** di aprirla, e se non si riesce a segnarlo la posta
+// Come il conto: prima il PDF, poi la posta con due righe, e non manda niente da
+// sola. Si segna *mandato* **prima** di aprirla, e se non si riesce a segnarlo la posta
 // non si apre: una mail partita di cui l'archivio non sa niente è il preventivo
 // che nessuno richiama. Stampare invece non lo segna — l'app non sa se quel
 // foglio è andato al cliente o è una prova — e c'è il bottone apposta.
@@ -3656,6 +3668,8 @@ async function inviaPreventivo() {
   if (!PREVENTIVO) return;
   const d = PREVENTIVO.doc;
   if (!prezziGuardati(d, 'mandarlo')) return;
+  const nomeFile = stampaPreventivo();
+  if (!nomeFile || !(await chiediPdfSalvato(nomeFile))) return;
   const noto = clienteDelPreventivo(d);
   const indirizzo = (d.cliente && d.cliente.email) || (noto && noto.email) || '';
   if (!indirizzo) {
@@ -3675,47 +3689,8 @@ async function inviaPreventivo() {
     return;
   }
   apriPosta(indirizzoPosta(indirizzo, 'Preventivo' + (IMPOSTAZIONI.azienda ? ' ' + IMPOSTAZIONI.azienda : ''),
-    testoPreventivo(d), mittente));
+    letteraConPdf('il nostro preventivo'), mittente));
   disegnaPreventivo();
-}
-
-// Il testo della mail. Niente colonne allineate con gli spazi: le app di posta
-// usano caratteri a larghezza variabile e arrivano storte. Una voce per riga, e
-// le alternative dette a parole, come sul foglio.
-function testoPreventivo(d) {
-  const t = totaliPreventivo(d);
-  const riga = r => {
-    if (r.tipo === 'sezione') return ['', (r.descrizione || '').toUpperCase()];
-    const imp = importoRiga(r);
-    return [(r.descrizione || r.voce) + ': ' +
-      [formattaQuantita(r.quantita), r.unita].filter(x => x).join(' ') +
-      (r.prezzo === '' || r.prezzo == null ? ' — da definire'
-        : ' × ' + formattaEuro(r.prezzo) + ' = ' + (imp == null ? 'da definire' : formattaEuro(imp)))];
-  };
-  const righe = ['Spett.le ' + ((d.cliente && d.cliente.nome) || ''), '',
-    'A seguito Vostra gentile richiesta, Vi comunichiamo la nostra migliore offerta per la seguente fornitura:', ''];
-  d.righe.filter(r => r.tipo !== 'tariffa' && !r.soluzione).forEach(r => righe.push(...riga(r)));
-  if (t.unico) {
-    righe.push('', 'TOTALE PREVENTIVO S.E. & O. (IVA inclusa): ' + formattaEuro(t.unico.totale));
-  } else {
-    righe.push('', 'Le soluzioni qui sotto sono alternative fra loro: il totale di ciascuna comprende le voci sopra.');
-    t.soluzioni.forEach(sol => {
-      righe.push('', sol.nome.toUpperCase());
-      d.righe.filter(r => r.tipo !== 'tariffa' && r.soluzione === sol.id).forEach(r => righe.push(...riga(r)));
-      righe.push('TOTALE ' + sol.nome.toUpperCase() + ' (IVA inclusa): ' + formattaEuro(sol.totale));
-    });
-  }
-  const tariffe = d.righe.filter(r => r.tipo === 'tariffa');
-  if (tariffe.length) {
-    righe.push('', 'Non compreso nel totale:');
-    tariffe.forEach(r => righe.push((r.descrizione || r.voce) + ': ' +
-      (r.prezzo === '' || r.prezzo == null ? 'da definire' : formattaEuro(r.prezzo)) +
-      (r.unita ? ' / ' + r.unita : '')));
-  }
-  if (d.note) righe.push('', d.note);
-  if (IMPOSTAZIONI.condizioni) righe.push('', IMPOSTAZIONI.condizioni);
-  if (IMPOSTAZIONI.azienda) righe.push('', IMPOSTAZIONI.azienda);
-  return righe.join('\n');
 }
 
 // ── DAL PREVENTIVO ALL'ANAGRAFICA ──
@@ -4548,9 +4523,11 @@ function stampaPreventivo() {
   const titolo = document.title;
   const ripristina = () => { document.title = titolo; window.removeEventListener('afterprint', ripristina); };
   window.addEventListener('afterprint', ripristina);
-  document.title = 'Preventivo ' + String(d.creato || '').slice(0, 10) + ' ' +
+  const nomeFile = 'Preventivo ' + String(d.creato || '').slice(0, 10) + ' ' +
     ((d.cliente && d.cliente.nome) || 'cliente');
+  document.title = nomeFile;
   window.print();
+  return nomeFile;
 }
 
 // Mandato non vuol dire accettato, e nemmeno «partito»: l'app sa di averlo
@@ -5539,55 +5516,43 @@ function disegnaArchiviato() {
   c.innerHTML = html;
 }
 
-// Niente colonne allineate con gli spazi: le app di posta usano caratteri a
-// larghezza variabile e arrivano storte. Una voce per riga.
-function testoConto(l) { return testoConti([l]); }
-
-// Come il foglio: più lavori dello stesso cliente in un messaggio solo, ognuno
-// con la sua data e il suo subtotale, e il totale in fondo.
-function testoConti(lavori, intestatario) {
-  const piu = lavori.length > 1;
-  const aChi = intestatario || lavori[0].cliente || {};
-  const { totale, escluse } = totaleConteggio(lavori.flatMap(l => l.righe || []));
-  const righe = [];
-  righe.push('CONTO DEI LAVORI');
-  righe.push(aChi.nome || '');
-  if (!piu && lavori[0].data) righe.push(formattaData(lavori[0].data));
-  lavori.forEach(l => {
-  righe.push('');
-  if (piu) righe.push('Lavoro del ' + formattaData(l.data) + (perContoDi(aChi, l) ? ' · per ' + perContoDi(aChi, l) : ''));
-  (l.righe || []).forEach(r => {
-    const imp = importoRiga(r);
-    const quantita = formattaQuantita(r.quantita);
-    const misurabile = quantita && (r.unita || parseFloat(r.quantita) !== 1);
-    const conUnita = misurabile ? quantita + (r.unita ? ' ' + r.unita : '') : '';
-    if (imp == null) {
-      // Dire cosa manca è più utile che tacere: chi legge sa cosa resta da
-      // quantificare e non deve telefonare per chiederlo.
-      righe.push('  ' + r.voce + ' — ' + [conUnita, 'importo da definire'].filter(Boolean).join(', '));
-    } else {
-      righe.push('  ' + r.voce + ' — ' +
-        (conUnita ? conUnita + ' × ' + formattaEuro(r.prezzo) + ' = ' : '') + formattaEuro(imp));
-    }
-  });
-  if (piu) righe.push('  Subtotale: ' + formattaEuro(totaleConteggio(l.righe).totale));
-  });
-  righe.push('');
-  righe.push('  TOTALE (IVA inclusa): ' + formattaEuro(totale));
-  if (escluse) {
-    righe.push('  (' + escluse + (escluse === 1 ? ' voce resta' : ' voci restano') +
-      ' da valutare e non ' + (escluse === 1 ? 'è compresa' : 'sono comprese') + ' nel totale)');
-  }
-  if (ibanScritto()) {
-    righe.push('', 'Pagamento con bonifico sull\'IBAN ' + ibanScritto() +
-      (IMPOSTAZIONI.intestatarioIban ? ' intestato a ' + IMPOSTAZIONI.intestatarioIban : ''));
-  }
-  if (IMPOSTAZIONI.nota) righe.push('', IMPOSTAZIONI.nota);
-  if (IMPOSTAZIONI.azienda) righe.push('', IMPOSTAZIONI.azienda);
-  return righe.join('\n');
+// Al cliente parte il PDF e basta. Il conto scritto anche nel corpo della mail
+// era una seconda copia dello stesso conto, più brutta e senza logo, e chi la
+// riceveva non sapeva quale delle due leggere. Il browser però non sa allegare
+// un file: né un mailto: né la finestra di Gmail lo accettano dal link. Quindi
+// in due tempi — la stampa, dove «Salva come PDF» ha già il nome pronto, e poi
+// la mail con due righe, dove il PDF lo trascina chi manda.
+function letteraConPdf(cosa) {
+  return 'Buongiorno,\n\nin allegato ' + cosa + '.\n\nCordiali saluti' +
+    (IMPOSTAZIONI.azienda ? '\n' + IMPOSTAZIONI.azienda : '');
 }
 
-// L'invio non manda niente: apre la posta con destinatario, oggetto e testo già
+// La mail si apre da un clic qui, non appena chiusa la stampa: con Gmail è una
+// scheda nuova, e Chrome blocca le finestre che non nascono da un clic. È anche
+// il momento per dire quale file allegare. Risponde true per aprire la posta.
+function chiediPdfSalvato(nomeFile) {
+  const pannello = document.getElementById('pannello-posta');
+  return new Promise(risolvi => {
+    window.__pdfSalvato = valore => {
+      pannello.classList.remove('aperto');
+      pannello.innerHTML = '';
+      delete window.__pdfSalvato;
+      risolvi(valore);
+    };
+    pannello.innerHTML = '<div class="scheda-novita" style="max-width:440px">' +
+      '<div class="titolo-novita">Adesso la mail</div>' +
+      '<p style="margin-top:10px">Si apre con due righe di saluto: il resto è il PDF che hai appena salvato, ' +
+      '<strong>' + perValore(nomeFile) + '.pdf</strong>. Trascinalo dentro la mail come allegato.</p>' +
+      '<p class="da-definire" style="margin-top:6px">Se la stampa l\'hai annullata, annulla anche qui e rifai.</p>' +
+      '<div class="bottoni" style="margin-top:14px">' +
+        '<button class="principale" onclick="__pdfSalvato(true)">Apri la mail</button>' +
+        '<button class="secondaria" onclick="__pdfSalvato(false)">Annulla</button>' +
+      '</div></div>';
+    pannello.classList.add('aperto');
+  });
+}
+
+// L'invio non manda niente: apre la posta con destinatario, oggetto e saluto già
 // scritti, e l'ultimo tocco resta di chi la usa. Per questo il lavoro si segna
 // "in posta" e non "inviato" — l'app sa di averlo passato alla posta, non sa se
 // è partito. E si segna prima di aprirla, o una mail mandata resterebbe senza
@@ -5602,6 +5567,8 @@ async function inviaConto(id) {
       ': mettila in Clienti, o scrivila a mano nella posta', true);
   }
 
+  const nomeFile = stampaConto('archivio', id);
+  if (!nomeFile || !(await chiediPdfSalvato(nomeFile))) return;
   const mittente = await scegliMittente();
   if (mittente === null) return;
   const aggiornato = { ...l, inPosta: new Date().toISOString() };
@@ -5618,7 +5585,7 @@ async function inviaConto(id) {
   l.inPosta = aggiornato.inPosta;
 
   const oggetto = 'Conto dei lavori' + (l.data ? ' del ' + formattaData(l.data) : '');
-  apriPosta(indirizzoPosta(indirizzo, oggetto, testoConto(l), mittente));
+  apriPosta(indirizzoPosta(indirizzo, oggetto, letteraConPdf(oggetto.replace('Conto', 'il conto')), mittente));
   disegna();
 }
 
@@ -5655,6 +5622,8 @@ async function inviaInsieme() {
     avvisa('Manca l\'email di ' + (cl.nome || 'questo cliente') +
       ': mettila in Clienti, o scrivila a mano nella posta', true);
   }
+  const nomeFile = stampaConto('insieme');
+  if (!nomeFile || !(await chiediPdfSalvato(nomeFile))) return;
   const mittente = await scegliMittente();
   if (mittente === null) return;
   const quando = new Date().toISOString();
@@ -5663,7 +5632,7 @@ async function inviaInsieme() {
     if (errore) { avvisa('Non ho potuto segnare l\'invio: ' + errore.message, true); disegna(); return; }
   }
   const oggetto = 'Conto dei lavori del ' + scelti.map(l => formattaData(l.data)).join(', ');
-  apriPosta(indirizzoPosta(indirizzo, oggetto, testoConti(scelti, cl), mittente));
+  apriPosta(indirizzoPosta(indirizzo, oggetto, letteraConPdf(oggetto.replace('Conto', 'il conto')), mittente));
   SCELTI_ARCHIVIO.clear();
   INTESTATARIO_SCELTI = '';
   disegna();
@@ -5713,7 +5682,7 @@ function scegliMittente() {
   const mittenti = elencoMittenti();
   if (!mittenti.length) return Promise.resolve('');
   if (mittenti.length === 1) return Promise.resolve(mittenti[0]);
-  const pannello = document.getElementById('scelta-mittente');
+  const pannello = document.getElementById('pannello-posta');
   return new Promise(risolvi => {
     window.__sceltaMittente = valore => {
       pannello.classList.remove('aperto');

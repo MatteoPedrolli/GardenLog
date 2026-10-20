@@ -876,8 +876,8 @@ fra i rifiutati come «scaduto senza risposta», e si accetta ancora se il clien
 richiama. È **calcolato**, non scritto: cambiare i giorni vale anche per quelli già
 mandati. Il «no» del cliente invece si scrive, con la sua data.
 
-**«Manda per mail» come il conto**: apre la posta col preventivo scritto, una voce
-per riga e le alternative dette a parole; si segna mandato **prima** di aprirla, e
+**«Manda per mail» come il conto**: prima il PDF del preventivo, poi la posta con
+due righe di saluto (sotto, *L'invio non manda niente*); si segna mandato **prima** di aprirla, e
 se il segno non riesce la posta non si apre. Stampare non lo segna — l'app non sa
 se quel foglio è andato al cliente — e c'è «Consegnato a mano».
 
@@ -1253,7 +1253,15 @@ risponde a nessuno. Raccogliendo **per cliente**, ogni gruppo dice quanti lavori
 
 **L'invio non manda niente**, come sul telefono prima di lui: `inviaConto()` apre
 la posta con destinatario — preso dall'anagrafica, ed è il motivo per cui le mail
-stanno lì — oggetto e conto già scritti. Il lavoro si segna *in posta* e non
+stanno lì — oggetto e due righe di saluto. **Al cliente va il PDF e basta**: il conto
+scritto anche nel corpo della mail era una seconda copia dello stesso conto, più
+brutta e senza logo, e l'hanno voluto togliere. Il browser però non sa allegare un
+file — né `mailto:` né Gmail lo accettano da un link, e generare il PDF dentro l'app
+vorrebbe una libreria — quindi l'invio è in due tempi: si apre la stampa, dove
+«Salva come PDF» ha già il nome pronto, e poi un pannello (`chiediPdfSalvato()`) dice
+quale file allegare e apre la posta **al suo clic**: con Gmail è una scheda nuova, e
+Chrome blocca le finestre che non nascono da un clic. Il saluto è `letteraConPdf()`,
+per conti, conti insieme e preventivi. Annullando lì non si segna niente. Il lavoro si segna *in posta* e non
 *inviato*: l'app sa di averlo passato alla posta, non sa se è partito. E si segna
 prima di aprirla, o una mail mandata resterebbe senza traccia in archivio. Senza
 email il conto si manda lo stesso, con il destinatario da scrivere a mano, ma
@@ -1269,14 +1277,14 @@ conti, conti insieme e preventivi. Vuoto, il `mailto:` di sempre. L'account dev'
 aperto in quel browser; un alias «invia come» dentro un account solo non si sceglie
 così.
 
-**L'IBAN esce sotto il totale**, sul foglio e nella mail (`ibanScritto()`, a gruppi di
+**L'IBAN esce sotto il totale**, sul foglio (`ibanScritto()`, a gruppi di
 quattro: trenta caratteri attaccati si ricopiano sbagliati). Esce anche senza
 intestazione: la carta intestata dice chi è l'azienda, non dove pagarla. Sta in
 Impostazioni con l'intestazione, ed è solo del conto: il preventivo ha le condizioni.
 
 **Più lavori, un conto solo.** Due giornate dallo stesso cliente sono due
 rapportini e due file in archivio, e restano tali; si spuntano, e «Stampa insieme»
-e «Manda insieme» fanno un foglio o una mail soli. Dentro, **un blocco per lavoro**
+e «Manda insieme» fanno un foglio solo, e una mail sola col suo PDF. Dentro, **un blocco per lavoro**
 con la sua data e il suo subtotale, e il totale in fondo: il cliente deve poter
 vedere cosa è stato fatto quando, e sommare le voci uguali lo nasconderebbe.
 **Lavori di clienti diversi si possono unire**, ma non di nascosto. Si univa solo lo
@@ -1285,15 +1293,12 @@ amministratore o due fratelli nella stessa casa costringevano a rifare il conto 
 mano. Adesso spuntando un cliente diverso compare un avviso, la barra dice «Clienti
 diversi» con un menù **«intesta il conto a»**, e stampa e posta restano spente
 finché non si sceglie (`intestatarioScelti()`). Il guasto da evitare era mandare a
-uno il conto dell'altro **senza accorgersene**, non l'unione. Nel foglio e nella mail
+uno il conto dell'altro **senza accorgersene**, non l'unione. Nel foglio
 il blocco di un lavoro di un altro cliente dice **per chi era** («Lavoro del 12/10 ·
 per Rossi»), perché chi paga deve sapere per chi sta pagando. Mandando insieme
 si segnano *in posta* tutti prima di aprire la posta, e se uno non si riesce a
 segnare la posta non si apre: una mail per due lavori di cui l'archivio ne ricorda
 uno è il doppione del mese dopo.
-
-Nel testo della mail niente colonne allineate con gli spazi: le app di posta usano
-caratteri a larghezza variabile e arrivano storte. Una voce per riga.
 
 `apriPosta()` è l'unico punto che porta fuori dall'app, e sta da solo per lo stesso
 motivo per cui ci sta `usaCartella()`: aprire la posta è una cosa che un test non

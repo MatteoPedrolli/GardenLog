@@ -1912,6 +1912,14 @@ try {
         async requestPermission() { return 'granted'; },
       };
     };
+    // Mandare per mail passa dalla stampa del PDF e da un pannello che dice quale
+    // file allegare: qui si preme «Apri la mail» come farebbe chi lo usa.
+    window.confermaPdf = async attesa => {
+      await new Promise(r => setTimeout(r, 30));
+      window.__pdfDetto = document.getElementById('pannello-posta').textContent;
+      if (window.__pdfSalvato) document.querySelector('#pannello-posta button.principale').click();
+      return attesa;
+    };
   });
 
   await pagU.evaluate(async ([d, ril]) => {
@@ -2869,17 +2877,27 @@ try {
     const l = ARCHIVIO.find(x => x.id !== 'altro-lavoro');
     const c = CLIENTI.find(x => x.id === (l.cliente && l.cliente.id));
     if (c) { modificaCliente(c.id, 'email', 'cliente@esempio.it'); await salvaClienti(); }
-    await inviaConto(l.id);
-    return { url: window.__posta || '', inPosta: l.inPosta };
+    document.getElementById('foglio').innerHTML = '';
+    window.__posta = '';
+    const attesa = inviaConto(l.id);
+    await new Promise(r => setTimeout(r, 30));
+    // Prima il PDF: la stampa è partita, e finché non si preme «Apri la mail» la
+    // posta resta chiusa e il lavoro non si segna.
+    const primaDelClic = { stampato: document.getElementById('foglio').textContent.includes('Conto dei lavori'),
+      posta: window.__posta, inPosta: l.inPosta || '' };
+    await confermaPdf(attesa);
+    return { url: window.__posta || '', inPosta: l.inPosta, primaDelClic, detto: window.__pdfDetto,
+      nome: 'Conto ' + l.data.slice(0, 10) + ' ' + l.cliente.nome };
   });
+  ok('«Invia al cliente» apre prima la stampa, per salvare il PDF',
+    posta.primaDelClic.stampato && posta.primaDelClic.posta === '', JSON.stringify(posta.primaDelClic));
+  ok('e dice quale PDF allegare, col nome già pronto', posta.detto.includes(posta.nome + '.pdf'), posta.detto);
   ok('la posta si apre col destinatario preso dall\'anagrafica',
     posta.url.startsWith('mailto:cliente%40esempio.it'), posta.url.slice(0, 60));
-  ok('e col conto già scritto nel corpo',
-    decodeURIComponent(posta.url).includes('TOTALE (IVA inclusa)'));
-  // Colonne allineate con gli spazi no: le app di posta usano caratteri a
-  // larghezza variabile e arrivano storte.
-  ok('una voce per riga, senza incolonnare con gli spazi',
-    !/ {3,}\S/.test(decodeURIComponent(posta.url).split('&body=')[1] || ''));
+  // Il conto sta nel PDF: scritto anche nella mail ne erano due copie.
+  ok('nel corpo solo due righe di saluto, il conto è il PDF',
+    decodeURIComponent(posta.url).includes('in allegato il conto dei lavori del') &&
+    !decodeURIComponent(posta.url).includes('TOTALE'), decodeURIComponent(posta.url).split('body=')[1]);
   ok('il lavoro si segna in posta, non inviato', !!posta.inPosta);
   ok('e la data finisce sul file, non solo a schermo',
     await pagU.evaluate(async () => { await ricarica(); return !!ARCHIVIO.find(l => l.inPosta); }));
@@ -2891,15 +2909,13 @@ try {
     IMPOSTAZIONI.iban = 'it60x0542811101000000123456';
     const l = ARCHIVIO.find(x => x.id !== 'altro-lavoro');
     const foglio = costruisciFoglio({ cliente: l.cliente, data: l.data, righe: l.righe, senzaIntestazione: true });
-    const testo = testoConto(l);
     IMPOSTAZIONI.iban = '';
-    const senza = testoConto(l);
+    const senza = costruisciFoglio({ cliente: l.cliente, data: l.data, righe: l.righe });
     IMPOSTAZIONI.iban = prima;
-    return { foglio: foglio.includes('IT60 X054 2811 1010 0000 0123 456'),
-      mail: testo.includes('IBAN IT60 X054 2811 1010 0000 0123 456'), senza: senza.includes('IBAN') };
+    return { foglio: foglio.includes('IT60 X054 2811 1010 0000 0123 456'), senza: senza.includes('IBAN') };
   });
   ok('l\'IBAN esce sul conto stampato, a gruppi di quattro, anche senza intestazione', iban.foglio, JSON.stringify(iban));
-  ok('e nella mail; vuoto non esce', iban.mail && !iban.senza, JSON.stringify(iban));
+  ok('vuoto non esce', !iban.senza, JSON.stringify(iban));
 
   // Il mittente: un mailto non sa sceglierlo, quindi con un indirizzo la posta si
   // apre in Gmail da quell'account; con più d'uno si sceglie, e annullando non si
@@ -2910,29 +2926,41 @@ try {
     const l = ARCHIVIO.find(x => x.id !== 'altro-lavoro');
     IMPOSTAZIONI.mittenti = 'conti@azienda.it';
     window.__posta = '';
-    await inviaConto(l.id);
+    await confermaPdf(inviaConto(l.id));
     const uno = window.__posta;
     IMPOSTAZIONI.mittenti = 'conti@azienda.it\ninfo@azienda.it';
     window.__posta = '';
     const inPostaPrima = l.inPosta;
+    // Annullando dopo la stampa non si apre niente e non si segna niente: il PDF
+    // forse non c'è.
+    const attesa0 = inviaConto(l.id);
+    await new Promise(r => setTimeout(r, 30));
+    __pdfSalvato(false);
+    await attesa0;
+    const annullatoPdf = window.__posta === '' && l.inPosta === inPostaPrima;
     const attesa = inviaConto(l.id);
-    await new Promise(r => setTimeout(r, 50));
-    const pannello = document.getElementById('scelta-mittente');
+    await new Promise(r => setTimeout(r, 30));
+    __pdfSalvato(true);
+    await new Promise(r => setTimeout(r, 30));
+    const pannello = document.getElementById('pannello-posta');
     const aperto = pannello.classList.contains('aperto') && pannello.textContent.includes('info@azienda.it');
     __sceltaMittente(null);
     await attesa;
     const annullato = { posta: window.__posta, inPosta: l.inPosta === inPostaPrima };
     const attesa2 = inviaConto(l.id);
-    await new Promise(r => setTimeout(r, 50));
+    await new Promise(r => setTimeout(r, 30));
+    __pdfSalvato(true);
+    await new Promise(r => setTimeout(r, 30));
     __sceltaMittente('info@azienda.it');
     await attesa2;
     const due = window.__posta;
     IMPOSTAZIONI.mittenti = prima;
-    return { uno, aperto, annullato, due };
+    return { uno, aperto, annullato, due, annullatoPdf };
   });
+  ok('annullando dopo la stampa la posta non si apre e il conto non si segna', mittente.annullatoPdf);
   ok('con un mittente la posta si apre in Gmail da quell\'account, col destinatario',
     mittente.uno.startsWith('https://mail.google.com/mail/?authuser=conti%40azienda.it') &&
-    mittente.uno.includes('to=cliente%40esempio.it') && decodeURIComponent(mittente.uno).includes('TOTALE (IVA inclusa)'),
+    mittente.uno.includes('to=cliente%40esempio.it') && decodeURIComponent(mittente.uno).includes('in allegato il conto'),
     mittente.uno.slice(0, 90));
   ok('con più mittenti si sceglie, e annullando non si apre la posta né si segna',
     mittente.aperto && mittente.annullato.posta === '' && mittente.annullato.inPosta, JSON.stringify(mittente.annullato));
@@ -2944,7 +2972,7 @@ try {
       const c = CLIENTI.find(x => x.id === (l.cliente && l.cliente.id));
       if (c) { modificaCliente(c.id, 'email', ''); await salvaClienti(); }
       window.__posta = '';
-      await inviaConto(l.id);
+      await confermaPdf(inviaConto(l.id));
       return document.getElementById('avviso').classList.contains('brutto') && window.__posta.startsWith('mailto:?');
     }));
 
@@ -3097,7 +3125,7 @@ try {
     stampaConto('insieme');
     const fogliMisto = document.getElementById('foglio').textContent;
     r.misti.foglio = fogliMisto.includes('Giuseppe Verdi') && fogliMisto.includes('per ' + altroNome);
-    r.misti.mail = testoConti(lavoriScelti(), intestatarioScelti());
+    r.misti.intestato = fogliMisto.indexOf('Giuseppe Verdi') < fogliMisto.indexOf('per ' + altroNome);
     r.misti.altroNome = altroNome;
     scegliLavoro(altroCliente.id, false);
     scegliLavoro('secondo-verdi', true);
@@ -3112,8 +3140,10 @@ try {
       parziale: foglio.textContent.includes('non è compresa') };
     window.apriPosta = url => { window.__posta = url; };
     window.__posta = '';
-    await inviaInsieme();
+    document.getElementById('foglio').innerHTML = '';
+    await confermaPdf(inviaInsieme());
     r.posta = decodeURIComponent(window.__posta);
+    r.pdf = window.__pdfDetto;
     r.inPosta = ARCHIVIO.filter(l => l.id === 'altro-lavoro' || l.id === 'secondo-verdi').every(l => !!l.inPosta);
     r.dopo = SCELTI_ARCHIVIO.size;
     // e il file d'archivio lo ricorda, non solo lo schermo
@@ -3127,17 +3157,15 @@ try {
   ok('finché non si sceglie, stampa e posta non partono',
     insieme.misti.bloccati && insieme.misti.senzaScelta, JSON.stringify(insieme.misti));
   ok('scelto, il conto è intestato a lui e il lavoro dell\'altro dice per chi era',
-    insieme.misti.sbloccati && insieme.misti.foglio &&
-    insieme.misti.mail.split('\n')[1] === 'Giuseppe Verdi' && insieme.misti.mail.includes('· per ' + insieme.misti.altroNome),
-    insieme.misti.mail.slice(0, 300));
+    insieme.misti.sbloccati && insieme.misti.foglio && insieme.misti.intestato, JSON.stringify(insieme.misti));
   ok('due lavori dello stesso cliente si spuntano insieme', insieme.scelti === 'altro-lavoro,secondo-verdi' && insieme.barra, insieme.scelti);
   ok('il foglio unico ha un blocco e un subtotale per lavoro',
     insieme.foglio.blocchi === 2 && insieme.foglio.sub === 2 && insieme.foglio.date, JSON.stringify(insieme.foglio));
   ok('e il totale li somma', insieme.foglio.totale.includes('245,00'), insieme.foglio.totale);
   ok('dicendo che una voce da definire resta fuori', insieme.foglio.parziale);
-  ok('«Manda insieme» apre una mail sola con i due lavori e il totale',
-    insieme.posta.includes('Lavoro del 04/05/2026') && insieme.posta.includes('Lavoro del 11/05/2026') &&
-    insieme.posta.includes('TOTALE (IVA inclusa): 245,00'), insieme.posta.slice(0, 400));
+  ok('«Manda insieme» fa un PDF solo e una mail sola, che nomina i due lavori',
+    insieme.pdf.includes('.pdf') && insieme.posta.includes('in allegato il conto dei lavori del 04/05/2026, 11/05/2026') &&
+    !insieme.posta.includes('TOTALE'), insieme.posta.slice(0, 400));
   ok('e li segna in posta tutti e due, anche sul file', insieme.inPosta && insieme.suFile && insieme.dopo === 0);
 
   // ── togliere un lavoro dall'archivio ──
@@ -4556,7 +4584,8 @@ try {
     window.apriPosta = u => { aperta = u; };
     PREVENTIVO.doc.stato = 'bozza';
     PREVENTIVO.doc.cliente.email = 'cliente@esempio.it';
-    await inviaPreventivo();
+    await confermaPdf(inviaPreventivo());
+    const pdf = window.__pdfDetto;
     const dopo = { stato: PREVENTIVO.doc.stato, mandato: !!PREVENTIVO.doc.mandato };
     // e se il salvataggio fallisce, la posta resta chiusa
     aperta = aperta || '';
@@ -4565,30 +4594,24 @@ try {
     const veraScrivi = window.scriviTesto;
     window.scriviTesto = async () => { throw new Error('Drive non risponde'); };
     PREVENTIVO.doc.stato = 'bozza';
-    await inviaPreventivo();
+    await confermaPdf(inviaPreventivo());
     const statoDopoFallito = PREVENTIVO.doc.stato;
     window.scriviTesto = veraScrivi;
     window.apriPosta = vera;
     Object.assign(PREVENTIVO.doc, tenuto);
     await salvaPreventivo();
-    return { primaApertura, dopo, apertaDopoFallito: aperta, statoDopoFallito };
+    return { primaApertura, dopo, apertaDopoFallito: aperta, statoDopoFallito, pdf };
   });
-  ok('«Manda per mail» apre la posta col destinatario e il preventivo già scritto',
+  ok('«Manda per mail» passa dal PDF del preventivo, e apre la posta col destinatario e il saluto',
+    perMail.pdf.includes('Preventivo ') && perMail.pdf.includes('.pdf') &&
     perMail.primaApertura.startsWith('mailto:cliente%40esempio.it') &&
-    decodeURIComponent(perMail.primaApertura).includes('migliore offerta'),
-    perMail.primaApertura.slice(0, 90));
+    decodeURIComponent(perMail.primaApertura).includes('in allegato il nostro preventivo') &&
+    !decodeURIComponent(perMail.primaApertura).includes('migliore offerta'),
+    perMail.primaApertura.slice(0, 120));
   ok('e lo segna mandato', perMail.dopo.stato === 'mandato' && perMail.dopo.mandato);
   ok('se non si riesce a segnarlo, la posta non si apre e lo stato non cambia',
     perMail.apertaDopoFallito === '' && perMail.statoDopoFallito === 'bozza',
     JSON.stringify(perMail));
-  // Con le alternative, la mail le dice a parole come il foglio.
-  ok('nel testo della mail le soluzioni sono dette alternative, e non si sommano',
-    await pagU.evaluate(() => {
-      const d = PREVENTIVI.find(p => (p.doc.soluzioni || []).length)?.doc;
-      if (!d) return false;
-      const t = testoPreventivo(d);
-      return t.includes('alternative fra loro') && !t.includes('TOTALE PREVENTIVO');
-    }));
 
   // Dal rilievo arrivano telefono e mail: chi non c'è si aggiunge con un clic, a
   // chi c'è si riempie solo quello che manca.
