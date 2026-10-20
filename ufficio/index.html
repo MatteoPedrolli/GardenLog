@@ -435,7 +435,7 @@ input.vuoto { background: #fffdf5; border-color: #ecdca8; }
   display: grid; grid-row: span 4; grid-template-rows: subgrid;
   grid-template-columns: minmax(0, 1fr); gap: 6px; min-width: 0;
 }
-.giorno-testa { display: flex; align-items: baseline; gap: 6px; }
+.giorno-testa { display: flex; align-items: baseline; gap: 2px 6px; flex-wrap: wrap; }
 .giorno-nome { font-size: 0.82rem; font-weight: 600; }
 .giorno-data { font-size: 0.72rem; color: var(--text-light); }
 .giorno.oggi .giorno-nome { color: var(--inchiostro-tenue); }
@@ -533,6 +533,13 @@ input.vuoto { background: #fffdf5; border-color: #ecdca8; }
   font-size: 0.85rem; font-weight: 600; cursor: pointer; }
 .tipo-scelta input { width: 16px; height: 16px; margin: 0; accent-color: var(--c); }
 .tipo-scelta:has(input:checked) { background: var(--c); color: #fff; }
+/* La pioggia non è un lavoro né uno stato: niente bordo tratteggiato (è la
+   matita), niente verde o blu. Un velo azzurrino a righe, e la parola. */
+.cartellino.pioggia { border: 1px solid #b9c6d3; cursor: grab;
+  background: repeating-linear-gradient(135deg, #eef2f6 0 8px, #e4eaf0 8px 16px); }
+.cartellino.pioggia .cliente-cart { color: #3d4f61; }
+.cartellino.pioggia .cosa-cart { color: #5b6b7b; }
+.meteo-giorno { margin-left: auto; font-size: 0.74rem; color: var(--text-mid); white-space: nowrap; }
 /* Né grigio né verde né blu: quelli sono gli stati. Lo dice la parola. */
 .sopralluogo-cart {
   font-size: 0.64rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.04em;
@@ -1239,6 +1246,9 @@ function sistemaLavoro(l) {
     // coda perché in mezzo agli altri non si distingueva, e chi pianifica lo
     // tratta diverso — mezz'ora, spesso col titolare, e da lì nasce un preventivo.
     sopralluogo: !!l.sopralluogo,
+    // Un giorno di pioggia: un segnaposto, non un lavoro. Arrivato dopo, senza
+    // alzare versioni: chi non ce l'ha è un lavoro, come tutti prima.
+    pioggia: !!l.pioggia,
     // Come raggiungere e chiamare chi ha chiesto il sopralluogo. Stanno qui, nella
     // lavagna che è un file privato dell'ufficio, e partono verso il telefono
     // solo in sopralluoghi.json — mai nell'agenda, che si legge senza chiave.
@@ -2224,6 +2234,15 @@ function riassuntoRicontrolla() {
 // La più recente per prima. Le righe sono poche e corte apposta: un elenco lungo
 // non si legge, e quello che non si legge tanto vale non scriverlo.
 const NOVITA = [
+  {
+    versione: '2026-10-20.3',
+    data: '2026-10-20',
+    titolo: 'Pioggia e previsioni',
+    righe: [
+      'Accanto a «+ Aggiungi appuntamento» c\'è **«🌧️ Giorno di pioggia»**: compare in cima alla coda, e si **trascina sul giorno** in cui non si lavora. Si allarga e si stringe col + e il −, e va anche nell\'agenda dei telefoni.',
+      'Sopra ogni giorno della lavagna c\'è la **probabilità di pioggia** — ☀️ ☁️ 🌧️ con la percentuale — per il paese scritto in **Impostazioni**. Senza rete semplicemente non si vede.',
+    ],
+  },
   {
     versione: '2026-10-20.2',
     data: '2026-10-20',
@@ -5863,6 +5882,8 @@ function oreNellaMezza(l, giorno, mezza) {
 // fare sta in fondo, ed è la colonna dei bloccati. Dentro i giorni non si ordina
 // niente: lì l'ordine è quello che gli dà chi pianifica.
 function ordinaCoda(a, b) {
+  // La pioggia in cima: è lì solo per essere trascinata sul giorno, subito.
+  if (a.pioggia !== b.pioggia) return a.pioggia ? -1 : 1;
   if (bloccato(a) !== bloccato(b)) return bloccato(a) ? 1 : -1;
   if (!a.settimana !== !b.settimana) return a.settimana ? -1 : 1;
   return String(a.settimana).localeCompare(String(b.settimana));
@@ -5900,7 +5921,42 @@ function etichetteTipi(l) {
 // Chiuso porta quello che serve a scegliere: chi, che cosa (la prima riga delle
 // note), per quando e da quando aspetta. Si era chiesto apposta che dalla coda si
 // vedesse cosa c'è da fare e quando è entrato: chiudere non vuol dire toglierlo.
+// Un giorno di pioggia non è un lavoro: niente cliente, niente matita o penna,
+// niente spunta né ora. Si trascina sul giorno, si allarga e si stringe come gli
+// altri — di solito tutto il giorno, a volte solo il pomeriggio — e si toglie.
+function cartellinoPioggia(l) {
+  const id = perOnclick(l.id);
+  const mezze = mezzeOccupate(l);
+  return '<article class="cartellino pioggia" draggable="true"' +
+      ' ondragstart="iniziaTrascino(event, \'' + id + '\')"' +
+      ' title="Giorno di pioggia: trascinalo sul giorno, + e − per quanto dura">' +
+    '<div class="testa-cart"><div class="cliente-cart testo-cart">🌧️ Pioggia</div>' +
+      '<button type="button" class="bottone-cart" onclick="event.stopPropagation(); togliDallaLavagna(\'' + id + '\')"' +
+        ' title="Togli">✕</button></div>' +
+    '<div class="cosa-cart">non si lavora</div>' +
+    (piazzato(l) ? '<div class="riga-cart"><span class="larghezza-cart">' +
+      '<button type="button" class="bottone-cart" onclick="event.stopPropagation(); stringi(\'' + id + '\')"' +
+        (mezze === 1 ? ' disabled' : '') + ' title="Una mezza giornata in meno">−</button>' +
+      '<span class="mezze-cart">' + (mezze === 2 ? 'giornata' : mezze + (mezze === 1 ? ' mezza' : ' mezze')) + '</span>' +
+      '<button type="button" class="bottone-cart" onclick="event.stopPropagation(); allarga(\'' + id + '\')"' +
+        ' title="Allarga alla mezza giornata successiva">+</button>' +
+    '</span></div>' : '<div class="riga-cart"><span class="origine-cart">trascinalo sul giorno</span></div>') +
+  '</article>';
+}
+
+// Il bottone accanto a «+ Aggiungi appuntamento». Il segnaposto nasce in cima
+// alla coda, largo un giorno intero, e da lì si trascina dove piove: sulla
+// lavagna niente si piazza da solo, nemmeno la pioggia.
+async function aggiungiPioggia() {
+  LAVAGNA.lavori.push(sistemaLavoro({ cliente: 'Pioggia', note: 'non si lavora', pioggia: true,
+    stato: 'lista', mezze: 2 }));
+  if (!(await salvaLavagna())) return;
+  disegnaLavagna();
+  avvisa('🌧️ Trascinalo sul giorno di pioggia');
+}
+
 function cartellinoChiuso(l) {
+  if (l.pioggia) return cartellinoPioggia(l);
   const id = perOnclick(l.id);
   const classi = ['cartellino', 'chiuso'];
   if (bloccato(l)) classi.push('bloccato');
@@ -5927,6 +5983,7 @@ function cartellinoChiuso(l) {
 }
 
 function cartellino(l) {
+  if (l.pioggia) return cartellinoPioggia(l);
   if (!piazzato(l) && !CODA_APERTI.has(l.id)) return cartellinoChiuso(l);
   const classi = ['cartellino'];
   if (piazzato(l)) classi.push(l.stato);
@@ -6081,6 +6138,7 @@ function disegnaLavagna() {
   // a ogni telefonata. Lo stesso modulo serve a correggere un lavoro già piazzato.
   const aggiungi = '<div class="aggiungi-lavagna"><div class="bottoni">' +
     '<button class="secondaria piccola" onclick="apriModuloLavoro()">+ Aggiungi appuntamento</button>' +
+    '<button class="secondaria piccola" onclick="aggiungiPioggia()" title="Un segnaposto da trascinare sul giorno in cui non si lavora">🌧️ Giorno di pioggia</button>' +
   '</div><div id="nuovo-lavoro"></div></div>';
 
   // ── la settimana ──
@@ -6110,7 +6168,8 @@ function disegnaLavagna() {
     });
     html += '<div class="' + classi.join(' ') + '">' +
       '<div class="giorno-testa"><span class="giorno-nome">' + NOMI_GIORNI[i] + '</span>' +
-        '<span class="giorno-data">' + d.getDate() + '/' + (d.getMonth() + 1) + '</span></div>' +
+        '<span class="giorno-data">' + d.getDate() + '/' + (d.getMonth() + 1) + '</span>' +
+        '<span class="meteo-giorno" data-giorno="' + iso + '">' + testoMeteo(iso) + '</span></div>' +
       mezze +
       '<div class="giorno-piede"><span>' + (i === 5 ? 'a disposizione' : 'giornata') + '</span>' +
         '<b>' + formattaQuantita(oreGiorno) + ' h</b></div>' +
@@ -6126,12 +6185,84 @@ function disegnaLavagna() {
     '<span><i class="campione fatto"></i><b>Fatto</b> — spuntato, è storia</span>' +
     '<span><i class="campione bloccato"></i><b>Bloccato</b> — manca qualcosa per poterlo fare</span>' +
     '<span><span class="sopralluogo-cart">sopralluogo</span> si va a guardare, non a lavorare</span>' +
+    '<span><b>🌧️ Pioggia</b> — un giorno in cui non si lavora · sopra ogni giorno la probabilità di pioggia</span>' +
     '<span>' + TIPI_LAVORO.map(t => '<span class="tipo-cart" style="background:' + t.colore + '">' +
       perValore(t.nome) + '</span>').join(' ') + ' che lavoro è, segnato prenotando</span>' +
     '<span>In coda un clic apre i dettagli · sulla settimana un clic sul cartellino conferma · <b>🕘</b> scrive l\'ora · la <b>✓</b> segna che è fatto · <b>+</b> e <b>−</b> allargano il lavoro di mezza giornata</span>' +
   '</div>';
 
   c.innerHTML = html;
+  caricaMeteo();
+}
+
+// ── LE PREVISIONI ──
+// Una nuvola con la probabilità di pioggia sopra ogni giorno: chi pianifica un
+// prato per giovedì vuole sapere se giovedì piove, e aprire un'altra finestra a
+// ogni cartellino è un gesto che non si fa. Vengono da Open-Meteo — gratuito,
+// senza chiave — per il paese della sede scritto in Impostazioni.
+//
+// È la prima cosa che l'ufficio chiede in rete, e come la ricerca degli indirizzi
+// sul telefono **può fallire senza conseguenze**: senza rete, o senza il paese in
+// Impostazioni, la nuvola non c'è e la lavagna è quella di sempre. Non si
+// scrive niente nella cartella: le previsioni invecchiano in un'ora, e il backup
+// del PC non deve portarsele dietro.
+let METEO = null;
+let METEO_IN_CORSO = false;
+const METEO_DURA = 60 * 60 * 1000;
+const CHIAVE_LUOGO_METEO = 'giardino-ufficio-meteo-luogo';
+
+function testoMeteo(iso) {
+  const p = METEO && METEO.giorni ? METEO.giorni[iso] : undefined;
+  if (p == null) return '';
+  const icona = p >= 50 ? '🌧️' : p >= 20 ? '☁️' : '☀️';
+  return '<span title="Probabilità di pioggia a ' + perValore(METEO.luogo) + ': ' + p + '% · previsioni Open-Meteo">' +
+    icona + ' ' + p + '%</span>';
+}
+
+function aggiornaMeteoLavagna() {
+  document.querySelectorAll('.meteo-giorno').forEach(el => { el.innerHTML = testoMeteo(el.dataset.giorno); });
+}
+
+// Dove sta il paese: il nome si cerca una volta e le coordinate restano su questo
+// PC; cambiando il paese in Impostazioni si cercano di nuovo.
+async function luogoMeteo(paese) {
+  try {
+    const salvato = JSON.parse(localStorage.getItem(CHIAVE_LUOGO_METEO) || 'null');
+    if (salvato && salvato.paese === paese) return salvato;
+  } catch (e) { /* senza localStorage si cerca ogni volta */ }
+  const r = await fetch('https://geocoding-api.open-meteo.com/v1/search?count=1&language=it&country=IT&name=' +
+    encodeURIComponent(paese));
+  const trovato = ((await r.json()).results || [])[0];
+  if (!trovato) throw new Error('paese non trovato');
+  const luogo = { paese, nome: trovato.name, lat: trovato.latitude, lon: trovato.longitude };
+  try { localStorage.setItem(CHIAVE_LUOGO_METEO, JSON.stringify(luogo)); } catch (e) { /* pazienza */ }
+  return luogo;
+}
+
+async function caricaMeteo() {
+  const paese = localitaAzienda();
+  if (!paese || METEO_IN_CORSO) return;
+  if (METEO && METEO.paese === paese && Date.now() - METEO.quando < METEO_DURA) return;
+  METEO_IN_CORSO = true;
+  try {
+    const luogo = await luogoMeteo(paese);
+    const r = await fetch('https://api.open-meteo.com/v1/forecast?latitude=' + luogo.lat + '&longitude=' + luogo.lon +
+      '&daily=precipitation_probability_max&timezone=Europe%2FRome&forecast_days=16');
+    const dati = await r.json();
+    const giorni = {};
+    ((dati.daily && dati.daily.time) || []).forEach((g, i) => {
+      const p = dati.daily.precipitation_probability_max[i];
+      if (p != null && !isNaN(p)) giorni[g] = Math.round(p);
+    });
+    METEO = { paese, luogo: luogo.nome || paese, quando: Date.now(), giorni };
+    aggiornaMeteoLavagna();
+  } catch (e) {
+    // Niente previsioni: niente nuvola, e la lavagna resta quella di sempre.
+    // Si riprova fra un'ora, non a ogni mossa.
+    METEO = { paese, luogo: paese, quando: Date.now(), giorni: (METEO && METEO.giorni) || {} };
+  } finally {
+    METEO_IN_CORSO = false;
+  }
 }
 
 // ── trascinare ──
@@ -6180,6 +6311,7 @@ async function spostaLavoro(id, giorno, mezza) {
 async function cambiaPenna(id) {
   const l = LAVAGNA.lavori.find(x => x.id === id);
   if (!l || !piazzato(l)) return;   // nella coda non esiste né matita né penna
+  if (l.pioggia) return;            // alla pioggia non si promette niente
   if (l.fatto) return;              // è già successo: non c'è più niente da promettere
   l.stato = l.stato === 'matita' ? 'confermato' : 'matita';
   await salvaLavagna();
@@ -6193,7 +6325,7 @@ async function cambiaPenna(id) {
 // prima che il rapportino arrivi, e a volte il rapportino non arriva affatto.
 async function spuntaFatto(id) {
   const l = LAVAGNA.lavori.find(x => x.id === id);
-  if (!l || !piazzato(l)) return;   // fatto vuol dire in un giorno, non in coda
+  if (!l || !piazzato(l) || l.pioggia) return;   // fatto vuol dire in un giorno, non in coda
   l.fatto = !l.fatto;
   await salvaLavagna();
   disegnaLavagna();
@@ -6241,7 +6373,8 @@ async function stringi(id) {
 async function togliDallaLavagna(id) {
   const l = LAVAGNA.lavori.find(x => x.id === id);
   if (!l) return;
-  if (!confirm('Togliere «' + (l.cliente || 'senza nome') + '» dalla lavagna?')) return;
+  if (!confirm(l.pioggia ? 'Togliere il giorno di pioggia dalla lavagna?'
+    : 'Togliere «' + (l.cliente || 'senza nome') + '» dalla lavagna?')) return;
   LAVAGNA.lavori = LAVAGNA.lavori.filter(x => x.id !== id);
   await salvaLavagna();
   disegnaLavagna();

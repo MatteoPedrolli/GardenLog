@@ -1790,6 +1790,18 @@ try {
   pagU.on('dialog', d => d.accept());
   await ctxU.route('**://fonts.googleapis.com/**', r => r.abort());
   await ctxU.route('**://fonts.gstatic.com/**', r => r.abort());
+  // Le previsioni della lavagna: Open-Meteo finto, perché il giro non dipenda
+  // dalla rete. Dice 70% di pioggia per oggi e i giorni dopo.
+  let meteoChieste = 0;
+  await ctxU.route('**://geocoding-api.open-meteo.com/**', r => r.fulfill({ status: 200, contentType: 'application/json',
+    body: JSON.stringify({ results: [{ name: 'Lavis', latitude: 46.14, longitude: 11.11 }] }) }));
+  await ctxU.route('**://api.open-meteo.com/**', r => {
+    meteoChieste++;
+    const giorni = [...Array(16)].map((_, i) => { const d = new Date(); d.setDate(d.getDate() + i);
+      return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0'); });
+    return r.fulfill({ status: 200, contentType: 'application/json',
+      body: JSON.stringify({ daily: { time: giorni, precipitation_probability_max: giorni.map(() => 70) } }) });
+  });
   await pagU.goto(BASE + 'ufficio/', { waitUntil: 'load' });
   await pagU.waitForTimeout(400);
 
@@ -3431,6 +3443,74 @@ try {
   ok('nel modulo i contatti compaiono solo spuntando «sopralluogo»',
     moduloContatti.prima === 'none' && moduloContatti.dopo === 'block', JSON.stringify(moduloContatti));
   // Anche dal computer il lavoro si etichetta, e correggendolo le spunte ci sono.
+  // ── la pioggia sulla lavagna ──
+  // Un segnaposto, non un lavoro: nasce in cima alla coda, si trascina sul giorno
+  // e lo occupa tutto; non ha matita né penna, e va in agenda perché in giardino
+  // si sappia che quel giorno non si lavora.
+  const pioggia = await pagU.evaluate(async () => {
+    vaiA('lavagna');
+    const bottone = [...document.querySelectorAll('#pagina-lavagna button')].some(b => b.textContent.includes('Giorno di pioggia'));
+    await aggiungiPioggia();
+    const l = LAVAGNA.lavori.find(x => x.pioggia);
+    const primoInCoda = document.querySelector('#pagina-lavagna .coda-lista.pronti article');
+    const oggi = isoData(new Date());
+    await spostaLavoro(l.id, oggi, 'mattina');
+    SETTIMANA = lunediDi(new Date());
+    disegnaLavagna();
+    const statoPrima = l.stato;
+    await cambiaPenna(l.id);
+    await spuntaFatto(l.id);
+    const giorno = [...document.querySelectorAll('#pagina-lavagna .meteo-giorno')].find(x => x.dataset.giorno === oggi);
+    const pomeriggio = document.querySelector('#pagina-lavagna').textContent.includes('Pioggia, continua');
+    const agenda = costruisciAgenda(LAVAGNA.lavori).appuntamenti.find(a => a.cliente === 'Pioggia');
+    const r = { bottone, mezze: l.mezze, primo: primoInCoda && primoInCoda.classList.contains('pioggia'),
+      piazzato: piazzato(l), pomeriggio, statoUguale: l.stato === statoPrima && !l.fatto,
+      agenda: agenda ? agenda.giorno + '|' + agenda.note : '',
+      senzaPaese: giorno ? giorno.textContent : 'nessuna testata' };
+    LAVAGNA.lavori = LAVAGNA.lavori.filter(x => !x.pioggia);
+    await salvaLavagna();
+    disegnaLavagna();
+    return r;
+  });
+  ok('accanto a «+ Aggiungi appuntamento» c\'è il giorno di pioggia, che nasce in cima alla coda largo un giorno',
+    pioggia.bottone && pioggia.mezze === 2 && pioggia.primo, JSON.stringify(pioggia));
+  ok('trascinato sul giorno lo occupa tutto, e non ha matita, penna né spunta',
+    pioggia.piazzato && pioggia.pomeriggio && pioggia.statoUguale, JSON.stringify(pioggia));
+  ok('e va in agenda, così in giardino si sa che quel giorno non si lavora',
+    /^\d{4}-\d{2}-\d{2}\|non si lavora$/.test(pioggia.agenda), pioggia.agenda);
+
+  // Le previsioni: col paese in Impostazioni, sopra ogni giorno la probabilità di
+  // pioggia. Senza paese non si chiede niente a nessuno.
+  const primaDelMeteo = meteoChieste;
+  const meteo = await pagU.evaluate(async () => {
+    const citta = IMPOSTAZIONI.citta;
+    const senza = { chiesto: false };
+    IMPOSTAZIONI.citta = '';
+    METEO = null;
+    await caricaMeteo();
+    senza.meteo = METEO;
+    IMPOSTAZIONI.citta = '38015 Lavis (TN)';
+    try { localStorage.removeItem(CHIAVE_LUOGO_METEO); } catch (e) {}
+    vaiA('lavagna');
+    await new Promise(ok => setTimeout(ok, 300));
+    const oggi = isoData(new Date());
+    const el = [...document.querySelectorAll('#pagina-lavagna .meteo-giorno')].find(x => x.dataset.giorno === oggi);
+    const r = { senza: senza.meteo, testo: el ? el.textContent : 'nessuna testata', luogo: METEO && METEO.luogo,
+      titolo: el && el.querySelector('span') ? el.querySelector('span').title : '' };
+    // Una seconda lavagna nella stessa ora non richiede niente.
+    disegnaLavagna();
+    await new Promise(ok => setTimeout(ok, 100));
+    IMPOSTAZIONI.citta = citta;
+    return r;
+  });
+  ok('senza il paese in Impostazioni le previsioni non si chiedono',
+    meteo.senza === null && meteoChieste >= primaDelMeteo, JSON.stringify(meteo.senza));
+  ok('col paese, sopra il giorno c\'è la nuvola con la probabilità di pioggia, e dice da dove viene',
+    meteo.testo.includes('🌧️') && meteo.testo.includes('70%') && meteo.luogo === 'Lavis' &&
+    meteo.titolo.includes('Lavis') && meteo.titolo.includes('Open-Meteo'), JSON.stringify(meteo));
+  ok('e si chiedono una volta l\'ora, non a ogni mossa sulla lavagna', meteoChieste - primaDelMeteo === 1,
+    String(meteoChieste - primaDelMeteo));
+
   const tipiUfficio = await pagU.evaluate(async () => {
     vaiA('lavagna');
     apriModuloLavoro();

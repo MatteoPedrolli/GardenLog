@@ -22,8 +22,9 @@ non è mai servito.
 
 **I dati stanno sul dispositivo.** IndexedDB come archivio, `localStorage` come
 seconda copia per Safari in navigazione privata. Non c'è un server: l'app non
-deve tornare a dipendere dalla rete per salvare o leggere. L'unica cosa che
-ancora esce verso l'esterno è la ricerca degli indirizzi (Nominatim), che può
+deve tornare a dipendere dalla rete per salvare o leggere. Le uniche cose che
+escono verso l'esterno sono la ricerca degli indirizzi sul telefono (Nominatim) e
+le previsioni della lavagna in ufficio (Open-Meteo), e tutte e due possono
 fallire senza conseguenze.
 
 **Niente fotografie nel database.** Sarebbe la cosa più utile da aggiungere a un
@@ -1077,6 +1078,27 @@ vanno: non li ha chiesti nessuno, e lì ogni campo in più si pubblica.
 **piena** — fondo colorato, scritta bianca, in minuscolo. Verde e blu sono già due
 stati della lavagna, «confermato» e «fatto», scritti in maiuscolo su una pastiglia
 chiara: due segni diversi per due cose diverse, e la parola c'è sempre.
+
+**Un giorno di pioggia è un segnaposto, non un lavoro.** Accanto a «+ Aggiungi
+appuntamento» c'è **«🌧️ Giorno di pioggia»** (`aggiungiPioggia()`): nasce in cima
+alla coda, largo un giorno intero, e si trascina sul giorno in cui non si lavora —
+sulla lavagna niente si piazza da solo, nemmeno la pioggia. Si allarga e si
+stringe come gli altri, ma non ha matita né penna, né spunta né ora: alla pioggia
+non si promette niente. È un lavoro con `pioggia: true`, arrivato senza alzare
+versioni; il suo aspetto (`cartellinoPioggia()`) non usa né il tratteggio della
+matita né il verde e il blu degli stati. In agenda va come gli altri, col nome
+«Pioggia» e le note «non si lavora»: in giardino è una cosa da sapere, e non porta
+nessun campo nuovo.
+
+**Sopra ogni giorno, la probabilità di pioggia** (`caricaMeteo()`): una nuvola con
+la percentuale, da Open-Meteo — gratuito, senza chiave — per il paese della sede in
+Impostazioni. Chi pianifica un prato per giovedì vuole sapere se giovedì piove, e
+aprire un'altra finestra a ogni cartellino è un gesto che non si fa. È **la prima
+cosa che l'ufficio chiede in rete**, e come la ricerca degli indirizzi sul telefono
+può fallire senza conseguenze: senza rete o senza paese la nuvola non c'è e la
+lavagna è quella di sempre. Si chiede **una volta l'ora**, non a ogni mossa, e non
+si scrive nella cartella: le previsioni invecchiano in un'ora, e il backup del PC
+non deve portarsele dietro. Le coordinate del paese restano in `localStorage`.
 
 **In coda i cartellini stanno chiusi**, sempre, e si aprono con un clic: con la coda
 piena erano un muro. Chiusi portano però quello che serve a scegliere — nome, la
