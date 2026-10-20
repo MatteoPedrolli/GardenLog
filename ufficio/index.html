@@ -514,6 +514,18 @@ input.vuoto { background: #fffdf5; border-color: #ecdca8; }
 }
 .quando-cart, .origine-cart { font-size: 0.68rem; color: var(--text-light); }
 .ora-cart { font-weight: 700; color: var(--inchiostro); }
+/* I tipi di lavoro — potature, prato — si guardano prima di leggere, ed è per
+   questo che hanno un colore. Pieni, scritta bianca, in minuscolo: gli stati sono
+   pastiglie chiare in maiuscolo, e un «prato» verde non deve sembrare un
+   «confermato». Il colore sta solo sull'etichetta, mai su tutto il cartellino. */
+.tipi-cart { display: flex; flex-wrap: wrap; gap: 4px; margin: 3px 0 2px; }
+.tipo-cart { font-size: 0.7rem; font-weight: 600; color: #fff; padding: 1px 8px; border-radius: 999px; }
+.tipi-scelta { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 8px; }
+.tipo-scelta { display: inline-flex; align-items: center; gap: 6px; padding: 5px 12px 5px 8px;
+  border-radius: 999px; border: 1.5px solid var(--c); color: var(--c); background: var(--white);
+  font-size: 0.85rem; font-weight: 600; cursor: pointer; }
+.tipo-scelta input { width: 16px; height: 16px; margin: 0; accent-color: var(--c); }
+.tipo-scelta:has(input:checked) { background: var(--c); color: #fff; }
 /* Né grigio né verde né blu: quelli sono gli stati. Lo dice la parola. */
 .sopralluogo-cart {
   font-size: 0.64rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.04em;
@@ -1015,6 +1027,7 @@ async function assorbiAppuntamenti() {
       origine: origineDellaPrenotazione(doc),
       requisiti: doc.requisiti,
       sopralluogo: doc.sopralluogo,
+      tipi: doc.tipi,
       stato: 'lista',
       da: doc.id,
       inserito,
@@ -1194,6 +1207,9 @@ function sistemaLavoro(l) {
     // ruolo, e suonava male. Il nome non si può recuperare, e restano «prenotato».
     origine: /^prenotato dal (cantiere|capo)$/.test(l.origine || '') ? 'prenotato' : (l.origine || ''),
     requisiti: Array.isArray(l.requisiti) ? l.requisiti.filter(r => r) : [],
+    // Potature, prato: arrivati dopo, senza alzare versioni. Un lavoro che non li
+    // ha non dice che tipo di lavoro è, ed è quello che erano tutti prima.
+    tipi: tipiLavoro(l.tipi),
     // Cosa c'è da fare e cosa c'è da ricordare: «potatura siepe di lauro»,
     // «chiedere della chiave del cancello». Un campo solo, perché erano due
     // caselle da riempire per dire la stessa cosa e una delle due restava
@@ -2175,6 +2191,15 @@ function riassuntoRicontrolla() {
 // La più recente per prima. Le righe sono poche e corte apposta: un elenco lungo
 // non si legge, e quello che non si legge tanto vale non scriverlo.
 const NOVITA = [
+  {
+    versione: '2026-10-20.1',
+    data: '2026-10-20',
+    titolo: 'Che lavoro è',
+    righe: [
+      'Prenotando si spunta **che lavoro è**: **Potature** (blu) o **Prato** (verde). Sul cartellino compare un\'etichetta colorata sotto il nome, così la coda si legge a colpo d\'occhio.',
+      'Si spunta anche qui, nel modulo **«+ Aggiungi»** della lavagna e correggendo un lavoro con ✎.',
+    ],
+  },
   {
     versione: '2026-10-19.3',
     data: '2026-10-19',
@@ -5701,6 +5726,17 @@ function apriChiudiCartellino(id) {
 
 const giornoMese = iso => iso.slice(8, 10) + '/' + iso.slice(5, 7);
 
+// Le etichette dei tipi, subito sotto il nome: è quello che si guarda scorrendo
+// la coda per decidere cosa mettere dove.
+function etichetteTipi(l) {
+  const tipi = tipiLavoro(l && l.tipi);
+  if (!tipi.length) return '';
+  return '<div class="tipi-cart">' + tipi.map(id => {
+    const t = tipoLavoro(id);
+    return '<span class="tipo-cart" style="background:' + t.colore + '">' + perValore(t.nome) + '</span>';
+  }).join('') + '</div>';
+}
+
 // Chiuso porta quello che serve a scegliere: chi, che cosa (la prima riga delle
 // note), per quando e da quando aspetta. Si era chiesto apposta che dalla coda si
 // vedesse cosa c'è da fare e quando è entrato: chiudere non vuol dire toglierlo.
@@ -5715,6 +5751,7 @@ function cartellinoChiuso(l) {
       ' title="Un clic per i dettagli · trascinalo in una mezza giornata">' +
     '<div class="testa-cart"><div class="cliente-cart testo-cart">' + perValore(l.cliente || 'senza nome') + '</div>' +
       '<span class="stato-cart">' + etichettaStato(l) + '</span></div>' +
+    etichetteTipi(l) +
     (primaRiga ? '<div class="cosa-cart una-riga">' + perValore(primaRiga) + '</div>' : '') +
     '<div class="riga-cart">' +
       (l.sopralluogo ? '<span class="sopralluogo-cart">sopralluogo</span>' : '') +
@@ -5764,6 +5801,7 @@ function cartellino(l) {
         ' onclick="event.stopPropagation(); spuntaFatto(\'' + id + '\')"' +
         ' title="' + (l.fatto ? 'Rimettilo da fare' : 'Segna che è stato fatto') + '">✓</button>' : '') +
     '</div>' +
+    etichetteTipi(l) +
     (l.note ? '<div class="cosa-cart">' + perValore(l.note) + '</div>' : '') +
     '<div class="riga-cart">' +
       '<span class="stato-cart">' + etichettaStato(l) + '</span>' +
@@ -5923,6 +5961,8 @@ function disegnaLavagna() {
     '<span><i class="campione fatto"></i><b>Fatto</b> — spuntato, è storia</span>' +
     '<span><i class="campione bloccato"></i><b>Bloccato</b> — manca qualcosa per poterlo fare</span>' +
     '<span><span class="sopralluogo-cart">sopralluogo</span> si va a guardare, non a lavorare</span>' +
+    '<span>' + TIPI_LAVORO.map(t => '<span class="tipo-cart" style="background:' + t.colore + '">' +
+      perValore(t.nome) + '</span>').join(' ') + ' che lavoro è, segnato prenotando</span>' +
     '<span>In coda un clic apre i dettagli · sulla settimana un clic sul cartellino conferma · <b>🕘</b> scrive l\'ora · la <b>✓</b> segna che è fatto · <b>+</b> e <b>−</b> allargano il lavoro di mezza giornata</span>' +
   '</div>';
 
@@ -6082,6 +6122,9 @@ function apriModuloLavoro(id) {
       perValore(etichettaSettimana(l ? l.settimana : '')) + '</div>' +
     '<input type="text" id="n-requisito" placeholder="Manca qualcosa? (blocca il lavoro)" value="' +
       perValore(l && l.requisiti.length ? l.requisiti.join(', ') : '') + '" style="margin-bottom:6px">' +
+    '<div class="tipi-scelta" id="n-tipi">' + TIPI_LAVORO.map(t => '<label class="tipo-scelta" style="--c:' + t.colore + '">' +
+      '<input type="checkbox" value="' + perValore(t.id) + '"' + (l && tipiLavoro(l.tipi).includes(t.id) ? ' checked' : '') +
+      '> ' + perValore(t.nome) + '</label>').join('') + '</div>' +
     '<label class="meta" style="display:flex; align-items:center; gap:6px; margin-bottom:6px">' +
       '<input type="checkbox" id="n-sopralluogo"' + (l && l.sopralluogo ? ' checked' : '') +
       ' onchange="mostraContattiSopralluogo()"> È un sopralluogo</label>' +
@@ -6146,6 +6189,7 @@ async function salvaModuloLavoro() {
     settimana: lunediDellaSettimana(valore('n-settimana')),
     requisiti,
     sopralluogo: !!(document.getElementById('n-sopralluogo') || {}).checked,
+    tipi: [...document.querySelectorAll('#n-tipi input:checked')].map(i => i.value),
     via: valore('n-via').trim(),
     telefono: valore('n-telefono').trim(),
     email: valore('n-email').trim(),

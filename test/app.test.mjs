@@ -433,6 +433,8 @@ try {
   // Il nome di «Come ti chiami» viaggia con la prenotazione: in lavagna il
   // cartellino dice «prenotato da Matteo».
   await page.evaluate(() => { DB.impostazioni.NomeMittente = 'Matteo'; });
+  // Che lavoro è: un'etichetta, perché in lavagna si veda senza leggere le note.
+  await page.check('#f-pren-tipi input[value="prato"]');
   await page.click('#overlay-prenotazione .btn-primary');
   await page.waitForTimeout(500);
 
@@ -448,6 +450,8 @@ try {
     docAppuntamento.tipo + ' v' + docAppuntamento.versione);
   ok('e dice chi ha prenotato, col nome delle impostazioni',
     docAppuntamento.prenotatoDa === 'Matteo', JSON.stringify(docAppuntamento.prenotatoDa));
+  ok('e che lavoro è, con le etichette spuntate',
+    JSON.stringify(docAppuntamento.tipi) === '["prato"]', JSON.stringify(docAppuntamento.tipi));
   // Da quando il prossimo intervento non si scrive più in fondo alla visita, le
   // note della prenotazione sono il posto dove va cosa c'è da fare e cosa
   // ricordare. Sono anche l'unica cosa che fa il giro completo.
@@ -3166,12 +3170,21 @@ try {
     MOSTRA_FUTURI = true;
     vaiA('lavagna');
     const testo = document.getElementById('pagina-lavagna').textContent;
+    const carta = [...document.querySelectorAll('#pagina-lavagna article.cartellino')]
+      .find(a => a.textContent.includes('prenotato da Matteo'));
+    const tag = carta && carta.querySelector('.tipo-cart');
+    const r = { fascia: /prenotazion[ei] arrivat[ae]/.test(testo), cartellino: testo.includes('prenotato da Matteo'),
+      tag: tag ? tag.textContent : '', coloreTag: tag ? getComputedStyle(tag).backgroundColor : '',
+      coloreCarta: carta ? getComputedStyle(carta).backgroundColor : '' };
     MOSTRA_FUTURI = prima;
     vaiA('lavagna');
-    return { fascia: /prenotazion[ei] arrivat[ae]/.test(testo), cartellino: testo.includes('prenotato da Matteo') };
+    return r;
   });
   ok('in lavagna niente fascia delle prenotazioni arrivate, ma il cartellino dice da dove viene',
     !fasciaPrenotati.fascia && fasciaPrenotati.cartellino, JSON.stringify(fasciaPrenotati));
+  ok('e porta l\'etichetta del tipo di lavoro, colorata lei e non il cartellino',
+    fasciaPrenotati.tag === 'Prato' && fasciaPrenotati.coloreTag === 'rgb(75, 138, 42)' &&
+    fasciaPrenotati.coloreCarta !== fasciaPrenotati.coloreTag, JSON.stringify(fasciaPrenotati));
   // Era un difetto vero: le note del cantiere venivano lette e buttate via, e
   // sono proprio la cosa che deve tornare in giardino. Sulla lavagna «cosa c'è da
   // fare» e «cosa ricordare» sono un campo solo — due caselle per dire la stessa
@@ -3341,6 +3354,35 @@ try {
   });
   ok('nel modulo i contatti compaiono solo spuntando «sopralluogo»',
     moduloContatti.prima === 'none' && moduloContatti.dopo === 'block', JSON.stringify(moduloContatti));
+  // Anche dal computer il lavoro si etichetta, e correggendolo le spunte ci sono.
+  const tipiUfficio = await pagU.evaluate(async () => {
+    vaiA('lavagna');
+    apriModuloLavoro();
+    document.getElementById('n-cliente').value = 'Tipi di Prova';
+    document.querySelector('#n-tipi input[value="potature"]').checked = true;
+    document.querySelector('#n-tipi input[value="prato"]').checked = true;
+    await salvaModuloLavoro();
+    const l = LAVAGNA.lavori.find(x => x.cliente === 'Tipi di Prova');
+    const tipiSalvati = l.tipi.join();
+    const carta = [...document.querySelectorAll('#pagina-lavagna article.cartellino')]
+      .find(a => a.textContent.includes('Tipi di Prova'));
+    const tag = carta ? [...carta.querySelectorAll('.tipo-cart')].map(x => x.textContent).join() : '';
+    apriModuloLavoro(l.id);
+    const spunte = [...document.querySelectorAll('#n-tipi input')].map(i => i.value + ':' + i.checked).join();
+    document.querySelector('#n-tipi input[value="prato"]').checked = false;
+    await salvaModuloLavoro();
+    const dopo = LAVAGNA.lavori.find(x => x.cliente === 'Tipi di Prova').tipi.join();
+    LAVAGNA.lavori = LAVAGNA.lavori.filter(x => x.cliente !== 'Tipi di Prova');
+    await salvaLavagna();
+    disegnaLavagna();
+    return { tipi: tipiSalvati, tag, spunte, dopo,
+      legenda: document.querySelector('.legenda-lavagna').textContent.includes('Potature') };
+  });
+  ok('anche dall\'ufficio un lavoro si etichetta, e la lavagna lo mostra in coda',
+    tipiUfficio.tipi === 'potature,prato' && tipiUfficio.tag === 'Potature,Prato' && tipiUfficio.legenda,
+    JSON.stringify(tipiUfficio));
+  ok('e correggendolo le spunte ci sono, e si tolgono',
+    tipiUfficio.spunte === 'potature:true,prato:true' && tipiUfficio.dopo === 'potature', JSON.stringify(tipiUfficio));
 
   // E ora il giro completo: quel file esatto, letto dall'app del cantiere. Se le
   // due app non si capiscono si vede qui, come per il rapportino.
@@ -3542,7 +3584,8 @@ try {
       if (v === true) await pagC.check(id); else await pagC.fill(id, v);
     }
   };
-  const ester = { '#p-cliente': 'Ester Rossi', '#p-paese': 'Lavis', '#p-settimana': '2026-11-12', '#p-ore': '4,5', '#p-sopralluogo': true };
+  const ester = { '#p-cliente': 'Ester Rossi', '#p-paese': 'Lavis', '#p-settimana': '2026-11-12', '#p-ore': '4,5',
+    '#p-sopralluogo': true, '#p-tipi input[value="potature"]': true };
   await compilaCapo(ester);
   await pagC.click('#p-salva');
   await pagC.waitForTimeout(300);
@@ -3558,6 +3601,7 @@ try {
     docCapo.tipo === 'appuntamento' && docCapo.prenotatoDa === 'Chiara' && docCapo.cliente?.nome === 'Ester Rossi' &&
     docCapo.cliente?.citta === 'Lavis' && docCapo.settimana === '2026-11-09' && docCapo.ore === 4.5 &&
     docCapo.sopralluogo === true && docCapo.note === 'Guardare la siepe lato strada' &&
+    JSON.stringify(docCapo.tipi) === '["potature"]' &&
     String(docCapo.id).startsWith('pren-capo-'), JSON.stringify(docCapo));
   ok('e arrivata, non resta fra quelle da consegnare',
     await pagC.evaluate(() => leggi(CHIAVI.coda, []).length === 0 &&
@@ -3605,14 +3649,15 @@ try {
     await scriviTesto(cartella, nome, JSON.stringify(d));
     await ricarica();
     const l = LAVAGNA.lavori.find(x => x.da === d.id);
-    const r = l ? { origine: l.origine, cliente: l.cliente, luogo: l.luogo, settimana: l.settimana } : null;
+    const r = l ? { origine: l.origine, cliente: l.cliente, luogo: l.luogo, settimana: l.settimana, tipi: l.tipi.join() } : null;
     LAVAGNA.lavori = LAVAGNA.lavori.filter(x => x.da !== d.id);
     await salvaLavagna();
     await cartella.removeEntry(nome);
     return r;
   }, docCapo);
   ok('in lavagna la prenotazione del capo dice «prenotato da Chiara»',
-    daCapo && daCapo.origine === 'prenotato da Chiara' && daCapo.cliente === 'Ester Rossi' && daCapo.luogo === 'Lavis',
+    daCapo && daCapo.origine === 'prenotato da Chiara' && daCapo.cliente === 'Ester Rossi' && daCapo.luogo === 'Lavis' &&
+    daCapo.tipi === 'potature',
     JSON.stringify(daCapo));
   // Senza nome solo «prenotato», e i cartellini di prima perdono il ruolo: «dal
   // cantiere» e «dal capo» suonavano male, e il nome non si può recuperare.

@@ -1039,6 +1039,21 @@ sopralluogo si riconosce dalla parola, non dal colore: grigio, verde e blu sono
 già degli stati. Il campo è arrivato dopo, senza alzare versioni: chi non ce l'ha
 non è un sopralluogo, ed è quello che erano tutti prima.
 
+**Che lavoro è si vede prima di leggere.** Prenotando — dal telefono, dal capo, o
+nel modulo dell'ufficio — si spuntano dei **tipi di lavoro**: **Potature** (blu) e
+**Prato** (verde), per ora. Sul cartellino sono etichette sotto il nome, in coda e
+sulla settimana, e scorrendo la colonna si capisce cosa c'è da fare senza aprire
+le note. L'elenco sta in `TIPI_LAVORO`, in `rapportino.js`, perché lo usano tutte e
+tre le app: per aggiungerne uno basta una riga. Viaggiano nell'appuntamento come
+`tipi` e stanno sul lavoro della lavagna, arrivati senza alzare versioni: senza, un
+lavoro non dice che tipo è, ed è quello che erano tutti prima. Nell'agenda non
+vanno: non li ha chiesti nessuno, e lì ogni campo in più si pubblica.
+
+**Il colore sta solo sull'etichetta**, mai su tutto il cartellino, e l'etichetta è
+**piena** — fondo colorato, scritta bianca, in minuscolo. Verde e blu sono già due
+stati della lavagna, «confermato» e «fatto», scritti in maiuscolo su una pastiglia
+chiara: due segni diversi per due cose diverse, e la parola c'è sempre.
+
 **In coda i cartellini stanno chiusi**, sempre, e si aprono con un clic: con la coda
 piena erano un muro. Chiusi portano però quello che serve a scegliere — nome, la
 prima riga delle note, settimana, da quando aspetta, e per un bloccato cosa manca

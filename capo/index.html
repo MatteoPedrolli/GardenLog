@@ -102,6 +102,18 @@ button { font-family: var(--font-body); cursor: pointer; }
   background: var(--inchiostro); color: var(--white); font-size: 0.88rem; text-align: center; display: none;
 }
 #avviso.brutto { background: var(--red); }
+/* I tipi di lavoro, come sul telefono del cantiere: spento un bordo, acceso pieno
+   del suo colore, come l'etichetta sul cartellino dell'ufficio. */
+.tipi-scelta { display: flex; flex-wrap: wrap; gap: 8px; }
+/* «.campo .tipo-scelta» e non solo la classe: la regola delle etichette dei campi
+   (.campo label, a blocco e piccola) pesa di più e le schiacciava. */
+.campo .tipo-scelta { display: inline-flex; align-items: center; gap: 6px; padding: 7px 14px 7px 10px; margin: 0;
+  border-radius: 999px; border: 1.5px solid var(--c); color: var(--c); background: var(--white);
+  font-size: 0.9rem; font-weight: 600; cursor: pointer; }
+.tipo-scelta input { width: 18px; height: 18px; margin: 0; accent-color: var(--c); }
+.campo .tipo-scelta:has(input:checked) { background: var(--c); color: #fff; }
+.tipo-cart { display: inline-block; font-size: 0.72rem; font-weight: 600; color: #fff;
+  padding: 1px 8px; border-radius: 999px; margin-right: 4px; }
 footer { text-align: center; font-size: 0.75rem; color: var(--text-light); margin: 22px 0 8px; }
 footer button { background: none; border: none; color: var(--text-light); text-decoration: underline; font-size: 0.75rem; }
 </style>
@@ -157,6 +169,10 @@ footer button { background: none; border: none; color: var(--text-light); text-d
     <div class="campo">
       <label for="p-requisiti">Manca qualcosa? (blocca il lavoro)</label>
       <input type="text" id="p-requisiti" placeholder="Es. serve la piattaforma">
+    </div>
+    <div class="campo">
+      <label>Che lavoro è</label>
+      <div class="tipi-scelta" id="p-tipi"></div>
     </div>
     <label class="spunta"><input type="checkbox" id="p-sopralluogo"> È un sopralluogo, si va a guardare</label>
     <div class="campo">
@@ -346,6 +362,8 @@ function apriPrenotazione() {
   ['p-cliente', 'p-paese', 'p-settimana', 'p-ore', 'p-requisiti', 'p-note']
     .forEach(id => { document.getElementById(id).value = ''; });
   document.getElementById('p-sopralluogo').checked = false;
+  document.getElementById('p-tipi').innerHTML = TIPI_LAVORO.map(t => '<label class="tipo-scelta" style="--c:' + t.colore + '">' +
+    '<input type="checkbox" value="' + perValore(t.id) + '"> ' + perValore(t.nome) + '</label>').join('');
   mostraSettimana();
   // Fra i suggerimenti i nomi che si sono già visti: in agenda e nelle
   // prenotazioni fatte da qui. Scriverli uguali aiuta l'ufficio a riconoscerli.
@@ -382,6 +400,7 @@ async function salvaPrenotazione() {
     Settimana: valore('p-settimana') ? lunediDellaSettimana(valore('p-settimana')) : '',
     Requisiti: valore('p-requisiti'),
     Sopralluogo: document.getElementById('p-sopralluogo').checked ? 'Sì' : '',
+    Tipi: [...document.querySelectorAll('#p-tipi input:checked')].map(i => i.value),
     Note: note,
     PrenotatoDa: nome(),
   };
@@ -467,6 +486,10 @@ function disegnaCoda() {
       '<div class="cliente">' + perValore(d.cliente?.nome || '') +
         (d.cliente?.citta ? ' <span class="etichetta">· ' + perValore(d.cliente.citta) + '</span>' : '') +
         (d.sopralluogo ? ' <span class="etichetta">· sopralluogo</span>' : '') + '</div>' +
+      (tipiLavoro(d.tipi).length ? '<div style="margin:3px 0">' + tipiLavoro(d.tipi).map(id => {
+        const t = tipoLavoro(id);
+        return '<span class="tipo-cart" style="background:' + t.colore + '">' + perValore(t.nome) + '</span>';
+      }).join('') + '</div>' : '') +
       '<div class="note">' + perValore(d.note) + '</div>' +
       '<div class="meta">' + (d.ore ? String(d.ore).replace('.', ',') + ' h · ' : '') +
         (d.settimana ? perValore(etichettaSettimana(d.settimana)) + ' · ' : '') + '📤 da consegnare</div>' +

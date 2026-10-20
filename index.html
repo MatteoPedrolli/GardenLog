@@ -616,6 +616,16 @@ select.form-control { background-image: url("data:image/svg+xml,%3Csvg xmlns='ht
   font-size: 0.95rem; padding: 4px 6px; color: var(--text-light);
 }
 .dati-nota { font-size: 0.8rem; color: var(--text-light); line-height: 1.5; margin-bottom: 10px; }
+/* I tipi di lavoro: potature, prato. Ognuno ha il suo colore, e lo prende solo
+   quando è spuntato — spento è un bordo, acceso è pieno come sul cartellino. */
+.tipi-scelta { display: flex; flex-wrap: wrap; gap: 8px; }
+.tipo-scelta { display: inline-flex; align-items: center; gap: 6px; padding: 7px 14px 7px 10px;
+  border-radius: 999px; border: 1.5px solid var(--c); color: var(--c); background: var(--white);
+  font-size: 0.88rem; font-weight: 600; cursor: pointer; }
+.tipo-scelta input { width: 18px; height: 18px; margin: 0; accent-color: var(--c); }
+.tipo-scelta:has(input:checked) { background: var(--c); color: #fff; }
+.tipo-cart { display: inline-block; font-size: 0.72rem; font-weight: 600; color: #fff;
+  padding: 1px 8px; border-radius: 999px; margin-right: 4px; }
 
 .empty { text-align: center; padding: 50px 20px; color: var(--text-light); }
 .empty-icon { font-size: 3rem; margin-bottom: 12px; }
@@ -902,6 +912,11 @@ select.form-control { background-image: url("data:image/svg+xml,%3Csvg xmlns='ht
       <div class="form-group">
         <label class="form-label">Manca qualcosa? (blocca il lavoro)</label>
         <input type="text" class="form-control" id="f-pren-requisiti" placeholder="Es. serve la piattaforma">
+      </div>
+
+      <div class="form-group">
+        <label class="form-label">Che lavoro è</label>
+        <div class="tipi-scelta" id="f-pren-tipi"></div>
       </div>
 
       <label class="form-group" style="display:flex; align-items:center; gap:8px">
@@ -3129,10 +3144,29 @@ async function prenotaDaVisita() {
   if (cid) scegliClientePrenotazione(cid, nome);
 }
 
+// Le etichette da spuntare escono da TIPI_LAVORO, in rapportino.js: lo stesso
+// elenco del telefono del capo e dell'ufficio.
+function disegnaTipiPrenotazione() {
+  const el = document.getElementById('f-pren-tipi');
+  if (!el) return;
+  el.innerHTML = TIPI_LAVORO.map(t => `<label class="tipo-scelta" style="--c:${t.colore}">
+    <input type="checkbox" value="${perValore(t.id)}"> ${perValore(t.nome)}</label>`).join('');
+}
+
+function tipiScelti() {
+  return [...document.querySelectorAll('#f-pren-tipi input:checked')].map(i => i.value);
+}
+
+const etichetteTipi = tipi => tipiLavoro(tipi).map(id => {
+  const t = tipoLavoro(id);
+  return `<span class="tipo-cart" style="background:${t.colore}">${perValore(t.nome)}</span>`;
+}).join('');
+
 function apriPrenotazione() {
   ['f-pren-ore', 'f-pren-settimana', 'f-pren-requisiti', 'f-pren-note']
     .forEach(id => document.getElementById(id).value = '');
   document.getElementById('f-pren-sopralluogo').checked = false;
+  disegnaTipiPrenotazione();
   mostraSettimanaScelta();
   scollegaClientePrenotazione();
   document.getElementById('overlay-prenotazione').classList.add('open');
@@ -3191,6 +3225,7 @@ async function salvaPrenotazione() {
     Settimana: lunediDellaSettimana(document.getElementById('f-pren-settimana').value),
     Requisiti: document.getElementById('f-pren-requisiti').value.trim(),
     Sopralluogo: document.getElementById('f-pren-sopralluogo').checked ? 'Sì' : '',
+    Tipi: tipiScelti(),
     Note: note,
     // Il nome di «Come ti chiami»: in lavagna il cartellino dice «prenotato da …».
     PrenotatoDa: (DB.impostazioni?.NomeMittente || '').trim(),
@@ -3887,6 +3922,7 @@ function renderPrenotazioni() {
     const davanti = posto > 0 ? coda.slice(0, posto).find(v => v.errore) : null;
     return `<div class="card" style="padding:12px">
       <div style="font-weight:600">${perValore(c ? c.Cliente : 'cliente eliminato')}${isSi(p.Sopralluogo) ? ' <span style="font-size:0.7rem; font-weight:600; color:var(--text-light)">· sopralluogo</span>' : ''}</div>
+      ${tipiLavoro(p.Tipi).length ? `<div style="margin:3px 0">${etichetteTipi(p.Tipi)}</div>` : ''}
       <div style="font-size:0.85rem; color:var(--text-mid); white-space:pre-line">${perValore(p.Note)}</div>
       <div style="font-size:0.78rem; color:var(--text-light); margin-top:4px">
         ${p.Ore ? formattaQuantita(p.Ore) + ' h · ' : ''}${p.Settimana ? etichettaSettimana(p.Settimana) + ' · ' : ''}${voce ? '📤 da consegnare' : '✅ in ufficio'}

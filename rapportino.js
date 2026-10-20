@@ -167,6 +167,34 @@ function nomeFileRapportino(doc) {
 
 const VERSIONE_APPUNTAMENTO = 3;
 
+// ── I TIPI DI LAVORO ──
+// Le etichette che si mettono prenotando — potature, prato — perché guardando la
+// lavagna si veda a colpo d'occhio che lavori ci sono da fare, senza leggere le
+// note di ognuno. Stanno qui perché le usano tutte e tre le app: chi prenota dal
+// telefono, chi dal telefono del capo, e l'ufficio che le legge sui cartellini.
+// Per aggiungerne una basta una riga.
+//
+// Il colore sta solo sull'etichetta, e l'etichetta è **piena** — fondo colorato,
+// scritta bianca, in minuscolo — apposta: in lavagna verde e blu sono già degli
+// stati, «confermato» e «fatto», scritti in maiuscolo su una pastiglia chiara.
+// Due segni diversi per due cose diverse, e la parola c'è sempre.
+const TIPI_LAVORO = [
+  { id: 'potature', nome: 'Potature', colore: '#2d6cdf' },
+  { id: 'prato', nome: 'Prato', colore: '#4b8a2a' },
+];
+
+// Un elenco di tipi letto da qualunque parte: un array, o la stringa che arriva da
+// un modulo. Quelli che non si conoscono restano — un telefono più nuovo può
+// averne uno in più — e si leggono col loro nome nudo.
+function tipiLavoro(grezzo) {
+  const lista = Array.isArray(grezzo) ? grezzo : String(grezzo || '').split(',');
+  return [...new Set(lista.map(t => String(t || '').trim()).filter(Boolean))];
+}
+
+function tipoLavoro(id) {
+  return TIPI_LAVORO.find(t => t.id === id) || { id, nome: id, colore: '#6b6458' };
+}
+
 // ── LE SETTIMANE ──
 // Un appuntamento non si fissa in un giorno preciso ma in una settimana, e una
 // settimana si identifica col **lunedì che la apre**: una data sola, che si
@@ -268,6 +296,9 @@ function costruisciAppuntamento({ prenotazione, cliente }) {
     // chiedere. Arrivato dopo, senza alzare la versione: un appuntamento che non
     // lo porta dice solo «prenotato».
     prenotatoDa: String(prenotazione.PrenotatoDa || '').trim(),
+    // Potature, prato: arrivati dopo, senza alzare la versione. Senza, non dice
+    // che lavoro è, ed è quello che erano tutti prima.
+    tipi: tipiLavoro(prenotazione.Tipi),
   };
 }
 
@@ -295,6 +326,7 @@ function leggiAppuntamento(grezzo) {
     requisiti: Array.isArray(doc.requisiti) ? doc.requisiti : [],
     sopralluogo: !!doc.sopralluogo,
     prenotatoDa: String(doc.prenotatoDa || '').trim(),
+    tipi: tipiLavoro(doc.tipi),
   };
 }
 
@@ -801,6 +833,7 @@ if (typeof module !== 'undefined' && module.exports) {
   module.exports = {
     VERSIONE_RAPPORTINO, costruisciRapportino, leggiRapportino, nomeFileRapportino,
     VERSIONE_APPUNTAMENTO, costruisciAppuntamento, leggiAppuntamento, nomeFileAppuntamento, origineDellaPrenotazione,
+    TIPI_LAVORO, tipiLavoro, tipoLavoro,
     VERSIONE_AGENDA, APPUNTAMENTI_IN_AGENDA, costruisciAgenda, leggiAgenda, etichettaMezzaGiornata,
     ORE_MEZZA, VOCE_MANODOPERA, VOCE_PIANTE, numeroDaTesto, oreManodopera, oreDelleLavorazioni,
     mezzeDaOre, pianteDaSesto, pianteDellaLavorazione, GENERI_LAVORAZIONE,
