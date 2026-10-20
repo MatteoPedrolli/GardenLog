@@ -2355,6 +2355,14 @@ function riassuntoRicontrolla() {
 // non si legge, e quello che non si legge tanto vale non scriverlo.
 const NOVITA = [
   {
+    versione: '2026-10-20.6',
+    data: '2026-10-20',
+    titolo: 'La mail del cliente',
+    righe: [
+      'Mandando un conto o un preventivo a un cliente **senza mail**, l\'app te la **chiede prima** e la **salva in anagrafica**: la volta dopo c\'è già. Chi non era in anagrafica ci entra adesso.',
+    ],
+  },
+  {
     versione: '2026-10-20.5',
     data: '2026-10-20',
     titolo: 'Per mail parte il PDF',
@@ -3668,14 +3676,10 @@ async function inviaPreventivo() {
   if (!PREVENTIVO) return;
   const d = PREVENTIVO.doc;
   if (!prezziGuardati(d, 'mandarlo')) return;
+  const indirizzo = (d.cliente && d.cliente.email) || await mailPerInvio(d.cliente || {});
+  if (!indirizzo) return;
   const nomeFile = stampaPreventivo();
   if (!nomeFile || !(await chiediPdfSalvato(nomeFile))) return;
-  const noto = clienteDelPreventivo(d);
-  const indirizzo = (d.cliente && d.cliente.email) || (noto && noto.email) || '';
-  if (!indirizzo) {
-    avvisa('Manca la mail di ' + ((d.cliente && d.cliente.nome) || 'questo cliente') +
-      ': la posta si apre lo stesso, il destinatario va scritto a mano', true);
-  }
   // Il mittente si sceglie prima di segnare: annullare lì non deve lasciare un
   // preventivo «mandato» che non è mai uscito.
   const mittente = await scegliMittente();
@@ -5527,6 +5531,56 @@ function letteraConPdf(cosa) {
     (IMPOSTAZIONI.azienda ? '\n' + IMPOSTAZIONI.azienda : '');
 }
 
+// Senza la mail del cliente il conto partiva lo stesso, col destinatario da
+// scrivere a mano: la si cercava ogni volta, e la volta dopo mancava ancora. Si
+// chiede prima di tutto il resto — prima della stampa, prima di segnare niente —
+// e finisce in anagrafica, dove la prossima volta c'è. Chi non c'è in anagrafica
+// ci entra adesso, coi dati che il lavoro porta già. Risponde la mail, o '' se
+// si è annullato o l'anagrafica non si è salvata: allora non si va avanti.
+const MAIL_VALIDA = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+async function mailPerInvio(cliente) {
+  const noto = CLIENTI.find(c => cliente.id && c.id === cliente.id) ||
+    CLIENTI.find(c => stessoNome(c.nome, cliente.nome));
+  if (noto && noto.email) return noto.email;
+  const mail = await chiediMail(cliente.nome || 'questo cliente');
+  if (!mail) return '';
+  if (noto) noto.email = mail;
+  else CLIENTI.push(sistemaCliente({ id: cliente.id, nome: cliente.nome, indirizzo: cliente.indirizzo,
+    citta: cliente.citta, telefono: cliente.telefono, email: mail }));
+  return (await salvaClienti()) ? mail : '';
+}
+
+function chiediMail(nome) {
+  const pannello = document.getElementById('pannello-posta');
+  return new Promise(risolvi => {
+    window.__mailScritta = valore => {
+      if (valore !== null) {
+        valore = String(valore).trim();
+        if (!MAIL_VALIDA.test(valore)) {
+          document.getElementById('mail-errore').textContent = 'Non sembra una mail: controlla e riprova';
+          return;
+        }
+      }
+      pannello.classList.remove('aperto');
+      pannello.innerHTML = '';
+      delete window.__mailScritta;
+      risolvi(valore);
+    };
+    pannello.innerHTML = '<div class="scheda-novita" style="max-width:440px">' +
+      '<div class="titolo-novita">Manca la mail di ' + perValore(nome) + '</div>' +
+      '<p style="margin-top:10px">Scrivila qui: la salvo in anagrafica, e poi si va avanti col PDF.</p>' +
+      '<input type="email" id="mail-cliente" aria-label="mail del cliente" placeholder="nome@esempio.it" style="margin-top:10px"' +
+      ' onkeydown="if (event.key === \'Enter\') __mailScritta(this.value)">' +
+      '<div id="mail-errore" style="color:#922b21;font-size:0.85rem;margin-top:6px"></div>' +
+      '<div class="bottoni" style="margin-top:14px">' +
+        '<button class="principale" onclick="__mailScritta(document.getElementById(\'mail-cliente\').value)">Salva e continua</button>' +
+        '<button class="secondaria" onclick="__mailScritta(null)">Annulla</button>' +
+      '</div></div>';
+    pannello.classList.add('aperto');
+    document.getElementById('mail-cliente').focus();
+  });
+}
+
 // La mail si apre da un clic qui, non appena chiusa la stampa: con Gmail è una
 // scheda nuova, e Chrome blocca le finestre che non nascono da un clic. È anche
 // il momento per dire quale file allegare. Risponde true per aprire la posta.
@@ -5560,13 +5614,8 @@ function chiediPdfSalvato(nomeFile) {
 async function inviaConto(id) {
   const l = ARCHIVIO.find(x => x.id === id);
   if (!l) return;
-  const cliente = CLIENTI.find(c => c.id === (l.cliente && l.cliente.id));
-  const indirizzo = (cliente && cliente.email) || '';
-  if (!indirizzo) {
-    avvisa('Manca l\'email di ' + ((l.cliente && l.cliente.nome) || 'questo cliente') +
-      ': mettila in Clienti, o scrivila a mano nella posta', true);
-  }
-
+  const indirizzo = await mailPerInvio(l.cliente || {});
+  if (!indirizzo) return;
   const nomeFile = stampaConto('archivio', id);
   if (!nomeFile || !(await chiediPdfSalvato(nomeFile))) return;
   const mittente = await scegliMittente();
@@ -5615,13 +5664,8 @@ async function inviaInsieme() {
   if (scelti.length < 2) return;
   const cl = intestatarioScelti();
   if (!cl) { avvisa('Lavori di clienti diversi: scegli a chi intestare il conto', true); return; }
-  const cliente = CLIENTI.find(c => c.id === cl.id) ||
-    CLIENTI.find(c => stessoNome(c.nome, cl.nome));
-  const indirizzo = (cliente && cliente.email) || '';
-  if (!indirizzo) {
-    avvisa('Manca l\'email di ' + (cl.nome || 'questo cliente') +
-      ': mettila in Clienti, o scrivila a mano nella posta', true);
-  }
+  const indirizzo = await mailPerInvio(cl);
+  if (!indirizzo) return;
   const nomeFile = stampaConto('insieme');
   if (!nomeFile || !(await chiediPdfSalvato(nomeFile))) return;
   const mittente = await scegliMittente();

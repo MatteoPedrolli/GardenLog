@@ -1916,6 +1916,12 @@ try {
     // file allegare: qui si preme «Apri la mail» come farebbe chi lo usa.
     window.confermaPdf = async attesa => {
       await new Promise(r => setTimeout(r, 30));
+      // Un cliente senza mail: la si scrive, come farebbe chi manda.
+      if (window.__mailScritta) {
+        window.__mailChiesta = document.getElementById('pannello-posta').textContent;
+        __mailScritta(window.__mailDaScrivere || 'cliente@esempio.it');
+        await new Promise(r => setTimeout(r, 30));
+      }
       window.__pdfDetto = document.getElementById('pannello-posta').textContent;
       if (window.__pdfSalvato) document.querySelector('#pannello-posta button.principale').click();
       return attesa;
@@ -2966,14 +2972,58 @@ try {
     mittente.aperto && mittente.annullato.posta === '' && mittente.annullato.inPosta, JSON.stringify(mittente.annullato));
   ok('e la posta parte dall\'indirizzo scelto', mittente.due.includes('authuser=info%40azienda.it'), mittente.due.slice(0, 70));
 
-  ok('senza email il conto si manda lo stesso, ma lo dice',
+  // Senza mail il conto non parte a vuoto: la mail si chiede prima di stampare e
+  // segnare, e finisce in anagrafica — la volta dopo c'è già.
+  const senzaMail = await pagU.evaluate(async () => {
+    const l = ARCHIVIO.find(x => x.id !== 'altro-lavoro');
+    const c = CLIENTI.find(x => x.id === (l.cliente && l.cliente.id));
+    if (c) { modificaCliente(c.id, 'email', ''); await salvaClienti(); }
+    const pannello = document.getElementById('pannello-posta');
+    const inPostaPrima = l.inPosta;
+    document.getElementById('foglio').innerHTML = '';
+    window.__posta = '';
+    // annullando non succede niente: niente stampa, niente posta, niente segno
+    let attesa = inviaConto(l.id);
+    await new Promise(r => setTimeout(r, 30));
+    const chiesta = pannello.textContent.includes('Manca la mail di') && !!document.getElementById('mail-cliente');
+    const primaDellaStampa = !document.getElementById('foglio').textContent.includes('Conto dei lavori');
+    __mailScritta(null);
+    await attesa;
+    const annullato = window.__posta === '' && l.inPosta === inPostaPrima &&
+      !document.getElementById('foglio').textContent.includes('Conto dei lavori');
+    // una mail storta non passa, e il pannello resta lì
+    attesa = inviaConto(l.id);
+    await new Promise(r => setTimeout(r, 30));
+    document.getElementById('mail-cliente').value = 'rossi chiocciola esempio';
+    [...pannello.querySelectorAll('button')].find(b => b.textContent.includes('Salva e continua')).click();
+    const storta = !!window.__mailScritta && pannello.textContent.includes('Non sembra una mail');
+    document.getElementById('mail-cliente').value = 'rossi.nuovo@esempio.it';
+    [...pannello.querySelectorAll('button')].find(b => b.textContent.includes('Salva e continua')).click();
+    await confermaPdf(attesa);
+    const salvata = (CLIENTI.find(x => x.id === (l.cliente && l.cliente.id)) || {}).email;
+    const suFile = JSON.parse(await leggiTesto(CARTELLA, 'clienti.json')).clienti
+      .some(x => x.id === l.cliente.id && x.email === 'rossi.nuovo@esempio.it');
+    return { chiesta, primaDellaStampa, annullato, storta, salvata, suFile,
+      posta: window.__posta.startsWith('mailto:rossi.nuovo%40esempio.it') };
+  });
+  ok('senza mail la chiede prima di stampare e di segnare', senzaMail.chiesta && senzaMail.primaDellaStampa, JSON.stringify(senzaMail));
+  ok('e annullando non parte niente', senzaMail.annullato);
+  ok('una mail storta non passa', senzaMail.storta);
+  ok('scritta, finisce in anagrafica, sul file, e la posta parte a lei',
+    senzaMail.salvata === 'rossi.nuovo@esempio.it' && senzaMail.suFile && senzaMail.posta, JSON.stringify(senzaMail));
+  // E chi non è in anagrafica ci entra, coi dati del lavoro.
+  ok('un cliente che non è in anagrafica ci entra con la sua mail',
     await pagU.evaluate(async () => {
-      const l = ARCHIVIO.find(x => x.id !== 'altro-lavoro');
-      const c = CLIENTI.find(x => x.id === (l.cliente && l.cliente.id));
-      if (c) { modificaCliente(c.id, 'email', ''); await salvaClienti(); }
-      window.__posta = '';
-      await confermaPdf(inviaConto(l.id));
-      return document.getElementById('avviso').classList.contains('brutto') && window.__posta.startsWith('mailto:?');
+      const prima = CLIENTI.length;
+      const attesa = mailPerInvio({ nome: 'Gino Passante', citta: 'Lavis' });
+      await new Promise(r => setTimeout(r, 30));
+      __mailScritta('gino@esempio.it');
+      const mail = await attesa;
+      const nuovo = CLIENTI.find(c => c.nome === 'Gino Passante');
+      const ok = mail === 'gino@esempio.it' && CLIENTI.length === prima + 1 && nuovo.email === mail && nuovo.citta === 'Lavis';
+      CLIENTI = CLIENTI.filter(c => c !== nuovo);
+      await salvaClienti();
+      return ok;
     }));
 
   ok('il filtro gestionale mostra solo quello che chiede',

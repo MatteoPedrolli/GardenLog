@@ -1263,9 +1263,14 @@ quale file allegare e apre la posta **al suo clic**: con Gmail è una scheda nuo
 Chrome blocca le finestre che non nascono da un clic. Il saluto è `letteraConPdf()`,
 per conti, conti insieme e preventivi. Annullando lì non si segna niente. Il lavoro si segna *in posta* e non
 *inviato*: l'app sa di averlo passato alla posta, non sa se è partito. E si segna
-prima di aprirla, o una mail mandata resterebbe senza traccia in archivio. Senza
-email il conto si manda lo stesso, con il destinatario da scrivere a mano, ma
-l'app lo dice.
+prima di aprirla, o una mail mandata resterebbe senza traccia in archivio.
+
+**Senza la mail del cliente si chiede, prima di tutto il resto** (`mailPerInvio()`):
+prima della stampa e prima di segnare niente. Partiva lo stesso col destinatario da
+scrivere a mano, e la mail si cercava ogni volta e la volta dopo mancava ancora.
+Scritta, finisce **in anagrafica** — chi non c'era ci entra coi dati del lavoro — e
+se l'anagrafica non si salva non si va avanti. Annullando non parte niente. Per il
+preventivo vale anche la mail arrivata col rilievo.
 
 **Il mittente un link `mailto:` non lo sa dire**: lo decide il programma di posta che
 lo apre. Per scegliere da quale indirizzo parte, in Impostazioni si scrivono gli
