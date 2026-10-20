@@ -2362,6 +2362,14 @@ function riassuntoRicontrolla() {
 // non si legge, e quello che non si legge tanto vale non scriverlo.
 const NOVITA = [
   {
+    versione: '2026-10-20.8',
+    data: '2026-10-20',
+    titolo: 'Nuova versione di un preventivo',
+    righe: [
+      'Su un preventivo già mandato c\'è **«Nuova versione»**: torna bozza con le stesse righe, si corregge e si rimanda. Quella mandata prima resta conservata, e si rivede in fondo al preventivo in **«Versioni mandate prima»**.',
+    ],
+  },
+  {
     versione: '2026-10-20.7',
     data: '2026-10-20',
     titolo: 'Preventivi consegnati',
@@ -3540,6 +3548,12 @@ function costruisciPreventivo(rilievo, precedente) {
     righe: precedente ? righePreventivo(rilievo, precedente.righe)
       : righePreventivo(rilievo, null).concat(rigaTrasferimento()),
     note: (precedente && precedente.note) || '',
+    // Quello che l'ufficio ha scritto sul preventivo e il rilievo non sa: le note
+    // per il cantiere e le versioni già mandate al cliente. Rifacendolo da un
+    // rilievo corretto non devono sparire.
+    noteCantiere: (precedente && precedente.noteCantiere) || '',
+    numeroVersione: (precedente && precedente.numeroVersione) || 1,
+    versioniPrecedenti: (precedente && Array.isArray(precedente.versioniPrecedenti)) ? precedente.versioniPrecedenti : [],
     // Il rilievo ci viaggia dentro per intero: fra due anni questo file deve
     // raccontare da solo da dove viene quel prezzo, anche se la cartella dei
     // rilievi è stata svuotata.
@@ -4414,6 +4428,8 @@ function disegnaPreventivo() {
       '<div class="nota-rilievo">' + perValore(d.daRilievo.note) + '</div></div>';
   }
 
+  html += bloccoVersioniPrecedenti(d);
+
   html += '<div class="bottoni">' +
     '<button class="principale" onclick="salvaPreventivo()">Salva</button>' +
     '<button class="secondaria" onclick="stampaPreventivo()">Stampa o salva in PDF</button>' +
@@ -4440,6 +4456,7 @@ function testataPreventivo(d) {
   html += '<p class="sottotitolo">' +
     '<span id="mezze-preventivo">' + etichettaMezzePreventivo(d) + '</span>' +
     (d.disegno || d.daRilievo?.disegno ? ' · 📐 aspetta il disegno' : '') +
+    ((d.numeroVersione || 1) > 1 ? ' · versione ' + d.numeroVersione : '') +
     ' · ' + (preventivoScaduto(d) ? 'scaduto senza risposta' : STATI_PREVENTIVO[d.stato]) +
     (d.stato === 'rifiutato' && d.rifiutato ? ' il ' + formattaData(d.rifiutato)
       : d.mandato ? ' · mandato il ' + formattaData(d.mandato) + ' · ' + daQuantoAspetta(d.mandato) : '') + '</p>';
@@ -4496,13 +4513,66 @@ function disegnaPreventivoConsegnato(c, d) {
     '<button class="secondaria" onclick="stampaPreventivo()">Ristampa</button>' +
     '<button class="secondaria" onclick="inviaPreventivo()">Rimanda per mail</button>' +
     '<button class="secondaria" onclick="apriCantierePreventivo()">Preventivo per il cantiere</button>' +
+    '<button class="secondaria" onclick="nuovaVersionePreventivo()">Nuova versione</button>' +
     '<button class="secondaria" onclick="vaiA(\'preventivi\')">Torna all\'elenco</button>' +
     '<button class="pericolo" style="margin-left:auto" onclick="eliminaPreventivo()" title="Elimina il preventivo">🗑 Elimina</button>' +
     '</div>';
   html += '<p class="meta" style="margin-top:10px">Com\'è arrivato al cliente: non si modifica. ' +
     'Le note per chi va in giardino si scrivono nel preventivo per il cantiere.</p>';
   html += '<div class="anteprima" id="anteprima-preventivo">' + costruisciFoglioPreventivo(d) + '</div>';
+  html += bloccoVersioniPrecedenti(d);
   c.innerHTML = html;
+}
+
+// ── LE VERSIONI ──
+// Un preventivo uscito non si tocca, ma il cliente chiede di cambiarlo: meno
+// piante, una soluzione in più. Eliminarlo e rifarlo perdeva quello che gli era
+// stato mandato, e la domanda «cosa gli avevamo scritto la prima volta?» arriva
+// sempre. Quindi la versione mandata si mette da parte dentro lo stesso file
+// (`versioniPrecedenti`), com'era, e il preventivo torna bozza con le stesse
+// righe: si corregge e si rimanda. Stesso file e stesso id, così il filo col
+// rilievo e col lavoro in lavagna resta quello.
+async function nuovaVersionePreventivo() {
+  if (!PREVENTIVO) return;
+  const d = PREVENTIVO.doc;
+  const n = d.numeroVersione || 1;
+  if (!confirm('Fare una nuova versione di questo preventivo?\n\n' +
+      'La versione ' + n + (d.mandato ? ', mandata il ' + formattaData(d.mandato) : '') +
+      ', resta conservata e si rivede da qui. La nuova riparte da bozza con le stesse righe, da correggere e rimandare.' +
+      (d.stato === 'accettato' ? '\n\nIl cliente l\'aveva accettato: il lavoro già in lavagna resta com\'è. Se cambia la durata, correggilo lì.' : ''))) return;
+  const prima = JSON.parse(JSON.stringify(d));
+  // Senza la storia e senza il rilievo, che resta sul preventivo: una versione è
+  // quello che il cliente ha avuto in mano, e tre copie del rilievo non dicono niente.
+  const { versioniPrecedenti, daRilievo, ...mandata } = prima;
+  d.versioniPrecedenti = (Array.isArray(versioniPrecedenti) ? versioniPrecedenti : [])
+    .concat([{ ...mandata, numeroVersione: n, messaDaParte: new Date().toISOString() }]);
+  d.numeroVersione = n + 1;
+  d.stato = 'bozza';
+  d.mandato = '';
+  d.rifiutato = '';
+  d.scelta = '';
+  if (!(await salvaPreventivo())) {
+    PREVENTIVO.doc = prima;
+    disegnaPreventivo();
+    return;
+  }
+  avvisa('Versione ' + (n + 1) + ': si corregge e si rimanda');
+}
+
+// Le versioni mandate prima, ognuna col suo foglio: si aprono una alla volta,
+// perché sono la risposta a una domanda che si fa ogni tanto, non ogni volta.
+function bloccoVersioniPrecedenti(d) {
+  const versioni = Array.isArray(d.versioniPrecedenti) ? d.versioniPrecedenti : [];
+  if (!versioni.length) return '';
+  return '<details class="scheda" style="margin-top:14px"><summary class="titolo-sezione">Versioni mandate prima' +
+    ' <span class="meta">· ' + versioni.length + '</span></summary>' +
+    versioni.slice().reverse().map(v => '<details style="margin-top:8px"><summary>' +
+      'Versione ' + (v.numeroVersione || 1) +
+      (v.mandato ? ' · mandata il ' + formattaData(v.mandato) : '') +
+      (v.stato && v.stato !== 'mandato' ? ' · ' + perValore(STATI_PREVENTIVO[v.stato] || v.stato) : '') +
+      ' · ' + forchettaPreventivo(v) + '</summary>' +
+      '<div class="anteprima">' + costruisciFoglioPreventivo(v) + '</div></details>').join('') +
+    '</details>';
 }
 
 // ── IL PREVENTIVO PER IL CANTIERE ──
@@ -5031,6 +5101,7 @@ function disegnaPreventivi() {
       '<div class="riga-scheda">' +
         '<span class="nome-cliente">' + perValore(d.cliente.nome || 'senza nome') + '</span>' +
         '<span class="etichetta ' + (d.stato === 'accettato' ? 'corretto' : 'nuovo') + '">' + etichetta + '</span>' +
+        ((d.numeroVersione || 1) > 1 ? '<span class="meta">versione ' + d.numeroVersione + '</span>' : '') +
         // Con le alternative il totale è più d'uno: si dice da quanto a quanto,
         // che è quello che si risponde al telefono prima che il cliente scelga.
         '<span class="meta" style="margin-left:auto">' + forchettaPreventivo(d) + '</span>' +

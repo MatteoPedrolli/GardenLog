@@ -828,6 +828,19 @@ rimandare non chiedono di riguardare i prezzi: sono quelli già partiti. Un rili
 corretto che arriva dopo non lo rifà: si rifà solo una bozza. Rimandarlo non toglie
 il sì a un accettato; un rifiutato o uno scaduto torna ad aspettare da oggi.
 
+**Per cambiarlo si fa una nuova versione** (`nuovaVersionePreventivo()`): il
+cliente chiede meno piante o una soluzione in più, ed eliminare e rifare perdeva
+quello che gli era stato mandato — e «cosa gli avevamo scritto la prima volta?»
+arriva sempre. La versione uscita si mette da parte **nello stesso file**, in
+`versioniPrecedenti`, com'era (senza la storia e senza il rilievo, che resta sul
+preventivo), e il preventivo torna bozza con le stesse righe e `numeroVersione`
+alzato. Stesso file e stesso id: il filo col rilievo e col lavoro in lavagna resta
+quello, e un sì già dato non rimette il lavoro in lavagna — se cambia la durata, si
+corregge lì, e la conferma lo dice. Le versioni di prima si rivedono in fondo, ognuna
+col suo foglio (`bloccoVersioniPrecedenti()`), e `costruisciPreventivo()` se le porta
+dietro con le note del cantiere quando il preventivo si rifà dal rilievo. Campi
+arrivati senza alzare `VERSIONE_PREVENTIVO`: senza, è la versione 1.
+
 **Il sì del cliente costa un clic** e porta il lavoro in «Da pianificare» sulla
 lavagna, largo le mezze giornate che escono dalle ore del preventivo: lo stesso
 numero, misurato una volta sola. Le mezze si rifanno dalle righe e non si leggono

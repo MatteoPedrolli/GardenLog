@@ -4619,6 +4619,45 @@ try {
   ok('«Consegnato a mano» lo segna mandato, e da lì si legge e basta',
     aMano.stato === 'mandato' && aMano.data && aMano.solaLettura, JSON.stringify(aMano));
 
+  // Il cliente chiede di cambiarlo: la versione mandata si mette da parte, com'era,
+  // e il preventivo torna bozza con le stesse righe. Stesso file, stesso id.
+  const versione = await pagU.evaluate(async () => {
+    const tenuto = JSON.parse(JSON.stringify(PREVENTIVO.doc));
+    const id = PREVENTIVO.doc.id;
+    const lavori = LAVAGNA.lavori.length;
+    vaiA('preventivo');
+    [...document.querySelectorAll('#pagina-preventivo .bottoni button')]
+      .find(b => b.textContent.includes('Nuova versione')).click();
+    await new Promise(r => setTimeout(r, 300));
+    const d = PREVENTIVO.doc;
+    const v = (d.versioniPrecedenti || [])[0] || {};
+    const pagina = document.getElementById('pagina-preventivo');
+    const r = {
+      stato: d.stato, numero: d.numeroVersione, quante: (d.versioniPrecedenti || []).length,
+      vecchia: { stato: v.stato, numero: v.numeroVersione, righe: JSON.stringify(v.righe) === JSON.stringify(tenuto.righe),
+        senzaRilievo: !v.daRilievo },
+      modificabile: pagina.querySelectorAll('input[type=text]').length > 0,
+      storia: pagina.textContent.includes('Versioni mandate prima') && pagina.textContent.includes('Versione 1'),
+      fogliVecchi: pagina.querySelectorAll('details .anteprima').length,
+      testata: pagina.querySelector('.sottotitolo').textContent.includes('versione 2'),
+      lavagna: LAVAGNA.lavori.length === lavori,
+      file: PREVENTIVI.filter(p => p.doc.id === id).length,
+    };
+    // Riaperto dal rilievo, la storia resta: il preventivo si rifà, le versioni no.
+    apriPreventivo(id);
+    r.riaperto = PREVENTIVO.doc.numeroVersione === 2 && (PREVENTIVO.doc.versioniPrecedenti || []).length === 1;
+    PREVENTIVO.doc = tenuto;
+    await salvaPreventivo();
+    return r;
+  });
+  ok('«Nuova versione» torna bozza modificabile, numero 2, con la stessa riga di prima',
+    versione.stato === 'bozza' && versione.numero === 2 && versione.modificabile && versione.testata, JSON.stringify(versione));
+  ok('e la versione mandata resta da parte, com\'era, nello stesso file',
+    versione.quante === 1 && versione.vecchia.stato === 'accettato' && versione.vecchia.numero === 1 &&
+    versione.vecchia.righe && versione.vecchia.senzaRilievo && versione.file === 1, JSON.stringify(versione.vecchia));
+  ok('si rivede in fondo, col suo foglio', versione.storia && versione.fogliVecchi === 1);
+  ok('non rimette il lavoro in lavagna, e riaprendolo la storia resta', versione.lavagna && versione.riaperto);
+
   // Dai metri e dal sesto d'impianto al numero di piante: è la formula del foglio
   // della segretaria, col «più uno» della pianta di testa.
   const pianteSesto = await pagU.evaluate(() => ({
