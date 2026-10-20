@@ -807,9 +807,26 @@ chi fa il preventivo, non a chi pianta. In fondo i **materiali da ordinare**, so
 le lavorazioni (due aiuole col telo sono un ordine solo), e le note del sopralluogo.
 **Niente prezzi**: gira in cantiere, e un prezzo lì sopra finisce dove non deve. Per
 la stessa ragione non aspetta i prezzi confermati — si stampa anche da un preventivo
-aperto, per ordinare. Con le alternative vale la soluzione scelta, se c'è. Per ora
-si stampa o si salva in PDF; portarla dentro l'app del telefono vorrebbe un file
-riservato come `sopralluoghi.json`.
+aperto, per ordinare. Con le alternative vale la soluzione scelta, se c'è. Prima di
+stamparla **la si guarda a schermo** («Preventivo per il cantiere»,
+`apriCantierePreventivo()`), con sopra le **note per il cantiere** (`noteCantiere`):
+escono in fondo alla scheda, al cliente no, e si salvano da sole mentre si scrive
+(`scriviPreventivo()`, senza rileggere la cartella né ridisegnare, o il campo
+sparirebbe da sotto le dita). Per ora si stampa o si salva in PDF; portarla dentro
+l'app del telefono vorrebbe un file riservato come `sopralluoghi.json`.
+
+**Un preventivo uscito non si modifica** (`preventivoConsegnato()`: mandato,
+consegnato a mano, accettato o rifiutato). Aperto, è **il foglio com'è arrivato al
+cliente**, a schermo (`disegnaPreventivoConsegnato()`, le regole di `#foglio` valgono
+anche per `.anteprima`), senza un campo: la carta in mano al cliente e il file
+devono dire la stessa cosa, e il lavoro entra in lavagna su quello. In cima i
+bottoni di quello che resta: **Confermato** (sulla soluzione, se sono più d'una) e
+**Declinato** finché aspetta — Confermato anche da rifiutato o scaduto, se il cliente
+richiama —, **Ristampa**, **Rimanda per mail**, **Preventivo per il cantiere**,
+**Elimina**. L'unica cosa che si scrive sono le note del cantiere. Ristampare e
+rimandare non chiedono di riguardare i prezzi: sono quelli già partiti. Un rilievo
+corretto che arriva dopo non lo rifà: si rifà solo una bozza. Rimandarlo non toglie
+il sì a un accettato; un rifiutato o uno scaduto torna ad aspettare da oggi.
 
 **Il sì del cliente costa un clic** e porta il lavoro in «Da pianificare» sulla
 lavagna, largo le mezze giornate che escono dalle ore del preventivo: lo stesso

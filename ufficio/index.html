@@ -160,7 +160,7 @@ table.elenco td.num, table.elenco th.num { text-align: right; padding-right: 0; 
    foglio di stampa — «90n», «12sacchi» — quindi la regola vale anche lì: è lo
    stesso difetto, e due regole diverse per lo stesso difetto si disallineano. */
 table.elenco td.num + td:not(.num), table.elenco th.num + th:not(.num),
-#foglio td.num + td:not(.num), #foglio th.num + th:not(.num) { padding-left: 8px; }
+:is(#foglio, .anteprima) td.num + td:not(.num), :is(#foglio, .anteprima) th.num + th:not(.num) { padding-left: 8px; }
 /* Nella scheda cliente le due colonne vanno larghe uguali: lasciate libere, le
    celle si dimensionano sul contenuto e il telefono esce stretto come il numero. */
 /* Le note del rilievo si leggono come sono state scritte in giardino: gli a capo
@@ -239,10 +239,10 @@ tr.riga-sezione input[type=text] { font-weight: 600; font-size: 0.95rem; border-
   background: transparent; }
 tr.riga-sezione input[type=text]:hover, tr.riga-sezione input[type=text]:focus {
   border-color: var(--border); background: var(--white); }
-#foglio tr.sezione-foglio td { font-weight: 700; padding-top: 16px; border-bottom: none; }
-#foglio .titolo-soluzione { font-size: 1rem; margin: 22px 0 6px; }
-#foglio .apertura { margin: 18px 0; font-size: 0.95rem; }
-#foglio table.tariffe { margin-top: 18px; font-size: 0.88rem; }
+:is(#foglio, .anteprima) tr.sezione-foglio td { font-weight: 700; padding-top: 16px; border-bottom: none; }
+:is(#foglio, .anteprima) .titolo-soluzione { font-size: 1rem; margin: 22px 0 6px; }
+:is(#foglio, .anteprima) .apertura { margin: 18px 0; font-size: 0.95rem; }
+:is(#foglio, .anteprima) table.tariffe { margin-top: 18px; font-size: 0.88rem; }
 table.scheda-cliente { table-layout: fixed; }
 .scheda-chiusa { padding: 12px 20px; margin-bottom: 8px; }
 .testa-cliente {
@@ -620,57 +620,64 @@ input.vuoto { background: #fffdf5; border-color: #ecdca8; }
   #foglio .foglio-pagina > tbody > tr > td { padding: 0; border: none; }
 }
 
-#foglio .intestazione { border-bottom: 2px solid #000; padding-bottom: 10px; margin-bottom: 22px; }
-#foglio .azienda { font-family: var(--font-display); font-size: 1.5rem; font-weight: 700; }
-#foglio .recapiti { font-size: 0.82rem; color: #333; margin-top: 3px; }
-#foglio h1 {
+:is(#foglio, .anteprima) .intestazione { border-bottom: 2px solid #000; padding-bottom: 10px; margin-bottom: 22px; }
+:is(#foglio, .anteprima) .azienda { font-family: var(--font-display); font-size: 1.5rem; font-weight: 700; }
+:is(#foglio, .anteprima) .recapiti { font-size: 0.82rem; color: #333; margin-top: 3px; }
+:is(#foglio, .anteprima) h1 {
   font-family: var(--font-display); font-size: 1.25rem; font-weight: 600;
   margin-bottom: 14px;
 }
-#foglio .a-chi { display: flex; justify-content: space-between; gap: 20px; margin-bottom: 20px; font-size: 0.95rem; }
-#foglio .a-chi .etichetta-campo { font-size: 0.72rem; text-transform: uppercase; letter-spacing: 0.05em; color: #555; }
-#foglio table { width: 100%; border-collapse: collapse; font-size: 0.95rem; }
-#foglio th {
+:is(#foglio, .anteprima) .a-chi { display: flex; justify-content: space-between; gap: 20px; margin-bottom: 20px; font-size: 0.95rem; }
+:is(#foglio, .anteprima) .a-chi .etichetta-campo { font-size: 0.72rem; text-transform: uppercase; letter-spacing: 0.05em; color: #555; }
+:is(#foglio, .anteprima) table { width: 100%; border-collapse: collapse; font-size: 0.95rem; }
+:is(#foglio, .anteprima) th {
   text-align: left; font-size: 0.72rem; text-transform: uppercase; letter-spacing: 0.05em;
   border-bottom: 1.5px solid #000; padding: 0 8px 6px 0;
 }
-#foglio td { padding: 7px 8px 7px 0; border-bottom: 1px solid #ccc; }
-#foglio td.num, #foglio th.num { text-align: right; padding-right: 0; }
-#foglio .da-definire { color: #555; }
-#foglio .riga-blocco td { padding-top: 16px; font-weight: 700; border-bottom: 1px solid #000; }
-#foglio .riga-subtotale td { color: #333; border-bottom: none; }
-#foglio .riga-totale td {
+:is(#foglio, .anteprima) td { padding: 7px 8px 7px 0; border-bottom: 1px solid #ccc; }
+:is(#foglio, .anteprima) td.num, :is(#foglio, .anteprima) th.num { text-align: right; padding-right: 0; }
+:is(#foglio, .anteprima) .da-definire { color: #555; }
+:is(#foglio, .anteprima) .riga-blocco td { padding-top: 16px; font-weight: 700; border-bottom: 1px solid #000; }
+:is(#foglio, .anteprima) .riga-subtotale td { color: #333; border-bottom: none; }
+:is(#foglio, .anteprima) .riga-totale td {
   border-bottom: none; border-top: 2px solid #000; padding-top: 12px;
   font-weight: 600; font-size: 1.05rem;
 }
-#foglio .nota-sotto {
+:is(#foglio, .anteprima) .nota-sotto {
   margin-top: 26px; padding-top: 12px; border-top: 1px solid #ccc;
   font-size: 0.82rem; color: #333; white-space: pre-line;
 }
 .riga-logo { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
 .riga-logo img { max-height: 60px; max-width: 220px; border: 1px solid var(--border); border-radius: 6px; padding: 4px; background: #fff; }
 .bottone-file { display: inline-block; cursor: pointer; }
-#foglio .incompleto { margin-top: 16px; font-size: 0.85rem; color: #8a6d1f; }
+:is(#foglio, .anteprima) .incompleto { margin-top: 16px; font-size: 0.85rem; color: #8a6d1f; }
 /* Il preventivo, come quelli veri: logo a sinistra, intestazione a destra,
    destinatario a destra come in una lettera, e la tabella a griglia. */
-#foglio .prev-testata { display: flex; justify-content: space-between; align-items: flex-start; gap: 24px; margin-bottom: 26px; }
-#foglio .prev-logo img { max-width: 70mm; max-height: 30mm; display: block; }
-#foglio .prev-azienda { text-align: right; }
-#foglio .prev-destinatario { margin: 0 0 18px auto; width: 45%; font-size: 0.95rem; line-height: 1.45; }
-#foglio .prev-luogo-data { margin: 0 0 14px; font-size: 0.95rem; }
-#foglio .prev table.griglia { margin-top: 6px; }
-#foglio .prev table.griglia th, #foglio .prev table.griglia td {
+:is(#foglio, .anteprima) .prev-testata { display: flex; justify-content: space-between; align-items: flex-start; gap: 24px; margin-bottom: 26px; }
+:is(#foglio, .anteprima) .prev-logo img { max-width: 70mm; max-height: 30mm; display: block; }
+:is(#foglio, .anteprima) .prev-azienda { text-align: right; }
+:is(#foglio, .anteprima) .prev-destinatario { margin: 0 0 18px auto; width: 45%; font-size: 0.95rem; line-height: 1.45; }
+:is(#foglio, .anteprima) .prev-luogo-data { margin: 0 0 14px; font-size: 0.95rem; }
+:is(#foglio, .anteprima) .prev table.griglia { margin-top: 6px; }
+:is(#foglio, .anteprima) .prev table.griglia th, :is(#foglio, .anteprima) .prev table.griglia td {
   border: 1px solid #000; padding: 5px 7px; vertical-align: top;
 }
-#foglio .prev table.griglia th { background: #eee; font-size: 0.78rem; letter-spacing: 0; text-transform: none; font-weight: 700; }
-#foglio .prev table.griglia td.num, #foglio .prev table.griglia th.num { padding-right: 7px; }
-#foglio .prev .centro { text-align: center; }
+:is(#foglio, .anteprima) .prev table.griglia th { background: #eee; font-size: 0.78rem; letter-spacing: 0; text-transform: none; font-weight: 700; }
+:is(#foglio, .anteprima) .prev table.griglia td.num, :is(#foglio, .anteprima) .prev table.griglia th.num { padding-right: 7px; }
+:is(#foglio, .anteprima) .prev .centro { text-align: center; }
 /* Importi e unità su una riga: «1.599,20» con l'euro a capo si legge male. */
-#foglio .prev table.griglia td.num, #foglio .prev table.griglia td.centro { white-space: nowrap; width: 1%; }
-#foglio .prev table.griglia .riga-totale td { border: 1px solid #000; border-top: 2px solid #000; padding-top: 7px; font-size: 0.98rem; }
-#foglio .prev table.griglia tr.sezione-foglio td { padding-top: 10px; background: #f6f6f6; }
-#foglio .prev-firma { margin: 40px 0 0 auto; width: 45%; text-align: center; font-size: 0.95rem; }
-#foglio .prev-riga-firma { border-bottom: 1px solid #000; height: 34px; }
+:is(#foglio, .anteprima) .prev table.griglia td.num, :is(#foglio, .anteprima) .prev table.griglia td.centro { white-space: nowrap; width: 1%; }
+:is(#foglio, .anteprima) .prev table.griglia .riga-totale td { border: 1px solid #000; border-top: 2px solid #000; padding-top: 7px; font-size: 0.98rem; }
+:is(#foglio, .anteprima) .prev table.griglia tr.sezione-foglio td { padding-top: 10px; background: #f6f6f6; }
+:is(#foglio, .anteprima) .prev-firma { margin: 40px 0 0 auto; width: 45%; text-align: center; font-size: 0.95rem; }
+:is(#foglio, .anteprima) .prev-riga-firma { border-bottom: 1px solid #000; height: 34px; }
+
+/* Lo stesso foglio a schermo: il preventivo come l'ha ricevuto il cliente, e la
+   scheda di cantiere com'esce dalla stampante. */
+.anteprima {
+  background: #fff; color: #000; padding: 28px 32px; max-width: 210mm;
+  border: 1px solid var(--border); border-radius: var(--radius-sm); margin-top: 14px;
+}
 
 #benvenuto { max-width: 560px; }
 #benvenuto .scheda { padding: 26px 28px; }
@@ -2355,6 +2362,16 @@ function riassuntoRicontrolla() {
 // non si legge, e quello che non si legge tanto vale non scriverlo.
 const NOVITA = [
   {
+    versione: '2026-10-20.7',
+    data: '2026-10-20',
+    titolo: 'Preventivi consegnati',
+    righe: [
+      'Un preventivo **già mandato** si apre **com\'è arrivato al cliente** e non si modifica più. In cima: **Confermato** o **Declinato**, **Ristampa**, **Rimanda per mail**, **Preventivo per il cantiere** ed **Elimina**.',
+      'Il **preventivo per il cantiere** si guarda a schermo prima di stamparlo, e ha le sue **note per il cantiere**: escono sulla scheda, al cliente no.',
+      '**«Consegnato a mano»** adesso funziona: prima non segnava niente.',
+    ],
+  },
+  {
     versione: '2026-10-20.6',
     data: '2026-10-20',
     titolo: 'La mail del cliente',
@@ -3675,7 +3692,7 @@ function prezziGuardati(d, perFare) {
 async function inviaPreventivo() {
   if (!PREVENTIVO) return;
   const d = PREVENTIVO.doc;
-  if (!prezziGuardati(d, 'mandarlo')) return;
+  if (!preventivoConsegnato(d) && !prezziGuardati(d, 'mandarlo')) return;
   const indirizzo = (d.cliente && d.cliente.email) || await mailPerInvio(d.cliente || {});
   if (!indirizzo) return;
   const nomeFile = stampaPreventivo();
@@ -3685,7 +3702,9 @@ async function inviaPreventivo() {
   const mittente = await scegliMittente();
   if (mittente === null) return;
   const prima = { stato: d.stato, mandato: d.mandato };
-  d.stato = 'mandato';
+  // Rimandarlo non toglie il sì: un accettato resta accettato. Un rifiutato o uno
+  // scaduto che si rimanda torna ad aspettare, dalla data di oggi.
+  if (d.stato !== 'accettato') d.stato = 'mandato';
   d.mandato = new Date().toISOString();
   if (!(await salvaPreventivo())) {
     d.stato = prima.stato;
@@ -3761,9 +3780,11 @@ function apriPreventivo(id) {
   if (!rilievo && !gia) { avvisa('Rilievo non trovato: ricontrolla la cartella', true); return; }
   // Se il campo ha rimandato il rilievo corretto, il preventivo si rifà su
   // quello **tenendo i prezzi già decisi**: le quantità cambiano, il giudizio no.
-  PREVENTIVO = rilievo
+  // Uno già consegnato invece resta com'è partito: il cliente ha in mano quello.
+  PREVENTIVO = rilievo && !(gia && preventivoConsegnato(gia.doc))
     ? { doc: costruisciPreventivo(rilievo.doc, gia ? gia.doc : null), file: gia ? gia.file : '', anno: gia ? gia.anno : '' }
-    : { doc: gia.doc, file: gia.file, anno: gia.anno };
+    : { doc: JSON.parse(JSON.stringify(gia.doc)), file: gia.file, anno: gia.anno };
+  VISTA_CANTIERE = false;
   vaiA('preventivo');
 }
 
@@ -4252,42 +4273,11 @@ function disegnaPreventivo() {
   const c = document.getElementById('pagina-preventivo');
   if (!PREVENTIVO) { c.innerHTML = '<div class="vuoto-elenco">Nessun preventivo aperto.</div>'; return; }
   const d = PREVENTIVO.doc;
+  if (VISTA_CANTIERE) { disegnaCantierePreventivo(c, d); return; }
+  if (preventivoConsegnato(d)) { disegnaPreventivoConsegnato(c, d); return; }
   const t = totaliPreventivo(d);
 
-  let html = '<h2 class="titolo-pagina">' + perValore(d.cliente.nome || 'senza nome') + '</h2>';
-  html += '<p class="sottotitolo">' +
-    '<span id="mezze-preventivo">' + etichettaMezzePreventivo(d) + '</span>' +
-    (d.disegno || d.daRilievo?.disegno ? ' · 📐 aspetta il disegno' : '') +
-    ' · ' + (preventivoScaduto(d) ? 'scaduto senza risposta' : STATI_PREVENTIVO[d.stato]) +
-    (d.stato === 'rifiutato' && d.rifiutato ? ' il ' + formattaData(d.rifiutato)
-      : d.mandato ? ' · mandato il ' + formattaData(d.mandato) + ' · ' + daQuantoAspetta(d.mandato) : '') + '</p>';
-
-  // Chi è e come raggiungerlo, subito sotto il nome: con un preventivo in mano
-  // la prima cosa che si fa in ufficio è richiamare. Dal rilievo o, se manca lì,
-  // dall'anagrafica.
-  const noto = clienteDelPreventivo(d);
-  const cc = d.cliente || {};
-  const contatti = [
-    [cc.indirizzo || (noto && noto.indirizzo), cc.citta || (noto && noto.citta)].filter(x => x).join(', '),
-    cc.telefono || (noto && noto.telefono),
-    cc.email || (noto && noto.email),
-  ].filter(x => x);
-  if (contatti.length || d.daRilievo?.sopralluogo) {
-    html += '<p class="meta" style="margin-top:-6px">' + contatti.map(perValore).join(' · ') +
-      (d.daRilievo?.sopralluogo ? (contatti.length ? ' · ' : '') + '📍 dal sopralluogo' : '') + '</p>';
-  }
-  const inAnagrafica = cosaPortaInAnagrafica(d);
-  if (inAnagrafica) {
-    html += '<div class="avvertenza">' + (inAnagrafica.nuovo
-      ? perValore(cc.nome) + ' non è in anagrafica' +
-        (CAMPI_DAL_PREVENTIVO.some(([k]) => cc[k])
-          ? ': dal rilievo arrivano ' + CAMPI_DAL_PREVENTIVO.filter(([k]) => cc[k]).map(([, n]) => n).join(', ') +
-            ' — servono per richiamare e per mandare il preventivo.'
-          : '.')
-      : 'Dal rilievo arriva quello che l\'anagrafica non ha: ' + inAnagrafica.campi.join(', ') + '.') +
-      ' <button class="secondaria" onclick="portaInAnagrafica()">' +
-      (inAnagrafica.nuovo ? 'Aggiungi in anagrafica' : 'Completa l\'anagrafica') + '</button></div>';
-  }
+  let html = testataPreventivo(d);
 
   html += '<div id="da-confermare" class="avvertenza" style="display:none"></div>';
 
@@ -4427,10 +4417,10 @@ function disegnaPreventivo() {
   html += '<div class="bottoni">' +
     '<button class="principale" onclick="salvaPreventivo()">Salva</button>' +
     '<button class="secondaria" onclick="stampaPreventivo()">Stampa o salva in PDF</button>' +
-    '<button class="secondaria" onclick="stampaSchedaCantiere()">Scheda di cantiere</button>' +
+    '<button class="secondaria" onclick="apriCantierePreventivo()">Scheda di cantiere</button>' +
     '<button class="secondaria" onclick="inviaPreventivo()">Manda per mail</button>' +
     (rilievoDellUfficio(d.id) ? '<button class="secondaria" onclick="modificaRilievoUfficio(\'' + perOnclick(d.id) + '\')">Modifica il rilievo</button>' : '') +
-    (d.stato === 'bozza' ? '<button class="secondaria" onclick="segnaMandato()">Consegnato a mano</button>' : '') +
+    (d.stato === 'bozza' ? '<button class="secondaria" onclick="consegnatoAMano()">Consegnato a mano</button>' : '') +
     (d.stato === 'accettato' || soluzioni.length ? '' :
       '<button class="secondaria" onclick="accettaPreventivo()">Il cliente ha detto sì</button>') +
     (d.stato === 'bozza' || d.stato === 'mandato'
@@ -4443,12 +4433,149 @@ function disegnaPreventivo() {
   aggiornaCodaPreventivo();
 }
 
+// Nome, stato e contatti: uguali sul preventivo aperto e su quello consegnato,
+// perché con un preventivo in mano la prima cosa che si fa è richiamare.
+function testataPreventivo(d) {
+  let html = '<h2 class="titolo-pagina">' + perValore(d.cliente.nome || 'senza nome') + '</h2>';
+  html += '<p class="sottotitolo">' +
+    '<span id="mezze-preventivo">' + etichettaMezzePreventivo(d) + '</span>' +
+    (d.disegno || d.daRilievo?.disegno ? ' · 📐 aspetta il disegno' : '') +
+    ' · ' + (preventivoScaduto(d) ? 'scaduto senza risposta' : STATI_PREVENTIVO[d.stato]) +
+    (d.stato === 'rifiutato' && d.rifiutato ? ' il ' + formattaData(d.rifiutato)
+      : d.mandato ? ' · mandato il ' + formattaData(d.mandato) + ' · ' + daQuantoAspetta(d.mandato) : '') + '</p>';
+
+  // Chi è e come raggiungerlo, subito sotto il nome: con un preventivo in mano
+  // la prima cosa che si fa in ufficio è richiamare. Dal rilievo o, se manca lì,
+  // dall'anagrafica.
+  const noto = clienteDelPreventivo(d);
+  const cc = d.cliente || {};
+  const contatti = [
+    [cc.indirizzo || (noto && noto.indirizzo), cc.citta || (noto && noto.citta)].filter(x => x).join(', '),
+    cc.telefono || (noto && noto.telefono),
+    cc.email || (noto && noto.email),
+  ].filter(x => x);
+  if (contatti.length || d.daRilievo?.sopralluogo) {
+    html += '<p class="meta" style="margin-top:-6px">' + contatti.map(perValore).join(' · ') +
+      (d.daRilievo?.sopralluogo ? (contatti.length ? ' · ' : '') + '📍 dal sopralluogo' : '') + '</p>';
+  }
+  const inAnagrafica = cosaPortaInAnagrafica(d);
+  if (inAnagrafica) {
+    html += '<div class="avvertenza">' + (inAnagrafica.nuovo
+      ? perValore(cc.nome) + ' non è in anagrafica' +
+        (CAMPI_DAL_PREVENTIVO.some(([k]) => cc[k])
+          ? ': dal rilievo arrivano ' + CAMPI_DAL_PREVENTIVO.filter(([k]) => cc[k]).map(([, n]) => n).join(', ') +
+            ' — servono per richiamare e per mandare il preventivo.'
+          : '.')
+      : 'Dal rilievo arriva quello che l\'anagrafica non ha: ' + inAnagrafica.campi.join(', ') + '.') +
+      ' <button class="secondaria" onclick="portaInAnagrafica()">' +
+      (inAnagrafica.nuovo ? 'Aggiungi in anagrafica' : 'Completa l\'anagrafica') + '</button></div>';
+  }
+
+  return html;
+}
+
+// Un preventivo che è uscito — mandato, consegnato a mano, poi accettato o
+// rifiutato — si legge com'è arrivato al cliente e non si tocca: correggere una
+// riga dopo averlo mandato vorrebbe dire che la carta in mano al cliente e il
+// file dicono due cose diverse, e il lavoro entra in lavagna su quello sbagliato.
+function preventivoConsegnato(d) {
+  return !!d && d.stato !== 'bozza';
+}
+
+function disegnaPreventivoConsegnato(c, d) {
+  const soluzioni = soluzioniDi(d);
+  // Il sì vale anche per un rifiutato o uno scaduto: se il cliente richiama, si accetta.
+  const siPuoConfermare = d.stato === 'mandato' || d.stato === 'rifiutato';
+  let html = testataPreventivo(d);
+  html += '<div class="bottoni">' +
+    (siPuoConfermare ? (soluzioni.length
+      ? soluzioni.map(sol => '<button class="principale" onclick="accettaPreventivo(\'' + perOnclick(sol.id) + '\')">' +
+          '✓ Confermato: ' + perValore(sol.nome) + '</button>').join('')
+      : '<button class="principale" onclick="accettaPreventivo()">✓ Confermato</button>') : '') +
+    (d.stato === 'mandato' ? '<button class="secondaria" onclick="rifiutaPreventivo()">✕ Declinato</button>' : '') +
+    '<button class="secondaria" onclick="stampaPreventivo()">Ristampa</button>' +
+    '<button class="secondaria" onclick="inviaPreventivo()">Rimanda per mail</button>' +
+    '<button class="secondaria" onclick="apriCantierePreventivo()">Preventivo per il cantiere</button>' +
+    '<button class="secondaria" onclick="vaiA(\'preventivi\')">Torna all\'elenco</button>' +
+    '<button class="pericolo" style="margin-left:auto" onclick="eliminaPreventivo()" title="Elimina il preventivo">🗑 Elimina</button>' +
+    '</div>';
+  html += '<p class="meta" style="margin-top:10px">Com\'è arrivato al cliente: non si modifica. ' +
+    'Le note per chi va in giardino si scrivono nel preventivo per il cantiere.</p>';
+  html += '<div class="anteprima" id="anteprima-preventivo">' + costruisciFoglioPreventivo(d) + '</div>';
+  c.innerHTML = html;
+}
+
+// ── IL PREVENTIVO PER IL CANTIERE ──
+// La scheda di cantiere a schermo, prima di stamparla: si guarda cosa esce e ci si
+// aggiungono le note per chi va in giardino — l'unica cosa che si scrive anche su
+// un preventivo già consegnato, perché al cliente non arriva.
+let VISTA_CANTIERE = false;
+let SALVA_NOTE_CANTIERE = null;
+
+function apriCantierePreventivo() {
+  VISTA_CANTIERE = true;
+  disegnaPreventivo();
+}
+
+async function chiudiCantierePreventivo() {
+  await salvaNoteCantiereOra();
+  VISTA_CANTIERE = false;
+  disegnaPreventivo();
+}
+
+function disegnaCantierePreventivo(c, d) {
+  c.innerHTML = '<h2 class="titolo-pagina">' + perValore((d.cliente && d.cliente.nome) || 'senza nome') + '</h2>' +
+    '<p class="sottotitolo">Preventivo per il cantiere · niente prezzi</p>' +
+    '<div class="bottoni">' +
+      '<button class="principale" onclick="stampaSchedaCantiere()">Stampa la scheda</button>' +
+      '<button class="secondaria" onclick="chiudiCantierePreventivo()">Torna al preventivo</button>' +
+    '</div>' +
+    '<div class="scheda" style="margin-top:14px"><div class="titolo-sezione">Note per il cantiere</div>' +
+      '<textarea rows="4" id="note-cantiere" oninput="scriviNoteCantiere(this.value)">' + perValore(d.noteCantiere) + '</textarea>' +
+      '<div class="meta">Escono in fondo alla scheda. Al cliente non arrivano.</div></div>' +
+    '<div class="anteprima" id="anteprima-cantiere">' + costruisciSchedaCantiere(d) + '</div>';
+}
+
+// Si salva da sola un momento dopo, come il conto: una nota scritta e lasciata lì
+// mentre si passa ad altro non deve sparire.
+function scriviNoteCantiere(testo) {
+  if (!PREVENTIVO) return;
+  const p = PREVENTIVO;
+  p.doc.noteCantiere = testo;
+  const anteprima = document.getElementById('anteprima-cantiere');
+  if (anteprima) anteprima.innerHTML = costruisciSchedaCantiere(p.doc);
+  clearTimeout(SALVA_NOTE_CANTIERE && SALVA_NOTE_CANTIERE.timer);
+  SALVA_NOTE_CANTIERE = { p, timer: setTimeout(salvaNoteCantiereOra, 800) };
+}
+
+async function salvaNoteCantiereOra() {
+  if (!SALVA_NOTE_CANTIERE) return true;
+  const { p, timer } = SALVA_NOTE_CANTIERE;
+  clearTimeout(timer);
+  SALVA_NOTE_CANTIERE = null;
+  return scriviPreventivo(p);
+}
+
 async function salvaPreventivo() {
   if (!PREVENTIVO) return;
   const d = PREVENTIVO.doc;
+  if (!(await scriviPreventivo(PREVENTIVO))) return false;
+  await ricarica();
+  disegna();
+  // La forchetta, non la somma di tutte le righe: con due soluzioni alternative
+  // la somma è proprio la cifra che non esiste.
+  avvisa('Preventivo salvato · ' + forchettaPreventivo(d));
+  return true;
+}
+
+// Il file e basta, senza rileggere la cartella né ridisegnare: le note del
+// cantiere si salvano mentre si scrive, e un ridisegno porterebbe via il campo da
+// sotto le dita.
+async function scriviPreventivo(p) {
+  const d = p.doc;
   d.aggiornato = new Date().toISOString();
-  const anno = PREVENTIVO.anno || String(d.creato || '').slice(0, 4) || String(new Date().getFullYear());
-  const nome = PREVENTIVO.file || nomeFilePreventivo(d);
+  const anno = p.anno || String(d.creato || '').slice(0, 4) || String(new Date().getFullYear());
+  const nome = p.file || nomeFilePreventivo(d);
   try {
     const radice = await sottocartella(CARTELLA, CARTELLA_PREVENTIVI, true);
     if (!radice) throw new Error('non riesco a creare la cartella preventivi');
@@ -4461,13 +4588,8 @@ async function salvaPreventivo() {
     avvisa('Non ho potuto salvare il preventivo: ' + e.message, true);
     return false;
   }
-  PREVENTIVO.file = nome;
-  PREVENTIVO.anno = anno;
-  await ricarica();
-  disegna();
-  // La forchetta, non la somma di tutte le righe: con due soluzioni alternative
-  // la somma è proprio la cifra che non esiste.
-  avvisa('Preventivo salvato · ' + forchettaPreventivo(d));
+  p.file = nome;
+  p.anno = anno;
   return true;
 }
 
@@ -4519,7 +4641,7 @@ function stampaPreventivo() {
   // Un prezzo proposto dal listino e mai guardato non è un prezzo: è quello che
   // il listino sa, e il listino non sa quanto vale questo lavoro. Qui si ferma,
   // come sul telefono si ferma il salvataggio con una fascia oraria proposta.
-  if (!prezziGuardati(d, 'stampare')) return;
+  if (!preventivoConsegnato(d) && !prezziGuardati(d, 'stampare')) return;
   if (!String(IMPOSTAZIONI.azienda || '').trim()) {
     if (!confirm('Manca l\'intestazione con i dati dell\'azienda: si compila in Impostazioni.\n\nStampare comunque?')) return;
   }
@@ -4538,7 +4660,9 @@ function stampaPreventivo() {
 // stampato o messo in posta, non sa cosa ne è stato. È la stessa distinzione del
 // conto in archivio, che si segna *in posta* e non *inviato*. La data serve
 // perché la domanda vera è da quanto aspetta una risposta.
-async function segnaMandato() {
+// Si chiamava segnaMandato, come quella dei conti in archivio qui sotto: col nome
+// uguale vinceva l'ultima, e «Consegnato a mano» su un preventivo non faceva niente.
+async function consegnatoAMano() {
   if (!PREVENTIVO) return;
   PREVENTIVO.doc.stato = 'mandato';
   PREVENTIVO.doc.mandato = new Date().toISOString();
@@ -4690,12 +4814,16 @@ function costruisciSchedaCantiere(d) {
   // rubinetto, dove resta il camion. In cantiere è la prima cosa che serve.
   const note = d.daRilievo && d.daRilievo.note;
   if (note) html += '<h2 class="titolo-soluzione">Dal sopralluogo</h2><div class="nota-sotto">' + perValore(note) + '</div>';
+  if (d.noteCantiere) html += '<h2 class="titolo-soluzione">Note per il cantiere</h2><div class="nota-sotto">' + perValore(d.noteCantiere) + '</div>';
   return html;
 }
 
 function stampaSchedaCantiere() {
   if (!PREVENTIVO) return;
   const d = PREVENTIVO.doc;
+  // Le note scritte un attimo prima partono per il file adesso; la stampa non le
+  // aspetta: Chrome apre il dialogo solo dentro il clic.
+  salvaNoteCantiereOra();
   mettiNelFoglio(costruisciSchedaCantiere(d));
   const titolo = document.title;
   const ripristina = () => { document.title = titolo; window.removeEventListener('afterprint', ripristina); };

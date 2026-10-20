@@ -4539,6 +4539,86 @@ try {
     sceltaFatta.stato === 'accettato' && sceltaFatta.scelta === conSoluzioni.b,
     JSON.stringify(sceltaFatta));
 
+  // Un preventivo uscito si legge com'è arrivato al cliente, e non si tocca: il
+  // foglio a schermo, nessun campo, e i bottoni di quello che resta da fare.
+  const consegnato = await pagU.evaluate(async () => {
+    const d = PREVENTIVO.doc;
+    vaiA('preventivo');
+    const pagina = document.getElementById('pagina-preventivo');
+    const bottoni = [...pagina.querySelectorAll('.bottoni button')].map(b => b.textContent.trim());
+    const r = {
+      foglio: !!pagina.querySelector('.anteprima .prev'),
+      campi: pagina.querySelectorAll('input:not([type=checkbox]), select, textarea').length,
+      bottoni,
+    };
+    // Mandato e non ancora deciso: confermato o declinato.
+    const tenuto = { stato: d.stato, scelta: d.scelta, mandato: d.mandato };
+    d.stato = 'mandato'; d.scelta = ''; d.mandato = new Date().toISOString();
+    disegnaPreventivo();
+    r.daDecidere = [...pagina.querySelectorAll('.bottoni button')].map(b => b.textContent.trim());
+    // Il preventivo per il cantiere: la scheda a schermo, e le note si scrivono.
+    [...pagina.querySelectorAll('.bottoni button')].find(b => b.textContent.includes('per il cantiere')).click();
+    r.cantiere = !!pagina.querySelector('#anteprima-cantiere') && !!document.getElementById('note-cantiere');
+    const area = document.getElementById('note-cantiere');
+    area.value = 'Chiave del cancello dalla vicina';
+    area.dispatchEvent(new Event('input'));
+    r.campoResta = document.getElementById('note-cantiere') === area;
+    r.nellaScheda = document.getElementById('anteprima-cantiere').textContent.includes('Chiave del cancello dalla vicina');
+    await salvaNoteCantiereOra();
+    const radice = await CARTELLA.getDirectoryHandle('preventivi');
+    const anno = await radice.getDirectoryHandle(PREVENTIVO.anno);
+    r.suFile = JSON.parse(await leggiTesto(anno, PREVENTIVO.file)).noteCantiere === 'Chiave del cancello dalla vicina';
+    let stampato = '';
+    const vera = window.print;
+    window.print = () => { stampato = document.getElementById('foglio').textContent; };
+    stampaSchedaCantiere();
+    window.print = vera;
+    r.stampata = stampato.includes('Note per il cantiere') && stampato.includes('Chiave del cancello') && !stampato.includes('€');
+    await chiudiCantierePreventivo();
+    r.tornato = !!pagina.querySelector('#anteprima-preventivo');
+    // Ristampare quello che è partito non chiede di riguardare i prezzi.
+    stampato = '';
+    window.print = () => { stampato = document.getElementById('foglio').textContent; };
+    stampaPreventivo();
+    window.print = vera;
+    r.ristampa = stampato.length > 0;
+    Object.assign(d, tenuto);
+    await salvaPreventivo();
+    return r;
+  });
+  ok('un preventivo consegnato si legge come il foglio del cliente, senza campi da modificare',
+    consegnato.foglio && consegnato.campi === 0, JSON.stringify(consegnato));
+  ok('accettato: ristampa, rimanda, cantiere, elimina — e niente più conferma',
+    ['Ristampa', 'Rimanda per mail', 'Preventivo per il cantiere'].every(x => consegnato.bottoni.includes(x)) &&
+    consegnato.bottoni.some(x => x.includes('Elimina')) && !consegnato.bottoni.some(x => x.includes('Confermato')),
+    consegnato.bottoni.join(' | '));
+  ok('mandato: confermato, sulla soluzione, o declinato',
+    consegnato.daDecidere.some(x => x.startsWith('✓ Confermato:')) && consegnato.daDecidere.includes('✕ Declinato'),
+    consegnato.daDecidere.join(' | '));
+  ok('il preventivo per il cantiere si vede a schermo, e le note si scrivono senza perdere il campo',
+    consegnato.cantiere && consegnato.campoResta && consegnato.nellaScheda);
+  ok('le note si salvano sul file e si stampano nella scheda, senza prezzi',
+    consegnato.suFile && consegnato.stampata);
+  ok('dalla scheda si torna al preventivo, che si ristampa com\'è', consegnato.tornato && consegnato.ristampa);
+  // «Consegnato a mano» non faceva niente: la funzione aveva lo stesso nome di
+  // quella dei conti in archivio, e vinceva l'altra.
+  const aMano = await pagU.evaluate(async () => {
+    const d = PREVENTIVO.doc;
+    const tenuto = { stato: d.stato, mandato: d.mandato };
+    d.stato = 'bozza';
+    disegnaPreventivo();
+    [...document.querySelectorAll('#pagina-preventivo .bottoni button')]
+      .find(b => b.textContent.includes('Consegnato a mano')).click();
+    await new Promise(r => setTimeout(r, 200));
+    const r = { stato: PREVENTIVO.doc.stato, data: !!PREVENTIVO.doc.mandato,
+      solaLettura: !!document.querySelector('#pagina-preventivo .anteprima') };
+    Object.assign(PREVENTIVO.doc, tenuto);
+    await salvaPreventivo();
+    return r;
+  });
+  ok('«Consegnato a mano» lo segna mandato, e da lì si legge e basta',
+    aMano.stato === 'mandato' && aMano.data && aMano.solaLettura, JSON.stringify(aMano));
+
   // Dai metri e dal sesto d'impianto al numero di piante: è la formula del foglio
   // della segretaria, col «più uno» della pianta di testa.
   const pianteSesto = await pagU.evaluate(() => ({
@@ -4553,6 +4633,11 @@ try {
   ok('senza i numeri non inventa un risultato',
     pianteSesto.vuoto === null && pianteSesto.zero === null, JSON.stringify(pianteSesto));
   const rigaPiante = await pagU.evaluate(() => {
+    // Le prove che seguono scrivono nel modulo: si fanno su una bozza, e il
+    // preventivo accettato si rimette com'era in fondo.
+    window.__tenuto = { stato: PREVENTIVO.doc.stato };
+    PREVENTIVO.doc.stato = 'bozza';
+    disegnaPreventivo();
     document.getElementById('sesto-metri').value = '36';
     document.getElementById('sesto-passo').value = '0,4';
     mostraPianteDaSesto();
@@ -4580,6 +4665,8 @@ try {
     prezzo.value = '12,50';
     prezzo.dispatchEvent(new Event('input'));
     const riga = PREVENTIVO.doc.righe[0];
+    Object.assign(PREVENTIVO.doc, window.__tenuto);
+    disegnaPreventivo();
     return { numerici, quanti: campi.length, prezzo: riga.prezzo };
   });
   ok('nessun campo decimale rifiuta la virgola',
