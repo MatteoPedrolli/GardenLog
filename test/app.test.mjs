@@ -5054,6 +5054,79 @@ try {
     setTel.opzione && setTel.irrigazione && setTel.dice, JSON.stringify(setTel));
   ok('un file dei settori rovinato si vede, e restano quelli di partenza', setTel.rotto && setTel.restano);
 
+  // ── i dati spariti dal desktop ──
+  // Una cartella sbagliata, o Drive che non l'ha ancora riempita, si presentano
+  // come una cartella vuota: l'app lo dice e non scrive niente da sola. E un
+  // file che c'è ma non si legge non si riscrive col vuoto: era la lavagna che
+  // ripartiva da zero e le prenotazioni in arrivo la salvavano sopra quella vera.
+  const protezioni = await pagU.evaluate(async d => {
+    const vuota = window.creaCartellaFinta('Vuota');
+    const pren = await vuota.getDirectoryHandle('appuntamenti', { create: true });
+    await scriviTesto(pren, nomeFileAppuntamento(d), JSON.stringify(d));
+    await usaCartella(vuota);
+    const vuotaDetta = CARTELLA_VUOTA && !!document.getElementById('allarme-vuota');
+    const vuotaFerma = !vuota._file.has('agenda.json') && !vuota._file.has('lavagna.json') &&
+      !vuota._sotto.has('copie') && LAVAGNA.lavori.length === 0;
+    await cominciaQui();
+    const cominciata = !CARTELLA_VUOTA && vuota._file.has('lavagna.json') &&
+      LAVAGNA.lavori.some(l => l.da === d.id) && !document.getElementById('allarme-vuota');
+
+    const rotta = window.creaCartellaFinta('Rotta');
+    const lavagnaTroncata = '{"tipo":"lavagna","versione":' + VERSIONE_LAVAGNA + ',"lavori":[{"id":"vero"';
+    await scriviTesto(rotta, 'lavagna.json', lavagnaTroncata);
+    await scriviTesto(rotta, 'clienti.json', JSON.stringify({ tipo: 'anagrafica-ufficio', versione: 1,
+      clienti: [{ id: 'c1', nome: 'Rossi' }] }));
+    await scriviTesto(rotta, 'agenda.json', '{"tipo":"agenda","vecchia":true}');
+    const pren2 = await rotta.getDirectoryHandle('appuntamenti', { create: true });
+    await scriviTesto(pren2, nomeFileAppuntamento(d), JSON.stringify(d));
+    // Trentuno giorni di copie già fatte: se ne tengono trenta, oggi compreso.
+    const copie = await rotta.getDirectoryHandle('copie', { create: true });
+    for (let i = 1; i <= 31; i++) {
+      const g = new Date(); g.setDate(g.getDate() - i);
+      await copie.getDirectoryHandle(isoData(g), { create: true });
+    }
+    await usaCartella(rotta);
+    const oggi = isoData(new Date());
+    const nonLetta = NON_LETTI.has('lavagna.json') && !CARTELLA_VUOTA;
+    const intatta = rotta._file.get('lavagna.json') === lavagnaTroncata;
+    const agendaIntatta = rotta._file.get('agenda.json') === '{"tipo":"agenda","vecchia":true}';
+    const detto = !!document.getElementById('allarme-non-letti') &&
+      document.getElementById('cartella-allarme').textContent.includes('Gestisci versioni');
+    LAVAGNA.lavori.push(sistemaLavoro({ cliente: 'Nuovo' }));
+    const salvata = await salvaLavagna();
+    const ancoraIntatta = rotta._file.get('lavagna.json') === lavagnaTroncata;
+    const copiaOggi = copie._sotto.get(oggi);
+    const copiata = !!copiaOggi && copiaOggi._file.has('clienti.json') && !copiaOggi._file.has('lavagna.json');
+    const giorni = [...copie._sotto.keys()].sort();
+    const ilPiuVecchio = new Date(); ilPiuVecchio.setDate(ilPiuVecchio.getDate() - 31);
+    const tenute = giorni.length === 30 && !giorni.includes(isoData(ilPiuVecchio)) && giorni.includes(oggi);
+
+    // Drive finisce di sincronizzare: la lavagna si legge, e tutto riparte.
+    // (dentro la cartella finta: l'app, giustamente, si rifiuterebbe)
+    rotta._file.set('lavagna.json', JSON.stringify({ tipo: 'lavagna', versione: VERSIONE_LAVAGNA,
+      lavori: [{ id: 'vero', cliente: 'Verdi' }], visti: [] }));
+    await ricontrolla();
+    const ripartita = !NON_LETTI.size && LAVAGNA.lavori.some(l => l.id === 'vero') &&
+      LAVAGNA.lavori.some(l => l.da === d.id) && !document.getElementById('allarme-non-letti') &&
+      rotta._file.get('agenda.json').includes('"da"');
+    // La copia di oggi è di stamattina: rileggendo non si riscrive.
+    const copiaFerma = !copiaOggi._file.has('lavagna.json');
+    return { vuotaDetta, vuotaFerma, cominciata, nonLetta, intatta, agendaIntatta, detto, salvata,
+      ancoraIntatta, copiata, tenute, giorni: giorni.length, ripartita, copiaFerma };
+  }, docAppuntamento);
+  ok('una cartella senza niente dell\'ufficio lo dice, sopra la pagina', protezioni.vuotaDetta, JSON.stringify(protezioni));
+  ok('e finché non si conferma non scrive niente da sola: né lavagna, né agenda, né copie', protezioni.vuotaFerma);
+  ok('«comincio da qui» la avvia, e le prenotazioni entrano', protezioni.cominciata);
+  ok('una lavagna che c\'è e non si legge resta com\'è, anche con prenotazioni in arrivo',
+    protezioni.nonLetta && protezioni.intatta, JSON.stringify(protezioni));
+  ok('e l\'agenda dei telefoni non diventa vuota', protezioni.agendaIntatta);
+  ok('l\'avviso dice dove ritrovare la versione buona', protezioni.detto);
+  ok('salvare sopra una lavagna non letta si rifiuta', protezioni.salvata === false && protezioni.ancoraIntatta);
+  ok('ogni giorno una copia dei file letti, non di quelli rotti', protezioni.copiata);
+  ok('e se ne tengono trenta giorni', protezioni.tenute, protezioni.giorni);
+  ok('quando Drive la riporta, la lavagna si legge e le prenotazioni entrano', protezioni.ripartita);
+  ok('la copia del giorno non si riscrive rileggendo', protezioni.copiaFerma);
+
   ok('nessun errore JavaScript nell\'app dell\'ufficio', erroriU.length === 0, erroriU.join(' | '));
   await ctxU.close();
 

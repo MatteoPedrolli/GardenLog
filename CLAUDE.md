@@ -976,6 +976,33 @@ dalla cartella**, non solo su quella da cui si entra: un rilievo troncato lo cer
 chi sta sulla pagina Rilievi. Un rapportino che non si riesce a leggere è lavoro fatto che rischia di non
 essere fatturato, e non può stare nascosto in una console.
 
+**Un file dell'ufficio che c'è e non si legge non si riscrive.** È successo che
+dal PC del capo «sparissero tutti i dati»: l'app guardava una cartella che non
+li aveva. E rileggendo il codice c'era di peggio: una `lavagna.json` illeggibile
+(Drive a metà, un file solo in rete) faceva ripartire la lavagna vuota, le
+prenotazioni in arrivo ci entravano e `salvaLavagna()` la scriveva sopra quella
+vera. Adesso lavagna, anagrafica, listino e impostazioni che esistono e non si
+leggono finiscono in `NON_LETTI` (`fileNonLetto()`), e `scriviTesto()` si
+rifiuta di toccarli — in un posto solo, così vale anche per il salvataggio che
+qualcuno aggiungerà domani. L'agenda non si riscrive da una lavagna non letta:
+quella di ieri in giardino vale più di una vuota. Una lavagna di **un'altra
+versione** invece riparte vuota come prima: è la regola della modalità costruzione.
+
+**Una cartella dove l'ufficio non ha mai scritto lo dice**, sopra ogni pagina
+(`bloccoCartella()`, in `#cartella-allarme`): niente lavagna, anagrafica, listino,
+impostazioni, archivio o preventivi (`cartellaDellUfficio()`; rapportini e
+prenotazioni non contano, li deposita il telefono). La prima volta va bene; ma è
+anche quello che si vede con la cartella sbagliata o con Drive scollegato. Finché
+non si preme «È quella giusta: comincio da qui» (`cominciaQui()`) l'app non scrive
+niente **da sola** — niente prenotazioni assorbite, niente agenda — o i telefoni
+riceverebbero un'agenda vuota.
+
+**Una copia al giorno** (`copiaDelGiorno()`): alla prima lettura di ogni giorno
+lavagna, anagrafica, listino e impostazioni si copiano com'erano in
+`copie/<AAAA-MM-GG>/`, e se ne tengono trenta giorni. Drive tiene le versioni, ma
+bisogna sapere dove cercarle; qui rimettere la lavagna di ieri vuol dire copiare
+un file. Un file non letto non si copia: sarebbe la copia di quello rotto.
+
 ## La lavagna non è un calendario
 
 Vive solo in ufficio, sul PC. In alto la settimana spezzata in mezze giornate,

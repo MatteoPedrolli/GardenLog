@@ -297,6 +297,7 @@ input.vuoto { background: #fffdf5; border-color: #ecdca8; }
   background: #fdedec; border: 1px solid #f2d4d0; color: #922b21;
   border-radius: var(--radius-sm); padding: 10px 13px; font-size: 0.86rem; margin-top: 12px;
 }
+#cartella-allarme:not(:empty) { margin-bottom: 14px; }
 .vuoto-elenco { color: var(--text-light); font-size: 0.9rem; padding: 26px 0; text-align: center; }
 
 #avviso {
@@ -704,6 +705,7 @@ input.vuoto { background: #fffdf5; border-color: #ecdca8; }
   </nav>
 
   <main id="contenuto">
+    <div id="cartella-allarme"></div>
     <div class="pagina attiva" id="pagina-arrivi"></div>
     <div class="pagina" id="pagina-lavoro"></div>
     <div class="pagina" id="pagina-preventivi"></div>
@@ -822,6 +824,17 @@ const STATI_PREVENTIVO = {
   accettato: 'accettato', rifiutato: 'rifiutato',
 };
 let ILLEGGIBILI = [];
+// I file dell'ufficio che ci sono e non si sono letti: Drive a metà
+// sincronizzazione, un file solo in rete, uno troncato. L'app parte vuota per
+// quella parte, e il primo salvataggio — anche uno automatico, come le
+// prenotazioni che entrano in lavagna — riscriveva il file vero con il vuoto.
+// Finché sono qui dentro, scriviTesto() si rifiuta di toccarli.
+let NON_LETTI = new Set();
+// Una cartella dove l'ufficio non ha mai scritto niente: la prima volta va bene,
+// ma è anche quello che si vede collegando la cartella sbagliata o con Drive che
+// non ha ancora sincronizzato. Finché chi lavora non dice che è quella giusta,
+// l'app non scrive niente da sola.
+let CARTELLA_VUOTA = false;
 let ARCHIVIO = [];
 let LAVORO = null;
 let PAGINA = 'arrivi';
@@ -971,6 +984,10 @@ async function leggiTesto(cartella, nome) {
 }
 
 async function scriviTesto(cartella, nome, testo) {
+  if (cartella === CARTELLA && NON_LETTI.has(nome)) {
+    throw new Error('«' + nome + '» c\'è ma non si è potuto leggere, e non lo sovrascrivo. ' +
+      'Aspetta che Drive finisca di sincronizzare e premi Ricontrolla, o rimettine una versione buona da drive.google.com');
+  }
   const maniglia = await cartella.getFileHandle(nome, { create: true });
   const flusso = await maniglia.createWritable();
   await flusso.write(testo);
@@ -985,6 +1002,8 @@ async function ricarica() {
   // letture che seguono. Azzerarlo dopo cancellerebbe quello che la prima di
   // esse ha trovato — e un file illeggibile che non si vede non esiste.
   ILLEGGIBILI = [];
+  NON_LETTI = new Set();
+  CARTELLA_VUOTA = !(await cartellaDellUfficio());
   IMPOSTAZIONI = await caricaImpostazioni();
   CLIENTI = await caricaClienti();
   LAVAGNA = await caricaLavagna();
@@ -994,8 +1013,68 @@ async function ricarica() {
   RILIEVI = await caricaRilievi();
   SETTORI_TELEFONO = await caricaSettoriTelefono();
   PREVENTIVI = await caricaPreventivi();
+  // In una cartella che sembra vuota non si scrive niente da soli: se è quella
+  // sbagliata, o Drive non l'ha ancora riempita, le prenotazioni finirebbero in
+  // una lavagna nuova e i telefoni riceverebbero un'agenda vuota.
+  if (CARTELLA_VUOTA) return;
+  await copiaDelGiorno();
   await assorbiAppuntamenti();
   await rinfrescaAgenda();
+}
+
+// Quello che scrive solo l'ufficio. I rapportini, le prenotazioni e i rilievi
+// non contano: li deposita il telefono, e ci sono anche in una cartella appena
+// collegata.
+async function cartellaDellUfficio() {
+  for (const nome of [FILE_LAVAGNA, FILE_CLIENTI, FILE_LISTINO, FILE_IMPOSTAZIONI]) {
+    if (await esisteFile(CARTELLA, nome)) return true;
+  }
+  for (const nome of [CARTELLA_ARCHIVIO, CARTELLA_PREVENTIVI]) {
+    if (await sottocartella(CARTELLA, nome, false)) return true;
+  }
+  return false;
+}
+
+// Un file che non si legge: se manca è un valore buono — non c'è ancora —, se
+// c'è va protetto e detto. Il permesso di Drive, un file solo in rete o uno
+// troncato non si distinguono dall'errore, ma tutti e tre vogliono dire che il
+// file vero è ancora là.
+async function fileNonLetto(nome, e) {
+  if (!(await esisteFile(CARTELLA, nome))) return;
+  NON_LETTI.add(nome);
+  ILLEGGIBILI.push({ nome, motivo: (e && e.message) || 'illeggibile' });
+}
+
+function cominciaQui() {
+  CARTELLA_VUOTA = false;
+  return salvaLavagna().then(() => ricontrolla());
+}
+
+// Una copia al giorno dei file che l'ufficio riscrive più spesso — la lavagna a
+// ogni mossa —, com'erano all'apertura. Drive tiene le versioni, ma per
+// trovarle bisogna sapere dove cercare; qui c'è una cartella per giorno, e
+// rimettere la lavagna di ieri vuol dire copiare un file.
+const CARTELLA_COPIE = 'copie';
+const GIORNI_DI_COPIE = 30;
+async function copiaDelGiorno() {
+  try {
+    const copie = await sottocartella(CARTELLA, CARTELLA_COPIE, true);
+    if (!copie) throw new Error('non riesco a creare la cartella ' + CARTELLA_COPIE);
+    const oggi = isoData(new Date());
+    if (await sottocartella(copie, oggi, false)) return;
+    const giorno = await sottocartella(copie, oggi, true);
+    for (const nome of [FILE_LAVAGNA, FILE_CLIENTI, FILE_LISTINO, FILE_IMPOSTAZIONI]) {
+      // Copiare un file che non si legge vorrebbe dire tenersi la copia rotta.
+      if (NON_LETTI.has(nome) || !(await esisteFile(CARTELLA, nome))) continue;
+      await scriviTesto(giorno, nome, await leggiTesto(CARTELLA, nome));
+    }
+    const giorni = (await elencaCartelle(copie)).filter(n => /^\d{4}-\d{2}-\d{2}$/.test(n)).sort();
+    for (const vecchio of giorni.slice(0, Math.max(0, giorni.length - GIORNI_DI_COPIE))) {
+      await copie.removeEntry(vecchio, { recursive: true });
+    }
+  } catch (e) {
+    avvisa('Non ho potuto fare la copia di oggi: ' + e.message, true);
+  }
 }
 
 // L'agenda si scrive salvando la lavagna, e parte dal giorno in cui la si scrive:
@@ -1078,6 +1157,7 @@ async function caricaListino() {
       ricette: l.ricette && typeof l.ricette === 'object' ? l.ricette : {},
     };
   } catch (e) {
+    await fileNonLetto(FILE_LISTINO, e);
     // Nessun listino ancora: si parte vuoto e si scrive al primo salvataggio.
     // Non lo creo qui, o un permesso di sola lettura fallirebbe all'apertura.
     return { tipo: 'listino', versione: 1, voci: [], prodotti: [], ricette: {} };
@@ -1093,6 +1173,7 @@ async function caricaImpostazioni() {
     if (!i || i.tipo !== 'impostazioni-ufficio') throw new Error('non sono le impostazioni');
     return { ...IMPOSTAZIONI_VUOTE, ...(i.dati || {}) };
   } catch (e) {
+    await fileNonLetto(FILE_IMPOSTAZIONI, e);
     return { ...IMPOSTAZIONI_VUOTE };
   }
 }
@@ -1134,6 +1215,7 @@ async function caricaClienti() {
     if (!a || a.tipo !== 'anagrafica-ufficio') throw new Error('non è l\'anagrafica');
     return (Array.isArray(a.clienti) ? a.clienti : []).map(sistemaCliente);
   } catch (e) {
+    await fileNonLetto(FILE_CLIENTI, e);
     return [];
   }
 }
@@ -1197,8 +1279,12 @@ async function caricaLavagna() {
     // Nessuna lavagna ancora, o illeggibile: si parte vuota. Se c'era e non si è
     // potuta leggere va detto, o una settimana di pianificazione sparirebbe
     // senza un rumore.
+    // Una lavagna di un'altra versione si riparte da vuota apposta (modalità
+    // costruzione); una che non si è letta no: è ancora là, e va protetta.
     if (String(e.message || '').includes('versione')) {
       ILLEGGIBILI.push({ nome: FILE_LAVAGNA, motivo: e.message });
+    } else {
+      await fileNonLetto(FILE_LAVAGNA, e);
     }
     return { tipo: 'lavagna', versione: VERSIONE_LAVAGNA, lavori: [], visti: [] };
   }
@@ -1305,6 +1391,9 @@ async function salvaLavagna() {
 // e non un pezzo di lavagna.json: quello porta tutto — luoghi, ore, requisiti — e
 // deve restare in ufficio.
 async function salvaAgenda() {
+  // Da una lavagna che non si è letta l'agenda uscirebbe vuota, e in giardino
+  // quella di ieri vale più del niente.
+  if (NON_LETTI.has(FILE_LAVAGNA) || CARTELLA_VUOTA) return false;
   try {
     await scriviTesto(CARTELLA, FILE_AGENDA,
       JSON.stringify(costruisciAgenda(LAVAGNA.lavori), null, 2));
@@ -2090,6 +2179,8 @@ function vaiA(pagina) {
 }
 
 function disegna() {
+  const allarme = document.getElementById('cartella-allarme');
+  if (allarme) allarme.innerHTML = CARTELLA ? bloccoCartella() : '';
   // Quanti conti sono ancora da incassare: è il numero che in ufficio si guarda.
   const daPagare = ARCHIVIO.filter(l => l.stato !== 'fatturato').length;
   const pallinoDaPagare = document.getElementById('pallino-da-pagare');
@@ -2172,6 +2263,32 @@ function bloccoIlleggibili() {
     '<br><br>Se Drive era a metà sincronizzazione, riprova fra un minuto con Ricontrolla.</div>';
 }
 
+// Sopra tutte le pagine, non dentro una: chi apre l'app su una cartella vuota o
+// con la lavagna illeggibile può stare su qualsiasi schermata, ed è lì che sta
+// per mettersi a lavorare.
+function bloccoCartella() {
+  let html = '';
+  if (CARTELLA_VUOTA) {
+    html += '<div class="allarme" id="allarme-vuota"><strong>In questa cartella non c\'è niente dell\'ufficio</strong>: ' +
+      'né lavagna, né anagrafica, né listino, né archivio.<br>' +
+      'Se è la prima volta che la colleghi, va bene così. Se i dati c\'erano, questa è la cartella sbagliata ' +
+      'o Drive non l\'ha ancora sincronizzata: <strong>non lavorarci sopra</strong> e ricollega quella giusta. ' +
+      'Finché non lo dici, l\'app non scrive niente da sola: le prenotazioni del cantiere aspettano e l\'agenda dei telefoni resta com\'è.' +
+      '<div class="bottoni"><button class="secondaria" onclick="scegliCartella()">Scegli un\'altra cartella</button>' +
+      '<button class="secondaria" onclick="cominciaQui()">È quella giusta: comincio da qui</button></div></div>';
+  }
+  if (NON_LETTI.size) {
+    html += '<div class="allarme" id="allarme-non-letti"><strong>' + [...NON_LETTI].map(perValore).join(', ') +
+      (NON_LETTI.size === 1 ? ' c\'è ma non si è letto' : ' ci sono ma non si sono letti') + '</strong>, ' +
+      'e quello che vedi qui è vuoto per quella parte. Non lo sovrascrivo: le modifiche non si salvano. ' +
+      'Se Drive era a metà sincronizzazione riprova fra un minuto; se resta così, su drive.google.com ' +
+      'tasto destro sul file → Informazioni sul file → Gestisci versioni, oppure la copia di un giorno prima in <code>' +
+      CARTELLA_COPIE + '/</code>.' +
+      '<div class="bottoni"><button class="secondaria" onclick="ricontrolla()">Ricontrolla la cartella</button></div></div>';
+  }
+  return html;
+}
+
 function schermataBenvenuto() {
   return '<div id="benvenuto">' +
     '<h2 class="titolo-pagina">Collega la cartella</h2>' +
@@ -2234,6 +2351,16 @@ function riassuntoRicontrolla() {
 // La più recente per prima. Le righe sono poche e corte apposta: un elenco lungo
 // non si legge, e quello che non si legge tanto vale non scriverlo.
 const NOVITA = [
+  {
+    versione: '2026-10-20.4',
+    data: '2026-10-20',
+    titolo: 'Protezione dei dati',
+    righe: [
+      'Se la cartella collegata **non ha niente dell\'ufficio** — la cartella sbagliata, o Drive non sincronizzato — un **avviso rosso** in cima lo dice, e l\'app non scrive niente finché non premi «È quella giusta».',
+      'Un file che c\'è ma **non si riesce a leggere** non viene più sovrascritto: l\'avviso lo nomina e dice dove ritrovare la versione buona.',
+      'Ogni giorno l\'app fa una **copia** di lavagna, anagrafica, listino e impostazioni nella cartella **copie/**, e ne tiene trenta giorni.',
+    ],
+  },
   {
     versione: '2026-10-20.3',
     data: '2026-10-20',

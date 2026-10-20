@@ -33,6 +33,7 @@ La cartella, dopo un po' di lavoro, ha questa forma:
     agenda.json                    ← ci scrive l'ufficio, il telefono la legge
     anagrafica-dal-telefono.json   ← il file che il telefono esporta, da importare
     prodotti-dal-telefono.json     ← concimi, sementi e fitofarmaci, da importare
+    copie/2026-10-20/              ← la copia del giorno, ci scrive l'ufficio
 ```
 
 Le prenotazioni depositate in `appuntamenti/` compaiono **da sole** sulla lavagna:
@@ -84,6 +85,22 @@ Un lavoro si può anche **togliere** dall'archivio, dalla sua scheda. Non serve 
 correggerlo — per quello si rimanda il rapportino dal cantiere — ma al lavoro che
 non ci doveva stare. La conferma dice cosa succede: se il rapportino è ancora in
 `rapportini/` torna fra quelli in arrivo, altrimenti quel file era l'unica copia.
+
+**Se i dati sembrano spariti** quasi sempre l'app sta guardando la cartella
+sbagliata, o Drive sul PC non l'ha sincronizzata: i file sono ancora su
+drive.google.com. L'app lo dice con un avviso rosso in cima — «in questa cartella
+non c'è niente dell'ufficio» — e finché non si conferma non scrive niente da sola.
+Se un file c'è ma non si legge, l'avviso lo nomina e l'app **non lo sovrascrive**.
+
+Per tornare indietro ci sono due strade:
+
+- **`copie/`**: ogni giorno, alla prima apertura, l'app copia lavagna, anagrafica,
+  listino e impostazioni in `copie/<data>/`, com'erano quella mattina, e ne tiene
+  trenta giorni. Per rimettere la lavagna di ieri si copia
+  `copie/<ieri>/lavagna.json` al posto di `lavagna.json` e si preme Ricontrolla.
+- **drive.google.com**: tasto destro sul file → *Informazioni sul file* →
+  *Gestisci versioni*; e il *Cestino* per quello che è stato cancellato, per
+  trenta giorni.
 
 ## L'app del capo
 
