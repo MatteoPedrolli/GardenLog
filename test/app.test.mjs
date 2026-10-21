@@ -3540,9 +3540,15 @@ try {
     await spuntaFatto(l.id);
     const giorno = [...document.querySelectorAll('#pagina-lavagna .meteo-giorno')].find(x => x.dataset.giorno === oggi);
     const pomeriggio = document.querySelector('#pagina-lavagna').textContent.includes('Pioggia, continua');
+    // Il pomeriggio è pieno e ha il velo della pioggia, non una riga in un angolo.
+    const seguito = document.querySelector('#pagina-lavagna .seguito-cart[data-lavoro="' + l.id + '"]');
+    const corpo = seguito && seguito.parentElement.getBoundingClientRect();
+    const pieno = !!seguito && seguito.classList.contains('pioggia') &&
+      seguito.getBoundingClientRect().height >= corpo.height - 16 &&
+      getComputedStyle(seguito).backgroundImage.includes('gradient');
     const agenda = costruisciAgenda(LAVAGNA.lavori).appuntamenti.find(a => a.cliente === 'Pioggia');
     const r = { bottone, mezze: l.mezze, primo: primoInCoda && primoInCoda.classList.contains('pioggia'),
-      piazzato: piazzato(l), pomeriggio, statoUguale: l.stato === statoPrima && !l.fatto,
+      piazzato: piazzato(l), pomeriggio, pieno, statoUguale: l.stato === statoPrima && !l.fatto,
       agenda: agenda ? agenda.giorno + '|' + agenda.note : '',
       senzaPaese: giorno ? giorno.textContent : 'nessuna testata' };
     LAVAGNA.lavori = LAVAGNA.lavori.filter(x => !x.pioggia);
@@ -3554,6 +3560,32 @@ try {
     pioggia.bottone && pioggia.mezze === 2 && pioggia.primo, JSON.stringify(pioggia));
   ok('trascinato sul giorno lo occupa tutto, e non ha matita, penna né spunta',
     pioggia.piazzato && pioggia.pomeriggio && pioggia.statoUguale, JSON.stringify(pioggia));
+  ok('e la mezza giornata dove prosegue è piena, col velo della pioggia', pioggia.pieno, JSON.stringify(pioggia));
+  // Lo stesso per un lavoro: il pomeriggio preso ha il colore del suo stato.
+  const prosegue = await pagU.evaluate(async () => {
+    const oggi = isoData(new Date());
+    const l = sistemaLavoro({ cliente: 'Prova Lunga', note: 'siepe', stato: 'lista', mezze: 2 });
+    LAVAGNA.lavori.push(l);
+    await spostaLavoro(l.id, oggi, 'mattina');
+    l.stato = 'confermato';
+    SETTIMANA = lunediDi(new Date());
+    disegnaLavagna();
+    const sel = () => document.querySelector('#pagina-lavagna .seguito-cart[data-lavoro="' + l.id + '"]');
+    const verde = sel() && sel().classList.contains('confermato') &&
+      getComputedStyle(sel()).backgroundColor === 'rgb(241, 250, 243)';
+    l.fatto = true;
+    disegnaLavagna();
+    const blu = sel() && sel().classList.contains('fatto');
+    l.fatto = false; l.stato = 'matita';
+    disegnaLavagna();
+    const grigio = sel() && sel().classList.contains('matita');
+    LAVAGNA.lavori = LAVAGNA.lavori.filter(x => x !== l);
+    await salvaLavagna();
+    disegnaLavagna();
+    return { verde, blu, grigio };
+  });
+  ok('un lavoro che prosegue colora la mezza giornata dopo come il suo cartellino',
+    prosegue.verde && prosegue.blu && prosegue.grigio, JSON.stringify(prosegue));
   ok('e va in agenda, così in giardino si sa che quel giorno non si lavora',
     /^\d{4}-\d{2}-\d{2}\|non si lavora$/.test(pioggia.agenda), pioggia.agenda);
 

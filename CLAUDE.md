@@ -1200,6 +1200,11 @@ motivo per toglierlo dal suo giorno; giorno, mezza e penna il modulo non li tocc
 **«+ Aggiungi appuntamento»** sta fra la settimana e la coda, col suo modulo: in fondo
 alla coda, con la coda piena, per arrivarci si scorrevano tutti i cartellini.
 
+**Dove un lavoro prosegue, la mezza giornata è piena** e ha il colore del suo
+cartellino — grigio, verde, blu, o il velo della pioggia (`seguitoCart()`). Era una
+riga tratteggiata piccola, «↳ Rossi, continua», e un pomeriggio già preso sembrava
+libero.
+
 **Quanto è largo un lavoro lo dice chi pianifica**, non la stima ore: `mezze` si
 alza e si abbassa di uno con `+` e `−`. Dedurlo dalle ore legava la lavagna a un
 numero messo a occhio, e chi pianifica sa cose che la stima non sa. Le ore seguono:

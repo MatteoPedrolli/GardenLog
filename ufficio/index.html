@@ -568,10 +568,19 @@ input.vuoto { background: #fffdf5; border-color: #ecdca8; }
   flex-wrap: wrap;
 }
 .mezze-cart { font-size: 0.68rem; color: var(--text-light); min-width: 46px; text-align: center; }
+/* La mezza giornata dove un lavoro prosegue è piena, del colore del suo
+   cartellino: una riga tratteggiata piccola in un angolo faceva sembrare libero un
+   pomeriggio già preso. */
 .seguito-cart {
-  border: 1px dashed var(--border); border-radius: var(--radius-sm); padding: 5px 8px;
-  font-size: 0.72rem; color: var(--text-light);
+  flex: 1; display: flex; align-items: center; justify-content: center; text-align: center;
+  border: 1px solid var(--border); border-radius: var(--radius-sm); padding: 5px 8px;
+  font-size: 0.72rem; color: var(--text-mid); background: var(--cream); min-width: 0; overflow-wrap: anywhere;
 }
+.seguito-cart.matita { border: 1px dashed #9aa0a6; background: #f4f5f6; color: #5f6469; }
+.seguito-cart.confermato { border-color: #2f8f4e; background: #f1faf3; color: #1c5c33; }
+.seguito-cart.fatto { border-color: #2a6f9e; background: #eef6fb; color: #1d4e6f; }
+.seguito-cart.pioggia { border-color: #b9c6d3; color: #3d4f61;
+  background: repeating-linear-gradient(135deg, #eef2f6 0 8px, #e4eaf0 8px 16px); }
 .sconfina-cart { font-size: 0.68rem; color: var(--earth); }
 .vuoto-mezza { font-size: 0.72rem; color: var(--text-light); text-align: center; padding: 8px 4px; }
 
@@ -2361,6 +2370,14 @@ function riassuntoRicontrolla() {
 // La più recente per prima. Le righe sono poche e corte apposta: un elenco lungo
 // non si legge, e quello che non si legge tanto vale non scriverlo.
 const NOVITA = [
+  {
+    versione: '2026-10-21',
+    data: '2026-10-21',
+    titolo: 'Lavori su più mezze giornate',
+    righe: [
+      'Quando un lavoro o un giorno di pioggia prosegue, la **mezza giornata dopo è piena** e ha **lo stesso colore** del cartellino: grigio, verde, blu o il velo della pioggia.',
+    ],
+  },
   {
     versione: '2026-10-20.8',
     data: '2026-10-20',
@@ -6294,6 +6311,14 @@ async function aggiungiPioggia() {
   avvisa('🌧️ Trascinalo sul giorno di pioggia');
 }
 
+// Dove un lavoro prosegue, la mezza giornata prende il colore del suo stato — o
+// il velo della pioggia — come il cartellino da cui parte.
+function seguitoCart(l) {
+  const stato = l.pioggia ? 'pioggia' : l.fatto ? 'fatto' : l.stato === 'confermato' ? 'confermato' : 'matita';
+  return '<div class="seguito-cart ' + stato + '" data-lavoro="' + perValore(l.id) + '">' +
+    (l.pioggia ? '🌧️ Pioggia, continua' : '↳ ' + perValore(l.cliente) + ', continua') + '</div>';
+}
+
 function cartellinoChiuso(l) {
   if (l.pioggia) return cartellinoPioggia(l);
   const id = perOnclick(l.id);
@@ -6496,7 +6521,7 @@ function disegnaLavagna() {
       const ore = LAVAGNA.lavori.reduce((s, l) => s + oreNellaMezza(l, iso, mezza), 0);
       oreGiorno += ore;
       const dentro = inizia.map(cartellino).join('') +
-        seguiti.map(l => '<div class="seguito-cart">↳ ' + perValore(l.cliente) + ', continua</div>').join('');
+        seguiti.map(seguitoCart).join('');
       mezze += '<div class="mezza">' +
         '<div class="mezza-etichetta"><span>' + mezza + '</span>' +
           (ore ? '<b>' + formattaQuantita(ore) + ' h</b>' : '') + '</div>' +
