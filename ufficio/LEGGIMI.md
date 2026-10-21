@@ -30,6 +30,7 @@ La cartella, dopo un po' di lavoro, ha questa forma:
     listino.json                   ← i prezzi, solo dell'ufficio
     impostazioni.json              ← l'intestazione del conto
     lavagna.json                   ← la pianificazione
+    clienti/                       ← ci scrive il telefono: le modifiche ai clienti
     agenda.json                    ← ci scrive l'ufficio, il telefono la legge
     anagrafica-dal-telefono.json   ← il file che il telefono esporta, da importare
     prodotti-dal-telefono.json     ← concimi, sementi e fitofarmaci, da importare
@@ -125,6 +126,22 @@ dice chi l'ha prenotato col nome scritto nelle impostazioni della sua app —
 «prenotato da Chiara», «prenotato da Matteo» — e solo «prenotato» se il nome
 non c'è.
 
+## L'anagrafica è una sola
+
+`clienti.json` è l'anagrafica di tutti: la tiene l'ufficio, e il telefono la
+scarica — con la chiave, perché porta telefoni e mail. Quando sul telefono si crea
+o si corregge un cliente parte una modifica coi soli campi cambiati, che finisce in
+`clienti/`; l'ufficio la applica da solo alla prima apertura, e l'avviso lo dice.
+Fino ad allora la correzione si vede sul telefono e in ufficio non ancora.
+
+I **doppioni** — lo stesso cliente scritto una volta qui e una sul telefono — si
+uniscono da Clienti → «Unisci doppioni»: per ogni campo si sceglie cosa tenere, e
+i conti e le visite dell'altro seguono il contatto che resta. Un cliente **si
+elimina solo da qui**: sul telefono sparisce, e le sue visite là restano.
+
+Serve lo script aggiornato (sotto): quello di prima non conosce né le modifiche ai
+clienti né l'anagrafica, e le lascia in coda sul telefono col loro errore.
+
 ## Due pezzi da installare, una volta sola
 
 **1. Lo script che riceve** — `ricevi-rapportini.gs`, da incollare in
@@ -155,8 +172,9 @@ backup.
 
 Un file, un solo autore. Il telefono deposita in `rapportini/` e non tocca
 altro; l'ufficio legge da lì, scrive nel suo archivio e scrive `agenda.json`, che
-il telefono legge e non tocca. Nessuno sovrascrive il lavoro di nessuno, e non
-serve nessuna sincronizzazione bidirezionale.
+il telefono legge e non tocca. Nessuno sovrascrive il lavoro di nessuno. Anche
+l'anagrafica segue la regola: il telefono non scrive `clienti.json`, deposita in
+`clienti/` una modifica per file, e l'ufficio la riporta nel suo.
 
 Per questo un rapportino risulta «in arrivo» perché **l'archivio non ne ha ancora
 una copia a quella revisione**, non perché qualcuno lo abbia spostato: l'ufficio

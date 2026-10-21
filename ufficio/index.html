@@ -298,6 +298,8 @@ input.vuoto { background: #fffdf5; border-color: #ecdca8; }
   border-radius: var(--radius-sm); padding: 10px 13px; font-size: 0.86rem; margin-top: 12px;
 }
 #cartella-allarme:not(:empty) { margin-bottom: 14px; }
+.coppia-doppione { border-top: 1px solid var(--border); padding-top: 10px; margin-top: 10px; }
+.scelta-doppione { display: flex; gap: 6px; align-items: baseline; cursor: pointer; font-size: 0.88rem; }
 .vuoto-elenco { color: var(--text-light); font-size: 0.9rem; padding: 26px 0; text-align: center; }
 
 #avviso {
@@ -758,6 +760,9 @@ input.vuoto { background: #fffdf5; border-color: #ecdca8; }
 const VERSIONE_LAVORO = 1;
 const CARTELLA_ARRIVI = 'rapportini';
 const CARTELLA_APPUNTAMENTI = 'appuntamenti';
+// Le modifiche ai clienti fatte dal telefono, una per file: le scrive lo script,
+// l'ufficio le applica a clienti.json e se le segna in `applicate`.
+const CARTELLA_CLIENTI = 'clienti';
 const CARTELLA_RILIEVI = 'rilievi';
 const CARTELLA_ARCHIVIO = 'archivio';
 const FILE_LISTINO = 'listino.json';
@@ -824,6 +829,11 @@ let IMPOSTAZIONI_DA_SALVARE = false;
 let LAVAGNA = { tipo: 'lavagna', versione: VERSIONE_LAVAGNA, lavori: [], visti: [] };
 let CLIENTI = [];
 let CLIENTI_DA_SALVARE = false;
+// Quello che clienti.json porta oltre ai clienti, e che serve al telefono per
+// tenersi allineato: chi è stato unito a chi (`uniti`, vecchio codice → nuovo),
+// chi è stato tolto, quali modifiche del telefono sono già dentro, e le coppie
+// che si è detto non essere la stessa persona.
+let ANAGRAFICA_EXTRA = { uniti: {}, eliminati: [], applicate: [], distinti: [] };
 let SETTIMANA = null;   // il lunedì della settimana mostrata
 let TRASCINATO = null;
 let MOSTRA_FUTURI = false;
@@ -1035,6 +1045,7 @@ async function ricarica() {
   if (CARTELLA_VUOTA) return;
   await copiaDelGiorno();
   await assorbiAppuntamenti();
+  await assorbiModificheClienti();
   await rinfrescaAgenda();
 }
 
@@ -1229,9 +1240,16 @@ async function caricaClienti() {
   try {
     const a = JSON.parse(await leggiTesto(CARTELLA, FILE_CLIENTI));
     if (!a || a.tipo !== 'anagrafica-ufficio') throw new Error('non è l\'anagrafica');
+    ANAGRAFICA_EXTRA = {
+      uniti: a.uniti && typeof a.uniti === 'object' ? a.uniti : {},
+      eliminati: Array.isArray(a.eliminati) ? a.eliminati : [],
+      applicate: Array.isArray(a.applicate) ? a.applicate : [],
+      distinti: Array.isArray(a.distinti) ? a.distinti : [],
+    };
     return (Array.isArray(a.clienti) ? a.clienti : []).map(sistemaCliente);
   } catch (e) {
     await fileNonLetto(FILE_CLIENTI, e);
+    ANAGRAFICA_EXTRA = { uniti: {}, eliminati: [], applicate: [], distinti: [] };
     return [];
   }
 }
@@ -1244,17 +1262,24 @@ function sistemaCliente(c) {
   };
 }
 
+// Il file e basta: lo scrivono il bottone Salva, le modifiche arrivate dal
+// telefono e l'unione dei doppioni. È anche quello che il telefono scarica, quindi
+// porta con sé chi è stato unito, tolto, e quali modifiche sono già dentro.
+async function scriviClienti() {
+  await scriviTesto(CARTELLA, FILE_CLIENTI, JSON.stringify({
+    tipo: 'anagrafica-ufficio', versione: VERSIONE_ANAGRAFICA,
+    aggiornato: new Date().toISOString(), clienti: CLIENTI, ...ANAGRAFICA_EXTRA,
+  }, null, 2));
+  CLIENTI_DA_SALVARE = false;
+}
+
 async function salvaClienti() {
   try {
-    await scriviTesto(CARTELLA, FILE_CLIENTI, JSON.stringify({
-      tipo: 'anagrafica-ufficio', versione: 1,
-      aggiornato: new Date().toISOString(), clienti: CLIENTI,
-    }, null, 2));
+    await scriviClienti();
   } catch (e) {
     avvisa('Non ho potuto salvare l\'anagrafica: ' + e.message, true);
     return false;
   }
-  CLIENTI_DA_SALVARE = false;
   // Via e telefono degli appuntamenti in agenda si prendono da qui: un numero
   // corretto in anagrafica deve arrivare in giardino senza aspettare la lavagna.
   await salvaAgenda();
@@ -2370,6 +2395,16 @@ function riassuntoRicontrolla() {
 // La più recente per prima. Le righe sono poche e corte apposta: un elenco lungo
 // non si legge, e quello che non si legge tanto vale non scriverlo.
 const NOVITA = [
+  {
+    versione: '2026-10-21.2',
+    data: '2026-10-21',
+    titolo: 'Un\'anagrafica sola',
+    righe: [
+      'L\'anagrafica è **la stessa del telefono**: i clienti creati o corretti là **arrivano qui da soli**, e il telefono scarica quella dell\'ufficio, con telefono e mail.',
+      'In **Clienti** c\'è **«Unisci doppioni»**: propone i contatti forse uguali (stesso nome, telefono o mail), scegli per ogni campo cosa tenere e diventano uno. I conti dell\'altro lo seguono.',
+      'Un cliente **si elimina solo da qui**: sparisce anche dal telefono, e le sue visite là restano.',
+    ],
+  },
   {
     versione: '2026-10-21',
     data: '2026-10-21',
@@ -3754,7 +3789,7 @@ async function inviaPreventivo() {
 // riscrive un rilievo, come non lo riscrive un'importazione.
 function clienteDelPreventivo(d) {
   const c = d.cliente || {};
-  return CLIENTI.find(x => (c.id && x.id === c.id) ||
+  return clienteDaCodice(c.id) || CLIENTI.find(x =>
     (c.nome && x.nome.trim().toLowerCase() === c.nome.trim().toLowerCase())) || null;
 }
 
@@ -5755,7 +5790,7 @@ function letteraConPdf(cosa) {
 // si è annullato o l'anagrafica non si è salvata: allora non si va avanti.
 const MAIL_VALIDA = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 async function mailPerInvio(cliente) {
-  const noto = CLIENTI.find(c => cliente.id && c.id === cliente.id) ||
+  const noto = clienteDaCodice(cliente.id) ||
     CLIENTI.find(c => stessoNome(c.nome, cliente.nome));
   if (noto && noto.email) return noto.email;
   const mail = await chiediMail(cliente.nome || 'questo cliente');
@@ -5971,7 +6006,7 @@ function disegnaClienti() {
   if (!CARTELLA) { c.innerHTML = schermataBenvenuto(); return; }
 
   let html = '<p class="sottotitolo">' + CLIENTI.length +
-    (CLIENTI.length === 1 ? ' cliente' : ' clienti') + ' · telefono e mail stanno qui, il cantiere non li ha</p>';
+    (CLIENTI.length === 1 ? ' cliente' : ' clienti') + ' · la stessa anagrafica del telefono, che la scarica con la chiave</p>';
 
   html += '<div id="clienti-da-salvare" class="avvertenza" style="display:' +
     (CLIENTI_DA_SALVARE ? 'block' : 'none') + '">' +
@@ -5984,6 +6019,8 @@ function disegnaClienti() {
     (mancanti.length ? '<button class="secondaria piccola" onclick="prendiClientiDaiRapportini()">Aggiungi i ' +
       mancanti.length + ' visti nei rapportini</button>' : '') +
     '<button class="secondaria piccola" onclick="aggiungiCliente()">+ Aggiungi a mano</button>' +
+    (doppioniProposti().length ? '<button class="secondaria piccola" onclick="apriDoppioni()">Unisci doppioni (' +
+      doppioniProposti().length + ')</button>' : '') +
     '<button class="principale piccola" onclick="salvaClienti()">Salva</button>' +
     '</div>' +
     '<div class="meta" style="margin-top:10px">Importare non sovrascrive: i clienti che ci sono già ' +
@@ -5993,8 +6030,158 @@ function disegnaClienti() {
   html += '<div class="scheda"><input type="search" placeholder="Cerca un cliente" value="' +
     perValore(FILTRO_CLIENTI) + '" oninput="filtraClienti(this.value)"></div>';
 
+  if (DOPPIONI_APERTI) html += bloccoDoppioni();
   html += '<div id="elenco-clienti">' + righeClienti() + '</div>';
   c.innerHTML = html;
+}
+
+// ── I DOPPIONI ──
+// Con l'anagrafica condivisa, lo stesso cliente scritto una volta in ufficio e
+// una sul telefono diventa due contatti. L'app li propone — stesso nome a meno di
+// accenti e ordine, stesso telefono, stessa mail (`forseDoppi()`) — e chi guarda
+// decide: per ogni campo quale tenere, e quale codice resta. Il codice dell'altro
+// finisce in `uniti`, così i conti in archivio e i rapportini che lo portano
+// ancora trovano il cliente giusto, e il telefono sposta lì le sue visite.
+let DOPPIONI_APERTI = false;
+
+function doppioniProposti() {
+  return forseDoppi(CLIENTI, ANAGRAFICA_EXTRA.distinti);
+}
+
+function apriDoppioni() {
+  DOPPIONI_APERTI = true;
+  disegnaClienti();
+}
+
+function chiudiDoppioni() {
+  DOPPIONI_APERTI = false;
+  disegnaClienti();
+}
+
+// Quanto un codice è usato: il conto dei lavori in archivio e in arrivo. Di
+// partenza resta quello che ha più storia, che è di solito quello del telefono.
+function quantoUsato(c) {
+  return contiDelCliente(c).length + ARRIVI.filter(a => a.doc.cliente && a.doc.cliente.id === c.id).length;
+}
+
+function bloccoDoppioni() {
+  const coppie = doppioniProposti();
+  let html = '<div class="scheda" id="doppioni"><div class="titolo-sezione">Possibili doppioni' +
+    ' <span class="meta">· ' + coppie.length + '</span></div>';
+  if (!coppie.length) {
+    html += '<div class="vuoto-elenco">Nessun doppione da guardare.</div>';
+  }
+  const nomiCampi = { nome: 'Nome', indirizzo: 'Indirizzo', citta: 'Città', telefono: 'Telefono', email: 'Mail', note: 'Note' };
+  coppie.forEach(({ a, b, perche }, i) => {
+    const restaB = quantoUsato(b) > quantoUsato(a);
+    const radio = (campo, lato, scelto, testo) =>
+      '<label class="scelta-doppione"><input type="radio" name="u-' + i + '-' + campo + '" value="' + lato + '"' +
+      (scelto ? ' checked' : '') + '> ' + testo + '</label>';
+    html += '<div class="coppia-doppione"><div class="meta">' + perValore(perche.join(' · ')) + '</div>' +
+      '<table class="elenco"><tbody>' +
+      '<tr><td class="meta">Codice da tenere</td>' +
+        '<td>' + radio('codice', 'a', !restaB, perValore(a.id) + ' <span class="meta">· ' + quantoUsato(a) + ' lavori</span>') + '</td>' +
+        '<td>' + radio('codice', 'b', restaB, perValore(b.id) + ' <span class="meta">· ' + quantoUsato(b) + ' lavori</span>') + '</td></tr>' +
+      CAMPI_CLIENTE.map(([k]) => {
+        const va = String(a[k] || ''), vb = String(b[k] || '');
+        // Di partenza vince chi resta, ma un campo vuoto non batte uno scritto.
+        const tieniB = vb && (!va || restaB);
+        return '<tr><td class="meta">' + nomiCampi[k] + '</td>' +
+          '<td>' + radio(k, 'a', !tieniB, va ? perValore(va) : '<span class="meta">vuoto</span>') + '</td>' +
+          '<td>' + radio(k, 'b', tieniB, vb ? perValore(vb) : '<span class="meta">vuoto</span>') + '</td></tr>';
+      }).join('') +
+      '</tbody></table>' +
+      '<div class="bottoni"><button class="principale piccola" onclick="unisciClienti(' + i + ')">Unisci</button>' +
+      '<button class="secondaria piccola" onclick="sonoDistinti(' + i + ')">Sono due persone diverse</button></div></div>';
+  });
+  html += '<div class="bottoni"><button class="secondaria piccola" onclick="chiudiDoppioni()">Chiudi</button></div></div>';
+  return html;
+}
+
+async function unisciClienti(i) {
+  const coppia = doppioniProposti()[i];
+  if (!coppia) return;
+  const scelta = k => (document.querySelector('input[name="u-' + i + '-' + k + '"]:checked') || {}).value || 'a';
+  const resta = scelta('codice') === 'b' ? coppia.b : coppia.a;
+  const va = resta === coppia.a ? coppia.b : coppia.a;
+  const valori = {};
+  CAMPI_CLIENTE.forEach(([k]) => { valori[k] = String((scelta(k) === 'b' ? coppia.b : coppia.a)[k] || ''); });
+  if (!confirm('Unire «' + (va.nome || 'senza nome') + '» in «' + (valori.nome || 'senza nome') + '»?\n\n' +
+      'Resta un contatto solo. I conti e i rapportini dell\'altro lo ritrovano, e sul telefono le sue visite passano qui.')) return;
+  Object.assign(resta, valori);
+  CLIENTI = CLIENTI.filter(x => x !== va);
+  const uniti = ANAGRAFICA_EXTRA.uniti;
+  uniti[va.id] = resta.id;
+  // Chi era già stato unito al doppione ora porta dritto al contatto che resta.
+  Object.keys(uniti).forEach(k => { if (uniti[k] === va.id) uniti[k] = resta.id; });
+  CLIENTI_DA_SALVARE = true;
+  if (!(await salvaClienti())) return;
+  if (!doppioniProposti().length) DOPPIONI_APERTI = false;
+  disegnaClienti();
+  avvisa('Uniti in «' + (resta.nome || 'senza nome') + '»');
+}
+
+// «Non sono la stessa persona» si ricorda: due fratelli con lo stesso nome non
+// vanno riproposti a ogni apertura.
+async function sonoDistinti(i) {
+  const coppia = doppioniProposti()[i];
+  if (!coppia) return;
+  ANAGRAFICA_EXTRA.distinti.push([coppia.a.id, coppia.b.id].sort().join('|'));
+  CLIENTI_DA_SALVARE = true;
+  if (!(await salvaClienti())) return;
+  if (!doppioniProposti().length) DOPPIONI_APERTI = false;
+  disegnaClienti();
+}
+
+// ── LE MODIFICHE CHE ARRIVANO DAL TELEFONO ──
+// Entrano da sole a ogni rilettura, come le prenotazioni: un cliente scritto in
+// giardino deve esserci in ufficio senza ricopiarlo. Ognuna si applica una volta
+// sola (`applicate`), in ordine di quando è stata fatta. Una modifica porta solo i
+// campi cambiati e li scrive; un cliente «nuovo» che l'ufficio ha già — il primo
+// giro, quando il telefono manda tutti i suoi — riempie solo i campi vuoti, o
+// cancellerebbe i numeri di telefono messi qui.
+async function assorbiModificheClienti() {
+  const cartella = await sottocartella(CARTELLA, CARTELLA_CLIENTI, false);
+  if (!cartella || NON_LETTI.has(FILE_CLIENTI)) return;
+  const arrivate = [];
+  for (const nome of await elencaFile(cartella)) {
+    let doc;
+    try {
+      doc = leggiModificaCliente(await leggiTesto(cartella, nome));
+    } catch (e) {
+      ILLEGGIBILI.push({ nome: CARTELLA_CLIENTI + '/' + nome, motivo: e.message });
+      continue;
+    }
+    if (!ANAGRAFICA_EXTRA.applicate.includes(doc.id)) arrivate.push(doc);
+  }
+  if (!arrivate.length) return;
+  arrivate.sort((a, b) => String(a.creato).localeCompare(String(b.creato)));
+  let nuovi = 0, corretti = 0;
+  arrivate.forEach(doc => {
+    ANAGRAFICA_EXTRA.applicate.push(doc.id);
+    const id = codiceUnito(doc.cliente.id, ANAGRAFICA_EXTRA.uniti);
+    // Tolto in ufficio resta tolto: il telefono lo saprà al prossimo aggiornamento.
+    if (ANAGRAFICA_EXTRA.eliminati.includes(id)) return;
+    const campi = { ...doc.cliente };
+    delete campi.id;
+    const c = CLIENTI.find(x => x.id === id);
+    if (!c) { CLIENTI.push(sistemaCliente({ ...campi, id })); nuovi++; return; }
+    Object.keys(campi).forEach(k => {
+      if (!doc.nuovo || !String(c[k] || '').trim()) c[k] = campi[k];
+    });
+    corretti++;
+  });
+  try {
+    await scriviClienti();
+  } catch (e) {
+    avvisa('Modifiche ai clienti arrivate dal telefono, ma non ho potuto salvarle: ' + e.message, true);
+    return;
+  }
+  await salvaAgenda();
+  if (nuovi || corretti) {
+    avvisa('Dal telefono: ' + [nuovi ? nuovi + (nuovi === 1 ? ' cliente nuovo' : ' clienti nuovi') : '',
+      corretti ? corretti + (corretti === 1 ? ' cliente corretto' : ' clienti corretti') : ''].filter(Boolean).join(', '));
+  }
 }
 
 function righeClienti() {
@@ -6052,8 +6239,18 @@ function contiDelCliente(c) {
   const nome = String(c.nome || '').trim().toLowerCase();
   return ARCHIVIO.filter(l => {
     const cl = l.cliente || {};
-    return (c.id && cl.id === c.id) || (nome && String(cl.nome || '').trim().toLowerCase() === nome);
+    // Anche i conti fatti col codice di un doppione unito a questo.
+    return (c.id && cl.id && codiceUnito(cl.id, ANAGRAFICA_EXTRA.uniti) === c.id) ||
+      (nome && String(cl.nome || '').trim().toLowerCase() === nome);
   });
+}
+
+// Il cliente in anagrafica per un codice, seguendo le unioni: un rapportino scritto
+// prima dell'unione porta ancora il codice del doppione.
+function clienteDaCodice(id) {
+  if (!id) return null;
+  const vero = codiceUnito(id, ANAGRAFICA_EXTRA.uniti);
+  return CLIENTI.find(x => x.id === vero) || null;
 }
 
 // Porta all'archivio con i soli conti di quel cliente. Il filtro resta scritto,
@@ -6095,8 +6292,11 @@ function aggiungiCliente() {
 function eliminaCliente(id) {
   const c = CLIENTI.find(x => x.id === id);
   if (!c) return;
-  if (!confirm('Eliminare «' + (c.nome || 'senza nome') + '» dall\'anagrafica?')) return;
+  if (!confirm('Eliminare «' + (c.nome || 'senza nome') + '» dall\'anagrafica?\n\n' +
+      'Sparisce anche dal telefono, al prossimo aggiornamento. Le sue visite là restano.')) return;
   CLIENTI = CLIENTI.filter(x => x.id !== id);
+  // Il telefono deve saperlo, o lo rimanderebbe come nuovo.
+  if (!ANAGRAFICA_EXTRA.eliminati.includes(id)) ANAGRAFICA_EXTRA.eliminati.push(id);
   CLIENTI_DA_SALVARE = true;
   disegnaClienti();
 }
@@ -6107,7 +6307,7 @@ function clientiMancanti() {
   const visti = new Map();
   const daDoc = r => {
     const c = r && r.cliente;
-    if (!c || !c.id || CLIENTI.some(x => x.id === c.id) || visti.has(c.id)) return;
+    if (!c || !c.id || clienteDaCodice(c.id) || ANAGRAFICA_EXTRA.eliminati.includes(c.id) || visti.has(c.id)) return;
     visti.set(c.id, { id: c.id, nome: c.nome || '', indirizzo: c.indirizzo || '', citta: c.citta || '' });
   };
   ARRIVI.forEach(a => daDoc(a.doc));

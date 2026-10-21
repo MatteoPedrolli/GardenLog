@@ -307,6 +307,16 @@ try {
     });
   });
 
+  // L'anagrafica condivisa, in lettura con la chiave. Finché una prova non la
+  // imposta, il servizio dice che l'ufficio non l'ha ancora scritta.
+  let anagraficaDalServizio = null;
+  await ctx.route(CONSEGNA + '?documento=anagrafica*', r => r.fulfill({
+    status: 200, contentType: 'application/json',
+    body: anagraficaDalServizio === null
+      ? JSON.stringify({ status: 'error', msg: 'l\'ufficio non ha ancora scritto clienti.json' })
+      : anagraficaDalServizio,
+  }));
+
   ok('senza indirizzo di consegna non parte niente e lo dice', await page.evaluate(async () => {
     DB.impostazioni.UrlRapportini = '';
     try { await consegnaRapportino({ tipo: 'rapportino', id: 'x' }); return false; }
@@ -3857,6 +3867,181 @@ try {
       return esito === false && DB.agenda?.appuntamenti.length === 10;
     }));
 
+  // ── un'anagrafica sola ──
+  // La tiene l'ufficio. Il telefono la scarica con la chiave e manda le sue
+  // modifiche coi soli campi cambiati; l'ufficio le applica da sé. Si prova il
+  // giro intero: telefono → script → ufficio → script → telefono.
+  const postati = [];
+  await ctx.route(CONSEGNA, r => {
+    const doc = JSON.parse(r.request().postData() || '{}');
+    postati.push(doc);
+    return r.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ status: 'ok' }) });
+  });
+  const telA = await page.evaluate(async url => {
+    DB.impostazioni.UrlRapportini = url;
+    DB.impostazioni.ChiaveLettura = 'giusta';
+    DB.coda = DB.coda.filter(v => v.tipo !== 'cliente');
+    DB.modificheClienti = [];
+    // Un cliente nuovo scritto in giardino, con telefono e mail.
+    openNuovoCliente();
+    document.getElementById('f-cliente-nome').value = 'Sincro Nuovo';
+    document.getElementById('f-cliente-citta').value = 'Lavis';
+    document.getElementById('f-cliente-telefono').value = '333 1112223';
+    document.getElementById('f-cliente-email').value = 'sincro@esempio.it';
+    await saveCliente();
+    const c = DB.clienti.find(x => x.Cliente === 'Sincro Nuovo');
+    const nuovo = DB.coda.find(v => v.tipo === 'cliente' && v.doc.cliente.id === c.ClienteID);
+    // Poi corretto: parte solo il campo cambiato.
+    editCliente(c.ClienteID);
+    document.getElementById('f-cliente-indirizzo').value = 'Via Nuova 1';
+    await saveCliente();
+    const corretto = DB.coda.filter(v => v.tipo === 'cliente' && v.doc.cliente.id === c.ClienteID)[1];
+    return { id: c.ClienteID, nuovo: nuovo && nuovo.doc, corretto: corretto && corretto.doc,
+      inAttesa: DB.modificheClienti.length, nome: comeSiChiama(nuovo) };
+  }, CONSEGNA);
+  ok('un cliente nuovo sul telefono parte per l\'ufficio, con telefono e mail',
+    !!telA.nuovo && telA.nuovo.nuovo === true && telA.nuovo.cliente.telefono === '333 1112223' &&
+    telA.nuovo.cliente.email === 'sincro@esempio.it', JSON.stringify(telA.nuovo));
+  ok('corretto, parte solo quello che è cambiato',
+    !!telA.corretto && telA.corretto.cliente.indirizzo === 'Via Nuova 1' && !('telefono' in telA.corretto.cliente) &&
+    telA.corretto.nuovo === false, JSON.stringify(telA.corretto));
+  ok('e la coda lo chiama per nome', telA.nome === 'modifica a un cliente');
+
+  // In ufficio: le modifiche arrivano nella cartella clienti/ e si applicano da sole.
+  const uffA = await pagU.evaluate(async ([nuovo, corretto]) => {
+    const prima = CLIENTI.length;
+    // L'ufficio ha già un «Rossi Mario» che il telefono conosce come «Mario Rossi»:
+    // il doppione da unire, con un numero suo da non perdere.
+    CLIENTI.push(sistemaCliente({ id: 'uff-mario', nome: 'Mario Rossi', citta: 'Lavis' }),
+      sistemaCliente({ id: 'uff-doppio', nome: 'rossi mario', telefono: '0461 555666' }));
+    await salvaClienti();
+    const cartella = await window.RADICE.getDirectoryHandle('clienti', { create: true });
+    await scriviTesto(cartella, nuovo.id + '.json', JSON.stringify(nuovo));
+    await scriviTesto(cartella, corretto.id + '.json', JSON.stringify(corretto));
+    await ricarica();
+    const c = CLIENTI.find(x => x.id === nuovo.cliente.id);
+    const r = { aggiunto: CLIENTI.length === prima + 3, c: c && { ...c },
+      applicate: ANAGRAFICA_EXTRA.applicate.includes(nuovo.id) && ANAGRAFICA_EXTRA.applicate.includes(corretto.id) };
+    // Rilette, non si applicano due volte: un nome corretto a mano qui resta.
+    c.telefono = '0461 000000';
+    await salvaClienti();
+    await ricarica();
+    r.unaVolta = CLIENTI.find(x => x.id === nuovo.cliente.id).telefono === '0461 000000';
+    // Un «nuovo» per un cliente che l'ufficio ha già riempie solo i vuoti.
+    const vecchio = CLIENTI.find(x => x.id === 'uff-mario');
+    const telVecchio = vecchio.telefono = '0461 222333';
+    await salvaClienti();
+    const giro = { tipo: 'cliente', versione: 1, id: 'cli-giro', creato: new Date().toISOString(), nuovo: true,
+      cliente: { id: vecchio.id, nome: vecchio.nome, telefono: '', email: 'dal-telefono@esempio.it' } };
+    await scriviTesto(cartella, 'giro.json', JSON.stringify(giro));
+    await ricarica();
+    const v2 = CLIENTI.find(x => x.id === vecchio.id);
+    r.soloVuoti = v2.telefono === telVecchio && v2.email === 'dal-telefono@esempio.it';
+    r.file = await leggiTesto(window.RADICE, 'clienti.json');
+    return r;
+  }, [telA.nuovo, telA.corretto]);
+  ok('in ufficio la modifica del telefono entra da sola', uffA.aggiunto && uffA.c &&
+    uffA.c.nome === 'Sincro Nuovo' && uffA.c.indirizzo === 'Via Nuova 1' && uffA.c.telefono === '333 1112223' &&
+    uffA.applicate, JSON.stringify(uffA.c));
+  ok('e una volta sola: quello corretto dopo in ufficio resta', uffA.unaVolta);
+  ok('il primo giro del telefono non cancella i numeri messi in ufficio, riempie solo i vuoti', uffA.soloVuoti);
+
+  // I doppioni: proposti, e uniti scegliendo i campi.
+  const doppi = await pagU.evaluate(async () => {
+    const mario = CLIENTI.find(c => c.id === 'uff-mario');
+    vaiA('clienti');
+    const bottone = [...document.querySelectorAll('#pagina-clienti button')].find(b => b.textContent.includes('Unisci doppioni'));
+    if (bottone) bottone.click();
+    const pagina = document.getElementById('pagina-clienti');
+    const coppie = doppioniProposti();
+    const i = coppie.findIndex(c => [c.a.id, c.b.id].includes('uff-doppio'));
+    const r = { proposta: i >= 0 && coppie[i].perche.includes('stesso nome'),
+      riquadro: !!pagina.querySelector('#doppioni'), bottone: !!bottone };
+    if (i < 0) return r;
+    // Resta il codice di Mario (ha i conti), ma il telefono si prende dal doppione.
+    const lato = coppie[i].a.id === 'uff-doppio' ? 'a' : 'b';
+    const altro = lato === 'a' ? 'b' : 'a';
+    pagina.querySelector('input[name="u-' + i + '-codice"][value="' + altro + '"]').checked = true;
+    pagina.querySelector('input[name="u-' + i + '-telefono"][value="' + lato + '"]').checked = true;
+    pagina.querySelector('input[name="u-' + i + '-nome"][value="' + altro + '"]').checked = true;
+    await unisciClienti(i);
+    const unito = CLIENTI.find(c => c.id === mario.id);
+    r.unito = !CLIENTI.some(c => c.id === 'uff-doppio') && unito.telefono === '0461 555666' && unito.nome === mario.nome;
+    r.uniti = ANAGRAFICA_EXTRA.uniti['uff-doppio'] === mario.id;
+    r.conti = contiDelCliente(unito).length;
+    r.mario = mario.id;
+    r.suFile = JSON.parse(await leggiTesto(window.RADICE, 'clienti.json')).uniti['uff-doppio'] === mario.id;
+    // Due persone diverse non si ripropongono.
+    CLIENTI.push(sistemaCliente({ id: 'omonimo-1', nome: 'Gino Bianchi' }), sistemaCliente({ id: 'omonimo-2', nome: 'Bianchi Gino' }));
+    const j = doppioniProposti().findIndex(c => [c.a.id, c.b.id].includes('omonimo-1'));
+    await sonoDistinti(j);
+    r.distinti = !doppioniProposti().some(c => [c.a.id, c.b.id].includes('omonimo-1'));
+    // Eliminare dall'ufficio lo segna, per il telefono.
+    const conferma = window.confirm;
+    window.confirm = () => true;
+    eliminaCliente('omonimo-2');
+    window.confirm = conferma;
+    await salvaClienti();
+    r.eliminato = ANAGRAFICA_EXTRA.eliminati.includes('omonimo-2');
+    r.file = await leggiTesto(window.RADICE, 'clienti.json');
+    return r;
+  });
+  ok('«Unisci doppioni» propone lo stesso nome scritto in un altro ordine', doppi.bottone && doppi.proposta && doppi.riquadro, JSON.stringify(doppi));
+  ok('unendo, resta un contatto solo coi campi scelti', doppi.unito, JSON.stringify(doppi));
+  ok('e il codice del doppione porta a quello rimasto, anche nel file', doppi.uniti && doppi.suFile);
+  ok('«sono due persone diverse» non si ripropone', doppi.distinti);
+  ok('un cliente eliminato in ufficio è segnato per il telefono', doppi.eliminato);
+
+  // Il telefono scarica l'anagrafica dell'ufficio: telefono e mail arrivano, le
+  // unioni spostano le visite, gli eliminati spariscono.
+  anagraficaDalServizio = doppi.file;
+  const telB = await page.evaluate(async ([uffFile, mario]) => {
+    const r = {};
+    // Il doppione c'era anche sul telefono, con una visita sua.
+    DB.clienti.push({ ClienteID: 'uff-doppio', Cliente: 'rossi mario', Condiviso: 'Sì' });
+    DB.visite.push({ VisitaID: 'v-doppio', ClienteID: 'uff-doppio', Data: '2026-10-01' });
+    DB.clienti.push({ ClienteID: 'omonimo-2', Cliente: 'Bianchi Gino', Condiviso: 'Sì' });
+    // Una correzione fatta qui e non ancora arrivata in ufficio.
+    const sincro = DB.clienti.find(c => c.Cliente === 'Sincro Nuovo');
+    sincro.Note_cliente = 'cancello verde';
+    annunciaCliente(sincro, { ...sincro, Note_cliente: '', Condiviso: 'Sì' });
+    const ok = await scaricaAnagrafica();
+    const m = DB.clienti.find(c => c.ClienteID === mario);
+    r.ok = ok;
+    r.telefono = m && m.Telefono === '0461 555666' && isSi(m.Condiviso);
+    r.spostata = DB.visite.find(v => v.VisitaID === 'v-doppio').ClienteID === mario && !DB.clienti.some(c => c.ClienteID === 'uff-doppio');
+    r.eliminato = !DB.clienti.some(c => c.ClienteID === 'omonimo-2');
+    r.inAttesaResta = DB.clienti.find(c => c.Cliente === 'Sincro Nuovo').Note_cliente === 'cancello verde';
+    r.vecchieTolte = !DB.modificheClienti.some(x => JSON.parse(uffFile).applicate.includes(x.id));
+    // La scheda col numero da toccare, e senza «Elimina»: si elimina dall'ufficio.
+    showCliente(mario);
+    const scheda = document.getElementById('page-clienti').innerHTML;
+    r.tel = scheda.includes('tel:0461555666');
+    r.senzaElimina = !scheda.includes('eliminaCliente(');
+    const prima = DB.clienti.length;
+    await eliminaCliente(mario);
+    r.nonElimina = DB.clienti.length === prima;
+    DB.visite = DB.visite.filter(v => v.VisitaID !== 'v-doppio');
+    return r;
+  }, [doppi.file, doppi.mario]);
+  ok('il telefono scarica l\'anagrafica dell\'ufficio, con telefono e mail', telB.ok && telB.telefono, JSON.stringify(telB));
+  ok('le visite del doppione unito passano al contatto rimasto', telB.spostata);
+  ok('un cliente eliminato in ufficio sparisce anche dal telefono', telB.eliminato);
+  ok('una correzione non ancora arrivata in ufficio non si perde scaricando', telB.inAttesaResta && telB.vecchieTolte);
+  ok('sul telefono la scheda ha il numero da toccare, e non si elimina', telB.tel && telB.senzaElimina && telB.nonElimina);
+
+  // Si rimette in ordine per le prove che seguono: niente chiave, niente
+  // modifiche in coda, e i clienti di prima senza il segno dell'anagrafica.
+  await page.evaluate(async () => {
+    DB.impostazioni.ChiaveLettura = '';
+    DB.coda = DB.coda.filter(v => v.tipo !== 'cliente');
+    DB.modificheClienti = [];
+    DB.clienti.forEach(c => { delete c.Condiviso; delete c.FuoriAnagrafica; });
+    await salvaDB({ conta: false });
+  });
+  await ctx.unroute(CONSEGNA);
+  anagraficaDalServizio = null;
+
   // ── l'app del capo: la pagina Prossimi e nient'altro ──
   // Quello che l'ufficio ha messo in lavagna e il modo di prenotarne altri, dallo
   // stesso script del telefono e con gli stessi due documenti. Il cliente si
@@ -5370,7 +5555,8 @@ try {
     const vm = await import('node:vm');
     const sorgente = readFileSync(resolve(RADICE, 'ufficio/ricevi-rapportini.gs'), 'utf8');
     const provaScript = proprieta => {
-      const file = { 'agenda.json': '{"tipo":"agenda"}', 'sopralluoghi.json': '{"tipo":"sopralluoghi","telefono":"333"}' };
+      const file = { 'agenda.json': '{"tipo":"agenda"}', 'sopralluoghi.json': '{"tipo":"sopralluoghi","telefono":"333"}',
+        'clienti.json': '{"tipo":"anagrafica-ufficio","clienti":[{"telefono":"0461 777"}]}' };
       const cartella = {
         getFoldersByName: () => ({ hasNext: () => true, next: () => cartella }),
         getFilesByName: n => {
@@ -5402,6 +5588,13 @@ try {
       !conChiave({ documento: 'sopralluoghi' }).includes('333') &&
       conChiave({ documento: 'sopralluoghi', chiave: 'altra' }).includes('chiave sbagliata'));
     ok('e quella giusta sì', conChiave({ documento: 'sopralluoghi', chiave: 'segreta' }).includes('333'));
+    // L'anagrafica è il file più delicato che esce di lì: telefoni e mail di tutti.
+    ok('l\'anagrafica esce solo con la chiave giusta',
+      !senzaChiaveSulloScript({ documento: 'anagrafica', chiave: '' }).includes('0461 777') &&
+      !conChiave({ documento: 'anagrafica', chiave: 'altra' }).includes('0461 777') &&
+      conChiave({ documento: 'anagrafica', chiave: 'segreta' }).includes('0461 777'));
+    ok('e lo script accetta le modifiche ai clienti, nella loro cartella',
+      JSON.parse(conChiave({})).accetta.includes('cliente'));
     ok('l\'agenda resta leggibile senza chiave, come prima',
       senzaChiaveSulloScript({ documento: 'agenda' }).includes('"tipo":"agenda"'));
     // Il nome del file non si prende mai da chi chiama.
@@ -5415,7 +5608,10 @@ try {
 
   // ── bilancio ──
   ok('nessun errore JavaScript in tutto il giro', erroriJS.length === 0, erroriJS.join(' | '));
-  const mancanti = risorseKO.filter(u => !/fonts\.(googleapis|gstatic)\.com/.test(u));
+  // Lo script finto non è una risorsa dell'app: fra una prova e l'altra resta senza
+  // rotta, e il telefono — che manda da solo le modifiche ai clienti — ci prova lo
+  // stesso. È la coda che fa il suo lavoro, non un file che manca.
+  const mancanti = risorseKO.filter(u => !/fonts\.(googleapis|gstatic)\.com|consegna\.esempio\.invalid/.test(u));
   ok('nessuna risorsa dell\'app mancante', mancanti.length === 0, mancanti.join(' | '));
 } finally {
   await browser.close();

@@ -46,6 +46,9 @@ const CARTELLE = {
   rapportino: 'rapportini',
   appuntamento: 'appuntamenti',
   rilievo: 'rilievi',
+  // Le modifiche ai clienti fatte dal telefono: una per file, coi soli campi
+  // cambiati. L'ufficio le applica all'anagrafica e non le tocca più.
+  cliente: 'clienti',
 };
 
 // I file che il telefono può leggere. L'elenco sta qui e non nella richiesta: il
@@ -66,6 +69,10 @@ const LEGGIBILI = {
 // basterebbe l'indirizzo per leggerlo.
 const RISERVATI = {
   sopralluoghi: 'sopralluoghi.json',
+  // L'anagrafica dell'ufficio, che il telefono scarica per averla uguale: nomi,
+  // vie, telefoni e mail di tutti i clienti. È il file più delicato che esce di
+  // qui, e senza chiave non esce.
+  anagrafica: 'clienti.json',
 };
 
 function doPost(e) {
@@ -102,7 +109,7 @@ function doGet(e) {
     if (!quale) {
       // Dice se la chiave c'è, mai quale sia: serve a verificare da un browser
       // che la distribuzione sia quella giusta e la chiave impostata.
-      return risposta({ status: 'ok', servizio: 'rapportini', versione: 5,
+      return risposta({ status: 'ok', servizio: 'rapportini', versione: 6,
         accetta: Object.keys(CARTELLE), leggibili: Object.keys(LEGGIBILI),
         riservati: Object.keys(RISERVATI), chiave: chiave ? 'impostata' : 'manca' });
     }

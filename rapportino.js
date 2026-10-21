@@ -864,6 +864,129 @@ function nomeFileRilievo(doc) {
   return `${quando}-${pulito(doc.cliente && doc.cliente.nome) || 'cliente'}-${doc.id}.json`;
 }
 
+// ── L'ANAGRAFICA CONDIVISA ──
+// Una sola anagrafica, che tiene l'ufficio in clienti.json: è il file che il
+// backup del PC copre. Il telefono la scarica — con la chiave, perché porta
+// telefoni e mail di persone vere — e quando crea o corregge un cliente manda
+// una **modifica**: un documento piccolo con i soli campi cambiati, che l'ufficio
+// applica appena si apre. Solo i campi cambiati, così se dal telefono si corregge
+// la via e in ufficio il numero, restano giuste tutte e due.
+const VERSIONE_CLIENTE = 1;
+const VERSIONE_ANAGRAFICA = 1;
+
+// I campi che l'anagrafica ha in comune, coi nomi dell'ufficio e del telefono. Il
+// resto — il prato, la siepe, le coordinate — è del telefono e resta lì.
+const CAMPI_CLIENTE = [
+  ['nome', 'Cliente'], ['indirizzo', 'Indirizzo'], ['citta', 'Citta'],
+  ['telefono', 'Telefono'], ['email', 'Email'], ['note', 'Note_cliente'],
+];
+
+// `cliente` è quello del telefono; `campi` i nomi (dell'ufficio) da mandare, o
+// tutti per un cliente nuovo. Il nome viaggia sempre: lo script ci fa il nome del
+// file, e l'ufficio lo legge se non trova il codice.
+function costruisciModificaCliente({ cliente, campi, nuovo, da }) {
+  const c = cliente || {};
+  const quali = nuovo || !campi ? CAMPI_CLIENTE.map(([k]) => k) : campi;
+  const dati = { id: String(c.ClienteID || ''), nome: String(c.Cliente || '').trim() };
+  CAMPI_CLIENTE.forEach(([k, t]) => { if (quali.includes(k)) dati[k] = String(c[t] || '').trim(); });
+  return {
+    tipo: 'cliente',
+    versione: VERSIONE_CLIENTE,
+    id: 'cli-' + Date.now().toString(36) + '-' + Math.random().toString(36).slice(2, 7),
+    creato: new Date().toISOString(),
+    nuovo: !!nuovo,
+    da: String(da || ''),
+    cliente: dati,
+  };
+}
+
+function leggiModificaCliente(grezzo) {
+  let doc = grezzo;
+  if (typeof grezzo === 'string') {
+    try { doc = JSON.parse(grezzo); }
+    catch (e) { throw new Error('Il file non è leggibile: non è JSON valido'); }
+  }
+  if (!doc || doc.tipo !== 'cliente') throw new Error('Questo file non è una modifica a un cliente');
+  const versione = Number(doc.versione) || 0;
+  if (versione !== VERSIONE_CLIENTE) {
+    throw new Error(`Modifica di un cliente della versione ${versione || '?'}: questa app legge la ${VERSIONE_CLIENTE}`);
+  }
+  if (!doc.id || !doc.cliente || !doc.cliente.id) throw new Error('Modifica di un cliente senza codice');
+  const cliente = { id: String(doc.cliente.id) };
+  CAMPI_CLIENTE.forEach(([k]) => { if (k in doc.cliente) cliente[k] = String(doc.cliente[k] || ''); });
+  return { tipo: 'cliente', versione, id: String(doc.id), creato: doc.creato || '', nuovo: !!doc.nuovo,
+    da: doc.da || '', cliente };
+}
+
+// Il file dell'ufficio, letto dal telefono così com'è: clienti, chi è stato unito
+// a chi, chi è stato tolto, e quali modifiche del telefono sono già dentro.
+function leggiAnagraficaCondivisa(grezzo) {
+  let doc = grezzo;
+  if (typeof grezzo === 'string') {
+    try { doc = JSON.parse(grezzo); }
+    catch (e) { throw new Error('Il file non è leggibile: non è JSON valido'); }
+  }
+  if (doc && doc.status === 'error') throw new Error(doc.msg || 'il servizio ha rifiutato');
+  if (!doc || doc.tipo !== 'anagrafica-ufficio') throw new Error('Questo file non è l\'anagrafica dell\'ufficio');
+  const versione = Number(doc.versione) || 0;
+  if (versione !== VERSIONE_ANAGRAFICA) {
+    throw new Error(`Anagrafica della versione ${versione || '?'}: questa app legge la ${VERSIONE_ANAGRAFICA}`);
+  }
+  const uniti = doc.uniti && typeof doc.uniti === 'object' ? doc.uniti : {};
+  return {
+    tipo: 'anagrafica-ufficio', versione, aggiornato: doc.aggiornato || '',
+    clienti: (Array.isArray(doc.clienti) ? doc.clienti : []).filter(c => c && c.id).map(c => {
+      const x = { id: String(c.id) };
+      CAMPI_CLIENTE.forEach(([k]) => { x[k] = String(c[k] || ''); });
+      return x;
+    }),
+    uniti: Object.fromEntries(Object.entries(uniti).filter(([a, b]) => a && b).map(([a, b]) => [String(a), String(b)])),
+    eliminati: (Array.isArray(doc.eliminati) ? doc.eliminati : []).map(String),
+    applicate: (Array.isArray(doc.applicate) ? doc.applicate : []).map(String),
+  };
+}
+
+// Dove è finito un codice dopo una o più unioni: A unito a B, poi B unito a C,
+// porta a C. Un giro chiuso non dovrebbe esistere, ma se c'è ci si ferma.
+function codiceUnito(id, uniti) {
+  let x = id;
+  const visti = new Set();
+  while (uniti && uniti[x] && !visti.has(x)) { visti.add(x); x = uniti[x]; }
+  return x;
+}
+
+// Due contatti sono forse la stessa persona se il nome è lo stesso a meno di
+// accenti, maiuscole e ordine («Rossi Mario» e «mario rossi»), o se hanno lo
+// stesso telefono o la stessa mail. È una proposta: l'unione la decide chi guarda.
+function chiaveNome(nome) {
+  return String(nome || '').normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase()
+    .replace(/[^a-z0-9]+/g, ' ').trim().split(' ').filter(Boolean).sort().join(' ');
+}
+
+function cifreTelefono(t) {
+  const d = String(t || '').replace(/\D/g, '').replace(/^0039|^39(?=3\d{8,9}$)/, '');
+  return d.length >= 6 ? d.slice(-9) : '';
+}
+
+function forseDoppi(clienti, distinti) {
+  const lontani = new Set((distinti || []).map(String));
+  const coppie = [];
+  const lista = (clienti || []).filter(c => c && c.id);
+  for (let i = 0; i < lista.length; i++) {
+    for (let j = i + 1; j < lista.length; j++) {
+      const a = lista[i], b = lista[j];
+      if (lontani.has([a.id, b.id].sort().join('|'))) continue;
+      const perche = [];
+      if (chiaveNome(a.nome) && chiaveNome(a.nome) === chiaveNome(b.nome)) perche.push('stesso nome');
+      if (cifreTelefono(a.telefono) && cifreTelefono(a.telefono) === cifreTelefono(b.telefono)) perche.push('stesso telefono');
+      const ma = String(a.email || '').trim().toLowerCase();
+      if (ma && ma === String(b.email || '').trim().toLowerCase()) perche.push('stessa mail');
+      if (perche.length) coppie.push({ a, b, perche });
+    }
+  }
+  return coppie;
+}
+
 if (typeof module !== 'undefined' && module.exports) {
   module.exports = {
     VERSIONE_RAPPORTINO, costruisciRapportino, leggiRapportino, nomeFileRapportino,
@@ -873,6 +996,8 @@ if (typeof module !== 'undefined' && module.exports) {
     ORE_MEZZA, VOCE_MANODOPERA, VOCE_PIANTE, numeroDaTesto, oreManodopera, oreDelleLavorazioni,
     mezzeDaOre, pianteDaSesto, pianteDellaLavorazione, GENERI_LAVORAZIONE,
     VERSIONE_SOPRALLUOGHI, costruisciSopralluoghi, leggiSopralluoghi,
+    VERSIONE_CLIENTE, VERSIONE_ANAGRAFICA, CAMPI_CLIENTE, costruisciModificaCliente, leggiModificaCliente,
+    leggiAnagraficaCondivisa, codiceUnito, chiaveNome, cifreTelefono, forseDoppi,
     VERSIONE_RILIEVO, UNITA_RILIEVO,
     costruisciRilievo, leggiRilievo, leggiLavorazione, lavorazioneIncompleta, nomeFileRilievo,
     dataISO, lunediDellaSettimana, lunediDellaPrimaSettimana, numeroSettimana, etichettaSettimana,

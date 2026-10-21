@@ -749,7 +749,7 @@ select.form-control { background-image: url("data:image/svg+xml,%3Csvg xmlns='ht
     <div id="page-prossimi" class="page">
       <div class="section-title">In programma <span id="agenda-quando" class="agenda-quando"></span></div>
       <div id="agenda-list"></div>
-      <button class="btn btn-secondary" style="margin:0 14px; width:calc(100% - 28px)" onclick="scaricaAgenda({ avvisa: true }); scaricaSopralluoghi()">🔄 Aggiorna dall'ufficio</button>
+      <button class="btn btn-secondary" style="margin:0 14px; width:calc(100% - 28px)" onclick="scaricaAgenda({ avvisa: true }); scaricaSopralluoghi(); scaricaAnagrafica()">🔄 Aggiorna dall'ufficio</button>
 
       <div class="section-title">Prenota un appuntamento</div>
       <div class="card" style="padding:14px">
@@ -812,12 +812,13 @@ select.form-control { background-image: url("data:image/svg+xml,%3Csvg xmlns='ht
           <div class="dati-nota" style="margin:4px 0 0">Sulla lavagna dell'ufficio le tue prenotazioni dicono «prenotato da» e questo nome.</div>
         </div>
         <div class="form-group">
-          <label class="form-label">Chiave dei sopralluoghi</label>
+          <label class="form-label">Chiave di lettura</label>
           <input type="text" class="form-control" id="f-imp-chiave" autocapitalize="off" autocomplete="off"
                  spellcheck="false" oninput="salvaImpostazione('ChiaveLettura', this.value.trim())">
           <div class="dati-nota" style="margin:4px 0 0">La stessa scritta nello script, in
-            CHIAVE_LETTURA. Senza, i sopralluoghi arrivano col solo nome: via e telefono
-            non escono dallo script a chi ha solo l'indirizzo.</div>
+            CHIAVE_LETTURA. Serve ai sopralluoghi e all'anagrafica dell'ufficio: senza, i
+            sopralluoghi arrivano col solo nome e i clienti restano quelli del telefono — via,
+            telefono e mail non escono dallo script a chi ha solo l'indirizzo.</div>
         </div>
       </div>
 
@@ -1120,6 +1121,16 @@ select.form-control { background-image: url("data:image/svg+xml,%3Csvg xmlns='ht
         <div class="form-group">
           <label class="form-label">Larghezza (m)</label>
           <input type="number" class="form-control" id="f-cliente-siepe-larghezza" placeholder="Es. 1" step="0.1">
+        </div>
+      </div>
+      <div class="form-row">
+        <div class="form-group">
+          <label class="form-label">Telefono</label>
+          <input type="tel" class="form-control" id="f-cliente-telefono" placeholder="Es. 333 1234567">
+        </div>
+        <div class="form-group">
+          <label class="form-label">Mail</label>
+          <input type="email" class="form-control" id="f-cliente-email" placeholder="nome@esempio.it">
         </div>
       </div>
       <div class="form-group">
@@ -1598,6 +1609,7 @@ async function init() {
   svuotaCoda();
   scaricaAgenda();
   scaricaSopralluoghi();
+  scaricaAnagrafica();
   chiediPersistenza();
   registraServiceWorker();
   armaIndietro();
@@ -1632,6 +1644,8 @@ function navTo(page) {
   titoletto.textContent = titoli[page] || '';
   titoletto.style.display = titoli[page] ? '' : 'none';
   if (page === 'dati') renderDati();
+  // L'anagrafica si riscarica aprendo i clienti, come l'agenda aprendo i Prossimi.
+  if (page === 'clienti' && Date.now() - anagraficaScaricataA > 300000) scaricaAnagrafica();
   // Aprendo la pagina si riprova a scaricare l'agenda, ma non a ogni tocco: in
   // ufficio la lavagna cambia qualche volta al giorno, e una richiesta per ogni
   // occhiata sarebbe traffico per niente.
@@ -1752,6 +1766,8 @@ function showCliente(id) {
       <div class="info-grid">
         <div class="info-item"><div class="info-label">Visite totali</div><div class="info-value">${visite.length}</div></div>
         ${c.Lat && c.Lng ? `<div class="info-item" style="cursor:pointer" onclick="window.open('https://maps.google.com/?q=${c.Lat},${c.Lng}','_blank')"><div class="info-label">Posizione</div><div class="info-value">📍 Maps</div></div>` : '<div class="info-item"><div class="info-label">Posizione</div><div class="info-value">–</div></div>'}
+        ${c.Telefono ? `<div class="info-item"><div class="info-label">Telefono</div><div class="info-value"><a class="tel-sopr" href="tel:${perValore(String(c.Telefono).replace(/[^\d+]/g, ''))}">📞 ${perValore(c.Telefono)}</a></div></div>` : ''}
+        ${c.Email ? `<div class="info-item"><div class="info-label">Mail</div><div class="info-value"><a href="mailto:${perValore(c.Email)}">✉️ ${perValore(c.Email)}</a></div></div>` : ''}
       </div>
 
       ${prato ? riquadroPrato(c, prato, annoCorr) : ''}
@@ -1769,7 +1785,7 @@ function showCliente(id) {
 
       <div style="display:flex; gap:8px; margin-bottom:14px">
         <button class="btn btn-secondary" style="flex:1" onclick="editCliente('${c.ClienteID}')">✏️ Modifica</button>
-        <button class="btn btn-danger" style="flex:1" onclick="eliminaCliente('${c.ClienteID}')">🗑 Elimina</button>
+        ${isSi(c.Condiviso) ? '' : `<button class="btn btn-danger" style="flex:1" onclick="eliminaCliente('${c.ClienteID}')">🗑 Elimina</button>`}
       </div>
 
       <div class="recent-title">Storico visite</div>
@@ -1960,7 +1976,8 @@ function openNuovoCliente() {
   addrLat = null; addrLng = null;
   document.getElementById('drawer-cliente-title').textContent = 'Nuovo Cliente';
   document.getElementById('cliente-edit-id').value = '';
-  ['f-cliente-nome','f-cliente-indirizzo','f-cliente-citta','f-cliente-coords','f-cliente-note'].forEach(id => document.getElementById(id).value = '');
+  ['f-cliente-nome','f-cliente-indirizzo','f-cliente-citta','f-cliente-coords','f-cliente-note',
+   'f-cliente-telefono','f-cliente-email'].forEach(id => document.getElementById(id).value = '');
   document.getElementById('f-cliente-mq').value = '';
   document.getElementById('f-cliente-fascia').value = '';
   document.getElementById('toggle-prato').classList.remove('on');
@@ -1984,6 +2001,8 @@ function editCliente(id) {
   document.getElementById('f-cliente-citta').value = c.Citta || '';
   document.getElementById('f-cliente-coords').value = c.Lat && c.Lng ? c.Lat+', '+c.Lng : '';
   document.getElementById('f-cliente-note').value = c.Note_cliente || '';
+  document.getElementById('f-cliente-telefono').value = c.Telefono || '';
+  document.getElementById('f-cliente-email').value = c.Email || '';
   document.getElementById('f-cliente-mq').value = c.Mq_prato || '';
   document.getElementById('f-cliente-fascia').value = c.FasciaID || '';
   document.getElementById('toggle-prato').classList.toggle('on', pratoEnabled);
@@ -2030,22 +2049,28 @@ async function saveCliente() {
     Siepe_altezza: siepeEnabled ? document.getElementById('f-cliente-siepe-altezza').value : '',
     Siepe_larghezza: siepeEnabled ? document.getElementById('f-cliente-siepe-larghezza').value : '',
     Note_cliente: document.getElementById('f-cliente-note').value.trim(),
+    Telefono: document.getElementById('f-cliente-telefono').value.trim(),
+    Email: document.getElementById('f-cliente-email').value.trim(),
   };
   salvataggioInCorso = true;
   try {
     if (editId) {
       const i = DB.clienti.findIndex(c => c.ClienteID == editId);
       if (i < 0) { showToast('⚠️ Cliente non trovato'); return; }
-      DB.clienti[i] = { ...DB.clienti[i], ...data };
+      const prima = DB.clienti[i];
+      DB.clienti[i] = { ...prima, ...data };
+      annunciaCliente(DB.clienti[i], prima);
     } else {
       data.ClienteID = generateID();
       DB.clienti.push(data);
+      annunciaCliente(data, null);
     }
     applicaFasce();
     // Il drawer resta aperto se la scrittura fallisce: salvaDB() ha già
     // avvisato, e chiuderlo darebbe l'idea che sia andato tutto bene.
     if (!await salvaDB()) return;
     showToast(editId ? '✅ Cliente aggiornato' : '✅ Cliente salvato');
+    svuotaCoda();
     closeDrawer('overlay-cliente');
     updateStats();
     renderAll();
@@ -2070,6 +2095,13 @@ async function eliminaCliente(id) {
   if (salvataggioInCorso) return;
   const c = DB.clienti.find(x => x.ClienteID == id);
   if (!c) return;
+  // Un cliente dell'anagrafica condivisa si toglie dall'ufficio, dove si vede se
+  // ha conti aperti: un tocco sbagliato qui non deve far sparire un numero di
+  // telefono che serve a tutti.
+  if (isSi(c.Condiviso)) {
+    showToast('🏢 Questo cliente è nell\'anagrafica dell\'ufficio: si elimina da lì');
+    return;
+  }
   const visite = DB.visite.filter(v => v.ClienteID == id);
   const vids = visite.map(v => v.VisitaID);
   const ops = DB.operazioni.filter(o => vids.includes(o.VisitaID));
@@ -2900,8 +2932,9 @@ async function saveVisita({ invia = false } = {}) {
 async function nuovoClienteDaPassaggio(p) {
   const c = { ClienteID: generateID(), Cliente: p.Cliente, Indirizzo: p.Indirizzo || '', Citta: p.Citta || '',
     Lat: '', Lng: '', Ha_prato: '', Mq_prato: '', FasciaID: '', Ha_siepe: '', Siepe_specie: '',
-    Siepe_lunghezza: '', Siepe_altezza: '', Siepe_larghezza: '', Note_cliente: '' };
+    Siepe_lunghezza: '', Siepe_altezza: '', Siepe_larghezza: '', Note_cliente: '', Telefono: '', Email: '' };
   DB.clienti.push(c);
+  annunciaCliente(c, null);
   if (!await salvaDB({ conta: false })) { DB.clienti = DB.clienti.filter(x => x !== c); return null; }
   return c;
 }
@@ -3798,7 +3831,7 @@ function renderSopralluoghi() {
   // sembra uno di cui l'ufficio non sa l'indirizzo.
   if (!chiave && elenco.some(x => !x.completo)) {
     html += `<div class="dati-nota" style="margin:0 18px 10px">Via e telefono arrivano solo con la
-      chiave dei sopralluoghi: si imposta in Impostazioni, ed è la stessa scritta nello script.</div>`;
+      chiave di lettura: si imposta in Impostazioni, ed è la stessa scritta nello script.</div>`;
   }
   el.innerHTML = html;
 }
@@ -3822,6 +3855,119 @@ function daSopralluogo(id) {
   da.innerHTML = '📍 Dal sopralluogo di ' + perValore(etichettaMezzaGiornata(x.giorno, x.mezza)) +
     (x.note ? '<br><span style="color:var(--text-mid)">' + perValore(x.note) + '</span>' : '');
   da.style.display = 'block';
+}
+
+// ── L'ANAGRAFICA CONDIVISA ──
+// Una sola anagrafica, che tiene l'ufficio. Il telefono la scarica — con la
+// chiave, perché porta telefoni e mail — e quando crea o corregge un cliente manda
+// una modifica coi soli campi cambiati, nella stessa coda dei rapportini: in
+// giardino il campo manca nello stesso modo. Finché l'ufficio non l'ha applicata
+// la modifica resta qui (`DB.modificheClienti`) e si rimette sopra a ogni
+// scaricamento, o l'anagrafica di ieri cancellerebbe quello appena scritto.
+let anagraficaInCorso = false;
+let anagraficaScaricataA = 0;
+
+// Si manda solo se c'è dove mandarla: senza l'indirizzo dello script il telefono
+// lavora da solo, come prima, e una coda che cresce senza mai partire sarebbe un
+// avviso perenne per niente.
+function annunciaCliente(c, prima) {
+  if (!(DB.impostazioni?.UrlRapportini || '').trim()) return null;
+  const nuovo = !prima || !isSi(prima.Condiviso) && !(DB.modificheClienti || []).some(m => m.ClienteID === c.ClienteID);
+  const campi = nuovo ? null : CAMPI_CLIENTE.filter(([, t]) => String(c[t] || '').trim() !== String(prima[t] || '').trim()).map(([k]) => k);
+  if (campi && !campi.length) return null;
+  const doc = costruisciModificaCliente({ cliente: c, campi, nuovo, da: DB.impostazioni?.NomeMittente || '' });
+  DB.coda.push({ docID: doc.id, tipo: doc.tipo, doc, creato: doc.creato, tentativi: 0, errore: '' });
+  DB.modificheClienti = (DB.modificheClienti || []).concat([{ id: doc.id, ClienteID: c.ClienteID, cliente: doc.cliente }]);
+  return doc;
+}
+
+function indirizzoAnagrafica() {
+  const url = (DB.impostazioni?.UrlRapportini || '').trim();
+  const chiave = (DB.impostazioni?.ChiaveLettura || '').trim();
+  if (!url || !chiave) return '';
+  return url + (url.includes('?') ? '&' : '?') + 'documento=anagrafica&chiave=' + encodeURIComponent(chiave);
+}
+
+async function scaricaAnagrafica({ avvisa = false } = {}) {
+  if (anagraficaInCorso) return false;
+  const url = indirizzoAnagrafica();
+  if (!url || !navigator.onLine) return false;
+  anagraficaInCorso = true;
+  anagraficaScaricataA = Date.now();
+  try {
+    const r = await fetch(url, { cache: 'no-store' });
+    const quanti = applicaAnagrafica(leggiAnagraficaCondivisa(await r.text()));
+    if (!await salvaDB({ conta: false })) return false;
+    renderAll();
+    if (quanti.mandati) svuotaCoda();
+    if (avvisa) showToast('👥 Anagrafica aggiornata');
+    return true;
+  } catch (e) {
+    // Come l'agenda: quella scaricata prima resta. Ma si dice a chi l'ha chiesta.
+    if (avvisa) showToast('⚠️ Anagrafica non aggiornata: ' + (e.message || e));
+    return false;
+  } finally {
+    anagraficaInCorso = false;
+  }
+}
+
+// Dove puntavano le visite, le prenotazioni e i rilievi di un cliente unito a un
+// altro in ufficio: si spostano sul contatto che resta, e il prato o la siepe
+// scritti solo sul doppione non si perdono.
+function spostaSuCliente(daId, aId) {
+  const da = DB.clienti.find(c => c.ClienteID == daId);
+  if (!da) return;
+  const a = DB.clienti.find(c => c.ClienteID == aId);
+  [DB.visite, DB.prenotazioni || [], DB.rilievi || []].forEach(elenco =>
+    elenco.forEach(x => { if (x.ClienteID == daId) x.ClienteID = aId; }));
+  (DB.modificheClienti || []).forEach(m => { if (m.ClienteID == daId) m.ClienteID = aId; });
+  if (!a) { da.ClienteID = aId; return; }
+  Object.keys(da).forEach(k => { if (!String(a[k] ?? '').trim() && String(da[k] ?? '').trim()) a[k] = da[k]; });
+  DB.clienti = DB.clienti.filter(c => c !== da);
+}
+
+function applicaAnagrafica(doc) {
+  const esito = { mandati: 0 };
+  // Prima le unioni: le visite del doppione passano al contatto che resta.
+  Object.keys(doc.uniti).forEach(vecchio => spostaSuCliente(vecchio, codiceUnito(vecchio, doc.uniti)));
+  const ufficio = new Set(doc.clienti.map(c => c.id));
+  doc.clienti.forEach(m => {
+    let c = DB.clienti.find(x => x.ClienteID == m.id);
+    if (!c) {
+      c = { ClienteID: m.id, Lat: '', Lng: '', Ha_prato: '', Mq_prato: '', FasciaID: '', Ha_siepe: '',
+        Siepe_specie: '', Siepe_lunghezza: '', Siepe_altezza: '', Siepe_larghezza: '' };
+      DB.clienti.push(c);
+    }
+    CAMPI_CLIENTE.forEach(([k, t]) => { c[t] = m[k] || ''; });
+    c.Condiviso = 'Sì';
+  });
+  // Quelle che l'ufficio ha già dentro non servono più; le altre si rimettono
+  // sopra, nell'ordine in cui sono state fatte.
+  DB.modificheClienti = (DB.modificheClienti || []).filter(m => !doc.applicate.includes(m.id));
+  DB.modificheClienti.forEach(m => {
+    const c = DB.clienti.find(x => x.ClienteID == codiceUnito(m.ClienteID, doc.uniti));
+    if (!c) return;
+    CAMPI_CLIENTE.forEach(([k, t]) => { if (k in m.cliente) c[t] = m.cliente[k]; });
+  });
+  const inAttesa = new Set(DB.modificheClienti.map(m => m.ClienteID));
+  DB.clienti.forEach(c => {
+    if (ufficio.has(c.ClienteID) || inAttesa.has(c.ClienteID)) return;
+    if (doc.eliminati.includes(c.ClienteID)) {
+      // Tolto in ufficio. Senza storia sparisce anche qui; con delle visite resta,
+      // perché sono lavoro fatto, ma non si rimanda più.
+      c.Condiviso = '';
+      c.FuoriAnagrafica = 'Sì';
+      return;
+    }
+    if (isSi(c.FuoriAnagrafica)) return;
+    // Il primo giro, o uno che l'ufficio non ha: si manda intero, e l'ufficio
+    // riempie solo i campi che non ha.
+    c.Condiviso = '';
+    if (annunciaCliente(c, null)) esito.mandati++;
+  });
+  const conStoria = id => DB.visite.some(v => v.ClienteID == id) || (DB.prenotazioni || []).some(p => p.ClienteID == id);
+  DB.clienti = DB.clienti.filter(c => !(isSi(c.FuoriAnagrafica) && doc.eliminati.includes(c.ClienteID) && !conStoria(c.ClienteID)));
+  return esito;
 }
 
 // ── L'AGENDA CHE ARRIVA DALL'UFFICIO ──
@@ -3908,7 +4054,7 @@ function renderAgenda() {
     ${a.note ? `<div style="font-size:0.82rem; color:var(--text-mid); margin-top:4px">${perValore(a.note)}</div>` : ''}
   </div>`;
   }).join('') + (conChiave ? '' : `<div class="dati-nota" style="margin:4px 14px">Via e telefono arrivano
-    con la chiave dei sopralluoghi (Impostazioni › Rapportino).</div>`);
+    con la chiave di lettura (Impostazioni › Rapportino).</div>`);
 }
 
 function renderPrenotazioni() {
@@ -3996,7 +4142,7 @@ async function consegnaRapportino(doc) {
   return risposta;
 }
 
-const NOMI_DOCUMENTO = { appuntamento: 'prenotazione', rilievo: 'rilievo' };
+const NOMI_DOCUMENTO = { appuntamento: 'prenotazione', rilievo: 'rilievo', cliente: 'modifica a un cliente' };
 
 function comeSiChiama(voce) {
   return (voce && NOMI_DOCUMENTO[voce.tipo]) || 'rapportino';
@@ -4093,7 +4239,7 @@ function aggiornaAvvisoCoda() {
 function avviaOrologioCoda() {
   // Alla ripresa della rete e ogni due minuti mentre l'app è aperta: abbastanza
   // spesso da non farti aspettare, abbastanza raro da non scaldare il telefono.
-  window.addEventListener('online', () => { svuotaCoda(); scaricaAgenda(); scaricaSopralluoghi(); });
+  window.addEventListener('online', () => { svuotaCoda(); scaricaAgenda(); scaricaSopralluoghi(); scaricaAnagrafica(); });
   clearInterval(orologioCoda);
   orologioCoda = setInterval(() => svuotaCoda(), 120000);
 }

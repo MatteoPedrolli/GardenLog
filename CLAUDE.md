@@ -393,7 +393,7 @@ quel concime nel frattempo è stato cancellato.
 essere un rapportino, o venire da una versione futura. In quest'ultimo caso si
 ferma e lo dice, invece di archiviare un documento monco in silenzio.
 
-I documenti sono quattro. Il **rapportino** racconta un lavoro finito;
+I documenti sono quattro, più le modifiche ai clienti (sotto, *L'anagrafica*). Il **rapportino** racconta un lavoro finito;
 l'**appuntamento** è una prenotazione fatta dal cantiere, col cliente davanti; il
 **rilievo** è il taccuino di un preventivo, preso in giardino prima che il lavoro
 esista. Sono cose diverse e in ufficio le guardano tre schermate diverse, quindi
@@ -588,8 +588,9 @@ modificabili. Un preventivo si fa spesso per chi non è ancora cliente, e farlo
 prima aggiungere all'anagrafica del telefono era una schermata in più col cliente
 davanti: basta il nome. La ricerca fra i clienti del telefono resta, ma solo per
 riempire i campi; quello scritto sul rilievo vince, perché è quello visto stando
-lì. Telefono e mail **il telefono non li tiene**: viaggiano col rilievo verso
-l'ufficio, che è dove servono. Sono arrivati senza alzare `VERSIONE_RILIEVO`.
+lì. Telefono e mail scritti sul rilievo **viaggiano col rilievo** verso l'ufficio,
+e in anagrafica entrano da lì («Dal preventivo all'anagrafica»), non dal rilievo
+del telefono. Sono arrivati senza alzare `VERSIONE_RILIEVO`.
 
 **Dal giardino partono lavorazioni, non righe di preventivo.** Una lavorazione è
 un fatto misurato: «Siepe nuova · 24 m · lauro, fitta, alta 1,8 m · 10 h». Le
@@ -1398,17 +1399,53 @@ Il titolo della pagina viene cambiato prima di stampare, perché Chrome lo propo
 come nome del file in PDF, e rimesso a posto su `afterprint`: rimetterlo subito
 darebbe un file chiamato «GiardinoApp · Ufficio».
 
-## L'anagrafica: due archivi, non una copia
+## L'anagrafica: una sola, la tiene l'ufficio
 
-L'ufficio ha il suo `clienti.json`, e **non è una copia** di quello del telefono:
-qui i clienti hanno telefono e mail — quello che serve per chiamare e confermare
-un appuntamento — e il cantiere non li conosce.
+Erano due archivi: l'ufficio aveva telefono e mail, il telefono no, e i clienti
+nuovi passavano con un file da esportare e importare a mano. Chi lavora le ha
+volute uguali, modificabili da tutti e due — e lavorare sullo stesso contatto
+nello stesso momento non succede. Le scelte, fatte con chi la usa:
 
-Per questo il telefono esporta in un file a parte, `anagrafica-dal-telefono.json`,
-e l'ufficio **importa** da lì invece di leggerlo come proprio archivio. Un'importazione
-che sovrascrive cancellerebbe i numeri di telefono a ogni giro: arrivano solo i
-clienti nuovi, quelli che ci sono già restano come sono stati corretti. Resta valida
-la regola di sempre — un file, un solo autore — anche quando i dati viaggiano.
+- **L'originale è `clienti.json`**, dell'ufficio: è il file che il backup del PC
+  copre, e resta di un solo autore. Il telefono non lo scrive.
+- **Il telefono la scarica con la chiave** (`documento=anagrafica`, fra i
+  `RISERVATI` dello script, che consegna proprio `clienti.json`): porta telefoni e
+  mail di tutti, ed è il file più delicato che esce da lì. Senza chiave il telefono
+  tiene i suoi clienti, come prima.
+- **Il telefono manda modifiche, non l'anagrafica**: un documento `cliente`
+  (`costruisciModificaCliente()`, in `rapportino.js`) coi **soli campi cambiati**,
+  nella stessa coda dei rapportini, che lo script deposita in `clienti/`. Così se
+  dal telefono si corregge la via e in ufficio il numero, restano giuste tutte e
+  due. L'ufficio le applica **da sole** a ogni rilettura (`assorbiModificheClienti()`),
+  una volta sola (`applicate`), in ordine di quando sono state fatte.
+- **Finché l'ufficio non l'ha applicata**, una modifica resta sul telefono
+  (`DB.modificheClienti`) e si rimette sopra a ogni scaricamento
+  (`applicaAnagrafica()`): l'anagrafica di ieri non deve cancellare quello appena
+  scritto in giardino.
+- **Il primo giro**: scaricata l'anagrafica, il telefono manda interi i clienti che
+  l'ufficio non ha (`nuovo: true`), e per un cliente che l'ufficio ha già un
+  «nuovo» **riempie solo i campi vuoti** — o cancellerebbe i numeri messi in ufficio.
+- **Si elimina solo dall'ufficio**, dove si vede se ha conti aperti; il codice
+  finisce in `eliminati`. Sul telefono «Elimina» non c'è per un cliente condiviso
+  (`Condiviso`); arrivato l'elenco, chi non ha storia sparisce e chi ha visite resta
+  con le sue visite (`FuoriAnagrafica`) e non si rimanda più.
+- **I doppioni si uniscono in ufficio** (Clienti › «Unisci doppioni»): `forseDoppi()`
+  propone lo stesso nome a meno di accenti, maiuscole e ordine, lo stesso telefono
+  o la stessa mail; per ogni campo si sceglie cosa tenere, e il codice che sparisce
+  finisce in `uniti` (vecchio → nuovo, `codiceUnito()` segue le catene). I conti in
+  archivio e i rapportini col codice vecchio ritrovano il cliente
+  (`clienteDaCodice()`, `contiDelCliente()`), e il telefono sposta visite,
+  prenotazioni e rilievi sul contatto che resta (`spostaSuCliente()`), tenendo prato
+  e siepe scritti solo sul doppione. «Sono due persone diverse» si ricorda (`distinti`).
+
+Campi arrivati senza alzare versioni: `Telefono`, `Email`, `Condiviso` sui clienti
+del telefono, `uniti`/`eliminati`/`applicate`/`distinti` in `clienti.json`; assenti
+vuol dire vuoti. Il documento `cliente` e l'anagrafica condivisa hanno le loro
+versioni (`VERSIONE_CLIENTE`, `VERSIONE_ANAGRAFICA`). Lo script va **ridistribuito**:
+quello di prima respinge le modifiche, che restano in coda col loro errore.
+
+L'esportazione «anagrafica-dal-telefono.json» e «Importa dal telefono» restano, per
+un telefono senza script: arrivano solo i clienti nuovi, come prima.
 
 Chi compare sui rapportini e non in anagrafica si aggiunge con un bottone: il
 cantiere l'ha già scritto una volta, e farlo ribattere sarebbe lavoro inventato.
