@@ -3596,6 +3596,71 @@ try {
   });
   ok('un lavoro che prosegue colora la mezza giornata dopo come il suo cartellino',
     prosegue.verde && prosegue.blu && prosegue.grigio, JSON.stringify(prosegue));
+
+  // L'ordine dentro una mezza giornata lo decide chi pianifica: lasciato sopra un
+  // cartellino va prima di quello, nello spazio libero va in fondo.
+  const riordino = await pagU.evaluate(async () => {
+    const oggi = isoData(new Date());
+    const nuovi = ['Ordine A', 'Ordine B', 'Ordine C', 'Ordine D'].map(n =>
+      sistemaLavoro({ cliente: n, note: 'prova', stato: 'lista' }));
+    LAVAGNA.lavori.push(...nuovi);
+    const [A, B, C, D] = nuovi;
+    for (const l of [A, B, C]) await spostaLavoro(l.id, oggi, 'mattina');
+    await spostaLavoro(D.id, oggi, 'pomeriggio');
+    SETTIMANA = lunediDi(new Date());
+    disegnaLavagna();
+    const zona = m => document.querySelector('#pagina-lavagna .mezza-corpo[data-giorno="' + oggi + '"]' +
+      (m === 'mattina' ? '' : ':not(:first-of-type)'));
+    const zone = () => [...document.querySelectorAll('#pagina-lavagna .mezza-corpo[data-giorno="' + oggi + '"]')];
+    const nomi = z => [...z.querySelectorAll('article.cartellino')].map(x => x.textContent.match(/Ordine \w/)?.[0]).filter(Boolean).join(',');
+    const carta = (z, l) => z.querySelector('article[data-lavoro="' + l.id + '"]');
+    const lascia = async (l, z, sopra) => {
+      TRASCINATO = l.id;
+      const e = { preventDefault() {}, target: sopra || z };
+      sopraZona(e, z);
+      const segnato = !!(sopra && sopra.classList.contains('prima-qui'));
+      await rilascia(e, z, oggi, z === zone()[0] ? 'mattina' : 'pomeriggio');
+      return segnato;
+    };
+    const r = { inizio: nomi(zone()[0]) };
+    // C lasciato sopra A: va prima di A, e la riga ocra lo diceva.
+    r.segno = await lascia(C, zone()[0], carta(zone()[0], A));
+    r.cSuA = nomi(zone()[0]);
+    // A nello spazio libero: va in fondo.
+    r.aInFondo = (await lascia(A, zone()[0], null), nomi(zone()[0]));
+    // D dal pomeriggio sopra B: cambia mezza giornata e si mette prima di B.
+    await lascia(D, zone()[0], carta(zone()[0], B));
+    r.dSuB = nomi(zone()[0]);
+    r.dMattina = D.mezza === 'mattina';
+    // Riordinare un confermato nella stessa mezza giornata non chiede niente.
+    B.stato = 'confermato';
+    disegnaLavagna();
+    const conferma = window.confirm;
+    let chieste = 0;
+    window.confirm = () => { chieste++; return true; };
+    await lascia(B, zone()[0], carta(zone()[0], C));
+    window.confirm = conferma;
+    r.bPrimo = nomi(zone()[0]);
+    r.chieste = chieste;
+    // L'agenda dei telefoni segue lo stesso ordine.
+    r.agenda = costruisciAgenda(LAVAGNA.lavori).appuntamenti.filter(x => /^Ordine/.test(x.cliente)).map(x => x.cliente.slice(-1)).join(',');
+    r.suFile = JSON.parse(await leggiTesto(CARTELLA, 'lavagna.json')).lavori
+      .filter(x => /^Ordine/.test(x.cliente)).map(x => x.cliente.slice(-1)).join(',');
+    LAVAGNA.lavori = LAVAGNA.lavori.filter(x => !/^Ordine/.test(x.cliente));
+    await salvaLavagna();
+    disegnaLavagna();
+    return r;
+  });
+  ok('in una mezza giornata i lavori stanno nell\'ordine in cui li metti', riordino.inizio === 'Ordine A,Ordine B,Ordine C', JSON.stringify(riordino));
+  ok('lasciato sopra un cartellino, va prima di quello, e la riga ocra lo dice prima',
+    riordino.segno && riordino.cSuA === 'Ordine C,Ordine A,Ordine B', JSON.stringify(riordino));
+  ok('nello spazio libero, va in fondo', riordino.aInFondo === 'Ordine C,Ordine B,Ordine A', JSON.stringify(riordino));
+  ok('anche arrivando da un\'altra mezza giornata si mette dove lo lasci',
+    riordino.dSuB === 'Ordine C,Ordine D,Ordine B,Ordine A' && riordino.dMattina, JSON.stringify(riordino));
+  ok('riordinare un confermato nella stessa mezza giornata non chiede conferma',
+    riordino.bPrimo === 'Ordine B,Ordine C,Ordine D,Ordine A' && riordino.chieste === 0, JSON.stringify(riordino));
+  ok('e l\'ordine resta sul file e vale per l\'agenda dei telefoni',
+    riordino.suFile === 'B,C,D,A' && riordino.agenda === 'B,C,D,A', JSON.stringify(riordino));
   ok('e va in agenda, così in giardino si sa che quel giorno non si lavora',
     /^\d{4}-\d{2}-\d{2}\|non si lavora$/.test(pioggia.agenda), pioggia.agenda);
 
@@ -3882,6 +3947,9 @@ try {
     DB.impostazioni.ChiaveLettura = 'giusta';
     DB.coda = DB.coda.filter(v => v.tipo !== 'cliente');
     DB.modificheClienti = [];
+    // La coda si ferma un momento: si guardano i documenti prima che partano, o
+    // la consegna — che il salvataggio fa partire da sé — li porterebbe via.
+    invioInCorso = true;
     // Un cliente nuovo scritto in giardino, con telefono e mail.
     openNuovoCliente();
     document.getElementById('f-cliente-nome').value = 'Sincro Nuovo';
@@ -3896,6 +3964,7 @@ try {
     document.getElementById('f-cliente-indirizzo').value = 'Via Nuova 1';
     await saveCliente();
     const corretto = DB.coda.filter(v => v.tipo === 'cliente' && v.doc.cliente.id === c.ClienteID)[1];
+    invioInCorso = false;
     return { id: c.ClienteID, nuovo: nuovo && nuovo.doc, corretto: corretto && corretto.doc,
       inAttesa: DB.modificheClienti.length, nome: comeSiChiama(nuovo) };
   }, CONSEGNA);

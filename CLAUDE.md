@@ -1172,7 +1172,15 @@ giornata l'ora si toglie, e si riscrive quando la si sa. Cambiare l'ora di un
 confermato chiede conferma, come spostarlo. Dentro la mezza giornata l'ora **non
 riordina** i cartellini: l'ordine lì resta di chi pianifica.
 
-Dentro i giorni non si ordina niente: lì l'ordine lo dà chi pianifica.
+**Dentro la mezza giornata l'ordine lo decide chi pianifica, trascinando**: lasciato
+sopra un cartellino, il lavoro va prima di quello — una riga ocra lo dice mentre lo
+si porta (`prima-qui`) — e nello spazio libero va in fondo (`mettiInOrdine()`).
+Prima stavano nell'ordine in cui erano entrati in lavagna, e trascinarne uno nella
+stessa mezza giornata non faceva niente. L'ordine è quello dei lavori in
+`lavagna.json`: nessun campo nuovo da tenere allineato, e i lavori di prima restano
+dove sono. Riordinare un confermato senza cambiare mezza giornata non chiede
+conferma: il cliente non lo sa e non deve saperlo. L'agenda dei telefoni lo segue,
+dopo l'ora. In coda no: lì l'ordine è la priorità.
 
 **Una mezza giornata sono otto ore di manodopera** — quattro d'orologio in due.
 Servono a sapere quante mezze giornate occupa un lavoro lungo, non a dichiarare

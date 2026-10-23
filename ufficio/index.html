@@ -578,6 +578,7 @@ input.vuoto { background: #fffdf5; border-color: #ecdca8; }
   border: 1px solid var(--border); border-radius: var(--radius-sm); padding: 5px 8px;
   font-size: 0.72rem; color: var(--text-mid); background: var(--cream); min-width: 0; overflow-wrap: anywhere;
 }
+.cartellino.prima-qui { box-shadow: 0 -3px 0 var(--ocra); }
 .seguito-cart.matita { border: 1px dashed #9aa0a6; background: #f4f5f6; color: #5f6469; }
 .seguito-cart.confermato { border-color: #2f8f4e; background: #f1faf3; color: #1c5c33; }
 .seguito-cart.fatto { border-color: #2a6f9e; background: #eef6fb; color: #1d4e6f; }
@@ -2395,6 +2396,14 @@ function riassuntoRicontrolla() {
 // La più recente per prima. Le righe sono poche e corte apposta: un elenco lungo
 // non si legge, e quello che non si legge tanto vale non scriverlo.
 const NOVITA = [
+  {
+    versione: '2026-10-23',
+    data: '2026-10-23',
+    titolo: 'L\'ordine dentro la mezza giornata',
+    righe: [
+      'Sulla lavagna **l\'ordine dei lavori in una mezza giornata lo decidi tu**: trascina un cartellino **sopra un altro** e va prima di quello (una riga color ocra ti dice dove), nello spazio libero e va in fondo. Vale anche per l\'agenda dei telefoni.',
+    ],
+  },
   {
     versione: '2026-10-21.2',
     data: '2026-10-21',
@@ -6483,7 +6492,7 @@ function etichetteTipi(l) {
 function cartellinoPioggia(l) {
   const id = perOnclick(l.id);
   const mezze = mezzeOccupate(l);
-  return '<article class="cartellino pioggia" draggable="true"' +
+  return '<article class="cartellino pioggia" draggable="true" data-lavoro="' + perValore(l.id) + '"' +
       ' ondragstart="iniziaTrascino(event, \'' + id + '\')"' +
       ' title="Giorno di pioggia: trascinalo sul giorno, + e − per quanto dura">' +
     '<div class="testa-cart"><div class="cliente-cart testo-cart">🌧️ Pioggia</div>' +
@@ -6565,6 +6574,7 @@ function cartellino(l) {
   // Un lavoro fatto non si trascina e non cambia penna: spostare una cosa già
   // avvenuta non vuol dire niente. Prima si toglie la spunta.
   return '<article class="' + classi.join(' ') + '" draggable="' + (l.fatto ? 'false' : 'true') + '"' +
+      ' data-lavoro="' + perValore(l.id) + '"' +
       (l.fatto ? '' : ' ondragstart="iniziaTrascino(event, \'' + id + '\')"') +
       (piazzato(l) && !l.fatto ? ' onclick="cambiaPenna(\'' + id + '\')"' : '') +
       (inLista ? ' onclick="apriChiudiCartellino(\'' + id + '\')"' : '') +
@@ -6725,7 +6735,7 @@ function disegnaLavagna() {
       mezze += '<div class="mezza">' +
         '<div class="mezza-etichetta"><span>' + mezza + '</span>' +
           (ore ? '<b>' + formattaQuantita(ore) + ' h</b>' : '') + '</div>' +
-        '<div class="mezza-corpo" ondragover="sopraZona(event, this)" ondragleave="fuoriZona(this)"' +
+        '<div class="mezza-corpo" data-giorno="' + iso + '" ondragover="sopraZona(event, this)" ondragleave="fuoriZona(this)"' +
           ' ondrop="rilascia(event, this, \'' + iso + '\', \'' + mezza + '\')">' +
           (dentro || '<div class="vuoto-mezza">—</div>') +
         '</div></div>';
@@ -6836,17 +6846,49 @@ function iniziaTrascino(e, id) {
   if (e.dataTransfer) e.dataTransfer.effectAllowed = 'move';
 }
 
-function sopraZona(e, zona) { e.preventDefault(); zona.classList.add('sopra'); }
-function fuoriZona(zona) { zona.classList.remove('sopra'); }
+// Dentro una mezza giornata l'ordine lo decide chi pianifica: lasciato sopra un
+// cartellino, il lavoro va prima di quello; nello spazio libero, in fondo. Era
+// l'ordine in cui i lavori erano entrati in lavagna, e trascinarne uno nella stessa
+// mezza giornata non faceva niente. In coda no: lì l'ordine è la priorità.
+function cartellinoSotto(e, zona) {
+  if (!zona.dataset.giorno) return null;
+  const sotto = e.target && e.target.closest ? e.target.closest('article.cartellino[data-lavoro]') : null;
+  return sotto && zona.contains(sotto) && sotto.dataset.lavoro !== TRASCINATO ? sotto : null;
+}
+
+function sopraZona(e, zona) {
+  e.preventDefault();
+  zona.classList.add('sopra');
+  const sotto = cartellinoSotto(e, zona);
+  zona.querySelectorAll('.prima-qui').forEach(x => { if (x !== sotto) x.classList.remove('prima-qui'); });
+  if (sotto) sotto.classList.add('prima-qui');
+}
+
+function fuoriZona(zona) {
+  zona.classList.remove('sopra');
+  zona.querySelectorAll('.prima-qui').forEach(x => x.classList.remove('prima-qui'));
+}
 
 async function rilascia(e, zona, giorno, mezza) {
   e.preventDefault();
-  zona.classList.remove('sopra');
-  await spostaLavoro(TRASCINATO, giorno, mezza);
+  const sotto = cartellinoSotto(e, zona);
+  fuoriZona(zona);
+  await spostaLavoro(TRASCINATO, giorno, mezza, sotto ? sotto.dataset.lavoro : '');
   TRASCINATO = null;
 }
 
-async function spostaLavoro(id, giorno, mezza) {
+// L'ordine sta nell'ordine dei lavori nel file: nessun campo da tenere allineato,
+// e i lavori di prima restano dove sono. Prima di `primaDi`, o in fondo.
+function mettiInOrdine(l, primaDi) {
+  const altri = LAVAGNA.lavori.filter(x => x !== l);
+  const i = primaDi ? altri.findIndex(x => x.id === primaDi) : -1;
+  if (i < 0) altri.push(l); else altri.splice(i, 0, l);
+  const cambiato = altri.some((x, k) => x !== LAVAGNA.lavori[k]);
+  LAVAGNA.lavori = altri;
+  return cambiato;
+}
+
+async function spostaLavoro(id, giorno, mezza, primaDi) {
   const l = LAVAGNA.lavori.find(x => x.id === id);
   if (!l) return;
   // Togliere o spostare un confermato vuol dire che qualcuno deve telefonare al
@@ -6860,13 +6902,18 @@ async function spostaLavoro(id, giorno, mezza) {
     l.stato = 'lista'; l.giorno = ''; l.mezza = ''; l.mezze = 1; l.ora = '';
     l.rimandato = true;   // era già stato programmato: torna in cima alla coda
   } else {
-    if (l.giorno === giorno && l.mezza === mezza) return;
-    // Un'ora della mattina su un pomeriggio direbbe due cose diverse: passando
-    // all'altra mezza giornata si toglie, e la si riscrive quando la si sa.
-    if (l.mezza !== mezza) l.ora = '';
-    l.giorno = giorno; l.mezza = mezza;
-    if (l.stato === 'lista') l.stato = 'matita';
-    l.rimandato = false;
+    const stesso = l.giorno === giorno && l.mezza === mezza;
+    // Nella stessa mezza giornata cambia solo il posto: niente da confermare,
+    // niente ora tolta. E se non cambia nemmeno quello, non si salva niente.
+    if (!mettiInOrdine(l, primaDi) && stesso) return;
+    if (!stesso) {
+      // Un'ora della mattina su un pomeriggio direbbe due cose diverse: passando
+      // all'altra mezza giornata si toglie, e la si riscrive quando la si sa.
+      if (l.mezza !== mezza) l.ora = '';
+      l.giorno = giorno; l.mezza = mezza;
+      if (l.stato === 'lista') l.stato = 'matita';
+      l.rimandato = false;
+    }
   }
   await salvaLavagna();
   disegnaLavagna();
