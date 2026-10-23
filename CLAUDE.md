@@ -1209,10 +1209,15 @@ motivo per toglierlo dal suo giorno; giorno, mezza e penna il modulo non li tocc
 **«+ Aggiungi appuntamento»** sta fra la settimana e la coda, col suo modulo: in fondo
 alla coda, con la coda piena, per arrivarci si scorrevano tutti i cartellini.
 
-**Dove un lavoro prosegue, la mezza giornata è piena** e ha il colore del suo
-cartellino — grigio, verde, blu, o il velo della pioggia (`seguitoCart()`). Era una
-riga tratteggiata piccola, «↳ Rossi, continua», e un pomeriggio già preso sembrava
-libero.
+**Dove un lavoro prosegue c'è un cartellino come gli altri**, grande uguale e col
+colore del suo stato — grigio, verde, blu, o il velo della pioggia — e «↳ continua da
+lun 21/9 mattina» (`seguitoCart()`). Era una riga tratteggiata piccola, e un
+pomeriggio già preso sembrava libero; poi una fascia che riempiva la mezza giornata,
+ma stava sempre in fondo e un appuntamento dopo non ci si metteva. Adesso sta
+nell'ordine della mezza giornata come gli altri — l'ordine dei lavori nel file, che
+vale per tutte le mezze dove il lavoro compare — e trascinandolo **gli si cambia solo
+il posto lì dentro**: il lavoro intero si sposta dal cartellino da cui parte, o
+trascinare il pomeriggio sposterebbe la mattina.
 
 **Quanto è largo un lavoro lo dice chi pianifica**, non la stima ore: `mezze` si
 alza e si abbassa di uno con `+` e `−`. Dedurlo dalle ore legava la lavagna a un

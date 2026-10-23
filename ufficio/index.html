@@ -570,20 +570,13 @@ input.vuoto { background: #fffdf5; border-color: #ecdca8; }
   flex-wrap: wrap;
 }
 .mezze-cart { font-size: 0.68rem; color: var(--text-light); min-width: 46px; text-align: center; }
-/* La mezza giornata dove un lavoro prosegue è piena, del colore del suo
-   cartellino: una riga tratteggiata piccola in un angolo faceva sembrare libero un
-   pomeriggio già preso. */
-.seguito-cart {
-  flex: 1; display: flex; align-items: center; justify-content: center; text-align: center;
-  border: 1px solid var(--border); border-radius: var(--radius-sm); padding: 5px 8px;
-  font-size: 0.72rem; color: var(--text-mid); background: var(--cream); min-width: 0; overflow-wrap: anywhere;
-}
+/* Dove un lavoro prosegue c'è un cartellino come gli altri, col colore del suo
+   stato: era una fascia che riempiva la mezza giornata, e stando sempre in fondo
+   non lasciava mettere niente dopo. */
 .cartellino.prima-qui { box-shadow: 0 -3px 0 var(--ocra); }
-.seguito-cart.matita { border: 1px dashed #9aa0a6; background: #f4f5f6; color: #5f6469; }
-.seguito-cart.confermato { border-color: #2f8f4e; background: #f1faf3; color: #1c5c33; }
-.seguito-cart.fatto { border-color: #2a6f9e; background: #eef6fb; color: #1d4e6f; }
-.seguito-cart.pioggia { border-color: #b9c6d3; color: #3d4f61;
-  background: repeating-linear-gradient(135deg, #eef2f6 0 8px, #e4eaf0 8px 16px); }
+.cartellino.seguito { cursor: grab; }
+.cartellino.seguito.fatto { cursor: default; }
+.continua-cart { font-size: 0.68rem; color: var(--text-light); }
 .sconfina-cart { font-size: 0.68rem; color: var(--earth); }
 .vuoto-mezza { font-size: 0.72rem; color: var(--text-light); text-align: center; padding: 8px 4px; }
 
@@ -2396,6 +2389,15 @@ function riassuntoRicontrolla() {
 // La più recente per prima. Le righe sono poche e corte apposta: un elenco lungo
 // non si legge, e quello che non si legge tanto vale non scriverlo.
 const NOVITA = [
+  {
+    versione: '2026-10-23.2',
+    data: '2026-10-23',
+    titolo: 'I lavori che proseguono',
+    righe: [
+      'Dove un lavoro o la pioggia **prosegue**, sulla lavagna c\'è **un cartellino grande come gli altri**, col suo colore e «↳ continua da…», invece della fascia che riempiva la mezza giornata.',
+      'Si mette in ordine come gli altri: **un appuntamento ora si può mettere anche dopo**, lasciandolo nello spazio libero sotto. Per spostare il lavoro intero si trascina il cartellino da cui parte.',
+    ],
+  },
   {
     versione: '2026-10-23',
     data: '2026-10-23',
@@ -6520,12 +6522,37 @@ async function aggiungiPioggia() {
   avvisa('🌧️ Trascinalo sul giorno di pioggia');
 }
 
-// Dove un lavoro prosegue, la mezza giornata prende il colore del suo stato — o
-// il velo della pioggia — come il cartellino da cui parte.
-function seguitoCart(l) {
-  const stato = l.pioggia ? 'pioggia' : l.fatto ? 'fatto' : l.stato === 'confermato' ? 'confermato' : 'matita';
-  return '<div class="seguito-cart ' + stato + '" data-lavoro="' + perValore(l.id) + '">' +
-    (l.pioggia ? '🌧️ Pioggia, continua' : '↳ ' + perValore(l.cliente) + ', continua') + '</div>';
+// Dove un lavoro prosegue c'è un cartellino suo, grande come gli altri e col
+// colore del suo stato — o il velo della pioggia. Era una fascia che riempiva la
+// mezza giornata e stava sempre in fondo: un appuntamento non ci si metteva dopo.
+// Si trascina solo per cambiargli posto lì dentro: il lavoro si sposta dal
+// cartellino da cui parte, o un pomeriggio trascinato sposterebbe la mattina.
+function seguitoCart(l, giorno, mezza) {
+  const classi = ['cartellino', 'seguito', l.pioggia ? 'pioggia' : l.stato];
+  if (l.fatto) classi.push('fatto');
+  if (bloccato(l)) classi.push('bloccato');
+  const id = perOnclick(l.id);
+  const inizio = new Date(l.giorno + 'T12:00:00');
+  const da = NOMI_GIORNI[(inizio.getDay() + 6) % 7].slice(0, 3).toLowerCase() + ' ' +
+    inizio.getDate() + '/' + (inizio.getMonth() + 1) + ' ' + l.mezza;
+  return '<article class="' + classi.join(' ') + '" draggable="' + (l.fatto ? 'false' : 'true') + '"' +
+      ' data-lavoro="' + perValore(l.id) + '"' +
+      (l.fatto ? '' : ' ondragstart="iniziaTrascino(event, \'' + id + '\', \'' + giorno + '\', \'' + mezza + '\')"') +
+      ' title="Continua da ' + perValore(da) + (l.fatto ? '' : ' · trascinalo per cambiargli posto in questa mezza giornata') + '">' +
+    '<div class="testa-cart"><div class="testo-cart">' +
+      '<div class="cliente-cart">' + (l.pioggia ? '🌧️ Pioggia' : perValore(l.cliente || 'senza nome')) + '</div>' +
+      (l.luogo && !l.pioggia ? '<div class="luogo-cart">' + perValore(l.luogo) + '</div>' : '') +
+    '</div></div>' +
+    (l.pioggia ? '' : etichetteTipi(l)) +
+    (l.note ? '<div class="cosa-cart">' + perValore(l.note) + '</div>' : '') +
+    '<div class="riga-cart">' +
+      (l.pioggia ? '' : '<span class="stato-cart">' + etichettaStato(l) + '</span>') +
+      (l.sopralluogo ? '<span class="sopralluogo-cart">sopralluogo</span>' : '') +
+      '<span class="continua-cart">↳ continua da ' + perValore(da) + '</span>' +
+      (l.pioggia ? '' : '<button type="button" class="bottone-cart" style="margin-left:auto"' +
+        ' onclick="event.stopPropagation(); apriModuloLavoro(\'' + id + '\')" title="Modifica">✎</button>') +
+    '</div>' +
+  '</article>';
 }
 
 function cartellinoChiuso(l) {
@@ -6725,13 +6752,13 @@ function disegnaLavagna() {
     let oreGiorno = 0;
     let mezze = '';
     MEZZE.forEach(mezza => {
-      const inizia = LAVAGNA.lavori.filter(l => piazzato(l) && l.giorno === iso && l.mezza === mezza);
-      const seguiti = LAVAGNA.lavori.filter(l => piazzato(l) && !(l.giorno === iso && l.mezza === mezza) &&
-        copertura(l).some(x => x.giorno === iso && x.mezza === mezza));
+      // Quelli che cominciano qui e quelli che proseguono stanno in un ordine
+      // solo, quello dei lavori nel file: chi prosegue non finisce per forza in fondo.
+      const qui = LAVAGNA.lavori.filter(l => copertura(l).some(x => x.giorno === iso && x.mezza === mezza));
       const ore = LAVAGNA.lavori.reduce((s, l) => s + oreNellaMezza(l, iso, mezza), 0);
       oreGiorno += ore;
-      const dentro = inizia.map(cartellino).join('') +
-        seguiti.map(seguitoCart).join('');
+      const dentro = qui.map(l => l.giorno === iso && l.mezza === mezza
+        ? cartellino(l) : seguitoCart(l, iso, mezza)).join('');
       mezze += '<div class="mezza">' +
         '<div class="mezza-etichetta"><span>' + mezza + '</span>' +
           (ore ? '<b>' + formattaQuantita(ore) + ' h</b>' : '') + '</div>' +
@@ -6841,8 +6868,12 @@ async function caricaMeteo() {
 
 // ── trascinare ──
 
-function iniziaTrascino(e, id) {
+// Da un cartellino che prosegue si porta solo il posto in quella mezza giornata.
+let TRASCINATO_DA = null;
+
+function iniziaTrascino(e, id, giorno, mezza) {
   TRASCINATO = id;
+  TRASCINATO_DA = giorno ? { giorno, mezza } : null;
   if (e.dataTransfer) e.dataTransfer.effectAllowed = 'move';
 }
 
@@ -6873,6 +6904,22 @@ async function rilascia(e, zona, giorno, mezza) {
   e.preventDefault();
   const sotto = cartellinoSotto(e, zona);
   fuoriZona(zona);
+  const da = TRASCINATO_DA;
+  TRASCINATO_DA = null;
+  if (da) {
+    const l = LAVAGNA.lavori.find(x => x.id === TRASCINATO);
+    TRASCINATO = null;
+    if (!l) return;
+    if (da.giorno !== giorno || da.mezza !== mezza) {
+      avvisa('Per spostare ' + (l.pioggia ? 'la pioggia' : l.cliente || 'il lavoro') +
+        ' trascina il cartellino da cui parte', true);
+      return;
+    }
+    if (!mettiInOrdine(l, sotto ? sotto.dataset.lavoro : '')) return;
+    await salvaLavagna();
+    disegnaLavagna();
+    return;
+  }
   await spostaLavoro(TRASCINATO, giorno, mezza, sotto ? sotto.dataset.lavoro : '');
   TRASCINATO = null;
 }

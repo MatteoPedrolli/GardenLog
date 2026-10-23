@@ -3549,12 +3549,10 @@ try {
     await cambiaPenna(l.id);
     await spuntaFatto(l.id);
     const giorno = [...document.querySelectorAll('#pagina-lavagna .meteo-giorno')].find(x => x.dataset.giorno === oggi);
-    const pomeriggio = document.querySelector('#pagina-lavagna').textContent.includes('Pioggia, continua');
-    // Il pomeriggio è pieno e ha il velo della pioggia, non una riga in un angolo.
-    const seguito = document.querySelector('#pagina-lavagna .seguito-cart[data-lavoro="' + l.id + '"]');
-    const corpo = seguito && seguito.parentElement.getBoundingClientRect();
+    // Il pomeriggio ha un cartellino suo, col velo della pioggia.
+    const seguito = document.querySelector('#pagina-lavagna article.seguito[data-lavoro="' + l.id + '"]');
+    const pomeriggio = !!seguito && seguito.textContent.includes('Pioggia') && seguito.textContent.includes('continua da');
     const pieno = !!seguito && seguito.classList.contains('pioggia') &&
-      seguito.getBoundingClientRect().height >= corpo.height - 16 &&
       getComputedStyle(seguito).backgroundImage.includes('gradient');
     const agenda = costruisciAgenda(LAVAGNA.lavori).appuntamenti.find(a => a.cliente === 'Pioggia');
     const r = { bottone, mezze: l.mezze, primo: primoInCoda && primoInCoda.classList.contains('pioggia'),
@@ -3570,7 +3568,7 @@ try {
     pioggia.bottone && pioggia.mezze === 2 && pioggia.primo, JSON.stringify(pioggia));
   ok('trascinato sul giorno lo occupa tutto, e non ha matita, penna né spunta',
     pioggia.piazzato && pioggia.pomeriggio && pioggia.statoUguale, JSON.stringify(pioggia));
-  ok('e la mezza giornata dove prosegue è piena, col velo della pioggia', pioggia.pieno, JSON.stringify(pioggia));
+  ok('e dove prosegue c\'è un cartellino col velo della pioggia', pioggia.pieno, JSON.stringify(pioggia));
   // Lo stesso per un lavoro: il pomeriggio preso ha il colore del suo stato.
   const prosegue = await pagU.evaluate(async () => {
     const oggi = isoData(new Date());
@@ -3580,9 +3578,13 @@ try {
     l.stato = 'confermato';
     SETTIMANA = lunediDi(new Date());
     disegnaLavagna();
-    const sel = () => document.querySelector('#pagina-lavagna .seguito-cart[data-lavoro="' + l.id + '"]');
+    const sel = () => document.querySelector('#pagina-lavagna article.seguito[data-lavoro="' + l.id + '"]');
     const verde = sel() && sel().classList.contains('confermato') &&
       getComputedStyle(sel()).backgroundColor === 'rgb(241, 250, 243)';
+    // Grande come il cartellino da cui parte, non una fascia che riempie la mezza.
+    const primo = document.querySelector('#pagina-lavagna article.cartellino:not(.seguito)[data-lavoro="' + l.id + '"]');
+    const alto = sel() && primo && Math.abs(sel().getBoundingClientRect().width - primo.getBoundingClientRect().width) < 2 &&
+      sel().getBoundingClientRect().height <= primo.getBoundingClientRect().height + 2;
     l.fatto = true;
     disegnaLavagna();
     const blu = sel() && sel().classList.contains('fatto');
@@ -3592,10 +3594,11 @@ try {
     LAVAGNA.lavori = LAVAGNA.lavori.filter(x => x !== l);
     await salvaLavagna();
     disegnaLavagna();
-    return { verde, blu, grigio };
+    return { verde, blu, grigio, alto };
   });
-  ok('un lavoro che prosegue colora la mezza giornata dopo come il suo cartellino',
+  ok('un lavoro che prosegue ha nella mezza giornata dopo un cartellino col colore del suo',
     prosegue.verde && prosegue.blu && prosegue.grigio, JSON.stringify(prosegue));
+  ok('e grande come gli altri, non una fascia che riempie la mezza giornata', prosegue.alto, JSON.stringify(prosegue));
 
   // L'ordine dentro una mezza giornata lo decide chi pianifica: lasciato sopra un
   // cartellino va prima di quello, nello spazio libero va in fondo.
@@ -3661,6 +3664,53 @@ try {
     riordino.bPrimo === 'Ordine B,Ordine C,Ordine D,Ordine A' && riordino.chieste === 0, JSON.stringify(riordino));
   ok('e l\'ordine resta sul file e vale per l\'agenda dei telefoni',
     riordino.suFile === 'B,C,D,A' && riordino.agenda === 'B,C,D,A', JSON.stringify(riordino));
+  // Un lavoro che prosegue è un cartellino come gli altri: ci si mette un
+  // appuntamento dopo, e trascinandolo gli si cambia solo il posto lì dentro.
+  const dopoSeguito = await pagU.evaluate(async () => {
+    const oggi = isoData(new Date());
+    const lungo = sistemaLavoro({ cliente: 'Seguito L', note: 'siepe', stato: 'lista', mezze: 2 });
+    const breve = sistemaLavoro({ cliente: 'Seguito B', note: 'prato', stato: 'lista' });
+    LAVAGNA.lavori.push(lungo, breve);
+    await spostaLavoro(lungo.id, oggi, 'mattina');
+    SETTIMANA = lunediDi(new Date());
+    disegnaLavagna();
+    const pomeriggio = () => [...document.querySelectorAll('#pagina-lavagna .mezza-corpo[data-giorno="' + oggi + '"]')][1];
+    const nomi = () => [...pomeriggio().querySelectorAll('article.cartellino')].map(x => x.textContent.match(/Seguito \w/)?.[0]).join(',');
+    const carta = l => pomeriggio().querySelector('article[data-lavoro="' + l.id + '"]');
+    const lascia = async (l, sopra, da) => {
+      if (da) iniziaTrascino({}, l.id, da.giorno, da.mezza); else iniziaTrascino({}, l.id);
+      const z = da && da.zona ? da.zona : pomeriggio();
+      const e = { preventDefault() {}, target: sopra || z };
+      sopraZona(e, z);
+      await rilascia(e, z, oggi, da && da.zona ? 'mattina' : 'pomeriggio');
+    };
+    const r = {};
+    // Nello spazio libero, dopo quello che prosegue.
+    await lascia(breve, null);
+    r.dopo = nomi();
+    // B lasciato sopra il cartellino che prosegue va prima di lui.
+    await lascia(breve, carta(lungo));
+    r.sopra = nomi();
+    // E quello che prosegue, lasciato sopra B, torna prima di B: il lavoro resta dov'era.
+    await lascia(lungo, carta(breve), { giorno: oggi, mezza: 'pomeriggio' });
+    r.prima = nomi();
+    r.fermo = lungo.giorno + '|' + lungo.mezza === oggi + '|mattina';
+    // E portato su un'altra mezza giornata non sposta niente: lo dice.
+    const zonaMattina = [...document.querySelectorAll('#pagina-lavagna .mezza-corpo[data-giorno="' + oggi + '"]')][0];
+    await lascia(lungo, null, { giorno: oggi, mezza: 'pomeriggio', zona: zonaMattina });
+    r.ancoraFermo = lungo.giorno + '|' + lungo.mezza === oggi + '|mattina';
+    r.detto = document.getElementById('avviso').textContent;
+    LAVAGNA.lavori = LAVAGNA.lavori.filter(x => !/^Seguito/.test(x.cliente));
+    await salvaLavagna();
+    disegnaLavagna();
+    return r;
+  });
+  ok('dopo un lavoro che prosegue si può mettere un appuntamento', dopoSeguito.dopo === 'Seguito L,Seguito B', JSON.stringify(dopoSeguito));
+  ok('e il cartellino che prosegue si riordina senza spostare il lavoro',
+    dopoSeguito.sopra === 'Seguito B,Seguito L' && dopoSeguito.prima === 'Seguito L,Seguito B' && dopoSeguito.fermo,
+    JSON.stringify(dopoSeguito));
+  ok('portato su un\'altra mezza giornata non sposta niente, e dice da dove trascinarlo',
+    dopoSeguito.ancoraFermo && dopoSeguito.detto.includes('cartellino da cui parte'), JSON.stringify(dopoSeguito));
   ok('e va in agenda, così in giardino si sa che quel giorno non si lavora',
     /^\d{4}-\d{2}-\d{2}\|non si lavora$/.test(pioggia.agenda), pioggia.agenda);
 
