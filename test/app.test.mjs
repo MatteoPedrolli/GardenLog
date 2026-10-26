@@ -3600,6 +3600,25 @@ try {
     prosegue.verde && prosegue.blu && prosegue.grigio, JSON.stringify(prosegue));
   ok('e grande come gli altri, non una fascia che riempie la mezza giornata', prosegue.alto, JSON.stringify(prosegue));
 
+  // Un lavoro cominciato di domenica che prosegue al lunedì: il nome del giorno
+  // veniva da un elenco che si ferma al sabato, e la lavagna non si disegnava più.
+  const domenica = await pagU.evaluate(() => {
+    const lun = lunediDi(new Date());
+    const dom = new Date(lun); dom.setDate(lun.getDate() - 1);
+    const l = sistemaLavoro({ cliente: 'Prova Domenica', note: 'x', stato: 'matita',
+      giorno: isoData(dom), mezza: 'pomeriggio', mezze: 2 });
+    LAVAGNA.lavori.push(l);
+    SETTIMANA = lun;
+    let errore = '';
+    try { disegnaLavagna(); } catch (e) { errore = e.message; }
+    const testo = (document.querySelector('#pagina-lavagna article.seguito[data-lavoro="' + l.id + '"]') || {}).textContent || '';
+    LAVAGNA.lavori = LAVAGNA.lavori.filter(x => x !== l);
+    disegnaLavagna();
+    return { errore, testo };
+  });
+  ok('un lavoro cominciato di domenica non blocca la lavagna, e dice da che giorno continua',
+    !domenica.errore && domenica.testo.includes('continua da dom'), JSON.stringify(domenica));
+
   // L'ordine dentro una mezza giornata lo decide chi pianifica: lasciato sopra un
   // cartellino va prima di quello, nello spazio libero va in fondo.
   const riordino = await pagU.evaluate(async () => {
@@ -4622,6 +4641,15 @@ try {
       firma: !!f.querySelector('.prev-firma'),
       titolone: !!f.querySelector('h1'),
     };
+    // E sul conto lo stesso: il logo a sinistra, l'intestazione a destra; senza
+    // intestazione, niente logo, perché la carta intestata ce l'ha già.
+    const conto = document.createElement('div');
+    conto.innerHTML = costruisciFoglio({ cliente: { nome: 'Mario Rossi' }, data: '2026-10-05', righe: [] });
+    const testaConto = conto.querySelector('.intestazione');
+    r.contoLogo = !!testaConto && testaConto.firstElementChild.querySelector('img') != null &&
+      testaConto.lastElementChild.textContent.includes('Giardini Prova');
+    conto.innerHTML = costruisciFoglio({ cliente: { nome: 'Mario Rossi' }, data: '2026-10-05', righe: [], senzaIntestazione: true });
+    r.contoSenza = !conto.querySelector('img');
     Object.keys(IMPOSTAZIONI).forEach(k => delete IMPOSTAZIONI[k]);
     Object.assign(IMPOSTAZIONI, tenute);
     IMPOSTAZIONI_DA_SALVARE = false;
@@ -4632,6 +4660,8 @@ try {
     formaPrev.caricato === '600x150' && formaPrev.inImpostazioni, formaPrev.caricato);
   ok('sul foglio il logo sta a sinistra e l\'intestazione a destra, senza un titolo in grande',
     formaPrev.logoPrima && formaPrev.aziendaDopo && !formaPrev.titolone, JSON.stringify(formaPrev));
+  ok('anche sul conto il logo sta a sinistra e l\'intestazione a destra', formaPrev.contoLogo, JSON.stringify(formaPrev));
+  ok('e stampando senza intestazione il logo non esce', formaPrev.contoSenza, JSON.stringify(formaPrev));
   ok('la tabella è quella dei preventivi veri: Descrizione, UM, Q.tà, Costo un., Totale',
     formaPrev.colonne === 'Descrizione|UM|Q.tà|Costo un.|Totale', formaPrev.colonne);
   ok('con la località senza CAP e la data per esteso, e la firma in fondo',

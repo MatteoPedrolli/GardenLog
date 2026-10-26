@@ -1383,7 +1383,9 @@ riga, o il foglio dichiara una cosa e ne mostra un'altra.
 li copre come tutto il resto. Se mancano, la stampa avvisa ma non si rifiuta — la
 decisione resta di chi stampa. **Il logo** sta lì con lei (`IMPOSTAZIONI.logo`, un
 PNG rimpicciolito a 600 px al caricamento, `caricaLogo()`): il repository è pubblico,
-e un file da tipografia gonfierebbe impostazioni.json per niente.
+e un file da tipografia gonfierebbe impostazioni.json per niente. Esce **in alto a
+sinistra su conti e preventivi**, con l'intestazione a destra: per un po' è stato
+solo sul preventivo, e chi l'aveva caricato stampava conti senza vederlo.
 
 **Il preventivo stampato ricalca quelli veri**, che il cliente ha sempre visto
 così: **logo in alto a sinistra, intestazione a destra**, «Spett.le» a destra come

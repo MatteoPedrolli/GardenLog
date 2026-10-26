@@ -1981,11 +1981,17 @@ function costruisciFoglio({ cliente, data, righe, lavori, senzaIntestazione }) {
   ].filter(x => x).join(' · ');
 
   // Senza intestazione si stampa sulla carta intestata, che i dati dell'azienda
-  // li ha già: ripeterli sopra li sovrapporrebbe al logo.
-  let html = senzaIntestazione ? '' : '<div class="intestazione">' +
+  // li ha già: ripeterli sopra li sovrapporrebbero al logo — e lo stesso il logo.
+  // Con il logo, come sul preventivo: lui a sinistra, l'intestazione a destra. Era
+  // solo sul preventivo, e caricato in Impostazioni sul conto non si vedeva.
+  const logo = !senzaIntestazione && IMPOSTAZIONI.logo;
+  let html = senzaIntestazione ? '' : '<div class="intestazione' + (logo ? ' prev-testata' : '') + '">' +
+    (logo ? '<div class="prev-logo"><img src="' + perValore(IMPOSTAZIONI.logo) + '" alt=""></div>' +
+      '<div class="prev-azienda">' : '') +
     '<div class="azienda">' + perValore(IMPOSTAZIONI.azienda) + '</div>' +
     (sede ? '<div class="recapiti">' + perValore(sede) + '</div>' : '') +
     (contatti ? '<div class="recapiti">' + perValore(contatti) + '</div>' : '') +
+    (logo ? '</div>' : '') +
   '</div>';
 
   html += '<h1>Conto dei lavori</h1>';
@@ -2389,6 +2395,14 @@ function riassuntoRicontrolla() {
 // La più recente per prima. Le righe sono poche e corte apposta: un elenco lungo
 // non si legge, e quello che non si legge tanto vale non scriverlo.
 const NOVITA = [
+  {
+    versione: '2026-10-26',
+    data: '2026-10-26',
+    titolo: 'Il logo anche sui conti',
+    righe: [
+      'Il logo caricato in **Impostazioni › Logo** esce ora **anche sui conti**, in alto a sinistra con l\'intestazione a destra, come sui preventivi. Stampando senza intestazione non esce: la carta intestata ce l\'ha già.',
+    ],
+  },
   {
     versione: '2026-10-23.2',
     data: '2026-10-23',
@@ -6533,7 +6547,9 @@ function seguitoCart(l, giorno, mezza) {
   if (bloccato(l)) classi.push('bloccato');
   const id = perOnclick(l.id);
   const inizio = new Date(l.giorno + 'T12:00:00');
-  const da = NOMI_GIORNI[(inizio.getDay() + 6) % 7].slice(0, 3).toLowerCase() + ' ' +
+  // Il nome del giorno dal calendario e non da NOMI_GIORNI, che si ferma al sabato:
+  // un lavoro cominciato di domenica bloccava tutta la lavagna.
+  const da = inizio.toLocaleDateString('it-IT', { weekday: 'short' }).replace('.', '') + ' ' +
     inizio.getDate() + '/' + (inizio.getMonth() + 1) + ' ' + l.mezza;
   return '<article class="' + classi.join(' ') + '" draggable="' + (l.fatto ? 'false' : 'true') + '"' +
       ' data-lavoro="' + perValore(l.id) + '"' +
@@ -7407,15 +7423,17 @@ function disegnaImpostazioni() {
         '" oninput="modificaImpostazione(\'' + campo + '\', this.value)"></td></tr>';
   });
   html += '</tbody></table>';
-  // Il logo va in alto a sinistra sul preventivo, come sui fogli veri.
+  // Il logo va in alto a sinistra su conti e preventivi, come sui fogli veri.
   html += '<div class="titolo-sezione" style="margin-top:18px">Logo</div>';
   html += '<div class="riga-logo">' +
     (IMPOSTAZIONI.logo ? '<img src="' + perValore(IMPOSTAZIONI.logo) + '" alt="logo" id="anteprima-logo">'
-      : '<span class="meta">Nessun logo: il preventivo esce con la sola intestazione.</span>') +
+      : '<span class="meta">Nessun logo: conti e preventivi escono con la sola intestazione.</span>') +
     '<label class="secondaria bottone-file">Scegli un\'immagine<input type="file" accept="image/*" ' +
       'onchange="caricaLogo(this.files[0])" style="display:none"></label>' +
     (IMPOSTAZIONI.logo ? '<button class="secondaria" onclick="togliLogo()">Togli</button>' : '') +
   '</div>';
+  html += '<div class="meta">Esce in alto a sinistra su conti e preventivi, non più largo di 7 cm né più alto ' +
+    'di 3: va bene qualsiasi immagine, si rimpicciolisce da sola. Stampando senza intestazione non esce.</div>';
   html += '<div class="titolo-sezione" style="margin-top:18px">Pagamento</div>';
   html += '<table class="elenco"><tbody>' +
     '<tr><td style="width:180px">IBAN per il bonifico</td><td><input type="text" id="imp-iban" value="' +
