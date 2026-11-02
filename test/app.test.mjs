@@ -1205,6 +1205,122 @@ try {
   await page.evaluate(() => { document.getElementById('f-visita-note').value = ''; closeDrawer('overlay-visita'); });
   await page.waitForTimeout(150);
 
+  // ── IL CONFERIMENTO DEL VERDE ──
+  // Il peso del certificato si divide sui lavori il cui verde era nel cassone, in
+  // proporzione alle stime e alla decina; quello che avanza va su «Altro».
+  const ripartizione = await page.evaluate(() => {
+    const a = ripartisciConferimento(1234, [{ chiave: 'a', stima: 300 }, { chiave: 'b', stima: 500 }], 200);
+    const b = ripartisciConferimento(1234, [{ chiave: 'a', stima: 333 }, { chiave: 'b', stima: 333 }, { chiave: 'c', stima: 334 }], 0);
+    const c = ripartisciConferimento(500, [{ chiave: 'a', fisso: 700 }], 0);
+    const d = ripartisciConferimento(500, [{ chiave: 'a', stima: 0 }], 0);
+    return { a: a.righe.map(r => r.kg).join(',') + '|' + a.altro, b: b.righe.map(r => r.kg).join(',') + '|' + b.altro,
+      decine: b.righe.every(r => r.kg % 10 === 0), c: c.errore, d: d.errore, fattore: Math.round(a.fattore * 1000) };
+  });
+  ok('il certificato si divide in proporzione alle stime, alla decina, e il resto va su Altro',
+    ripartizione.a === '370,620|244' && ripartizione.fattore === 1234, JSON.stringify(ripartizione));
+  ok('e quando l\'arrotondamento supererebbe il certificato, Altro non va sotto zero',
+    ripartizione.b === '410,410,410|4' && ripartizione.decine, JSON.stringify(ripartizione));
+  ok('pesi scritti a mano oltre il certificato, o nessuna stima, fermano il conferimento',
+    !!ripartizione.c && !!ripartizione.d, JSON.stringify(ripartizione));
+
+  const conferimento = await page.evaluate(async () => {
+    const cli = DB.clienti[0];
+    const visita = (id, data, extra) => ({ VisitaID: id, Data: data, ClienteID: cli.ClienteID, Fasce: [], Ore_Visita: 1,
+      Note_visita: '', Conto: [], ...extra });
+    // Uno scarico come operazione, già partito; uno scritto in «+ Altro», mai
+    // mandato; uno già pesato col suo certificato; e uno di tre mesi fa.
+    const v1 = visita('verde-v1', isoGiorno(-1), { Consegnato: new Date().toISOString(), Revisione: 1,
+      Conto: [{ Chiave: 'verde-op1', VoceID: 'smaltimento-verde', Voce: 'Smaltimento verde', Unita: 'kg', Quantita: 300 }] });
+    const v2 = visita('verde-v2', isoGiorno(0), {
+      Conto: [{ RigaID: 'verde-r2', VoceID: 'smaltimento-verde', Voce: 'Smaltimento verde', Unita: 'kg', Quantita: '500' }] });
+    const v3 = visita('verde-v3', isoGiorno(0), {});
+    const v4 = visita('verde-v4', isoGiorno(-90), {});
+    const op = (id, vid, kg, extra) => ({ OperazioneID: id, VisitaID: vid, TipoID: 'scarico-verde', Tipo_operazione: 'Scarico verde',
+      Quantita: String(kg), Unita: 'kg', Descrizione: '', ...extra });
+    DB.visite.push(v1, v2, v3, v4);
+    DB.operazioni.push(op('verde-op1', 'verde-v1', 300), op('verde-op3', 'verde-v3', 800, { Pesato: 'Sì' }), op('verde-op4', 'verde-v4', 200));
+    DB.conferimenti = [];
+    invioInCorso = true;   // la coda resta ferma: si guarda cosa c'è dentro
+    const r = {};
+    aggiornaSchedaConferimento();
+    r.scheda = document.getElementById('conferimento-sub').textContent;
+    apriConferimento();
+    r.elenco = CONFERIMENTO.elenco.map(x => x.chiave).join(',');
+    r.spuntati = CONFERIMENTO.spuntati.size;
+    document.getElementById('f-conf-kg').value = '1234';
+    document.getElementById('f-conf-altro').value = '200';
+    document.getElementById('f-conf-certificato').value = 'FIR 0042';
+    ricalcolaConferimento();
+    r.proposte = [...document.querySelectorAll('#conf-righe .conf-kg')].map(x => x.placeholder).join(',');
+    r.altro = document.getElementById('conf-altro-kg').textContent;
+    r.esito = document.getElementById('conf-esito').textContent;
+    // Un peso scritto a mano resta quello; gli altri si dividono il resto.
+    pesoConferimento('riga:verde-r2', '600');
+    r.conFisso = document.querySelector('#conf-righe .conf-kg').placeholder + '|' + document.getElementById('conf-altro-kg').textContent;
+    await confermaConferimento();
+    const o1 = DB.operazioni.find(o => o.OperazioneID === 'verde-op1');
+    const riga2 = DB.visite.find(v => v.VisitaID === 'verde-v2').Conto[0];
+    const conf = DB.conferimenti[0];
+    r.op1 = [o1.Quantita, o1.Pesato, o1.Stima, o1.Conferimento === conf.id].join('|');
+    r.contoV1 = DB.visite.find(v => v.VisitaID === 'verde-v1').Conto[0].Quantita;
+    r.riga2 = [riga2.Quantita, riga2.Pesato, riga2.Stima].join('|');
+    r.conf = [conf.kg, conf.altro.kg, conf.certificato, conf.lavori.map(l => l.stima + '>' + l.kg).join(',')].join('|');
+    const inCoda = DB.coda.filter(v => /^verde-|^conf-/.test(v.docID));
+    r.coda = inCoda.map(v => v.tipo + ':' + (v.tipo === 'rapportino' ? v.docID : '')).sort().join(',');
+    const rapp = inCoda.find(v => v.docID === 'verde-v1');
+    r.rapportino = rapp ? JSON.stringify(rapp.doc.righe.find(x => x.voceID === 'smaltimento-verde')) : '';
+    r.rigaAMano = JSON.stringify(costruisciRapportino({ visita: DB.visite.find(v => v.VisitaID === 'verde-v2'), cliente: cli,
+      operazioni: [], tipi: DB.tipiOperazione, voci: DB.voci }).righe[0]);
+    r.nome = comeSiChiama({ tipo: 'conferimento' });
+    r.segno = spuntaPesato(o1, '');
+    // Sbagliato? Si annulla: le stime tornano, i rapportini ripartono.
+    const conferma = window.confirm;
+    window.confirm = () => true;
+    await annullaConferimento(conf.id);
+    window.confirm = conferma;
+    const o1b = DB.operazioni.find(o => o.OperazioneID === 'verde-op1');
+    r.annullato = [o1b.Quantita, o1b.Pesato === undefined, DB.visite.find(v => v.VisitaID === 'verde-v1').Conto[0].Quantita,
+      !!DB.conferimenti[0].annullato, DB.conferimenti[0].revisione].join('|');
+    r.docAnnullato = !!(DB.coda.find(v => v.docID === conf.id) || {}).doc?.annullato;
+    r.dopoAnnullo = verdeDaPesare().filter(x => /verde-/.test(x.chiave)).length;
+    closeDrawer('overlay-conferimento');
+    DB.visite = DB.visite.filter(v => !/^verde-/.test(v.VisitaID));
+    DB.operazioni = DB.operazioni.filter(o => !/^verde-/.test(o.OperazioneID));
+    DB.coda = DB.coda.filter(v => !/^verde-|^conf-/.test(v.docID));
+    DB.conferimenti = [];
+    invioInCorso = false;
+    await salvaDB({ conta: false });
+    renderAll();
+    return r;
+  });
+  ok('in home la scheda dice quanto verde stimato aspetta di essere pesato',
+    conferimento.scheda.startsWith('2 lavori') && conferimento.scheda.includes('800'), conferimento.scheda);
+  ok('nel cassone ci sono gli scarichi stimati, come operazione o come riga a mano, non quelli già pesati né i vecchi',
+    conferimento.elenco === 'op:verde-op1,riga:verde-r2' && conferimento.spuntati === 2, JSON.stringify(conferimento));
+  ok('il pannello propone i pesi in proporzione, e dice di quanto si sbagliavano le stime',
+    conferimento.proposte === '370,620' && conferimento.altro.includes('244') && conferimento.esito.includes('23% più'),
+    JSON.stringify(conferimento));
+  ok('un peso scritto a mano resta quello, e gli altri si dividono il resto',
+    conferimento.conFisso === '380|→ 254 kg', conferimento.conFisso);
+  ok('confermando, la stima diventa il peso e lo scarico è segnato pesato, con la stima accanto',
+    conferimento.op1.startsWith('380|Sì|300|true') && conferimento.contoV1 === 380 && conferimento.riga2 === '600|Sì|500',
+    JSON.stringify(conferimento));
+  ok('il conferimento si ricorda certificato, altro e ogni lavoro', conferimento.conf === '1234|254|FIR 0042|300>380,500>600',
+    conferimento.conf);
+  ok('riparte il rapportino già consegnato, non quello mai mandato, e parte il conferimento',
+    conferimento.coda === 'conferimento:,rapportino:verde-v1', conferimento.coda);
+  ok('nel rapportino il verde dice che è pesato, da quale conferimento e quanto si era stimato',
+    /"pesato":true/.test(conferimento.rapportino) && /"stima":300/.test(conferimento.rapportino) &&
+    /"conferimento":"conf-/.test(conferimento.rapportino), conferimento.rapportino);
+  ok('una riga scritta a mano viaggia con la sua chiave, e il verde stimato lo dice',
+    conferimento.rigaAMano.includes('"chiave":"riga-verde-r2"') && conferimento.rigaAMano.includes('"pesato":true'),
+    conferimento.rigaAMano);
+  ok('la coda lo chiama col suo nome, e sulla visita lo scarico dice quando è stato pesato',
+    conferimento.nome === 'conferimento del verde' && conferimento.segno.includes('pesato il'), conferimento.segno);
+  ok('annullato, le stime tornano al loro posto e il conferimento riparte annullato',
+    conferimento.annullato === '300|true|300|true|2' && conferimento.docAnnullato && conferimento.dopoAnnullo === 2,
+    JSON.stringify(conferimento));
+
   // ── backup ──
   const backup = await page.evaluate(() =>
     JSON.stringify({ app: 'GiardinoApp', versione: VERSIONE_DATI, esportato: new Date().toISOString(), db: DB }));
@@ -5619,6 +5735,146 @@ try {
     setTel.opzione && setTel.irrigazione && setTel.dice, JSON.stringify(setTel));
   ok('un file dei settori rovinato si vede, e restano quelli di partenza', setTel.rotto && setTel.restano);
 
+  // ── IL VERDE IN UFFICIO ──
+  // Le righe scritte a mano sul telefono non si raddoppiano quando il rapportino
+  // torna corretto: quelle già in archivio senza chiave si riconoscono dalla voce.
+  const righeAMano = await pagU.evaluate(() => {
+    const vecchie = [
+      { chiave: '', voceID: 'smaltimento-verde', voce: 'Smaltimento verde', quantita: 150, unita: 'kg', prezzo: 0.2, manuale: true },
+      { chiave: '', voceID: '', voce: 'Noleggio rullo', quantita: 1, unita: '', prezzo: 50, manuale: true, ufficio: true },
+    ];
+    const doc = r => ({ righe: [r], operazioni: [] });
+    const verde = c => ({ chiave: c, voceID: 'smaltimento-verde', voce: 'Smaltimento verde', quantita: 200, unita: 'kg', pesato: true, stima: 150 });
+    const legacy = costruisciConteggio(doc(verde('')), vecchie);
+    const nuova = costruisciConteggio(doc(verde('riga-x')), vecchie);
+    const poi = costruisciConteggio(doc(verde('riga-x')), nuova);
+    const quante = rr => rr.filter(r => r.voceID === 'smaltimento-verde').length + '/' + rr.length;
+    const v = nuova.find(r => r.voceID === 'smaltimento-verde');
+    return { legacy: quante(legacy), nuova: quante(nuova), poi: quante(poi), prezzo: v.prezzo, quantita: v.quantita,
+      pesato: v.pesato, stima: v.stimaVerde, etichetta: etichettaVerde(v),
+      stimato: etichettaVerde({ voceID: 'smaltimento-verde', pesato: false }), vecchio: etichettaVerde({ voceID: 'smaltimento-verde' }) };
+  });
+  ok('una riga a mano del telefono non si raddoppia quando il rapportino torna corretto',
+    righeAMano.legacy === '1/2' && righeAMano.nuova === '1/2' && righeAMano.poi === '1/2', JSON.stringify(righeAMano));
+  ok('e tiene il prezzo deciso in ufficio, con la quantità nuova',
+    righeAMano.prezzo === 0.2 && righeAMano.quantita === 200, JSON.stringify(righeAMano));
+  ok('nel conto il verde dice pesato o stimato, e un rapportino di prima non dice niente',
+    righeAMano.pesato === true && righeAMano.stima === 150 && righeAMano.etichetta.includes('pesato') &&
+    righeAMano.stimato.includes('stimato') && righeAMano.vecchio === '', JSON.stringify(righeAMano));
+
+  // Prima di stampare o mandare un conto col verde ancora stimato, si chiede.
+  const avvisoVerde = await pagU.evaluate(() => {
+    const conferma = window.confirm, stampa = window.print, lavoro = LAVORO;
+    let chieste = 0, risposta = false;
+    window.confirm = m => { if (!/verde/.test(m)) return true; chieste++; return risposta; };
+    window.print = () => {};
+    const riga = pesato => ({ chiave: 'riga-x', voceID: 'smaltimento-verde', voce: 'Smaltimento verde', quantita: 200, unita: 'kg', prezzo: 0.2, pesato });
+    LAVORO = { doc: { id: 'prova-verde', cliente: { nome: 'Verdi' }, data: '2026-10-30' }, righe: [riga(false)] };
+    const fermato = !stampaConto('lavoro');
+    const chiesteStimato = chieste;
+    risposta = true;
+    const passato = !!stampaConto('lavoro');
+    chieste = 0;
+    LAVORO.righe = [riga(true)];
+    stampaConto('lavoro');
+    const chiestePesato = chieste;
+    window.confirm = conferma; window.print = stampa; LAVORO = lavoro;
+    return { fermato, chiesteStimato, passato, chiestePesato };
+  });
+  ok('un conto col verde ancora stimato chiede prima di stampare, e annullando non stampa',
+    avvisoVerde.fermato && avvisoVerde.chiesteStimato >= 1 && avvisoVerde.passato, JSON.stringify(avvisoVerde));
+  ok('col verde pesato non chiede niente', avvisoVerde.chiestePesato === 0, JSON.stringify(avvisoVerde));
+
+  // Una correzione che arriva per un conto già pagato non lo riapre: si legge, si
+  // segna vista, e il conto resta com'è. Per uno già mandato, aprirla lo chiede.
+  const dopoPagato = await pagU.evaluate(async () => {
+    const arrivi = await CARTELLA.getDirectoryHandle('rapportini', { create: true });
+    const rapportino = (id, rev, kg, pesato) => {
+      const d = costruisciRapportino({
+        visita: { VisitaID: id, Data: '2026-10-30', Revisione: rev - 1, Fasce: [],
+          Conto: [{ RigaID: 'r-' + id, VoceID: 'smaltimento-verde', Voce: 'Smaltimento verde', Unita: 'kg', Quantita: kg, Pesato: pesato ? 'Sì' : '' }] },
+        cliente: { ClienteID: 'c-' + id, Cliente: 'Verde ' + id }, operazioni: [], tipi: [], voci: [] });
+      return d;
+    };
+    const metti = async d => { await scriviTesto(arrivi, nomeFileRapportino(d), JSON.stringify(d)); };
+    await metti(rapportino('pagato', 1, 150, false));
+    await metti(rapportino('mandato', 1, 150, false));
+    await ricarica();
+    for (const id of ['pagato', 'mandato']) { apriLavoro(id); await archivia(); }
+    await cambiaStato('pagato', 'fatturato');
+    await aggiornaArchiviato(ARCHIVIO.find(l => l.id === 'mandato'), { inPosta: '2026-11-01T09:00:00.000Z' });
+    await metti(rapportino('pagato', 2, 200, true));
+    await metti(rapportino('mandato', 2, 200, true));
+    await ricarica();
+    vaiA('arrivi');
+    const r = {};
+    const a = ARRIVI.find(x => x.doc.id === 'pagato');
+    r.chiuso = !!a && a.chiuso;
+    const scheda = [...document.querySelectorAll('#pagina-arrivi .scheda')].find(x => x.textContent.includes('Verde pagato'));
+    r.testo = scheda ? scheda.textContent : '';
+    r.cliccabile = scheda ? scheda.classList.contains('cliccabile') : null;
+    LAVORO = null;
+    apriLavoro('pagato');
+    r.nonAperto = LAVORO === null;
+    const conferma = window.confirm;
+    let domanda = '';
+    window.confirm = m => { domanda = m; return false; };
+    apriLavoro('mandato');
+    window.confirm = conferma;
+    r.mandato = LAVORO === null && /posta/.test(domanda);
+    await correzioneVista('pagato');
+    await ricarica();
+    r.sparito = !ARRIVI.some(x => x.doc.id === 'pagato');
+    r.contoUguale = ARCHIVIO.find(l => l.id === 'pagato').righe.find(x => x.voceID === 'smaltimento-verde').quantita;
+    // Si pulisce: questi lavori non devono pesare sulle prove che seguono.
+    for (const id of ['pagato', 'mandato']) {
+      for (const rev of [1, 2]) { try { await arrivi.removeEntry(nomeFileRapportino(rapportino(id, rev, 1))); } catch (e) { /* già tolto */ } }
+      const l = ARCHIVIO.find(x => x.id === id);
+      if (l) {
+        const cartella = await (await CARTELLA.getDirectoryHandle('archivio')).getDirectoryHandle(l.anno);
+        await cartella.removeEntry(l.file);
+      }
+    }
+    await ricarica();
+    disegna();
+    return r;
+  });
+  ok('la correzione di un conto pagato si legge in arrivo, col verde che cambia, e non si apre',
+    dopoPagato.chiuso && dopoPagato.testo.includes('dopo il pagamento') && dopoPagato.testo.includes('150 → 200') &&
+    dopoPagato.cliccabile === false && dopoPagato.nonAperto, JSON.stringify(dopoPagato));
+  ok('segnata «Visto» sparisce, e il conto pagato resta com\'era',
+    dopoPagato.sparito && dopoPagato.contoUguale === 150, JSON.stringify(dopoPagato));
+  ok('aprire la correzione di un conto già mandato lo chiede, e annullando non si apre',
+    dopoPagato.mandato, JSON.stringify(dopoPagato));
+
+  // Il registro dei conferimenti: i file in conferimenti/, letti e basta.
+  const registro = await pagU.evaluate(async () => {
+    const cartella = await CARTELLA.getDirectoryHandle('conferimenti', { create: true });
+    const doc = costruisciConferimento({ id: 'conf-prova', data: '2026-11-02', certificato: 'FIR 0042', kg: 1234,
+      altro: { stima: 200, kg: 254 }, lavori: [{ rapportino: 'v1', cliente: 'Mario Rossi', data: '2026-11-01', stima: 300, kg: 380 },
+        { rapportino: 'v2', cliente: 'Anna Verdi', data: '2026-11-02', stima: 500, kg: 600 }] });
+    const annullato = costruisciConferimento({ ...doc, id: 'conf-annullato', data: '2026-11-01', kg: 500, revisione: 2, annullato: '2026-11-02' });
+    await scriviTesto(cartella, 'buono.json', JSON.stringify(doc));
+    await scriviTesto(cartella, 'annullato.json', JSON.stringify(annullato));
+    await scriviTesto(cartella, 'troncato.json', '{"tipo":"conferim');
+    await ricarica();
+    vaiA('conferimenti');
+    const pagina = document.getElementById('pagina-conferimenti');
+    const r = { n: CONFERIMENTI.length, testo: pagina.textContent, barrato: !!pagina.querySelector('tr.annullato'),
+      voce: !!document.getElementById('v-conferimenti') && document.getElementById('v-conferimenti').classList.contains('attiva') };
+    for (const n of ['buono.json', 'annullato.json', 'troncato.json']) await cartella.removeEntry(n);
+    await ricarica();
+    vaiA('arrivi');
+    return r;
+  });
+  ok('il registro legge i conferimenti, col certificato, i kg ai clienti e su altro, e ogni lavoro',
+    registro.n === 2 && registro.testo.includes('FIR 0042') && registro.testo.includes('980') &&
+    registro.testo.includes('Mario Rossi') && registro.testo.includes('300 → 380') && registro.voce, registro.testo.slice(0, 400));
+  ok('il mese somma solo quelli validi, e un annullato si vede barrato',
+    registro.testo.includes('1234 kg · 980 ai clienti · 254 altro') && registro.barrato, registro.testo.slice(0, 300));
+  ok('dice di quanto si sbagliavano le stime, e un file troncato si vede',
+    registro.testo.includes('+23%') && registro.testo.includes('troncato.json'), registro.testo.slice(0, 500));
+
   // ── i dati spariti dal desktop ──
   // Una cartella sbagliata, o Drive che non l'ha ancora riempita, si presentano
   // come una cartella vuota: l'app lo dice e non scrive niente da sola. E un
@@ -5744,6 +6000,8 @@ try {
       conChiave({ documento: 'anagrafica', chiave: 'segreta' }).includes('0461 777'));
     ok('e lo script accetta le modifiche ai clienti, nella loro cartella',
       JSON.parse(conChiave({})).accetta.includes('cliente'));
+    ok('e i conferimenti del verde', JSON.parse(conChiave({})).accetta.includes('conferimento') &&
+      JSON.parse(conChiave({})).versione === 7);
     ok('l\'agenda resta leggibile senza chiave, come prima',
       senzaChiaveSulloScript({ documento: 'agenda' }).includes('"tipo":"agenda"'));
     // Il nome del file non si prende mai da chi chiama.

@@ -31,6 +31,7 @@ La cartella, dopo un po' di lavoro, ha questa forma:
     impostazioni.json              ← l'intestazione del conto
     lavagna.json                   ← la pianificazione
     clienti/                       ← ci scrive il telefono: le modifiche ai clienti
+    conferimenti/                  ← ci scrive il telefono: il verde pesato in discarica
     agenda.json                    ← ci scrive l'ufficio, il telefono la legge
     anagrafica-dal-telefono.json   ← il file che il telefono esporta, da importare
     prodotti-dal-telefono.json     ← concimi, sementi e fitofarmaci, da importare
@@ -141,6 +142,19 @@ elimina solo da qui**: sul telefono sparisce, e le sue visite là restano.
 
 Serve lo script aggiornato (sotto): quello di prima non conosce né le modifiche ai
 clienti né l'anagrafica, e le lascia in coda sul telefono col loro errore.
+
+## Il verde pesato in discarica
+
+Il verde si stima a occhio in giardino, e in discarica lo pesano. Quando si scarica,
+sul telefono si fa il **conferimento**: i kg del certificato si ripartiscono sui
+lavori il cui verde era nel cassone, in proporzione alle stime, e su «Altro» per il
+verde che non è di nessun cliente. I rapportini di quei lavori ripartono corretti,
+col verde **pesato**, e il conferimento finisce in `conferimenti/`: è il registro che
+si legge alla pagina **Conferimenti**.
+
+Serve lo script aggiornato (versione 7): quello di prima non conosce i conferimenti
+e li lascia in coda sul telefono col loro errore. I rapportini corretti arrivano lo
+stesso.
 
 ## Due pezzi da installare, una volta sola
 

@@ -49,6 +49,9 @@ const CARTELLE = {
   // Le modifiche ai clienti fatte dal telefono: una per file, coi soli campi
   // cambiati. L'ufficio le applica all'anagrafica e non le tocca più.
   cliente: 'clienti',
+  // I conferimenti del verde in discarica: il peso del certificato e come si è
+  // ripartito sui lavori. L'ufficio ne tiene il registro.
+  conferimento: 'conferimenti',
 };
 
 // I file che il telefono può leggere. L'elenco sta qui e non nella richiesta: il
@@ -109,7 +112,7 @@ function doGet(e) {
     if (!quale) {
       // Dice se la chiave c'è, mai quale sia: serve a verificare da un browser
       // che la distribuzione sia quella giusta e la chiave impostata.
-      return risposta({ status: 'ok', servizio: 'rapportini', versione: 6,
+      return risposta({ status: 'ok', servizio: 'rapportini', versione: 7,
         accetta: Object.keys(CARTELLE), leggibili: Object.keys(LEGGIBILI),
         riservati: Object.keys(RISERVATI), chiave: chiave ? 'impostata' : 'manca' });
     }
@@ -134,7 +137,9 @@ function doGet(e) {
 }
 
 function nomeFile(doc) {
-  const pulito = String((doc.cliente && doc.cliente.nome) || 'cliente')
+  // Un conferimento non è di un cliente: porta il suo nome, o la cartella si
+  // riempirebbe di «cliente» che non dicono niente.
+  const pulito = String((doc.cliente && doc.cliente.nome) || (doc.tipo === 'conferimento' ? 'conferimento' : 'cliente'))
     .replace(/[^a-zA-Z0-9]+/g, '-').replace(/^-|-$/g, '').toLowerCase();
   // Il rapportino porta la data del lavoro, l'appuntamento il lunedì della
   // settimana in cui andrebbe fatto: in entrambi i casi la cartella resta

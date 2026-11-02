@@ -90,14 +90,24 @@ function costruisciRapportino({ visita, cliente, operazioni, tipi, voci, concimi
     // Le righe viaggiano con le quantità e senza prezzi: il listino sta in
     // ufficio ed è l'ufficio a decidere quanto vale ognuna. Il cantiere dice
     // cosa è stato fatto e quanto, che è la cosa che solo lui sa.
-    righe: (visita.Conto || []).map(r => ({
-      chiave: r.Chiave || '',
-      voceID: r.VoceID || '',
-      voce: r.Voce || '',
-      quantita: r.Quantita === '' || r.Quantita == null ? null : Number(r.Quantita),
-      unita: r.Unita || '',
-      prezzo: prezzoPianta((operazioni || []).find(o => o.OperazioneID && o.OperazioneID === r.Chiave)),
-    })),
+    righe: (visita.Conto || []).map(r => {
+      const op = (operazioni || []).find(o => o.OperazioneID && o.OperazioneID === r.Chiave);
+      return {
+        // Una riga scritta a mano non nasce da niente e non aveva una chiave: a
+        // ogni rapportino corretto l'ufficio non la riconosceva più e se la
+        // ritrovava due volte. Adesso porta la sua, presa dalla riga stessa.
+        chiave: r.Chiave || (r.RigaID ? 'riga-' + r.RigaID : ''),
+        voceID: r.VoceID || '',
+        voce: r.Voce || '',
+        quantita: r.Quantita === '' || r.Quantita == null ? null : Number(r.Quantita),
+        unita: r.Unita || '',
+        prezzo: prezzoPianta(op),
+        // Il verde dice se il suo peso è quello della discarica o una stima a
+        // occhio, e da quale conferimento viene. Solo sul verde, e senza alzare
+        // la versione: un ufficio che non lo conosce lo ignora.
+        ...(r.VoceID === VOCE_VERDE ? pesataDelVerde(op || r) : {}),
+      };
+    }),
     // Niente «prossimo intervento»: quello che c'è da fare la prossima volta è
     // una prenotazione, e viaggia col suo documento. Scriverlo anche qui voleva
     // dire due posti dove cercarlo e due da tenere allineati.
@@ -864,6 +874,127 @@ function nomeFileRilievo(doc) {
   return `${quando}-${pulito(doc.cliente && doc.cliente.nome) || 'cliente'}-${doc.id}.json`;
 }
 
+// ── LO SMALTIMENTO DEL VERDE ──
+// In giardino il verde si stima a occhio; in discarica lo pesano, e il certificato
+// dice il peso vero di tutto il cassone. Il **conferimento** è la quadratura fra le
+// due cose: il peso del certificato si ripartisce sui lavori il cui verde era nel
+// cassone, in proporzione a quanto si era stimato, e le loro stime diventano pesi.
+// Nel cassone c'è anche verde che non è di nessun cliente: è la riga «Altro», che
+// si stima a occhio come le altre e si prende quello che avanza.
+const VOCE_VERDE = 'smaltimento-verde';
+const VERSIONE_CONFERIMENTO = 1;
+// I pesi si arrotondano alla decina: un lavoro da 137 kg stimati non è più preciso
+// di uno da 140, e il cliente legge meglio il secondo. Quello che avanza
+// dall'arrotondamento va su Altro, e non su un cliente.
+const ARROTONDA_VERDE = 10;
+
+// Un peso è di un conferimento, scritto a mano da un certificato già in mano (i
+// lavori grossi, con due o tre scarichi pesati uno per uno), o una stima.
+function pesataDelVerde(x) {
+  const pesato = !!x && !!x.Pesato && String(x.Pesato).trim() !== '';
+  const stima = x && x.Stima !== '' && x.Stima != null && !isNaN(Number(x.Stima)) ? Number(x.Stima) : null;
+  return {
+    pesato,
+    ...(pesato && x.Conferimento ? { conferimento: String(x.Conferimento) } : {}),
+    ...(pesato && stima != null ? { stima } : {}),
+  };
+}
+
+// `righe` sono i lavori nel cassone, ognuno con la sua stima e, se l'ha scritto a
+// mano, il suo peso (`fisso`). Quelli senza peso scritto si dividono quello che
+// resta del certificato in proporzione alle stime, Altro compreso; Altro prende
+// quello che avanza. Non può andare sotto zero: se l'arrotondamento per eccesso
+// supera il certificato, si toglie una decina a chi è stato arrotondato di più.
+function ripartisciConferimento(totale, righe, stimaAltro) {
+  const T = Number(totale) || 0;
+  const conStima = x => Math.max(0, Number(x) || 0);
+  const lista = (righe || []).map(r => ({
+    chiave: r.chiave, stima: conStima(r.stima),
+    fisso: r.fisso === '' || r.fisso == null || isNaN(Number(r.fisso)) ? null : Math.max(0, Number(r.fisso)),
+  }));
+  const altroStima = conStima(stimaAltro);
+  const fissi = lista.filter(r => r.fisso != null);
+  const liberi = lista.filter(r => r.fisso == null);
+  const restante = T - fissi.reduce((s, r) => s + r.fisso, 0);
+  const S = liberi.reduce((s, r) => s + r.stima, 0) + altroStima;
+  const esatto = new Map();
+  lista.forEach(r => {
+    if (r.fisso != null) r.kg = r.fisso;
+    else {
+      const x = S > 0 && restante > 0 ? restante * r.stima / S : 0;
+      esatto.set(r, x);
+      r.kg = Math.round(x / ARROTONDA_VERDE) * ARROTONDA_VERDE;
+    }
+  });
+  let altro = T - lista.reduce((s, r) => s + r.kg, 0);
+  while (altro < 0) {
+    const giu = liberi.filter(r => r.kg >= ARROTONDA_VERDE)
+      .sort((a, b) => (b.kg - esatto.get(b)) - (a.kg - esatto.get(a)))[0];
+    if (!giu) break;
+    giu.kg -= ARROTONDA_VERDE;
+    altro += ARROTONDA_VERDE;
+  }
+  const stimeTutte = lista.reduce((s, r) => s + r.stima, 0) + altroStima;
+  let errore = '';
+  if (T <= 0) errore = 'Scrivi i kg del certificato';
+  else if (altro < 0) errore = 'I pesi scritti a mano fanno più del certificato';
+  else if (S <= 0 && liberi.length && restante > 0) errore = 'Nessuna stima da cui ripartire: scrivi i pesi a mano';
+  return {
+    righe: lista.map(r => ({ chiave: r.chiave, stima: r.stima, kg: r.kg, fisso: r.fisso != null })),
+    altro: Math.max(0, Number(altro.toFixed(2))),
+    // Di quanto le stime erano sotto o sopra il peso vero: 1,25 vuol dire che il
+    // cassone pesava un quarto più di quanto si era detto.
+    fattore: stimeTutte > 0 && T > 0 ? T / stimeTutte : null,
+    errore,
+  };
+}
+
+// `lavori` porta per ognuno il rapportino (l'id della visita), cliente e data per
+// leggerlo da solo, e stima e peso. Un conferimento sbagliato si annulla: torna
+// con la revisione alzata e `annullato`, e le stime tornano al loro posto.
+function costruisciConferimento({ id, data, certificato, kg, altro, lavori, revisione, annullato, da }) {
+  return {
+    tipo: 'conferimento',
+    versione: VERSIONE_CONFERIMENTO,
+    id: id || 'conf-' + Date.now().toString(36) + '-' + Math.random().toString(36).slice(2, 7),
+    revisione: Number(revisione) || 1,
+    creato: new Date().toISOString(),
+    da: String(da || ''),
+    data: String(data || '').slice(0, 10),
+    certificato: String(certificato || '').trim(),
+    kg: Number(kg) || 0,
+    altro: { stima: Number(altro && altro.stima) || 0, kg: Number(altro && altro.kg) || 0 },
+    lavori: (lavori || []).map(l => ({
+      rapportino: String(l.rapportino || ''),
+      chiave: String(l.chiave || ''),
+      cliente: String(l.cliente || ''),
+      data: String(l.data || '').slice(0, 10),
+      stima: Number(l.stima) || 0,
+      kg: Number(l.kg) || 0,
+    })),
+    ...(annullato ? { annullato: String(annullato) } : {}),
+  };
+}
+
+function leggiConferimento(grezzo) {
+  let doc = grezzo;
+  if (typeof grezzo === 'string') {
+    try { doc = JSON.parse(grezzo); }
+    catch (e) { throw new Error('Il file non è leggibile: non è JSON valido'); }
+  }
+  if (!doc || doc.tipo !== 'conferimento') throw new Error('Questo file non è un conferimento del verde');
+  const versione = Number(doc.versione) || 0;
+  if (versione !== VERSIONE_CONFERIMENTO) {
+    throw new Error(`Conferimento della versione ${versione || '?'}: questa app legge la ${VERSIONE_CONFERIMENTO}`);
+  }
+  if (!doc.id) throw new Error('Conferimento senza identificativo');
+  if (!(Number(doc.kg) > 0)) throw new Error('Conferimento senza peso');
+  return {
+    ...costruisciConferimento({ ...doc, altro: doc.altro || {} }),
+    id: String(doc.id), creato: doc.creato || '', versione,
+  };
+}
+
 // ── L'ANAGRAFICA CONDIVISA ──
 // Una sola anagrafica, che tiene l'ufficio in clienti.json: è il file che il
 // backup del PC copre. Il telefono la scarica — con la chiave, perché porta
@@ -996,6 +1127,8 @@ if (typeof module !== 'undefined' && module.exports) {
     ORE_MEZZA, VOCE_MANODOPERA, VOCE_PIANTE, numeroDaTesto, oreManodopera, oreDelleLavorazioni,
     mezzeDaOre, pianteDaSesto, pianteDellaLavorazione, GENERI_LAVORAZIONE,
     VERSIONE_SOPRALLUOGHI, costruisciSopralluoghi, leggiSopralluoghi,
+    VOCE_VERDE, VERSIONE_CONFERIMENTO, ARROTONDA_VERDE, pesataDelVerde, ripartisciConferimento,
+    costruisciConferimento, leggiConferimento,
     VERSIONE_CLIENTE, VERSIONE_ANAGRAFICA, CAMPI_CLIENTE, costruisciModificaCliente, leggiModificaCliente,
     leggiAnagraficaCondivisa, codiceUnito, chiaveNome, cifreTelefono, forseDoppi,
     VERSIONE_RILIEVO, UNITA_RILIEVO,

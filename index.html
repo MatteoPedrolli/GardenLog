@@ -491,6 +491,26 @@ select.form-control { background-image: url("data:image/svg+xml,%3Csvg xmlns='ht
 .op-dett input[type=number] { width: 76px; padding: 9px 6px; text-align: right; font-size: 0.85rem; }
 .op-dett input[type=text] { flex: 1; min-width: 0; padding: 9px 8px; font-size: 0.85rem; }
 .op-dett .unita { font-size: 0.78rem; color: var(--text-light); min-width: 36px; }
+/* Il verde dice se il suo peso è quello della discarica: spuntato a mano da un
+   certificato, o quadrato con un conferimento. */
+.pesato-check { display: inline-flex; align-items: center; gap: 4px; font-size: 0.74rem; color: var(--text-mid); white-space: nowrap; }
+.pesato-check input { width: 16px; height: 16px; }
+.pesato-tag { font-size: 0.72rem; font-weight: 600; color: var(--inchiostro-tenue); background: var(--foglio); border-radius: 999px; padding: 2px 8px; white-space: nowrap; }
+.quick-largo { grid-column: 1 / -1; display: flex; align-items: center; gap: 12px; }
+.conf-riga { display: grid; grid-template-columns: auto 1fr auto auto; gap: 10px; align-items: center; padding: 10px 0; border-bottom: 1px solid var(--border); }
+.conf-riga.spenta .conf-chi, .conf-riga.spenta .conf-kg { opacity: 0.45; }
+.conf-riga input[type=checkbox] { width: 20px; height: 20px; }
+.conf-chi { min-width: 0; font-size: 0.86rem; }
+.conf-chi b { display: block; font-weight: 600; overflow-wrap: anywhere; }
+.conf-chi span { font-size: 0.74rem; color: var(--text-light); }
+.conf-kg { width: 84px; padding: 9px 8px; text-align: right; font-size: 0.9rem; border: 1px solid var(--border); border-radius: 8px; background: var(--white); }
+.conf-kg.fisso { border-color: var(--ocra); }
+.conf-esito { margin: 14px 0; padding: 12px 14px; border-radius: 10px; background: var(--foglio); font-size: 0.84rem; line-height: 1.6; }
+.conf-esito.errore { background: #fbeaea; color: #8a2a22; }
+.conf-esito .attenzione { color: #8a5a10; font-weight: 600; }
+.conf-storico { margin-top: 18px; }
+.conf-storico-riga { display: flex; align-items: center; gap: 8px; padding: 8px 0; border-bottom: 1px solid var(--border); font-size: 0.82rem; }
+.conf-storico-riga span { flex: 1; min-width: 0; }
 .op-pianta input[type=number] { width: 64px; }
 /* Il cliente di passaggio: tre righe scritte qui, che viaggiano col rapportino e
    non finiscono in anagrafica. */
@@ -725,6 +745,10 @@ select.form-control { background-image: url("data:image/svg+xml,%3Csvg xmlns='ht
             <span class="quick-icon">📐</span>
             <div><div class="quick-label">Rilievo</div><div class="quick-sub">Misure per un preventivo</div></div>
           </div>
+          <div class="quick-card quick-largo" id="scheda-conferimento" onclick="apriConferimento()">
+            <span class="quick-icon">⚖️</span>
+            <div><div class="quick-label">Conferimento verde</div><div class="quick-sub" id="conferimento-sub">Il peso del certificato sui lavori</div></div>
+          </div>
         </div>
       </div>
       <div class="recent-title">Ultime visite</div>
@@ -934,6 +958,49 @@ select.form-control { background-image: url("data:image/svg+xml,%3Csvg xmlns='ht
       <button class="btn btn-primary" onclick="salvaPrenotazione()">📨 Manda in ufficio</button>
       <div style="height:8px"></div>
       <button class="btn btn-secondary" onclick="closeDrawer('overlay-prenotazione')">Annulla</button>
+    </div>
+  </div>
+</div>
+
+<!-- DRAWER CONFERIMENTO DEL VERDE -->
+<div class="overlay" id="overlay-conferimento">
+  <div class="drawer">
+    <div class="drawer-handle"></div>
+    <div class="drawer-title">Conferimento del verde</div>
+
+    <div class="drawer-body">
+      <div class="form-row">
+        <div class="form-group">
+          <label class="form-label">Giorno dello scarico</label>
+          <input type="date" class="form-control" id="f-conf-data">
+        </div>
+        <div class="form-group">
+          <label class="form-label">Kg del certificato</label>
+          <input type="text" inputmode="decimal" class="form-control" id="f-conf-kg" placeholder="Es. 1240" oninput="ricalcolaConferimento()">
+        </div>
+      </div>
+      <div class="form-group">
+        <label class="form-label">Numero del certificato</label>
+        <input type="text" class="form-control" id="f-conf-certificato" placeholder="facoltativo">
+      </div>
+
+      <div class="form-label" style="margin-top:6px">Il verde nel cassone</div>
+      <div class="dati-nota" style="margin:2px 0 4px">Togli la spunta a quello che è ancora nel cassone. Un peso scritto a mano resta quello; gli altri si dividono il resto in proporzione alle stime.</div>
+      <div id="conf-righe"></div>
+      <div class="conf-riga">
+        <span style="width:20px"></span>
+        <div class="conf-chi"><b>Altro</b><span>verde non di clienti · stima a occhio</span></div>
+        <input type="text" inputmode="decimal" class="conf-kg" id="f-conf-altro" placeholder="stima" oninput="ricalcolaConferimento()" aria-label="stima del verde non di clienti">
+        <span class="unita" id="conf-altro-kg">kg</span>
+      </div>
+
+      <div class="conf-esito" id="conf-esito"></div>
+
+      <button class="btn btn-primary" onclick="confermaConferimento()">⚖️ Conferma e manda</button>
+      <div style="height:8px"></div>
+      <button class="btn btn-secondary" onclick="closeDrawer('overlay-conferimento')">Annulla</button>
+
+      <div class="conf-storico" id="conf-storico"></div>
     </div>
   </div>
 </div>
@@ -1237,7 +1304,9 @@ const VERSIONE_DATI = 13;
 // piccola, ma è la stessa categoria di dato che il backup deve salvare.
 const IMPOSTAZIONI_DEFAULT = { UrlRapportini: '', NomeMittente: '', ChiaveLettura: '' };
 
-const COLLEZIONI = ['clienti', 'visite', 'operazioni', 'concimi', 'sementi', 'fitofarmaci', 'fasce', 'tipiOperazione', 'voci', 'settori', 'coda', 'prenotazioni', 'rilievi'];
+// `conferimenti` è arrivata dopo, senza alzare VERSIONE_DATI: assente vuol dire
+// che il verde non è mai stato pesato, ed è quello che era vero per tutti.
+const COLLEZIONI = ['clienti', 'visite', 'operazioni', 'concimi', 'sementi', 'fitofarmaci', 'fasce', 'tipiOperazione', 'voci', 'settori', 'coda', 'prenotazioni', 'rilievi', 'conferimenti'];
 
 // Fasce di partenza per chi apre l'app la prima volta: numeri da correggere
 // in Archivi, non verità rivelate. Chi arriva da Sheets o da un backup se li
@@ -1585,6 +1654,7 @@ async function chiediPersistenza() {
 
 function renderAll() {
   renderHome();
+  aggiornaSchedaConferimento();
   renderClienti();
   renderVisite();
   renderPrenotazioni();
@@ -2450,8 +2520,12 @@ function dettaglioOperazione(tipo, op) {
     campi.push(`<input type="text" placeholder="Cosa" value="${perValore(op.Descrizione)}" oninput="modificaOperazione(${i}, 'Descrizione', this.value)">`);
   }
   if (e || tipo.dettaglio === 'quantita') {
-    campi.push(`<input type="number" step="any" min="0" placeholder="0" value="${perValore(op.Quantita)}" oninput="modificaOperazione(${i}, 'Quantita', this.value)">`);
+    // Il verde pesato in un conferimento non si ritocca qui: il registro dice
+    // quel numero, e per cambiarlo si annulla il conferimento.
+    const daConferimento = tipo.VoceID === VOCE_VERDE && !!op.Conferimento;
+    campi.push(`<input type="number" step="any" min="0" placeholder="0" value="${perValore(op.Quantita)}"${daConferimento ? ' readonly title="Pesato in discarica: per cambiarlo annulla il conferimento"' : ''} oninput="modificaOperazione(${i}, 'Quantita', this.value)">`);
     campi.push(`<span class="unita">${perValore(tipo.Unita)}</span>`);
+    if (tipo.VoceID === VOCE_VERDE) campi.push(spuntaPesato(op, `modificaOperazione(${i}, 'Pesato', this.checked ? 'Sì' : '')`));
   }
   // Con più d'una, ognuna si toglie da sé; l'ultima si toglie togliendo la spunta.
   if (campi.length && opDelTipo(tipo.TipoID, settoreDiOperazione(op)).length > 1) {
@@ -2894,7 +2968,8 @@ async function saveVisita({ invia = false } = {}) {
     Ore_Visita: fasce.length ? Number(oreTotali(fasce).toFixed(2)) : (precedente?.Ore_Visita || ''),
     ClienteID: cid,
     Note_visita: document.getElementById('f-visita-note').value.trim(),
-    Conto: contoCorrente.map(r => ({ ...r })),
+    // Le righe a mano delle visite di prima non avevano un nome: lo prendono qui.
+    Conto: contoCorrente.map(r => (r.Chiave || r.RigaID ? { ...r } : { ...r, RigaID: generateID() })),
   };
   // Un campo in più, senza alzare versioni: chi non ce l'ha ha un cliente vero.
   if (passaggio) visita.Passaggio = passaggio; else delete visita.Passaggio;
@@ -3077,6 +3152,7 @@ function renderContoRighe() {
           <div class="conto-numeri">
             <input type="text" inputmode="decimal" value="${perValore(formattaQuantita(r.Quantita))}"
                    oninput="modificaRigaConto(${i}, 'Quantita', this.value)" aria-label="quantità">
+            ${r.VoceID === VOCE_VERDE ? spuntaPesato(r, `modificaRigaConto(${i}, 'Pesato', this.checked ? 'Sì' : '')`) : ''}
             ${r.VoceID ? `<span class="unita">${perValore(r.Unita)}</span>`
               // Una riga scritta a mano non ha un'unità sua: la si sceglie, o in
               // ufficio arriverebbe un «3» che non dice tre cosa.
@@ -3129,9 +3205,11 @@ function aggiungiRigaLibera() {
   const testo = campo.value.trim();
   if (!testo) return;
   const vo = DB.voci.find(v => perCercare(v.Nome) === perCercare(testo));
+  // La riga ha un nome suo, `RigaID`: è quello che fa riconoscere in ufficio la
+  // stessa riga quando il rapportino torna corretto, invece di vederne due.
   contoCorrente.push(vo
-    ? { VoceID: vo.VoceID, Voce: vo.Nome, Unita: vo.Unita || '', Quantita: isSi(vo.ACorpo) ? 1 : '' }
-    : { VoceID: '', Voce: testo, Unita: '', Quantita: '' });
+    ? { RigaID: generateID(), VoceID: vo.VoceID, Voce: vo.Nome, Unita: vo.Unita || '', Quantita: isSi(vo.ACorpo) ? 1 : '' }
+    : { RigaID: generateID(), VoceID: '', Voce: testo, Unita: '', Quantita: '' });
   campo.value = '';
   renderContoRighe();
 }
@@ -3139,6 +3217,264 @@ function aggiungiRigaLibera() {
 function togliRigaConto(i) {
   contoCorrente.splice(i, 1);
   renderContoRighe();
+}
+
+// ── IL CONFERIMENTO DEL VERDE ──
+// In giardino il verde si stima a occhio; in discarica lo pesano, e il certificato
+// dice il peso vero del cassone. Il conferimento ripartisce quel peso sui lavori il
+// cui verde c'era dentro, in proporzione alle stime (`ripartisciConferimento()`, in
+// rapportino.js), e su «Altro» per il verde che non è di nessun cliente. Le stime
+// diventano pesi, i rapportini già partiti ripartono corretti, e il conferimento va
+// in ufficio, che ne tiene il registro. La fattura parte giorni dopo lo scarico: di
+// solito, quando arriva in ufficio, il verde è già pesato.
+//
+// Il verde sta in due posti: l'operazione «Scarico verde» e la riga «Smaltimento
+// verde» scritta in «+ Altro». Tutti e due contano.
+let CONFERIMENTO = null;
+const GIORNI_VERDE = 60;   // più vecchio di così, è verde già scaricato prima della quadratura
+
+const pesoScritto = v => { const n = parseFloat(String(v == null ? '' : v).replace(',', '.')); return isNaN(n) ? null : n; };
+
+// Il segno sul verde: «pesato» spuntato a mano quando il certificato c'è già (un
+// lavoro grosso con due o tre scarichi pesati uno per uno), o quello di un
+// conferimento, che si toglie solo annullandolo.
+function spuntaPesato(x, gestore) {
+  if (x.Conferimento) {
+    const c = (DB.conferimenti || []).find(k => k.id === x.Conferimento);
+    return `<span class="pesato-tag">⚖️ pesato${c && c.data ? ' il ' + perValore(c.data.slice(8, 10) + '/' + c.data.slice(5, 7)) : ''}</span>`;
+  }
+  return `<label class="pesato-check" title="Il peso viene da un certificato: non entra nei conferimenti">
+    <input type="checkbox"${isSi(x.Pesato) ? ' checked' : ''} onchange="${gestore}"> pesato</label>`;
+}
+
+// Tutto il verde registrato, visita per visita: un elemento per ogni scarico,
+// con quello che serve a correggerlo.
+function scarichiVerde() {
+  const elenco = [];
+  DB.visite.forEach(v => {
+    DB.operazioni.filter(o => o.VisitaID == v.VisitaID && tipoDi(o.TipoID)?.VoceID === VOCE_VERDE).forEach(o => {
+      elenco.push({ chiave: 'op:' + o.OperazioneID, visita: v, op: o, x: o, docChiave: o.OperazioneID });
+    });
+    (v.Conto || []).filter(r => !r.Chiave && r.VoceID === VOCE_VERDE).forEach(r => {
+      if (!r.RigaID) r.RigaID = generateID();
+      elenco.push({ chiave: 'riga:' + r.RigaID, visita: v, riga: r, x: r, docChiave: 'riga-' + r.RigaID });
+    });
+  });
+  return elenco.filter(s => (pesoScritto(s.x.Quantita) || 0) > 0);
+}
+
+function verdeDaPesare() {
+  const limite = isoGiorno(-GIORNI_VERDE);
+  return scarichiVerde().filter(s => !isSi(s.x.Pesato) && String(s.visita.Data || '') >= limite)
+    .sort((a, b) => String(a.visita.Data).localeCompare(String(b.visita.Data)));
+}
+
+const isoGiorno = giorni => { const d = new Date(); d.setDate(d.getDate() + giorni); return dataISO(d); };
+
+// Spuntati di partenza: quello registrato dall'ultimo scarico in poi. È verde
+// che non è ancora passato dalla discarica, a meno che non sia rimasto nel
+// cassone — e quello lo sai tu, e togli la spunta.
+function daQuandoNelCassone() {
+  const ultimo = (DB.conferimenti || []).filter(c => !c.annullato).map(c => c.data).sort().pop();
+  return ultimo || isoGiorno(-7);
+}
+
+function aggiornaSchedaConferimento() {
+  const el = document.getElementById('conferimento-sub');
+  if (!el) return;
+  const da = daQuandoNelCassone();
+  const nel = verdeDaPesare().filter(s => String(s.visita.Data) >= da);
+  const kg = nel.reduce((t, s) => t + (pesoScritto(s.x.Quantita) || 0), 0);
+  el.textContent = nel.length
+    ? `${nel.length === 1 ? '1 lavoro' : nel.length + ' lavori'} · ~${formattaQuantita(kg)} kg stimati da pesare`
+    : 'Niente di stimato da pesare';
+}
+
+function apriConferimento() {
+  const da = daQuandoNelCassone();
+  const elenco = verdeDaPesare();
+  CONFERIMENTO = {
+    elenco,
+    spuntati: new Set(elenco.filter(s => String(s.visita.Data) >= da).map(s => s.chiave)),
+    fissi: new Map(),
+  };
+  document.getElementById('f-conf-data').value = dataISO(new Date());
+  ['f-conf-kg', 'f-conf-certificato', 'f-conf-altro'].forEach(id => { document.getElementById(id).value = ''; });
+  disegnaConferimento();
+  document.getElementById('overlay-conferimento').classList.add('open');
+}
+
+function disegnaConferimento() {
+  const el = document.getElementById('conf-righe');
+  const { elenco, spuntati, fissi } = CONFERIMENTO;
+  el.innerHTML = elenco.length ? elenco.map(s => {
+    const on = spuntati.has(s.chiave);
+    const quando = s.visita.Data ? new Date(s.visita.Data).toLocaleDateString('it-IT', { day: 'numeric', month: 'short' }) : '';
+    return `<div class="conf-riga${on ? '' : ' spenta'}">
+      <input type="checkbox"${on ? ' checked' : ''} onchange="spuntaConferimento('${perOnclick(s.chiave)}')" aria-label="nel cassone">
+      <div class="conf-chi"><b>${perValore(nomeDellaVisita(s.visita))}</b><span>${perValore(quando)} · stimati ${perValore(formattaQuantita(s.x.Quantita))} kg</span></div>
+      <input type="text" inputmode="decimal" class="conf-kg${fissi.has(s.chiave) ? ' fisso' : ''}" data-chiave="${perValore(s.chiave)}"
+             value="${fissi.has(s.chiave) ? perValore(formattaQuantita(fissi.get(s.chiave))) : ''}"${on ? '' : ' disabled'}
+             oninput="pesoConferimento('${perOnclick(s.chiave)}', this.value)" aria-label="peso">
+      <span class="unita">kg</span>
+    </div>`;
+  }).join('') : '<div class="dati-nota">Nessuno scarico verde stimato negli ultimi due mesi.</div>';
+  disegnaStoricoConferimenti();
+  ricalcolaConferimento();
+}
+
+function spuntaConferimento(chiave) {
+  const { spuntati, fissi } = CONFERIMENTO;
+  if (spuntati.has(chiave)) { spuntati.delete(chiave); fissi.delete(chiave); } else spuntati.add(chiave);
+  disegnaConferimento();
+}
+
+// Scrivere un peso lo fissa; svuotare la casella lo rimette in proporzione.
+// Non si ridisegna l'elenco: si sta scrivendo dentro una casella.
+function pesoConferimento(chiave, valore) {
+  const n = pesoScritto(valore);
+  if (n == null) CONFERIMENTO.fissi.delete(chiave); else CONFERIMENTO.fissi.set(chiave, n);
+  document.querySelector(`#conf-righe .conf-kg[data-chiave="${CSS.escape(chiave)}"]`)?.classList.toggle('fisso', n != null);
+  ricalcolaConferimento();
+}
+
+function esitoConferimento() {
+  const { elenco, spuntati, fissi } = CONFERIMENTO;
+  const scelti = elenco.filter(s => spuntati.has(s.chiave));
+  const kg = pesoScritto(document.getElementById('f-conf-kg').value) || 0;
+  const altro = pesoScritto(document.getElementById('f-conf-altro').value) || 0;
+  const esito = ripartisciConferimento(kg, scelti.map(s => ({
+    chiave: s.chiave, stima: pesoScritto(s.x.Quantita) || 0, fisso: fissi.has(s.chiave) ? fissi.get(s.chiave) : null,
+  })), altro);
+  return { ...esito, scelti, kg, altroStima: altro };
+}
+
+// I pesi in proporzione si scrivono nelle caselle che nessuno ha toccato, come
+// proposta in grigio; quelle scritte a mano restano quello che sono.
+function ricalcolaConferimento() {
+  if (!CONFERIMENTO) return;
+  const e = esitoConferimento();
+  e.righe.forEach(r => {
+    const campo = document.querySelector(`#conf-righe .conf-kg[data-chiave="${CSS.escape(r.chiave)}"]`);
+    if (campo && !r.fisso) { campo.value = ''; campo.placeholder = e.kg ? formattaQuantita(r.kg) : ''; }
+  });
+  document.getElementById('conf-altro-kg').textContent = e.kg ? '→ ' + formattaQuantita(e.altro) + ' kg' : 'kg';
+  const box = document.getElementById('conf-esito');
+  const clienti = e.righe.reduce((t, r) => t + r.kg, 0);
+  let testo = '';
+  if (!e.kg) testo = 'Scrivi i kg del certificato: si dividono qui sopra.';
+  else if (e.errore) testo = e.errore;
+  else {
+    testo = `<b>${formattaQuantita(e.kg)} kg</b> · ai clienti ${formattaQuantita(clienti)} · altro ${formattaQuantita(e.altro)}`;
+    if (e.fattore) {
+      const scarto = Math.round((e.fattore - 1) * 100);
+      testo += `<br>Il cassone pesava ${scarto === 0 ? 'quanto stimato' : Math.abs(scarto) + '% ' + (scarto > 0 ? 'più' : 'meno') + ' delle stime'}`;
+      // Uno scarto così grande di solito vuol dire un lavoro di troppo o che manca.
+      if (e.fattore < 0.5 || e.fattore > 2) testo += '<br><span class="attenzione">⚠️ Molto lontano dalle stime: controlla che i lavori spuntati siano quelli del cassone</span>';
+    }
+  }
+  box.innerHTML = testo;
+  box.classList.toggle('errore', !!e.kg && !!e.errore);
+}
+
+// Una quantità e la riga del conto che ne nasce vanno insieme: cambiata una,
+// l'altra la segue, come quando si scrive nella visita.
+function scriviPesoVerde(s, kg) {
+  s.x.Quantita = String(kg);
+  if (s.op) {
+    const riga = (s.visita.Conto || []).find(r => r.Chiave === s.op.OperazioneID);
+    if (riga) riga.Quantita = kg;
+  }
+}
+
+// Un rapportino riparte solo se era già partito: uno salvato e mai mandato si
+// porta il peso giusto quando lo mandi tu.
+function rimandaSeConsegnata(visite) {
+  visite.forEach(v => {
+    if (v.Consegnato || DB.coda.some(c => c.docID === v.VisitaID)) accodaRapportino(v);
+  });
+}
+
+function accodaConferimento(doc) {
+  DB.coda = DB.coda.filter(v => v.docID !== doc.id);
+  DB.coda.push({ docID: doc.id, tipo: doc.tipo, doc, creato: new Date().toISOString(), tentativi: 0, errore: '' });
+}
+
+async function confermaConferimento() {
+  if (salvataggioInCorso || !CONFERIMENTO) return;
+  const e = esitoConferimento();
+  if (!e.kg) { showToast('⚠️ Scrivi i kg del certificato'); return; }
+  if (e.errore) { showToast('⚠️ ' + e.errore); return; }
+  const data = document.getElementById('f-conf-data').value || dataISO(new Date());
+  const prima = JSON.stringify({ visite: DB.visite, operazioni: DB.operazioni, conferimenti: DB.conferimenti, coda: DB.coda });
+  const id = 'conf-' + Date.now().toString(36) + '-' + Math.random().toString(36).slice(2, 7);
+  const lavori = [];
+  const toccate = new Set();
+  e.scelti.forEach(s => {
+    const r = e.righe.find(x => x.chiave === s.chiave);
+    const stima = pesoScritto(s.x.Quantita) || 0;
+    s.x.Stima = stima;
+    s.x.Pesato = 'Sì';
+    s.x.Conferimento = id;
+    scriviPesoVerde(s, r.kg);
+    lavori.push({ rapportino: s.visita.VisitaID, chiave: s.docChiave, cliente: nomeDellaVisita(s.visita),
+      data: s.visita.Data, stima, kg: r.kg });
+    toccate.add(s.visita);
+  });
+  const doc = costruisciConferimento({ id, data, certificato: document.getElementById('f-conf-certificato').value,
+    kg: e.kg, altro: { stima: e.altroStima, kg: e.altro }, lavori, da: DB.impostazioni?.NomeMittente || '' });
+  DB.conferimenti.push(doc);
+  rimandaSeConsegnata(toccate);
+  accodaConferimento(doc);
+  if (!await salvaDB()) {
+    // Niente a metà: o le stime diventano pesi e il conferimento parte, o resta
+    // tutto com'era.
+    Object.assign(DB, JSON.parse(prima));
+    return;
+  }
+  closeDrawer('overlay-conferimento');
+  CONFERIMENTO = null;
+  showToast('⚖️ Conferimento registrato: ' + (lavori.length === 1 ? '1 lavoro pesato' : lavori.length + ' lavori pesati'));
+  renderAll();
+  svuotaCoda({ avvisa: true });
+}
+
+function disegnaStoricoConferimenti() {
+  const el = document.getElementById('conf-storico');
+  const ultimi = [...(DB.conferimenti || [])].sort((a, b) => String(b.data).localeCompare(String(a.data))).slice(0, 5);
+  el.innerHTML = ultimi.length ? `<div class="form-label">Ultimi conferimenti</div>` + ultimi.map(c => {
+    const quando = c.data ? c.data.slice(8, 10) + '/' + c.data.slice(5, 7) : '';
+    const stato = c.annullato ? 'annullato' : DB.coda.some(v => v.docID === c.id) ? '📤 da consegnare' : c.consegnato ? '✅ in ufficio' : '';
+    return `<div class="conf-storico-riga"><span>${perValore(quando)} · ${perValore(formattaQuantita(c.kg))} kg · ${c.lavori.length === 1 ? '1 lavoro' : c.lavori.length + ' lavori'}${stato ? ' · ' + stato : ''}</span>
+      ${c.annullato ? '' : `<button class="btn btn-secondary" style="width:auto; padding:6px 12px; font-size:0.78rem" onclick="annullaConferimento('${perOnclick(c.id)}')">Annulla</button>`}</div>`;
+  }).join('') : '';
+}
+
+// Un conferimento sbagliato — i kg battuti male, un lavoro di troppo — si annulla:
+// le stime tornano al loro posto, i rapportini ripartono, e l'ufficio lo vede
+// annullato nel registro. Non si cancella: il certificato c'è stato.
+async function annullaConferimento(id) {
+  if (salvataggioInCorso) return;
+  const c = (DB.conferimenti || []).find(x => x.id === id && !x.annullato);
+  if (!c) return;
+  if (!confirm(`Annullare il conferimento del ${c.data.slice(8, 10)}/${c.data.slice(5, 7)} (${formattaQuantita(c.kg)} kg)?\n\n` +
+    'I lavori tornano alla loro stima e i rapportini già partiti ripartono corretti.')) return;
+  const prima = JSON.stringify({ visite: DB.visite, operazioni: DB.operazioni, conferimenti: DB.conferimenti, coda: DB.coda });
+  const toccate = new Set();
+  scarichiVerde().filter(s => s.x.Conferimento === id).forEach(s => {
+    scriviPesoVerde(s, s.x.Stima != null && s.x.Stima !== '' ? s.x.Stima : s.x.Quantita);
+    delete s.x.Pesato; delete s.x.Conferimento; delete s.x.Stima;
+    toccate.add(s.visita);
+  });
+  const doc = costruisciConferimento({ ...c, revisione: (Number(c.revisione) || 1) + 1, annullato: new Date().toISOString() });
+  DB.conferimenti = DB.conferimenti.map(x => x === c ? doc : x);
+  rimandaSeConsegnata(toccate);
+  accodaConferimento(doc);
+  if (!await salvaDB()) { Object.assign(DB, JSON.parse(prima)); return; }
+  showToast('↩️ Conferimento annullato');
+  if (CONFERIMENTO) apriConferimento();
+  renderAll();
+  svuotaCoda({ avvisa: true });
 }
 
 // ── LA CODA DI USCITA ──
@@ -4142,7 +4478,8 @@ async function consegnaRapportino(doc) {
   return risposta;
 }
 
-const NOMI_DOCUMENTO = { appuntamento: 'prenotazione', rilievo: 'rilievo', cliente: 'modifica a un cliente' };
+const NOMI_DOCUMENTO = { appuntamento: 'prenotazione', rilievo: 'rilievo', cliente: 'modifica a un cliente',
+  conferimento: 'conferimento del verde' };
 
 function comeSiChiama(voce) {
   return (voce && NOMI_DOCUMENTO[voce.tipo]) || 'rapportino';
@@ -4175,6 +4512,8 @@ async function svuotaCoda({ avvisa = false } = {}) {
           rilievo.Consegnato = new Date().toISOString();
           rilievo.Revisione = voce.doc.revisione;
         }
+        const conferimento = (DB.conferimenti || []).find(c => c.id === voce.docID);
+        if (conferimento) conferimento.consegnato = new Date().toISOString();
         consegnati++;
       } catch (e) {
         voce.tentativi = (voce.tentativi || 0) + 1;

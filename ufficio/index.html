@@ -128,6 +128,12 @@ tr.cosa-fascia td { color: var(--text-mid); font-size: 0.86rem; padding-top: 0; 
 .etichetta.corretto { background: #fdebd0; color: #9c5700; }
 .etichetta.ufficio { background: transparent; color: var(--inchiostro); border: 1px solid var(--border); }
 .etichetta.fatturato { background: var(--foglio); color: var(--inchiostro-tenue); }
+/* Il verde pesato e quello stimato: la parola dice la cosa, il bordo tratteggiato
+   della stima la ripete a chi non distingue i colori, come i prezzi proposti. */
+.etichetta.verde-pesato { background: var(--foglio); color: var(--inchiostro-tenue); }
+.etichetta.verde-stimato { background: transparent; color: var(--earth); border: 1px dashed var(--ocra); }
+tr.annullato td { color: var(--text-light); text-decoration: line-through; }
+tr.annullato td .etichetta { text-decoration: none; }
 .etichetta.da-fatturare { background: var(--earth-light); color: var(--earth); }
 
 button.principale, button.secondaria, button.pericolo, label.secondaria {
@@ -711,6 +717,7 @@ input.vuoto { background: #fffdf5; border-color: #ecdca8; }
     </button>
     <button class="voce-barra" id="v-pagati" onclick="apriArchivio('fatturato')"><span>🗂️</span> Lavori chiusi</button>
     <button class="voce-barra" id="v-listino" onclick="vaiA('listino')"><span>🏷️</span> Listino</button>
+    <button class="voce-barra" id="v-conferimenti" onclick="vaiA('conferimenti')"><span>⚖️</span> Conferimenti</button>
     <button class="voce-barra" id="v-impostazioni" onclick="vaiA('impostazioni')"><span>⚙️</span> Impostazioni</button>
     <div id="stato-cartella">Nessuna cartella collegata</div>
     <div id="versione-app" onclick="mostraNovita(true)" title="Cosa c'è di nuovo"></div>
@@ -728,6 +735,7 @@ input.vuoto { background: #fffdf5; border-color: #ecdca8; }
     <div class="pagina" id="pagina-archivio"></div>
     <div class="pagina" id="pagina-archiviato"></div>
     <div class="pagina" id="pagina-listino"></div>
+    <div class="pagina" id="pagina-conferimenti"></div>
     <div class="pagina" id="pagina-impostazioni"></div>
   </main>
 </div>
@@ -1031,6 +1039,7 @@ async function ricarica() {
   ARCHIVIO = await caricaArchivio();
   ARRIVI = await caricaArrivi();
   RILIEVI = await caricaRilievi();
+  CONFERIMENTI = await caricaConferimenti();
   SETTORI_TELEFONO = await caricaSettoriTelefono();
   PREVENTIVI = await caricaPreventivi();
   // In una cartella che sembra vuota non si scrive niente da soli: se è quella
@@ -1484,7 +1493,15 @@ async function caricaArrivi() {
     }
     const archiviato = ARCHIVIO.find(l => l.id === doc.id);
     if (archiviato && Number(archiviato.revisione) >= Number(doc.revisione)) continue;
-    arrivi.push({ doc, file: nome, corretto: !!archiviato });
+    // Un conto pagato è chiuso davvero, anche se dal cantiere arriva una correzione
+    // — il verde pesato dopo, un'ora in più. La si mostra, la si segna vista, e il
+    // conto non cambia.
+    if (archiviato && archiviato.stato === 'fatturato' &&
+      Number(archiviato.revisioneVista) >= Number(doc.revisione)) continue;
+    arrivi.push({ doc, file: nome, corretto: !!archiviato,
+      chiuso: !!archiviato && archiviato.stato === 'fatturato',
+      inPosta: archiviato && archiviato.stato !== 'fatturato' ? archiviato.inPosta || '' : '',
+      verdePrima: archiviato ? kgVerde(archiviato.righe) : null });
   }
   arrivi.sort((a, b) => String(b.doc.data).localeCompare(String(a.doc.data)));
   return arrivi;
@@ -1562,8 +1579,20 @@ function costruisciConteggio(doc, precedenti) {
   // rapportino — ma restano dentro il loro gruppo.
   const vecchie = precedentiTutte.filter(x => !x.gruppo)
     .concat(gruppi.flatMap(g => g.componenti || []));
+  // Le righe scritte a mano sul telefono non avevano una chiave, e quelle già in
+  // archivio non ce l'hanno ancora: si riconoscono dalla voce, e una sola volta.
+  // Senza, a ogni rapportino corretto la riga c'era due volte — quella di prima,
+  // presa per una riga dell'ufficio, e quella nuova.
+  const giaPrese = new Set();
+  const delTelefono = r => !r.chiave || /^riga-/.test(r.chiave);
+  const stessaRigaAMano = (x, r) => !x.chiave && !x.ufficio && !giaPrese.has(x) &&
+    (r.voceID ? x.voceID === r.voceID : !x.voceID && String(x.voce || '').trim() === String(r.voce || '').trim());
   const righe = (doc.righe || []).map(r => {
-    const vecchia = vecchie.find(x => x.chiave && x.chiave === r.chiave);
+    let vecchia = vecchie.find(x => x.chiave && x.chiave === r.chiave);
+    if (!vecchia && delTelefono(r)) {
+      vecchia = vecchie.find(x => stessaRigaAMano(x, r));
+      if (vecchia) giaPrese.add(vecchia);
+    }
     const inListino = voceInListino(r.voceID);
     // Il prodotto, quando c'è, vince sulla voce: «Concime» è una categoria,
     // «Nitrophoska Gold» è quello che hai comprato. La voce resta la rete per
@@ -1618,6 +1647,10 @@ function costruisciConteggio(doc, precedenti) {
       prezzo,
       manuale,
       daCantiere,
+      // Il verde dice se è pesato in discarica o stimato a occhio: è la prima
+      // cosa da sapere prima di mandare il conto.
+      ...(r.voceID === VOCE_VERDE && typeof r.pesato === 'boolean' ? { pesato: r.pesato } : {}),
+      ...(r.voceID === VOCE_VERDE && r.pesato && r.stima != null ? { stimaVerde: Number(r.stima) } : {}),
     };
   });
   // Il gruppo tiene il suo nome e il suo prezzo: il prezzo l'ha deciso chi
@@ -1633,7 +1666,7 @@ function costruisciConteggio(doc, precedenti) {
   })).filter(g => g.componenti.length);
   // Le righe aggiunte in ufficio non hanno chiave e non nascono da niente:
   // restano dove sono, come sul telefono.
-  const manuali = precedentiTutte.filter(r => !r.gruppo && !r.chiave).map(r => ({ ...r }));
+  const manuali = precedentiTutte.filter(r => !r.gruppo && !r.chiave && !giaPrese.has(r)).map(r => ({ ...r }));
   return libere.concat(rifatti, manuali);
 }
 
@@ -2073,6 +2106,12 @@ function stampaConto(origine, id, senzaIntestazione) {
     cliente = l.cliente || {}; data = l.data; righe = l.righe;
   }
 
+  // Il verde si pesa in discarica qualche giorno dopo il lavoro, e la fattura
+  // parte dopo ancora: un conto col verde ancora stimato di solito vuol dire che
+  // il conferimento non è arrivato. Si dice, e la decisione resta di chi stampa.
+  const stimati = verdeStimato(lavori ? lavori.flatMap(b => b.righe || []) : righe);
+  if (stimati && !confirm('Il verde di questo conto è ancora stimato a occhio (' + formattaQuantita(stimati) +
+    ' kg): il peso della discarica non è arrivato.\n\nStampare lo stesso?')) return;
   // Un foglio che va a un cliente senza dire da chi arriva non serve a niente:
   // si avvisa, ma la decisione resta di chi stampa.
   if (!senzaIntestazione && !String(IMPOSTAZIONI.azienda || '').trim()) {
@@ -2257,6 +2296,7 @@ function disegna() {
   if (PAGINA === 'archivio') disegnaArchivio();
   if (PAGINA === 'archiviato') disegnaArchiviato();
   if (PAGINA === 'listino') disegnaListino();
+  if (PAGINA === 'conferimenti') disegnaConferimenti();
   if (PAGINA === 'impostazioni') disegnaImpostazioni();
 }
 
@@ -2276,18 +2316,27 @@ function disegnaArrivi() {
     ARRIVI.forEach(a => {
       const d = a.doc;
       const conteggio = totaleConteggio(costruisciConteggio(d, null));
-      html += '<div class="scheda cliccabile" onclick="apriLavoro(\'' + perOnclick(d.id) + '\')">' +
+      const verdeOra = kgVerde(costruisciConteggio(d, null));
+      // Quanto è cambiato il verde: è quasi sempre il motivo di una correzione
+      // che arriva giorni dopo, e il numero dice subito se vale la pena guardarla.
+      const verde = a.corretto && a.verdePrima != null && verdeOra !== a.verdePrima
+        ? ' · verde ' + formattaQuantita(a.verdePrima) + ' → ' + formattaQuantita(verdeOra) + ' kg' : '';
+      html += '<div class="scheda' + (a.chiuso ? '' : ' cliccabile') + '"' +
+          (a.chiuso ? '' : ' onclick="apriLavoro(\'' + perOnclick(d.id) + '\')"') + '>' +
         '<div class="riga-scheda">' +
           '<span class="nome-cliente">' + perValore(d.cliente.nome || 'senza nome') + '</span>' +
-          (a.corretto ? '<span class="etichetta corretto">corretto · rev ' + d.revisione + '</span>'
+          (a.chiuso ? '<span class="etichetta corretto">corretto dopo il pagamento</span>'
+            : a.corretto ? '<span class="etichetta corretto">corretto · rev ' + d.revisione + '</span>'
                       : '<span class="etichetta nuovo">nuovo</span>') +
           '<span class="meta" style="margin-left:auto">' + formattaData(d.data) + '</span>' +
         '</div>' +
         '<div class="meta" style="margin-top:6px">' +
           formattaOre(d.ore.totale) + ' · ' + d.operazioni.length + ' operazioni' +
           (conteggio.totale ? ' · circa ' + formattaEuro(conteggio.totale) : '') +
-          (conteggio.escluse ? ' · ' + conteggio.escluse + ' righe senza prezzo' : '') +
+          (conteggio.escluse ? ' · ' + conteggio.escluse + ' righe senza prezzo' : '') + verde +
         '</div>' +
+        (a.chiuso ? '<div class="riga-scheda" style="margin-top:8px"><span class="meta">Il conto è già pagato e resta com\'è.</span>' +
+          '<button class="secondaria piccola" style="margin-left:auto" onclick="correzioneVista(\'' + perOnclick(d.id) + '\')">Visto</button></div>' : '') +
       '</div>';
     });
   }
@@ -2395,6 +2444,17 @@ function riassuntoRicontrolla() {
 // La più recente per prima. Le righe sono poche e corte apposta: un elenco lungo
 // non si legge, e quello che non si legge tanto vale non scriverlo.
 const NOVITA = [
+  {
+    versione: '2026-11-02',
+    data: '2026-11-02',
+    titolo: 'Il verde pesato in discarica',
+    righe: [
+      'Quando si scarica in discarica, dal telefono si registra il **conferimento**: il peso del certificato si divide sui lavori, e i loro rapportini arrivano corretti col verde **pesato**.',
+      'Nel conto la riga del verde dice **pesato** o **stimato**, e prima di stampare o mandare un conto col verde ancora stimato l\'app lo chiede.',
+      'La pagina **Conferimenti** è il registro: ogni scarico col suo certificato, i kg ai clienti e su «altro», e di quanto si sbagliavano le stime.',
+      'Una correzione che arriva per un conto **già pagato** non lo riapre: si legge in arrivo e si segna «Visto».',
+    ],
+  },
   {
     versione: '2026-10-26',
     data: '2026-10-26',
@@ -5198,11 +5258,127 @@ function disegnaPreventivi() {
   c.innerHTML = html;
 }
 
+// ── IL VERDE ──
+// Quanti kg di verde porta un conto, gruppi compresi.
+function righeSciolte(righe) {
+  return (righe || []).flatMap(r => r.gruppo ? (r.componenti || []) : [r]);
+}
+
+function kgVerde(righe) {
+  return righeSciolte(righe).filter(r => r.voceID === VOCE_VERDE)
+    .reduce((t, r) => t + (Number(r.quantita) || 0), 0);
+}
+
+// Solo quello che il cantiere ha detto stimato: i rapportini di prima della
+// pesata non lo dicono, e non si può avvisare di una cosa che non si sa.
+function verdeStimato(righe) {
+  return righeSciolte(righe).filter(r => r.voceID === VOCE_VERDE && r.pesato === false)
+    .reduce((t, r) => t + (Number(r.quantita) || 0), 0);
+}
+
+function etichettaVerde(r) {
+  if (r.voceID !== VOCE_VERDE || typeof r.pesato !== 'boolean') return '';
+  return r.pesato
+    ? ' <span class="etichetta verde-pesato" title="' + (r.stimaVerde != null ? 'Stimato ' + formattaQuantita(r.stimaVerde) + ' kg' : 'Dal certificato') + '">pesato</span>'
+    : ' <span class="etichetta verde-stimato" title="Stima a occhio: il peso della discarica non è arrivato">stimato</span>';
+}
+
+// La correzione di un lavoro pagato si segna vista sul file d'archivio, che è
+// dell'ufficio: in rapportini/ l'ufficio non scrive.
+async function correzioneVista(id) {
+  const a = ARRIVI.find(x => x.doc.id === id);
+  const l = ARCHIVIO.find(x => x.id === id);
+  if (!a || !l) return;
+  const errore = await aggiornaArchiviato(l, { revisioneVista: Number(a.doc.revisione) || 1 });
+  if (errore) { avvisa('Non ho potuto segnarla: ' + errore.message, true); return; }
+  ARRIVI = ARRIVI.filter(x => x !== a);
+  disegna();
+}
+
+// ── IL REGISTRO DEI CONFERIMENTI ──
+// Il telefono manda un conferimento a ogni scarico in discarica: il peso del
+// certificato e come si è diviso sui lavori. Qui si leggono e basta — un file, un
+// solo autore —, e dicono quanto verde è passato, quanto non era di clienti e di
+// quanto si sbagliano le stime.
+const CARTELLA_CONFERIMENTI = 'conferimenti';
+let CONFERIMENTI = [];
+const MESI_REGISTRO = ['gennaio', 'febbraio', 'marzo', 'aprile', 'maggio', 'giugno', 'luglio', 'agosto',
+  'settembre', 'ottobre', 'novembre', 'dicembre'];
+
+async function caricaConferimenti() {
+  const cartella = await sottocartella(CARTELLA, CARTELLA_CONFERIMENTI, false);
+  if (!cartella) return [];
+  const trovati = [];
+  for (const nome of await elencaFile(cartella)) {
+    try {
+      trovati.push(leggiConferimento(await leggiTesto(cartella, nome)));
+    } catch (e) {
+      ILLEGGIBILI.push({ nome: CARTELLA_CONFERIMENTI + '/' + nome, motivo: e.message });
+    }
+  }
+  return trovati.sort((a, b) => String(b.data).localeCompare(String(a.data)) ||
+    String(b.creato).localeCompare(String(a.creato)));
+}
+
+function disegnaConferimenti() {
+  const c = document.getElementById('pagina-conferimenti');
+  if (!CARTELLA) { c.innerHTML = schermataBenvenuto(); return; }
+  let html = '<p class="sottotitolo">Il verde portato in discarica, col peso del certificato e i lavori da cui veniva</p>';
+  html += bloccoIlleggibili();
+  if (!CONFERIMENTI.length) {
+    html += '<div class="scheda"><div class="vuoto-elenco">Nessun conferimento. Si registrano dal telefono, ' +
+      'alla scheda «Conferimento verde» in home, quando si scarica in discarica.</div></div>';
+    c.innerHTML = html;
+    return;
+  }
+  const mesi = new Map();
+  CONFERIMENTI.forEach(k => {
+    const m = String(k.data).slice(0, 7);
+    if (!mesi.has(m)) mesi.set(m, []);
+    mesi.get(m).push(k);
+  });
+  mesi.forEach((elenco, m) => {
+    const validi = elenco.filter(k => !k.annullato);
+    const tot = validi.reduce((t, k) => t + k.kg, 0);
+    const altro = validi.reduce((t, k) => t + k.altro.kg, 0);
+    html += '<div class="scheda"><div class="riga-scheda"><span class="nome-cliente">' +
+      perValore((MESI_REGISTRO[Number(m.slice(5, 7)) - 1] || '') + ' ' + m.slice(0, 4)) + '</span>' +
+      '<span class="meta" style="margin-left:auto">' + formattaQuantita(tot) + ' kg · ' +
+        formattaQuantita(tot - altro) + ' ai clienti · ' + formattaQuantita(altro) + ' altro</span></div>';
+    html += '<table class="elenco" style="margin-top:10px"><thead><tr><th>Giorno</th><th>Certificato</th>' +
+      '<th class="num">Kg</th><th class="num">Ai clienti</th><th class="num">Altro</th><th>Stime</th><th>Lavori</th></tr></thead><tbody>';
+    elenco.forEach(k => {
+      const clienti = k.lavori.reduce((t, l) => t + l.kg, 0);
+      const stime = k.lavori.reduce((t, l) => t + l.stima, 0) + k.altro.stima;
+      const scarto = stime > 0 ? Math.round((k.kg / stime - 1) * 100) : null;
+      html += '<tr' + (k.annullato ? ' class="annullato"' : '') + '>' +
+        '<td>' + formattaData(k.data) + (k.annullato ? ' <span class="etichetta">annullato</span>' : '') + '</td>' +
+        '<td>' + perValore(k.certificato || '—') + '</td>' +
+        '<td class="num">' + formattaQuantita(k.kg) + '</td>' +
+        '<td class="num">' + formattaQuantita(clienti) + '</td>' +
+        '<td class="num">' + formattaQuantita(k.altro.kg) + '</td>' +
+        '<td class="meta">' + (scarto == null ? '—' : scarto === 0 ? 'giuste' : (scarto > 0 ? '+' : '') + scarto + '%') + '</td>' +
+        '<td class="meta">' + (k.lavori.length ? k.lavori.map(l => perValore(l.cliente || 'senza nome') + ' ' +
+          perValore(l.data ? l.data.slice(8, 10) + '/' + l.data.slice(5, 7) : '') + ': ' +
+          formattaQuantita(l.stima) + ' → ' + formattaQuantita(l.kg) + ' kg').join('<br>') : '—') + '</td>' +
+      '</tr>';
+    });
+    html += '</tbody></table></div>';
+  });
+  html += '<p class="meta">«Stime» dice di quanto il cassone pesava più o meno di quanto si era stimato in giardino.</p>';
+  c.innerHTML = html;
+}
+
 // ── UN LAVORO ──
 
 function apriLavoro(id) {
   const arrivo = ARRIVI.find(a => a.doc.id === id);
   if (!arrivo) { avvisa('Rapportino non trovato: ricontrolla la cartella', true); return; }
+  if (arrivo.chiuso) return;
+  // La correzione di un conto già mandato cambia il conto che il cliente ha in
+  // mano: aprirla si può, ma va saputo.
+  if (arrivo.inPosta && !confirm('Questo conto è già passato alla posta il ' + formattaData(arrivo.inPosta) +
+    '.\n\nAprendo la correzione le quantità cambiano: ricordati di rimandarlo al cliente. Continuare?')) return;
   // Se è la correzione di un lavoro già archiviato, i prezzi messi a mano la
   // prima volta restano: il cantiere ha corretto le ore, non il listino.
   const precedente = ARCHIVIO.find(l => l.id === id);
@@ -5275,7 +5451,8 @@ function disegnaLavoro() {
       '<td><input type="checkbox" class="scegli" title="Spunta per unirla ad altre in una voce sola"' +
         ' onclick="sceltaRiga(' + i + ', this.checked)"></td>' +
       '<td>' + (r.chiave ? perValore(voceConProdotto(r)) :
-        '<input type="text" value="' + perValore(r.voce) + '" oninput="modificaRiga(' + i + ', \'voce\', this.value)">') + '</td>' +
+        '<input type="text" value="' + perValore(r.voce) + '" oninput="modificaRiga(' + i + ', \'voce\', this.value)">') +
+        etichettaVerde(r) + '</td>' +
       '<td class="num"><input type="text" class="quantita" value="' + perValore(formattaQuantita(r.quantita)) +
         '" oninput="modificaRiga(' + i + ', \'quantita\', this.value)"></td>' +
       '<td class="meta">' + perValore(r.unita) + '</td>' +
@@ -5363,7 +5540,9 @@ function modificaRiga(indice, campo, valore) {
 
 function aggiungiRiga() {
   if (!LAVORO) return;
-  LAVORO.righe.push({ chiave: '', voceID: '', voce: '', quantita: '', unita: '', prezzo: '', manuale: true });
+  // `ufficio`: è una riga di qui, e un rapportino corretto non la scambia mai per
+  // una delle sue.
+  LAVORO.righe.push({ chiave: '', voceID: '', voce: '', quantita: '', unita: '', prezzo: '', manuale: true, ufficio: true });
   disegnaLavoro();
   pianificaSalvataggio();
 }

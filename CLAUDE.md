@@ -377,6 +377,64 @@ I `Conto` delle visite già registrate **conservano i loro `Prezzo`**: sono il
 registro di quello che è stato fatturato prima che il listino passasse in
 ufficio, non un listino. Riscriverli cancellerebbe l'unica traccia che ne resta.
 
+**Una riga scritta a mano ha un nome suo** (`RigaID`, e nel rapportino `chiave:
+'riga-…'`). Non ce l'aveva: a ogni rapportino corretto l'ufficio non la
+riconosceva, la teneva come riga sua e ne aggiungeva una nuova — il verde scritto in
+«+ Altro» finiva nel conto due volte, una con la stima e una col peso. Le righe di
+prima ricevono il nome al primo salvataggio, e in ufficio quelle già in archivio
+senza chiave si riconoscono dalla voce, una volta sola (`costruisciConteggio()`); le
+righe aggiunte in ufficio portano `ufficio: true`, e non si scambiano mai per una del
+telefono.
+
+## Il verde pesato in discarica
+
+In giardino il verde si stima a occhio — l'operazione «Scarico verde» o la riga
+«Smaltimento verde» in «+ Altro», contano tutte e due —; in discarica lo pesano, e il
+certificato dice il peso vero di tutto il cassone. Il **conferimento** è la quadratura:
+dalla scheda **«Conferimento verde»** in home si scrivono giorno, kg e numero del
+certificato, e il peso si divide sugli scarichi ancora stimati **in proporzione alle
+stime** (`ripartisciConferimento()`, in `rapportino.js`). Le stime diventano pesi, lo
+scarico è segnato pesato (`Pesato`, `Conferimento`, e la stima che c'era in `Stima`), e
+i rapportini **già partiti** ripartono corretti; uno salvato e mai mandato si porta il
+peso giusto quando lo mandi. Si scarica tre o quattro volte la settimana e si fattura
+cinque o sei giorni dopo: quasi sempre la pesata arriva prima del conto.
+
+**Nel cassone c'è anche verde di nessuno**, ed è la riga **«Altro»**: si stima a occhio
+come le altre, entra nella proporzione, e si prende quello che avanza. **I pesi si
+arrotondano alla decina**, e i chili che avanzano dall'arrotondamento vanno su Altro e
+non su un cliente: un lavoro da 617 kg non è più vero di uno da 620, e al cliente non si
+fanno pagare i resti. Altro non va mai sotto zero: se le decine per eccesso superano il
+certificato, se ne toglie una a chi è stato arrotondato di più.
+
+Spuntati di partenza ci sono gli scarichi **dall'ultimo conferimento** in poi (la prima
+volta, l'ultima settimana), fra quelli degli ultimi sessanta giorni: si toglie la spunta
+a quello che è ancora nel cassone. Un peso scritto a mano su un lavoro resta quello, e
+gli altri si dividono il resto. **Un lavoro grosso pesato scarico per scarico** ha già il
+suo certificato: sulla visita lo scarico si spunta **«pesato»**, e nei conferimenti non
+entra. Uno pesato da un conferimento non si ritocca sulla visita: il registro dice quel
+numero, e per cambiarlo **si annulla il conferimento** (le stime tornano, i rapportini
+ripartono, il documento riparte con `annullato`). Non si cancella: il certificato c'è stato.
+
+Il conferimento è un **documento suo**, `conferimento` (`costruisciConferimento()`,
+`VERSIONE_CONFERIMENTO`), nella cartella `conferimenti/`: l'ufficio ne tiene il **registro**
+(pagina Conferimenti, per mese: kg, ai clienti, altro, di quanto si sbagliavano le stime,
+e ogni lavoro con stima → peso). Lo script lo conosce dalla versione 7. Nel rapportino il
+verde porta `pesato`, e se pesato `conferimento` e `stima`: campi arrivati senza alzare
+`VERSIONE_RAPPORTINO`. Sul telefono `DB.conferimenti`, assente vuol dire nessun conferimento,
+senza alzare `VERSIONE_DATI`. Il **costo** pagato alla discarica non c'è: per ora non serve.
+
+In ufficio la riga del verde dice **«pesato»** o **«stimato»** (`etichettaVerde()`, tratteggiata
+come i prezzi proposti), e **stampare o mandare un conto col verde ancora stimato lo chiede**
+(`verdeStimato()`, dentro `stampaConto()`, che la posta chiama prima di partire): avvisa e non
+blocca, come l'intestazione mancante. Un rapportino di prima non dice se il verde è pesato, e
+non si avvisa di quello che non si sa.
+
+**La correzione di un conto già pagato non lo riapre.** Prima ricompariva fra gli arrivi e,
+aperta, riscriveva un conto chiuso. Adesso si legge in arrivo — «corretto dopo il pagamento»,
+col verde che cambia — e si segna **«Visto»** (`revisioneVista` sul file d'archivio, che è
+dell'ufficio). Quella di un conto **già mandato** si apre, chiedendolo: le quantità cambiano
+sul conto che il cliente ha in mano, e va rimandato.
+
 ## Due app, un documento
 
 L'app del cantiere (`index.html`) e quella dell'ufficio **non condividono un
@@ -393,7 +451,8 @@ quel concime nel frattempo è stato cancellato.
 essere un rapportino, o venire da una versione futura. In quest'ultimo caso si
 ferma e lo dice, invece di archiviare un documento monco in silenzio.
 
-I documenti sono quattro, più le modifiche ai clienti (sotto, *L'anagrafica*). Il **rapportino** racconta un lavoro finito;
+I documenti sono quattro, più le modifiche ai clienti (sotto, *L'anagrafica*) e i
+conferimenti del verde (sopra, *Il verde pesato in discarica*). Il **rapportino** racconta un lavoro finito;
 l'**appuntamento** è una prenotazione fatta dal cantiere, col cliente davanti; il
 **rilievo** è il taccuino di un preventivo, preso in giardino prima che il lavoro
 esista. Sono cose diverse e in ufficio le guardano tre schermate diverse, quindi
