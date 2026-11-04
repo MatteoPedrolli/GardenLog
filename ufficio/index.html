@@ -380,6 +380,7 @@ input.vuoto { background: #fffdf5; border-color: #ecdca8; }
 .campione.penna { background: #f1faf3; border: 1px solid #2f8f4e; }
 .campione.fatto { background: #eef6fb; border: 1px solid #2a6f9e; }
 .campione.bloccato { background: var(--earth-light); border: 1px solid var(--earth); }
+.campione.assenza { background: #fbecea; border: 1px solid #e3b5ae; }
 
 .due-colonne-archivio { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 14px; align-items: start; }
 .colonna-archivio { min-width: 0; }
@@ -548,6 +549,11 @@ input.vuoto { background: #fffdf5; border-color: #ecdca8; }
   background: repeating-linear-gradient(135deg, #eef2f6 0 8px, #e4eaf0 8px 16px); }
 .cartellino.pioggia .cliente-cart { color: #3d4f61; }
 .cartellino.pioggia .cosa-cart { color: #5b6b7b; }
+/* Un'assenza: qualcuno non c'è. Rosso pallido e pieno, senza tratteggio: non è la
+   matita né uno stato, e il rosso acceso resta degli errori. La parola c'è sempre. */
+.cartellino.assenza { border: 1px solid #e3b5ae; background: #fbecea; cursor: grab; }
+.cartellino.assenza .cliente-cart { color: #7a2e25; }
+.cartellino.assenza .cosa-cart { color: #8f4a41; }
 .meteo-giorno { margin-left: auto; font-size: 0.74rem; color: var(--text-mid); white-space: nowrap; }
 /* Né grigio né verde né blu: quelli sono gli stati. Lo dice la parola. */
 .sopralluogo-cart {
@@ -1379,6 +1385,10 @@ function sistemaLavoro(l) {
     // Un giorno di pioggia: un segnaposto, non un lavoro. Arrivato dopo, senza
     // alzare versioni: chi non ce l'ha è un lavoro, come tutti prima.
     pioggia: !!l.pioggia,
+    // Un'assenza: qualcuno non c'è, per una visita medica o per le ferie. Un
+    // segnaposto come la pioggia, col nome di chi manca e il perché. Arrivato
+    // dopo, senza alzare versioni.
+    assenza: !!l.assenza,
     // Come raggiungere e chiamare chi ha chiesto il sopralluogo. Stanno qui, nella
     // lavagna che è un file privato dell'ufficio, e partono verso il telefono
     // solo in sopralluoghi.json — mai nell'agenda, che si legge senza chiave.
@@ -2444,6 +2454,15 @@ function riassuntoRicontrolla() {
 // La più recente per prima. Le righe sono poche e corte apposta: un elenco lungo
 // non si legge, e quello che non si legge tanto vale non scriverlo.
 const NOVITA = [
+  {
+    versione: '2026-11-04',
+    data: '2026-11-04',
+    titolo: 'Le assenze sulla lavagna',
+    righe: [
+      'Accanto a «🌧️ Giorno di pioggia» c\'è **«🚫 Assenza»**: chi non c\'è (es. «Matteo non c\'è»), il perché (visita medica, ferie…) e per quanto. Nasce in cima alla coda, **rosso pallido**, e si trascina sul giorno.',
+      'Sull\'agenda dei telefoni va **solo il nome**: il perché resta in ufficio.',
+    ],
+  },
   {
     versione: '2026-11-02',
     data: '2026-11-02',
@@ -6642,8 +6661,8 @@ function oreNellaMezza(l, giorno, mezza) {
 // fare sta in fondo, ed è la colonna dei bloccati. Dentro i giorni non si ordina
 // niente: lì l'ordine è quello che gli dà chi pianifica.
 function ordinaCoda(a, b) {
-  // La pioggia in cima: è lì solo per essere trascinata sul giorno, subito.
-  if (a.pioggia !== b.pioggia) return a.pioggia ? -1 : 1;
+  // Pioggia e assenze in cima: sono lì solo per essere trascinate sul giorno, subito.
+  if (segnaposto(a) !== segnaposto(b)) return segnaposto(a) ? -1 : 1;
   if (bloccato(a) !== bloccato(b)) return bloccato(a) ? 1 : -1;
   if (!a.settimana !== !b.settimana) return a.settimana ? -1 : 1;
   return String(a.settimana).localeCompare(String(b.settimana));
@@ -6681,12 +6700,48 @@ function etichetteTipi(l) {
 // Chiuso porta quello che serve a scegliere: chi, che cosa (la prima riga delle
 // note), per quando e da quando aspetta. Si era chiesto apposta che dalla coda si
 // vedesse cosa c'è da fare e quando è entrato: chiudere non vuol dire toglierlo.
+// Pioggia e assenze tengono un posto sulla lavagna e non sono lavori: niente
+// matita o penna, niente spunta né ora.
+const segnaposto = l => !!(l && (l.pioggia || l.assenza));
+
+// Quanto dura: + e −, come per un lavoro, quando è sul giorno.
+function larghezzaSegnaposto(l) {
+  const id = perOnclick(l.id);
+  const mezze = mezzeOccupate(l);
+  return piazzato(l) ? '<div class="riga-cart"><span class="larghezza-cart">' +
+      '<button type="button" class="bottone-cart" onclick="event.stopPropagation(); stringi(\'' + id + '\')"' +
+        (mezze === 1 ? ' disabled' : '') + ' title="Una mezza giornata in meno">−</button>' +
+      '<span class="mezze-cart">' + (mezze === 2 ? 'giornata' : mezze + (mezze === 1 ? ' mezza' : ' mezze')) + '</span>' +
+      '<button type="button" class="bottone-cart" onclick="event.stopPropagation(); allarga(\'' + id + '\')"' +
+        ' title="Allarga alla mezza giornata successiva">+</button>' +
+    '</span>' + (l.assenza ? '<button type="button" class="bottone-cart" style="margin-left:auto"' +
+        ' onclick="event.stopPropagation(); apriModuloAssenza(\'' + id + '\')" title="Modifica">✎</button>' : '') +
+    '</div>'
+    : '<div class="riga-cart"><span class="origine-cart">trascinalo sul giorno</span>' +
+      (l.assenza ? '<button type="button" class="bottone-cart" style="margin-left:auto"' +
+        ' onclick="event.stopPropagation(); apriModuloAssenza(\'' + id + '\')" title="Modifica">✎</button>' : '') + '</div>';
+}
+
+// Chi non c'è e perché. Il perché resta in ufficio: l'agenda si legge senza
+// chiave, e «visita medica» accanto a un nome non deve uscire di qui.
+function cartellinoAssenza(l) {
+  const id = perOnclick(l.id);
+  return '<article class="cartellino assenza" draggable="true" data-lavoro="' + perValore(l.id) + '"' +
+      ' ondragstart="iniziaTrascino(event, \'' + id + '\')"' +
+      ' title="Assenza: trascinala sul giorno, + e − per quanto dura">' +
+    '<div class="testa-cart"><div class="cliente-cart testo-cart">' + perValore(l.cliente || 'Assenza') + '</div>' +
+      '<button type="button" class="bottone-cart" onclick="event.stopPropagation(); togliDallaLavagna(\'' + id + '\')"' +
+        ' title="Togli">✕</button></div>' +
+    '<div class="cosa-cart">' + perValore(l.note || 'assenza') + '</div>' +
+    larghezzaSegnaposto(l) +
+  '</article>';
+}
+
 // Un giorno di pioggia non è un lavoro: niente cliente, niente matita o penna,
 // niente spunta né ora. Si trascina sul giorno, si allarga e si stringe come gli
 // altri — di solito tutto il giorno, a volte solo il pomeriggio — e si toglie.
 function cartellinoPioggia(l) {
   const id = perOnclick(l.id);
-  const mezze = mezzeOccupate(l);
   return '<article class="cartellino pioggia" draggable="true" data-lavoro="' + perValore(l.id) + '"' +
       ' ondragstart="iniziaTrascino(event, \'' + id + '\')"' +
       ' title="Giorno di pioggia: trascinalo sul giorno, + e − per quanto dura">' +
@@ -6694,13 +6749,7 @@ function cartellinoPioggia(l) {
       '<button type="button" class="bottone-cart" onclick="event.stopPropagation(); togliDallaLavagna(\'' + id + '\')"' +
         ' title="Togli">✕</button></div>' +
     '<div class="cosa-cart">non si lavora</div>' +
-    (piazzato(l) ? '<div class="riga-cart"><span class="larghezza-cart">' +
-      '<button type="button" class="bottone-cart" onclick="event.stopPropagation(); stringi(\'' + id + '\')"' +
-        (mezze === 1 ? ' disabled' : '') + ' title="Una mezza giornata in meno">−</button>' +
-      '<span class="mezze-cart">' + (mezze === 2 ? 'giornata' : mezze + (mezze === 1 ? ' mezza' : ' mezze')) + '</span>' +
-      '<button type="button" class="bottone-cart" onclick="event.stopPropagation(); allarga(\'' + id + '\')"' +
-        ' title="Allarga alla mezza giornata successiva">+</button>' +
-    '</span></div>' : '<div class="riga-cart"><span class="origine-cart">trascinalo sul giorno</span></div>') +
+    larghezzaSegnaposto(l) +
   '</article>';
 }
 
@@ -6715,13 +6764,59 @@ async function aggiungiPioggia() {
   avvisa('🌧️ Trascinalo sul giorno di pioggia');
 }
 
+// Il bottone accanto alla pioggia: chi non c'è e perché, e per quanto. Nasce in
+// cima alla coda come la pioggia, e da lì si trascina sul giorno.
+const DURATE_ASSENZA = [[1, 'mezza giornata'], [2, 'un giorno'], [4, 'due giorni'], [6, 'tre giorni'],
+  [8, 'quattro giorni'], [10, 'cinque giorni'], [12, 'una settimana']];
+
+function apriModuloAssenza(id) {
+  const c = document.getElementById('nuovo-lavoro');
+  if (!c) return;
+  const l = id ? LAVAGNA.lavori.find(x => x.id === id && x.assenza) : null;
+  if (id && !l) return;
+  const mezze = l ? mezzeOccupate(l) : 2;
+  const durate = DURATE_ASSENZA.some(([n]) => n === mezze) ? DURATE_ASSENZA
+    : DURATE_ASSENZA.concat([[mezze, mezze + ' mezze giornate']]);
+  c.innerHTML = '<div class="scheda" style="margin-top:10px">' +
+    '<div class="titolo-sezione">' + (l ? 'Correggi l\'assenza' : 'Un\'assenza') + '</div>' +
+    '<input type="hidden" id="a-id" value="' + perValore(id || '') + '">' +
+    '<input type="text" id="a-chi" placeholder="Chi non c\'è — es. Matteo non c\'è" value="' +
+      perValore(l ? l.cliente : '') + '" style="margin-bottom:6px">' +
+    '<input type="text" id="a-perche" placeholder="Perché — visita medica, ferie…" value="' +
+      perValore(l ? l.note : '') + '" style="margin-bottom:6px">' +
+    '<select id="a-durata" style="margin-bottom:6px">' + durate.map(([n, t]) =>
+      '<option value="' + n + '"' + (n === mezze ? ' selected' : '') + '>' + t + '</option>').join('') + '</select>' +
+    '<div class="meta">Il perché resta in ufficio: sull\'agenda dei telefoni va solo il nome.</div>' +
+    '<div class="bottoni">' +
+      '<button class="principale piccola" onclick="salvaModuloAssenza()">' + (l ? 'Salva' : 'Metti in coda') + '</button>' +
+      '<button class="secondaria piccola" onclick="chiudiModuloLavoro()">Annulla</button>' +
+    '</div></div>';
+  document.getElementById('a-chi').focus();
+  if (c.scrollIntoView) c.scrollIntoView({ block: 'nearest' });
+}
+
+async function salvaModuloAssenza() {
+  const chi = document.getElementById('a-chi').value.trim();
+  if (!chi) { avvisa('Scrivi chi non c\'è', true); return; }
+  const id = document.getElementById('a-id').value;
+  const campi = { cliente: chi, note: document.getElementById('a-perche').value.trim(),
+    mezze: Math.max(1, Number(document.getElementById('a-durata').value) || 2) };
+  const l = id ? LAVAGNA.lavori.find(x => x.id === id) : null;
+  if (l) Object.assign(l, campi);
+  else LAVAGNA.lavori.push(sistemaLavoro({ ...campi, assenza: true, stato: 'lista' }));
+  if (!(await salvaLavagna())) return;
+  chiudiModuloLavoro();
+  disegnaLavagna();
+  if (!l) avvisa('Trascinala sul giorno dell\'assenza');
+}
+
 // Dove un lavoro prosegue c'è un cartellino suo, grande come gli altri e col
 // colore del suo stato — o il velo della pioggia. Era una fascia che riempiva la
 // mezza giornata e stava sempre in fondo: un appuntamento non ci si metteva dopo.
 // Si trascina solo per cambiargli posto lì dentro: il lavoro si sposta dal
 // cartellino da cui parte, o un pomeriggio trascinato sposterebbe la mattina.
 function seguitoCart(l, giorno, mezza) {
-  const classi = ['cartellino', 'seguito', l.pioggia ? 'pioggia' : l.stato];
+  const classi = ['cartellino', 'seguito', l.pioggia ? 'pioggia' : l.assenza ? 'assenza' : l.stato];
   if (l.fatto) classi.push('fatto');
   if (bloccato(l)) classi.push('bloccato');
   const id = perOnclick(l.id);
@@ -6736,22 +6831,24 @@ function seguitoCart(l, giorno, mezza) {
       ' title="Continua da ' + perValore(da) + (l.fatto ? '' : ' · trascinalo per cambiargli posto in questa mezza giornata') + '">' +
     '<div class="testa-cart"><div class="testo-cart">' +
       '<div class="cliente-cart">' + (l.pioggia ? '🌧️ Pioggia' : perValore(l.cliente || 'senza nome')) + '</div>' +
-      (l.luogo && !l.pioggia ? '<div class="luogo-cart">' + perValore(l.luogo) + '</div>' : '') +
+      (l.luogo && !segnaposto(l) ? '<div class="luogo-cart">' + perValore(l.luogo) + '</div>' : '') +
     '</div></div>' +
-    (l.pioggia ? '' : etichetteTipi(l)) +
+    (segnaposto(l) ? '' : etichetteTipi(l)) +
     (l.note ? '<div class="cosa-cart">' + perValore(l.note) + '</div>' : '') +
     '<div class="riga-cart">' +
-      (l.pioggia ? '' : '<span class="stato-cart">' + etichettaStato(l) + '</span>') +
+      (segnaposto(l) ? '' : '<span class="stato-cart">' + etichettaStato(l) + '</span>') +
       (l.sopralluogo ? '<span class="sopralluogo-cart">sopralluogo</span>' : '') +
       '<span class="continua-cart">↳ continua da ' + perValore(da) + '</span>' +
       (l.pioggia ? '' : '<button type="button" class="bottone-cart" style="margin-left:auto"' +
-        ' onclick="event.stopPropagation(); apriModuloLavoro(\'' + id + '\')" title="Modifica">✎</button>') +
+        ' onclick="event.stopPropagation(); ' + (l.assenza ? 'apriModuloAssenza' : 'apriModuloLavoro') +
+        '(\'' + id + '\')" title="Modifica">✎</button>') +
     '</div>' +
   '</article>';
 }
 
 function cartellinoChiuso(l) {
   if (l.pioggia) return cartellinoPioggia(l);
+  if (l.assenza) return cartellinoAssenza(l);
   const id = perOnclick(l.id);
   const classi = ['cartellino', 'chiuso'];
   if (bloccato(l)) classi.push('bloccato');
@@ -6779,6 +6876,7 @@ function cartellinoChiuso(l) {
 
 function cartellino(l) {
   if (l.pioggia) return cartellinoPioggia(l);
+  if (l.assenza) return cartellinoAssenza(l);
   if (!piazzato(l) && !CODA_APERTI.has(l.id)) return cartellinoChiuso(l);
   const classi = ['cartellino'];
   if (piazzato(l)) classi.push(l.stato);
@@ -6935,6 +7033,7 @@ function disegnaLavagna() {
   const aggiungi = '<div class="aggiungi-lavagna"><div class="bottoni">' +
     '<button class="secondaria piccola" onclick="apriModuloLavoro()">+ Aggiungi appuntamento</button>' +
     '<button class="secondaria piccola" onclick="aggiungiPioggia()" title="Un segnaposto da trascinare sul giorno in cui non si lavora">🌧️ Giorno di pioggia</button>' +
+    '<button class="secondaria piccola" onclick="apriModuloAssenza()" title="Chi non c\'è e perché: visita medica, ferie…">🚫 Assenza</button>' +
   '</div><div id="nuovo-lavoro"></div></div>';
 
   // ── la settimana ──
@@ -6982,6 +7081,7 @@ function disegnaLavagna() {
     '<span><i class="campione bloccato"></i><b>Bloccato</b> — manca qualcosa per poterlo fare</span>' +
     '<span><span class="sopralluogo-cart">sopralluogo</span> si va a guardare, non a lavorare</span>' +
     '<span><b>🌧️ Pioggia</b> — un giorno in cui non si lavora · sopra ogni giorno la probabilità di pioggia</span>' +
+    '<span><i class="campione assenza"></i><b>Assenza</b> — qualcuno non c\'è, e perché</span>' +
     '<span>' + TIPI_LAVORO.map(t => '<span class="tipo-cart" style="background:' + t.colore + '">' +
       perValore(t.nome) + '</span>').join(' ') + ' che lavoro è, segnato prenotando</span>' +
     '<span>In coda un clic apre i dettagli · sulla settimana un clic sul cartellino conferma · <b>🕘</b> scrive l\'ora · la <b>✓</b> segna che è fatto · <b>+</b> e <b>−</b> allargano il lavoro di mezza giornata</span>' +
@@ -7164,7 +7264,7 @@ async function spostaLavoro(id, giorno, mezza, primaDi) {
 async function cambiaPenna(id) {
   const l = LAVAGNA.lavori.find(x => x.id === id);
   if (!l || !piazzato(l)) return;   // nella coda non esiste né matita né penna
-  if (l.pioggia) return;            // alla pioggia non si promette niente
+  if (segnaposto(l)) return;        // alla pioggia e alle assenze non si promette niente
   if (l.fatto) return;              // è già successo: non c'è più niente da promettere
   l.stato = l.stato === 'matita' ? 'confermato' : 'matita';
   await salvaLavagna();
@@ -7178,7 +7278,7 @@ async function cambiaPenna(id) {
 // prima che il rapportino arrivi, e a volte il rapportino non arriva affatto.
 async function spuntaFatto(id) {
   const l = LAVAGNA.lavori.find(x => x.id === id);
-  if (!l || !piazzato(l) || l.pioggia) return;   // fatto vuol dire in un giorno, non in coda
+  if (!l || !piazzato(l) || segnaposto(l)) return;   // fatto vuol dire in un giorno, non in coda
   l.fatto = !l.fatto;
   await salvaLavagna();
   disegnaLavagna();
@@ -7189,7 +7289,7 @@ async function spuntaFatto(id) {
 // sullo stesso rettangolo.
 async function scriviOra(id) {
   const l = LAVAGNA.lavori.find(x => x.id === id);
-  if (!l || !piazzato(l) || l.fatto) return;
+  if (!l || !piazzato(l) || l.fatto || segnaposto(l)) return;
   const scritto = prompt('A che ora, per ' + (l.cliente || 'questo lavoro') + '?\n' +
     'Per esempio 8:30. Lascia vuoto per toglierla.', l.ora || '');
   if (scritto === null) return;

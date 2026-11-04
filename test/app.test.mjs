@@ -3685,6 +3685,60 @@ try {
   ok('trascinato sul giorno lo occupa tutto, e non ha matita, penna né spunta',
     pioggia.piazzato && pioggia.pomeriggio && pioggia.statoUguale, JSON.stringify(pioggia));
   ok('e dove prosegue c\'è un cartellino col velo della pioggia', pioggia.pieno, JSON.stringify(pioggia));
+  // ── le assenze ──
+  // Come la pioggia, un segnaposto: chi non c'è, perché e per quanto. Il perché
+  // resta in ufficio: sull'agenda, che si legge senza chiave, va solo il nome.
+  const assenza = await pagU.evaluate(async () => {
+    vaiA('lavagna');
+    const r = {};
+    r.bottone = [...document.querySelectorAll('#pagina-lavagna button')].some(b => b.textContent.includes('Assenza'));
+    apriModuloAssenza();
+    document.getElementById('a-chi').value = '';
+    const prima = LAVAGNA.lavori.length;
+    await salvaModuloAssenza();
+    r.senzaNome = LAVAGNA.lavori.length === prima;
+    document.getElementById('a-chi').value = "Matteo non c'è";
+    document.getElementById('a-perche').value = 'visita medica';
+    document.getElementById('a-durata').value = '4';
+    await salvaModuloAssenza();
+    const l = LAVAGNA.lavori.find(x => x.assenza);
+    r.campi = l ? [l.cliente, l.note, l.mezze, l.stato].join('|') : '';
+    const primo = document.querySelector('#pagina-lavagna .coda-lista.pronti article');
+    r.primo = !!primo && primo.classList.contains('assenza');
+    const oggi = isoData(new Date());
+    await spostaLavoro(l.id, oggi, 'mattina');
+    SETTIMANA = lunediDi(new Date());
+    disegnaLavagna();
+    const carta = document.querySelector('#pagina-lavagna .mezza-corpo article.assenza[data-lavoro="' + l.id + '"]');
+    r.carta = carta ? carta.textContent : '';
+    r.colore = carta ? getComputedStyle(carta).backgroundColor : '';
+    r.prosegue = !!document.querySelector('#pagina-lavagna article.seguito.assenza[data-lavoro="' + l.id + '"]');
+    const statoPrima = l.stato;
+    await cambiaPenna(l.id);
+    await spuntaFatto(l.id);
+    r.nienteStati = l.stato === statoPrima && !l.fatto;
+    const voce = costruisciAgenda(LAVAGNA.lavori).appuntamenti.find(a => a.id === l.id);
+    r.agenda = voce ? voce.cliente + '|' + voce.note : 'assente';
+    // Si corregge col suo modulo, restando al suo giorno.
+    apriModuloAssenza(l.id);
+    document.getElementById('a-perche').value = 'ferie';
+    await salvaModuloAssenza();
+    r.corretta = l.note === 'ferie' && l.giorno === oggi;
+    LAVAGNA.lavori = LAVAGNA.lavori.filter(x => !x.assenza);
+    await salvaLavagna();
+    disegnaLavagna();
+    return r;
+  });
+  ok('accanto alla pioggia c\'è «Assenza», e senza chi non c\'è non si mette niente',
+    assenza.bottone && assenza.senzaNome, JSON.stringify(assenza));
+  ok('l\'assenza ha chi, perché e quanto dura, e nasce in cima alla coda',
+    assenza.campi === "Matteo non c'è|visita medica|4|lista" && assenza.primo, JSON.stringify(assenza));
+  ok('sul giorno è rossa pallida, dice chi e perché, e prosegue come gli altri',
+    assenza.carta.includes("Matteo non c'è") && assenza.carta.includes('visita medica') &&
+    assenza.colore === 'rgb(251, 236, 234)' && assenza.prosegue, JSON.stringify(assenza));
+  ok('non ha matita, penna né spunta', assenza.nienteStati, JSON.stringify(assenza));
+  ok('sull\'agenda dei telefoni va il nome e non il perché', assenza.agenda === "Matteo non c'è|", assenza.agenda);
+  ok('e si corregge col suo modulo, restando al suo giorno', assenza.corretta, JSON.stringify(assenza));
   // Lo stesso per un lavoro: il pomeriggio preso ha il colore del suo stato.
   const prosegue = await pagU.evaluate(async () => {
     const oggi = isoData(new Date());

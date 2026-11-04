@@ -402,7 +402,9 @@ function costruisciAgenda(lavori, oggi) {
       mezza: l.mezza === 'pomeriggio' ? 'pomeriggio' : 'mattina',
       ora: /^\d{2}:\d{2}$/.test(l.ora || '') ? l.ora : '',
       cliente: l.cliente || '',
-      note: l.note || '',
+      // Di un'assenza va il nome e non il perché: l'agenda si legge senza chiave,
+      // e «visita medica» accanto a un nome non deve uscire dall'ufficio.
+      note: l.assenza ? '' : l.note || '',
       // Se è un sopralluogo, e quale. Non dicono niente di nessuno — un sì/no e
       // un codice — e servono al telefono per elencare i sopralluoghi anche
       // senza la chiave. Arrivati dopo, senza alzare VERSIONE_AGENDA. Il codice

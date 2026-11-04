@@ -1207,6 +1207,16 @@ matita né il verde e il blu degli stati. In agenda va come gli altri, col nome
 «Pioggia» e le note «non si lavora»: in giardino è una cosa da sapere, e non porta
 nessun campo nuovo.
 
+**Un'assenza è un segnaposto come la pioggia.** Accanto a «🌧️ Giorno di pioggia» c'è
+**«🚫 Assenza»** (`apriModuloAssenza()`): chi non c'è — «Matteo non c'è» —, il perché —
+visita medica, ferie — e per quanto, da mezza giornata a una settimana. Nasce in cima
+alla coda e si trascina sul giorno; si allarga col + e il −, si corregge con la ✎, e
+come la pioggia non ha matita, penna, spunta né ora (`segnaposto()`). È un lavoro con
+`assenza: true`, il nome in `cliente` e il perché in `note`, arrivato senza alzare
+versioni. **Rosso pallido e pieno** (`cartellinoAssenza()`): non è uno stato, e il rosso
+acceso resta degli errori. **In agenda va il nome e non il perché**: l'agenda si legge
+senza chiave, e «visita medica» accanto a un nome non deve uscire dall'ufficio.
+
 **Sopra ogni giorno, la probabilità di pioggia** (`caricaMeteo()`): una nuvola con
 la percentuale, da Open-Meteo — gratuito, senza chiave — per il paese della sede in
 Impostazioni. Chi pianifica un prato per giovedì vuole sapere se giovedì piove, e
