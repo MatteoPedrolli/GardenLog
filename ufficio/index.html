@@ -1511,7 +1511,8 @@ async function caricaArrivi() {
     arrivi.push({ doc, file: nome, corretto: !!archiviato,
       chiuso: !!archiviato && archiviato.stato === 'fatturato',
       inPosta: archiviato && archiviato.stato !== 'fatturato' ? archiviato.inPosta || '' : '',
-      verdePrima: archiviato ? kgVerde(archiviato.righe) : null });
+      verdePrima: archiviato ? kgVerde(archiviato.righe) : null,
+      soloVerde: !!archiviato && soloVerdeCambiato(archiviato.rapportino, doc) });
   }
   arrivi.sort((a, b) => String(b.doc.data).localeCompare(String(a.doc.data)));
   return arrivi;
@@ -2336,8 +2337,10 @@ function disegnaArrivi() {
         '<div class="riga-scheda">' +
           '<span class="nome-cliente">' + perValore(d.cliente.nome || 'senza nome') + '</span>' +
           (a.chiuso ? '<span class="etichetta corretto">corretto dopo il pagamento</span>'
+            : a.corretto && a.soloVerde && statoVerde(d) === 'confermato' ? ''
             : a.corretto ? '<span class="etichetta corretto">corretto · rev ' + d.revisione + '</span>'
                       : '<span class="etichetta nuovo">nuovo</span>') +
+          etichettaStatoVerde(d) +
           '<span class="meta" style="margin-left:auto">' + formattaData(d.data) + '</span>' +
         '</div>' +
         '<div class="meta" style="margin-top:6px">' +
@@ -2454,6 +2457,15 @@ function riassuntoRicontrolla() {
 // La più recente per prima. Le righe sono poche e corte apposta: un elenco lungo
 // non si legge, e quello che non si legge tanto vale non scriverlo.
 const NOVITA = [
+  {
+    versione: '2026-11-05',
+    data: '2026-11-05',
+    titolo: 'Il verde in arrivo',
+    righe: [
+      'Fra i rapportini in arrivo, uno corretto solo per la pesata del verde dice **«smaltimento verde confermato»** invece di «corretto · rev 2». Se è cambiato anche altro, resta «corretto».',
+      'Un rapportino col verde ancora stimato dice **«smaltimento verde da confermare»**.',
+    ],
+  },
   {
     versione: '2026-11-04',
     data: '2026-11-04',
@@ -5302,6 +5314,39 @@ function etichettaVerde(r) {
     : ' <span class="etichetta verde-stimato" title="Stima a occhio: il peso della discarica non è arrivato">stimato</span>';
 }
 
+// Il verde di un rapportino: confermato se tutto quello che porta è pesato, da
+// confermare se qualcosa è ancora stimato. Un rapportino senza verde, o di prima
+// della pesata, non dice niente: non si scrive quello che non si sa.
+function statoVerde(doc) {
+  const verde = (doc && doc.righe || []).filter(r => r.voceID === VOCE_VERDE && typeof r.pesato === 'boolean');
+  if (!verde.length) return '';
+  return verde.every(r => r.pesato) ? 'confermato' : 'da-confermare';
+}
+
+function etichettaStatoVerde(doc) {
+  const s = statoVerde(doc);
+  return s === 'confermato' ? '<span class="etichetta verde-pesato">smaltimento verde confermato</span>'
+    : s === 'da-confermare' ? '<span class="etichetta verde-stimato">smaltimento verde da confermare</span>' : '';
+}
+
+// Una correzione che tocca solo il verde è la pesata arrivata dalla discarica:
+// «corretto · rev 2» non diceva cosa fosse cambiato, e faceva riaprire il lavoro
+// per scoprirlo. Se è cambiato anche altro — un'ora, una nota — resta «corretto».
+function soloVerdeCambiato(prima, ora) {
+  if (!prima || !ora) return false;
+  const senzaVerde = doc => {
+    const delVerde = new Set((doc.righe || []).filter(r => r.voceID === VOCE_VERDE).map(r => r.chiave));
+    return JSON.stringify({
+      data: doc.data || '', note: doc.note || '', cliente: (doc.cliente && doc.cliente.nome) || '',
+      fasce: ((doc.ore && doc.ore.fasce) || []).map(f => [f.data, f.inizio, f.fine, f.persone, f.cosa]),
+      operazioni: (doc.operazioni || []).filter(o => !delVerde.has(o.id))
+        .map(o => [o.id, o.tipoID, o.quantita, o.prodottoID, o.descrizione, o.prezzo]),
+      righe: (doc.righe || []).filter(r => r.voceID !== VOCE_VERDE).map(r => [r.chiave, r.voceID, r.voce, r.quantita, r.prezzo]),
+    });
+  };
+  return senzaVerde(prima) === senzaVerde(ora);
+}
+
 // La correzione di un lavoro pagato si segna vista sul file d'archivio, che è
 // dell'ufficio: in rapportini/ l'ufficio non scrive.
 async function correzioneVista(id) {
@@ -5406,6 +5451,7 @@ function apriLavoro(id) {
     righe: costruisciConteggio(arrivo.doc, precedente ? precedente.righe : null),
     stato: precedente ? precedente.stato : 'da-fatturare',
     corretto: arrivo.corretto,
+    soloVerde: arrivo.soloVerde && statoVerde(arrivo.doc) === 'confermato',
   };
   vaiA('lavoro');
 }
@@ -5422,7 +5468,8 @@ function disegnaLavoro() {
   html += '<p class="sottotitolo">' + formattaData(d.data) +
     (d.cliente.indirizzo ? ' · ' + perValore(d.cliente.indirizzo) : '') +
     (d.cliente.citta ? ', ' + perValore(d.cliente.citta) : '') +
-    (LAVORO.corretto ? ' · <strong>versione corretta (rev ' + d.revisione + ')</strong>' : '') +
+    (LAVORO.soloVerde ? ' · <strong>smaltimento verde confermato</strong>'
+      : LAVORO.corretto ? ' · <strong>versione corretta (rev ' + d.revisione + ')</strong>' : '') +
     '</p>';
 
   html += '<div class="scheda"><div class="titolo-sezione">Ore</div>';

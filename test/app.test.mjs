@@ -5925,6 +5925,49 @@ try {
   ok('aprire la correzione di un conto già mandato lo chiede, e annullando non si apre',
     dopoPagato.mandato, JSON.stringify(dopoPagato));
 
+  // In arrivo, la correzione che porta solo la pesata dice «verde confermato», e
+  // un rapportino col verde ancora stimato dice «da confermare».
+  const etichetteVerde = await pagU.evaluate(async () => {
+    const arrivi = await CARTELLA.getDirectoryHandle('rapportini', { create: true });
+    const rapportino = (id, rev, kg, pesato, note) => costruisciRapportino({
+      visita: { VisitaID: id, Data: '2026-10-30', Revisione: rev - 1, Fasce: [], Note_visita: note || '',
+        Conto: [{ RigaID: 'r-' + id, VoceID: 'smaltimento-verde', Voce: 'Smaltimento verde', Unita: 'kg', Quantita: kg, Pesato: pesato ? 'Sì' : '' }] },
+      cliente: { ClienteID: 'c-' + id, Cliente: 'Verde ' + id }, operazioni: [], tipi: [], voci: [] });
+    const metti = async d => { await scriviTesto(arrivi, nomeFileRapportino(d), JSON.stringify(d)); };
+    await metti(rapportino('solo', 1, 150, false));
+    await metti(rapportino('anche', 1, 150, false));
+    await ricarica();
+    vaiA('arrivi');
+    const scheda = nome => ([...document.querySelectorAll('#pagina-arrivi .scheda')].find(x => x.textContent.includes(nome)) || {}).textContent || '';
+    const r = { stimato: scheda('Verde solo') };
+    for (const id of ['solo', 'anche']) { apriLavoro(id); await archivia(); }
+    await metti(rapportino('solo', 2, 200, true));
+    await metti(rapportino('anche', 2, 200, true, 'tornati per il cancello'));
+    await ricarica();
+    vaiA('arrivi');
+    r.solo = scheda('Verde solo');
+    r.anche = scheda('Verde anche');
+    apriLavoro('solo');
+    r.lavoro = document.querySelector('#pagina-lavoro .sottotitolo').textContent;
+    LAVORO = null;
+    for (const id of ['solo', 'anche']) {
+      for (const rev of [1, 2]) { try { await arrivi.removeEntry(nomeFileRapportino(rapportino(id, rev, 1))); } catch (e) { /* già tolto */ } }
+      const l = ARCHIVIO.find(x => x.id === id);
+      if (l) await (await (await CARTELLA.getDirectoryHandle('archivio')).getDirectoryHandle(l.anno)).removeEntry(l.file);
+    }
+    await ricarica();
+    vaiA('arrivi');
+    return r;
+  });
+  ok('un rapportino col verde stimato dice «smaltimento verde da confermare»',
+    etichetteVerde.stimato.includes('smaltimento verde da confermare'), etichetteVerde.stimato);
+  ok('corretto solo per la pesata dice «smaltimento verde confermato», non «corretto · rev»',
+    etichetteVerde.solo.includes('smaltimento verde confermato') && !etichetteVerde.solo.includes('rev 2') &&
+    etichetteVerde.lavoro.includes('smaltimento verde confermato'), JSON.stringify(etichetteVerde));
+  ok('se è cambiato anche altro resta «corretto», col verde confermato accanto',
+    etichetteVerde.anche.includes('corretto · rev 2') && etichetteVerde.anche.includes('smaltimento verde confermato'),
+    etichetteVerde.anche);
+
   // Il registro dei conferimenti: i file in conferimenti/, letti e basta.
   const registro = await pagU.evaluate(async () => {
     const cartella = await CARTELLA.getDirectoryHandle('conferimenti', { create: true });

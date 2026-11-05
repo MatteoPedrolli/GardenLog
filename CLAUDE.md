@@ -433,6 +433,13 @@ come i prezzi proposti), e **stampare o mandare un conto col verde ancora stimat
 blocca, come l'intestazione mancante. Un rapportino di prima non dice se il verde è pesato, e
 non si avvisa di quello che non si sa.
 
+**In arrivo il verde dice a che punto è.** Una correzione che tocca solo il verde è la
+pesata arrivata dalla discarica, e dice **«smaltimento verde confermato»** invece di
+«corretto · rev 2», che non diceva cosa fosse cambiato e faceva aprire il lavoro per
+scoprirlo; se è cambiato anche altro — un'ora, una nota — resta «corretto», col verde
+accanto (`soloVerdeCambiato()`, che confronta col rapportino in archivio). Un rapportino
+col verde ancora stimato dice **«smaltimento verde da confermare»** (`statoVerde()`).
+
 **La correzione di un conto già pagato non lo riapre.** Prima ricompariva fra gli arrivi e,
 aperta, riscriveva un conto chiuso. Adesso si legge in arrivo — «corretto dopo il pagamento»,
 col verde che cambia — e si segna **«Visto»** (`revisioneVista` sul file d'archivio, che è
