@@ -1235,10 +1235,12 @@ try {
       Conto: [{ RigaID: 'verde-r2', VoceID: 'smaltimento-verde', Voce: 'Smaltimento verde', Unita: 'kg', Quantita: '500' }] });
     const v3 = visita('verde-v3', isoGiorno(0), {});
     const v4 = visita('verde-v4', isoGiorno(-90), {});
+    const v5 = visita('verde-v5', isoGiorno(-20), {});
     const op = (id, vid, kg, extra) => ({ OperazioneID: id, VisitaID: vid, TipoID: 'scarico-verde', Tipo_operazione: 'Scarico verde',
       Quantita: String(kg), Unita: 'kg', Descrizione: '', ...extra });
-    DB.visite.push(v1, v2, v3, v4);
-    DB.operazioni.push(op('verde-op1', 'verde-v1', 300), op('verde-op3', 'verde-v3', 800, { Pesato: 'Sì' }), op('verde-op4', 'verde-v4', 200));
+    DB.visite.push(v1, v2, v3, v4, v5);
+    DB.operazioni.push(op('verde-op1', 'verde-v1', 300), op('verde-op3', 'verde-v3', 800, { Pesato: 'Sì' }), op('verde-op4', 'verde-v4', 200),
+      op('verde-op5', 'verde-v5', 150));
     DB.conferimenti = [];
     invioInCorso = true;   // la coda resta ferma: si guarda cosa c'è dentro
     const r = {};
@@ -1247,6 +1249,17 @@ try {
     apriConferimento();
     r.elenco = CONFERIMENTO.elenco.map(x => x.chiave).join(',');
     r.spuntati = CONFERIMENTO.spuntati.size;
+    // Quello di prima dell'ultimo scarico non si vede, finché non lo si chiede.
+    const righe = () => document.querySelectorAll('#conf-righe .conf-riga').length;
+    r.visibili = righe();
+    r.bottoneVecchi = (document.querySelector('#conf-righe button') || {}).textContent || '';
+    mostraVerdeVecchio();
+    r.conVecchi = righe();
+    mostraVerdeVecchio();
+    // I campi stanno uno sotto l'altro: il peso non sta più accanto alla data.
+    const data = document.getElementById('f-conf-data').getBoundingClientRect();
+    const peso = document.getElementById('f-conf-kg').getBoundingClientRect();
+    r.sotto = peso.top >= data.bottom;
     document.getElementById('f-conf-kg').value = '1234';
     document.getElementById('f-conf-altro').value = '200';
     document.getElementById('f-conf-certificato').value = 'FIR 0042';
@@ -1296,7 +1309,11 @@ try {
   ok('in home la scheda dice quanto verde stimato aspetta di essere pesato',
     conferimento.scheda.startsWith('2 lavori') && conferimento.scheda.includes('800'), conferimento.scheda);
   ok('nel cassone ci sono gli scarichi stimati, come operazione o come riga a mano, non quelli già pesati né i vecchi',
-    conferimento.elenco === 'op:verde-op1,riga:verde-r2' && conferimento.spuntati === 2, JSON.stringify(conferimento));
+    conferimento.elenco === 'op:verde-op5,op:verde-op1,riga:verde-r2' && conferimento.spuntati === 2, JSON.stringify(conferimento));
+  ok('quelli di prima dell\'ultimo scarico non si vedono, e un bottone li mostra',
+    conferimento.visibili === 2 && conferimento.bottoneVecchi.includes('Mostra 1 lavoro') && conferimento.conVecchi === 3,
+    JSON.stringify(conferimento));
+  ok('giorno e peso del certificato stanno uno sotto l\'altro', conferimento.sotto, JSON.stringify(conferimento));
   ok('il pannello propone i pesi in proporzione, e dice di quanto si sbagliavano le stime',
     conferimento.proposte === '370,620' && conferimento.altro.includes('244') && conferimento.esito.includes('23% più'),
     JSON.stringify(conferimento));
@@ -1318,7 +1335,7 @@ try {
   ok('la coda lo chiama col suo nome, e sulla visita lo scarico dice quando è stato pesato',
     conferimento.nome === 'conferimento del verde' && conferimento.segno.includes('pesato il'), conferimento.segno);
   ok('annullato, le stime tornano al loro posto e il conferimento riparte annullato',
-    conferimento.annullato === '300|true|300|true|2' && conferimento.docAnnullato && conferimento.dopoAnnullo === 2,
+    conferimento.annullato === '300|true|300|true|2' && conferimento.docAnnullato && conferimento.dopoAnnullo === 3,
     JSON.stringify(conferimento));
 
   // ── backup ──
@@ -3500,7 +3517,14 @@ try {
   // I giorni sono contati da oggi e non scritti a mano: l'agenda guarda avanti, e
   // una data fissa in un test funziona finché non arriva quel giorno.
   const agendaPrima = JSON.parse(await pagU.evaluate(async () => {
-    const fraGiorni = n => { const d = new Date(); d.setDate(d.getDate() + n); return dataISO(d); };
+    // La domenica sulla lavagna non c'è: un lavoro piazzato lì non si vede, e le
+    // prove che lo cercano sui giorni fallivano ogni volta che «fra tre giorni»
+    // cadeva di domenica. Si scivola al giorno dopo (o prima, per il passato).
+    const fraGiorni = n => {
+      const d = new Date(); d.setDate(d.getDate() + n);
+      if (d.getDay() === 0) d.setDate(d.getDate() + (n < 0 ? -1 : 1));
+      return dataISO(d);
+    };
     window.GIORNI = { ieri: fraGiorni(-1), presto: fraGiorni(1), dopo: fraGiorni(3) };
     LAVAGNA.lavori = [
       sistemaLavoro({ cliente: 'Ieri', giorno: window.GIORNI.ieri, mezza: 'mattina', stato: 'confermato' }),

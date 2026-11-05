@@ -408,7 +408,11 @@ certificato, se ne toglie una a chi è stato arrotondato di più.
 
 Spuntati di partenza ci sono gli scarichi **dall'ultimo conferimento** in poi (la prima
 volta, l'ultima settimana), fra quelli degli ultimi sessanta giorni: si toglie la spunta
-a quello che è ancora nel cassone. Un peso scritto a mano su un lavoro resta quello, e
+a quello che è ancora nel cassone. **Quelli di prima dell'ultimo scarico non si vedono**,
+se non li si chiede col bottone sotto l'elenco: erano una sfilza in grigio sopra quelli da
+pesare, e quasi sempre sono verde già scaricato e fatturato. Il telefono non sa cosa è
+fatturato — lo sa l'ufficio — ma sa quando è stato l'ultimo scarico. Giorno e kg del
+certificato stanno uno sotto l'altro: affiancati, il peso stava stretto. Un peso scritto a mano su un lavoro resta quello, e
 gli altri si dividono il resto. **Un lavoro grosso pesato scarico per scarico** ha già il
 suo certificato: sulla visita lo scarico si spunta **«pesato»**, e nei conferimenti non
 entra. Uno pesato da un conferimento non si ritocca sulla visita: il registro dice quel

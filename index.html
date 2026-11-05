@@ -969,15 +969,15 @@ select.form-control { background-image: url("data:image/svg+xml,%3Csvg xmlns='ht
     <div class="drawer-title">Conferimento del verde</div>
 
     <div class="drawer-body">
-      <div class="form-row">
-        <div class="form-group">
-          <label class="form-label">Giorno dello scarico</label>
-          <input type="date" class="form-control" id="f-conf-data">
-        </div>
-        <div class="form-group">
-          <label class="form-label">Kg del certificato</label>
-          <input type="text" inputmode="decimal" class="form-control" id="f-conf-kg" placeholder="Es. 1240" oninput="ricalcolaConferimento()">
-        </div>
+      <!-- Uno sotto l'altro: affiancati, sul telefono il peso — la cosa che si
+           scrive guardando il certificato — stava stretto accanto alla data. -->
+      <div class="form-group">
+        <label class="form-label">Giorno dello scarico</label>
+        <input type="date" class="form-control" id="f-conf-data">
+      </div>
+      <div class="form-group">
+        <label class="form-label">Kg del certificato</label>
+        <input type="text" inputmode="decimal" class="form-control" id="f-conf-kg" placeholder="Es. 1240" oninput="ricalcolaConferimento()">
       </div>
       <div class="form-group">
         <label class="form-label">Numero del certificato</label>
@@ -3295,8 +3295,10 @@ function apriConferimento() {
   const elenco = verdeDaPesare();
   CONFERIMENTO = {
     elenco,
+    da,
     spuntati: new Set(elenco.filter(s => String(s.visita.Data) >= da).map(s => s.chiave)),
     fissi: new Map(),
+    vecchi: false,
   };
   document.getElementById('f-conf-data').value = dataISO(new Date());
   ['f-conf-kg', 'f-conf-certificato', 'f-conf-altro'].forEach(id => { document.getElementById(id).value = ''; });
@@ -3304,10 +3306,21 @@ function apriConferimento() {
   document.getElementById('overlay-conferimento').classList.add('open');
 }
 
+// Quelli di prima dell'ultimo conferimento non si vedono, se non li si chiede:
+// erano una sfilza in grigio sopra quelli da pesare, e quasi sempre sono verde già
+// passato dalla discarica e già fatturato. Il telefono non sa cosa è fatturato —
+// lo sa l'ufficio —, ma sa quando è stato l'ultimo scarico. Uno spuntato resta
+// visibile anche se è vecchio: nascondere una cosa segnata è il modo di scordarla.
 function disegnaConferimento() {
   const el = document.getElementById('conf-righe');
-  const { elenco, spuntati, fissi } = CONFERIMENTO;
-  el.innerHTML = elenco.length ? elenco.map(s => {
+  const { elenco, spuntati, fissi, da } = CONFERIMENTO;
+  const vecchio = s => String(s.visita.Data) < da && !spuntati.has(s.chiave);
+  const quantiVecchi = elenco.filter(vecchio).length;
+  const visibili = CONFERIMENTO.vecchi ? elenco : elenco.filter(s => !vecchio(s));
+  const bottone = quantiVecchi ? `<button type="button" class="btn btn-secondary" style="margin:8px 0 2px; padding:8px 12px; font-size:0.8rem"
+      onclick="mostraVerdeVecchio()">${CONFERIMENTO.vecchi ? 'Nascondi quelli di prima dell\'ultimo scarico'
+        : (quantiVecchi === 1 ? 'Mostra 1 lavoro' : 'Mostra ' + quantiVecchi + ' lavori') + ' di prima dell\'ultimo scarico'}</button>` : '';
+  el.innerHTML = (visibili.length ? visibili.map(s => {
     const on = spuntati.has(s.chiave);
     const quando = s.visita.Data ? new Date(s.visita.Data).toLocaleDateString('it-IT', { day: 'numeric', month: 'short' }) : '';
     return `<div class="conf-riga${on ? '' : ' spenta'}">
@@ -3318,9 +3331,14 @@ function disegnaConferimento() {
              oninput="pesoConferimento('${perOnclick(s.chiave)}', this.value)" aria-label="peso">
       <span class="unita">kg</span>
     </div>`;
-  }).join('') : '<div class="dati-nota">Nessuno scarico verde stimato negli ultimi due mesi.</div>';
+  }).join('') : `<div class="dati-nota">${elenco.length ? 'Niente di stimato dall\'ultimo scarico.' : 'Nessuno scarico verde stimato negli ultimi due mesi.'}</div>`) + bottone;
   disegnaStoricoConferimenti();
   ricalcolaConferimento();
+}
+
+function mostraVerdeVecchio() {
+  CONFERIMENTO.vecchi = !CONFERIMENTO.vecchi;
+  disegnaConferimento();
 }
 
 function spuntaConferimento(chiave) {
