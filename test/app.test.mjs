@@ -1338,6 +1338,15 @@ try {
     conferimento.annullato === '300|true|300|true|2' && conferimento.docAnnullato && conferimento.dopoAnnullo === 3,
     JSON.stringify(conferimento));
 
+  // Le modifiche ai clienti in attesa dell'ufficio sopravvivono alla riapertura e
+  // al backup: normalizzaDB() le lasciava cadere.
+  ok('le modifiche ai clienti in attesa restano dopo la riapertura e nel backup',
+    await page.evaluate(() => {
+      const m = [{ id: 'cli-prova', ClienteID: 'x', cliente: { id: 'x', nome: 'Prova' } }];
+      const riletto = leggiDati({ ...DB, modificheClienti: m }, VERSIONE_DATI);
+      return riletto.modificheClienti.length === 1 && riletto.modificheClienti[0].id === 'cli-prova';
+    }));
+
   // ── backup ──
   const backup = await page.evaluate(() =>
     JSON.stringify({ app: 'GiardinoApp', versione: VERSIONE_DATI, esportato: new Date().toISOString(), db: DB }));

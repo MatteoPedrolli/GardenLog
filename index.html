@@ -1306,7 +1306,11 @@ const IMPOSTAZIONI_DEFAULT = { UrlRapportini: '', NomeMittente: '', ChiaveLettur
 
 // `conferimenti` è arrivata dopo, senza alzare VERSIONE_DATI: assente vuol dire
 // che il verde non è mai stato pesato, ed è quello che era vero per tutti.
-const COLLEZIONI = ['clienti', 'visite', 'operazioni', 'concimi', 'sementi', 'fitofarmaci', 'fasce', 'tipiOperazione', 'voci', 'settori', 'coda', 'prenotazioni', 'rilievi', 'conferimenti'];
+// `modificheClienti` c'era già ma non stava qui, e normalizzaDB() la lasciava
+// cadere a ogni riapertura e a ogni backup ripristinato: una correzione fatta in
+// giardino e non ancora applicata dall'ufficio spariva, e l'anagrafica scaricata
+// dopo la ricopriva col dato di prima.
+const COLLEZIONI = ['clienti', 'visite', 'operazioni', 'concimi', 'sementi', 'fitofarmaci', 'fasce', 'tipiOperazione', 'voci', 'settori', 'coda', 'prenotazioni', 'rilievi', 'conferimenti', 'modificheClienti'];
 
 // Fasce di partenza per chi apre l'app la prima volta: numeri da correggere
 // in Archivi, non verità rivelate. Chi arriva da Sheets o da un backup se li
