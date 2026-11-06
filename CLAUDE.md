@@ -40,6 +40,21 @@ con il telefono, sono persi. Ogni cosa che tocca i dati deve tenerne conto: un
 salvataggio fallito va detto a chiaro schermo, non messo in console; una
 condivisione annullata non va segnata come backup fatto.
 
+**Il backup parte anche da solo.** Una rete che bisogna ricordarsi di stendere prima o
+poi non c'è: una volta al giorno, quando c'è rete e qualcosa è cambiato, il telefono
+manda una **copia di sicurezza** di tutto il database nella cartella dell'ufficio, in
+`backup/` (`preparaCopiaDelGiorno()`, documento `backup` nella stessa coda dei
+rapportini). È lo stesso file del backup a mano — `app`, `versione`, `esportato`, `db` —
+e si ripristina con «Importa backup» scegliendolo dal Drive. La copia si costruisce **al
+momento di partire** (`costruisciCopiaSicurezza()`), non quando entra in coda: sarebbe
+vecchia, e una copia del database dentro il database ne raddoppierebbe il peso, che in
+`localStorage` è contato. Consegnata con `status: "ok"`, conta come backup fatto. Lo
+script tiene un file al giorno per telefono (`Dispositivo` nelle impostazioni) e butta
+quelli più vecchi di trenta giorni; la conosce dalla versione 8. Porta anche la chiave
+di lettura e i contatti dei clienti: sta nella cartella dell'ufficio, e lo script non la
+consegna a nessuno. Quello che si fa senza campo resta solo sul telefono finché la rete
+non torna: nessuna copia lo evita. Il backup a mano resta, per averne una copia altrove.
+
 **Tutto in italiano.** Interfaccia, nomi delle funzioni nuove, commenti,
 messaggi di errore. Il codice più vecchio ha nomi inglesi (`renderClienti`,
 `saveVisita`): lasciarli dov'è, non serve una rinominazione di massa.

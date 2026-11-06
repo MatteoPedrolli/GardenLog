@@ -52,7 +52,14 @@ const CARTELLE = {
   // I conferimenti del verde in discarica: il peso del certificato e come si è
   // ripartito sui lavori. L'ufficio ne tiene il registro.
   conferimento: 'conferimenti',
+  // La copia di sicurezza di ogni telefono, una al giorno: tutto il suo database,
+  // da rimettere su un telefono nuovo. Non si legge da qui: si prende dal Drive.
+  backup: 'backup',
 };
+
+// Quanti giorni di copie di sicurezza si tengono per ogni telefono. Le più vecchie
+// vanno nel cestino di Drive, che le tiene ancora un mese.
+const GIORNI_COPIE = 30;
 
 // I file che il telefono può leggere. L'elenco sta qui e non nella richiesta: il
 // nome del file non si prende mai da chi chiama, o l'indirizzo diventerebbe un
@@ -96,6 +103,7 @@ function doPost(e) {
     while (vecchi.hasNext()) vecchi.next().setTrashed(true);
 
     cartella.createFile(nome, JSON.stringify(doc, null, 2), 'application/json');
+    if (doc.tipo === 'backup') togliCopieVecchie(cartella, doc.id);
     return risposta({ status: 'ok', tipo: doc.tipo, file: nome, revisione: doc.revisione || 1 });
   } catch (err) {
     return risposta({ status: 'error', msg: String((err && err.message) || err) });
@@ -112,7 +120,7 @@ function doGet(e) {
     if (!quale) {
       // Dice se la chiave c'è, mai quale sia: serve a verificare da un browser
       // che la distribuzione sia quella giusta e la chiave impostata.
-      return risposta({ status: 'ok', servizio: 'rapportini', versione: 7,
+      return risposta({ status: 'ok', servizio: 'rapportini', versione: 8,
         accetta: Object.keys(CARTELLE), leggibili: Object.keys(LEGGIBILI),
         riservati: Object.keys(RISERVATI), chiave: chiave ? 'impostata' : 'manca' });
     }
@@ -136,10 +144,19 @@ function doGet(e) {
   }
 }
 
+function togliCopieVecchie(cartella, id) {
+  const limite = Date.now() - GIORNI_COPIE * 86400000;
+  const tutti = cartella.getFiles();
+  while (tutti.hasNext()) {
+    const f = tutti.next();
+    if (f.getName().indexOf(id) >= 0 && f.getDateCreated().getTime() < limite) f.setTrashed(true);
+  }
+}
+
 function nomeFile(doc) {
   // Un conferimento non è di un cliente: porta il suo nome, o la cartella si
   // riempirebbe di «cliente» che non dicono niente.
-  const pulito = String((doc.cliente && doc.cliente.nome) || (doc.tipo === 'conferimento' ? 'conferimento' : 'cliente'))
+  const pulito = String((doc.cliente && doc.cliente.nome) || (doc.tipo === 'conferimento' ? 'conferimento' : doc.tipo === 'backup' ? 'copia-' + (doc.da || 'telefono') : 'cliente'))
     .replace(/[^a-zA-Z0-9]+/g, '-').replace(/^-|-$/g, '').toLowerCase();
   // Il rapportino porta la data del lavoro, l'appuntamento il lunedì della
   // settimana in cui andrebbe fatto: in entrambi i casi la cartella resta

@@ -813,7 +813,8 @@ select.form-control { background-image: url("data:image/svg+xml,%3Csvg xmlns='ht
 
       <div class="section-title">Backup</div>
       <div class="card" style="padding:14px">
-        <div class="dati-nota">I dati stanno solo su questo dispositivo. Il file di backup è l'unica copia che sopravvive a un telefono perso, formattato o cambiato: esportalo ogni tanto e tienilo dove tieni le cose che contano.</div>
+        <div class="dati-nota">Ogni giorno, quando c'è rete, il telefono manda da solo una copia di tutti i suoi dati nella cartella dell'ufficio, in <b>backup/</b>. Per rimetterla su un telefono nuovo: «Importa backup» e scegli il file dal Drive. Il backup a mano resta, per tenerne una copia anche altrove.</div>
+        <div id="stato-copia-auto" class="dati-nota" style="color:var(--text-mid)"></div>
         <div id="stato-backup" class="dati-nota" style="color:var(--text-mid)"></div>
         <button class="btn btn-primary" onclick="esportaBackup()">⬇️ Esporta backup</button>
         <button class="btn btn-secondary" style="margin-top:8px" onclick="document.getElementById('file-backup').click()">⬆️ Importa backup</button>
@@ -3499,6 +3500,52 @@ async function annullaConferimento(id) {
   svuotaCoda({ avvisa: true });
 }
 
+// ── LA COPIA DI SICUREZZA AUTOMATICA ──
+// Il backup a mano era l'unica rete, e una rete che bisogna ricordarsi di
+// stendere prima o poi non c'è. Una volta al giorno, quando c'è rete e qualcosa è
+// cambiato, il telefono manda da solo una copia di tutti i suoi dati nella
+// cartella dell'ufficio, in backup/: lo stesso file del backup a mano, che si
+// ripristina con «Importa backup» scegliendolo dal Drive. Un file al giorno, e lo
+// script tiene gli ultimi trenta. Quello che si fa senza campo resta sul telefono
+// finché la rete non torna: nessuna copia lo evita, ma qui sono ore e non settimane.
+function dispositivo() {
+  if (!DB.impostazioni.Dispositivo) {
+    DB.impostazioni = { ...DB.impostazioni, Dispositivo: Date.now().toString(36) + Math.random().toString(36).slice(2, 6) };
+  }
+  return DB.impostazioni.Dispositivo;
+}
+
+function costruisciCopiaSicurezza() {
+  const ora = new Date().toISOString();
+  return {
+    tipo: 'backup', id: 'backup-' + dispositivo(), revisione: 1, creato: ora,
+    data: dataISO(new Date()), da: (DB.impostazioni?.NomeMittente || '').trim(),
+    // Lo stesso formato del backup a mano: «Importa backup» lo legge così com'è.
+    app: 'GiardinoApp', versione: VERSIONE_DATI, esportato: ora,
+    db: { ...DB, coda: DB.coda.filter(v => v.tipo !== 'backup') },
+  };
+}
+
+// Dice se ha messo in coda la copia di oggi. Una alla volta, una al giorno, e solo
+// se c'è qualcosa da salvare e un posto dove mandarla.
+function preparaCopiaDelGiorno() {
+  if (!(DB.impostazioni?.UrlRapportini || '').trim() || !contieneQualcosa(DB)) return false;
+  if (DB.coda.some(v => v.tipo === 'backup')) return false;
+  const oggi = dataISO(new Date());
+  const ultima = META.ultimaCopiaAutomatica ? dataISO(new Date(META.ultimaCopiaAutomatica)) : '';
+  if (ultima === oggi) return false;
+  if (ultima && !(META.modificheDalBackup > 0)) return false;
+  DB.coda.push({ docID: 'backup-' + dispositivo(), tipo: 'backup', doc: null, creato: new Date().toISOString(), tentativi: 0, errore: '' });
+  return true;
+}
+
+function testoCopiaAutomatica() {
+  if (!(DB.impostazioni?.UrlRapportini || '').trim()) return 'Copia automatica: spenta finché non c\'è l\'indirizzo di consegna';
+  const giorni = giorniDa(META.ultimaCopiaAutomatica);
+  if (giorni === null) return 'Copia automatica sul Drive: non ancora partita';
+  return 'Ultima copia automatica sul Drive: ' + (giorni <= 0 ? 'oggi' : giorni === 1 ? 'ieri' : giorni + ' giorni fa');
+}
+
 // ── LA CODA DI USCITA ──
 // Il rapportino si salva sempre sul telefono, e parte quando c'è rete. In
 // giardino il campo spesso non c'è: se l'invio fosse l'unico modo di
@@ -4501,7 +4548,7 @@ async function consegnaRapportino(doc) {
 }
 
 const NOMI_DOCUMENTO = { appuntamento: 'prenotazione', rilievo: 'rilievo', cliente: 'modifica a un cliente',
-  conferimento: 'conferimento del verde' };
+  conferimento: 'conferimento del verde', backup: 'copia di sicurezza' };
 
 function comeSiChiama(voce) {
   return (voce && NOMI_DOCUMENTO[voce.tipo]) || 'rapportino';
@@ -4510,6 +4557,7 @@ function comeSiChiama(voce) {
 // Prova a svuotare la coda. Silenziosa di suo: viene chiamata all'avvio, al
 // ritorno della rete e ogni tanto, e non deve interrompere chi sta lavorando.
 async function svuotaCoda({ avvisa = false } = {}) {
+  if (!invioInCorso && preparaCopiaDelGiorno()) await salvaDB({ conta: false });
   if (invioInCorso || !DB.coda.length) return;
   if (!navigator.onLine) { if (avvisa) showToast('📭 Nessuna rete: quello che c\'è parte appena torna'); return; }
   invioInCorso = true;
@@ -4517,8 +4565,15 @@ async function svuotaCoda({ avvisa = false } = {}) {
   try {
     for (const voce of [...DB.coda]) {
       try {
-        await consegnaRapportino(voce.doc);
+        // La copia di sicurezza si fa al momento di partire, non quando entra in
+        // coda: sarebbe vecchia, e una copia di tutto il database dentro il
+        // database ne raddoppierebbe il peso, che in localStorage è contato.
+        await consegnaRapportino(voce.tipo === 'backup' ? costruisciCopiaSicurezza() : voce.doc);
         DB.coda = DB.coda.filter(v => v !== voce);
+        if (voce.tipo === 'backup') {
+          META.ultimoBackup = META.ultimaCopiaAutomatica = new Date().toISOString();
+          META.modificheDalBackup = 0;
+        }
         const visita = DB.visite.find(v => v.VisitaID == voce.docID);
         if (visita) {
           visita.Consegnato = new Date().toISOString();
@@ -4916,6 +4971,8 @@ function salvaImpostazione(chiave, valore) {
 
 function renderDati() {
   mostraVersione();
+  const auto = document.getElementById('stato-copia-auto');
+  if (auto) auto.textContent = testoCopiaAutomatica();
   const stato = document.getElementById('stato-backup');
   if (stato) {
     const modifiche = META.modificheDalBackup || 0;

@@ -323,7 +323,9 @@ try {
     catch (e) { return e.message.includes('indirizzo'); }
   }));
 
-  await page.evaluate(u => { DB.impostazioni.UrlRapportini = u; }, CONSEGNA);
+  // La copia di sicurezza del giorno parte anche lei da questa coda: qui si
+  // contano i rapportini, quindi la si segna già fatta. Ha le sue prove più avanti.
+  await page.evaluate(u => { DB.impostazioni.UrlRapportini = u; META.ultimaCopiaAutomatica = new Date().toISOString(); }, CONSEGNA);
   await page.evaluate(async () => { accodaRapportino(DB.visite[0]); await salvaDB({ conta: false }); renderAll(); });
   ok('il rapportino entra in coda', await page.evaluate(() => DB.coda.length) === 1);
   ok('la visita si vede che è da consegnare',
@@ -1346,6 +1348,55 @@ try {
       const riletto = leggiDati({ ...DB, modificheClienti: m }, VERSIONE_DATI);
       return riletto.modificheClienti.length === 1 && riletto.modificheClienti[0].id === 'cli-prova';
     }));
+
+  // ── la copia di sicurezza automatica ──
+  // Una volta al giorno, quando c'è rete e qualcosa è cambiato, tutto il database
+  // va nella cartella dell'ufficio: lo stesso file del backup a mano.
+  const copiaAuto = await page.evaluate(async () => {
+    const codaPrima = DB.coda.slice(), metaPrima = { ...META }, urlPrima = DB.impostazioni.UrlRapportini, fetchPrima = window.fetch;
+    const r = {};
+    DB.coda = [];
+    DB.impostazioni.UrlRapportini = 'https://consegna.esempio.invalid/exec';
+    META.ultimaCopiaAutomatica = null;
+    META.modificheDalBackup = 3;
+    let mandato = null;
+    window.fetch = async (url, opz) => { mandato = JSON.parse(opz.body); return new Response('{"status":"ok"}'); };
+    invioInCorso = true;   // si guarda la coda prima che parta
+    r.preparata = preparaCopiaDelGiorno();
+    r.unaSola = !preparaCopiaDelGiorno() && DB.coda.filter(v => v.tipo === 'backup').length === 1;
+    r.leggera = DB.coda.find(v => v.tipo === 'backup').doc === null;
+    r.nome = comeSiChiama(DB.coda[0]);
+    invioInCorso = false;
+    await svuotaCoda();
+    r.tipo = mandato && mandato.tipo;
+    r.clienti = mandato ? mandato.db.clienti.length === DB.clienti.length && mandato.db.visite.length === DB.visite.length : false;
+    r.senzaSeStessa = mandato ? !mandato.db.coda.some(v => v.tipo === 'backup') : false;
+    r.siImporta = mandato ? !!leggiDati(mandato.db, mandato.versione) : false;
+    r.svuotata = !DB.coda.some(v => v.tipo === 'backup');
+    r.segnata = giorniDa(META.ultimaCopiaAutomatica) === 0 && META.modificheDalBackup === 0;
+    // Lo stesso giorno non riparte; il giorno dopo, senza modifiche, nemmeno.
+    r.oggiNo = !preparaCopiaDelGiorno();
+    renderDati();
+    r.testo = (document.getElementById('stato-copia-auto') || {}).textContent || '';
+    META.ultimaCopiaAutomatica = new Date(Date.now() - 86400000).toISOString();
+    r.ieriSenzaModificheNo = !preparaCopiaDelGiorno();
+    META.modificheDalBackup = 1;
+    r.ieriConModificheSi = preparaCopiaDelGiorno();
+    window.fetch = fetchPrima;
+    DB.coda = codaPrima;
+    DB.impostazioni.UrlRapportini = urlPrima;
+    META = metaPrima;
+    await salvaDB({ conta: false });
+    return r;
+  });
+  ok('la copia del giorno entra in coda una volta sola, leggera, col suo nome',
+    copiaAuto.preparata && copiaAuto.unaSola && copiaAuto.leggera && copiaAuto.nome === 'copia di sicurezza', JSON.stringify(copiaAuto));
+  ok('parte con tutti i dati, senza se stessa, e si ripristina con «Importa backup»',
+    copiaAuto.tipo === 'backup' && copiaAuto.clienti && copiaAuto.senzaSeStessa && copiaAuto.siImporta, JSON.stringify(copiaAuto));
+  ok('consegnata, conta come backup fatto, e la pagina Dati lo dice',
+    copiaAuto.svuotata && copiaAuto.segnata && copiaAuto.testo.includes('oggi'), JSON.stringify(copiaAuto));
+  ok('non riparte lo stesso giorno né il giorno dopo senza modifiche, sì con le modifiche',
+    copiaAuto.oggiNo && copiaAuto.ieriSenzaModificheNo && copiaAuto.ieriConModificheSi, JSON.stringify(copiaAuto));
 
   // ── backup ──
   const backup = await page.evaluate(() =>
@@ -6130,8 +6181,9 @@ try {
       conChiave({ documento: 'anagrafica', chiave: 'segreta' }).includes('0461 777'));
     ok('e lo script accetta le modifiche ai clienti, nella loro cartella',
       JSON.parse(conChiave({})).accetta.includes('cliente'));
-    ok('e i conferimenti del verde', JSON.parse(conChiave({})).accetta.includes('conferimento') &&
-      JSON.parse(conChiave({})).versione === 7);
+    ok('e i conferimenti del verde', JSON.parse(conChiave({})).accetta.includes('conferimento'));
+    ok('e le copie di sicurezza dei telefoni', JSON.parse(conChiave({})).accetta.includes('backup') &&
+      JSON.parse(conChiave({})).versione === 8);
     ok('l\'agenda resta leggibile senza chiave, come prima',
       senzaChiaveSulloScript({ documento: 'agenda' }).includes('"tipo":"agenda"'));
     // Il nome del file non si prende mai da chi chiama.

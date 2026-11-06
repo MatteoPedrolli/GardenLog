@@ -32,6 +32,7 @@ La cartella, dopo un po' di lavoro, ha questa forma:
     lavagna.json                   ← la pianificazione
     clienti/                       ← ci scrive il telefono: le modifiche ai clienti
     conferimenti/                  ← ci scrive il telefono: il verde pesato in discarica
+    backup/                        ← ci scrive il telefono: una copia di sicurezza al giorno
     agenda.json                    ← ci scrive l'ufficio, il telefono la legge
     anagrafica-dal-telefono.json   ← il file che il telefono esporta, da importare
     prodotti-dal-telefono.json     ← concimi, sementi e fitofarmaci, da importare
@@ -155,6 +156,16 @@ si legge alla pagina **Conferimenti**.
 Serve lo script aggiornato (versione 7): quello di prima non conosce i conferimenti
 e li lascia in coda sul telefono col loro errore. I rapportini corretti arrivano lo
 stesso.
+
+## La copia di sicurezza dei telefoni
+
+Ogni telefono, una volta al giorno, manda da solo una copia di tutti i suoi dati in
+`backup/`. Se un telefono si perde o si cambia, sul telefono nuovo si apre l'app, si va
+in Impostazioni → «Importa backup» e si sceglie dal Drive l'ultimo file di quel telefono.
+Lo script tiene gli ultimi trenta giorni e butta nel cestino i più vecchi.
+
+Dentro c'è anche la chiave di lettura e i contatti dei clienti: la cartella `backup/`
+non va condivisa con nessuno. Serve lo script alla versione 8.
 
 ## Due pezzi da installare, una volta sola
 
