@@ -112,7 +112,22 @@ function costruisciRapportino({ visita, cliente, operazioni, tipi, voci, concimi
     // una prenotazione, e viaggia col suo documento. Scriverlo anche qui voleva
     // dire due posti dove cercarlo e due da tenere allineati.
     note: visita.Note_visita || '',
+    // Pagato sul posto, in contanti: quanto si è preso davvero e quando. In ufficio
+    // il conto si fa lo stesso, e va dritto fra i chiusi. Arrivato senza alzare la
+    // versione: un ufficio che non lo conosce lo ignora, e il conto resta da pagare.
+    ...(incassoDellaVisita(visita) ? { incasso: incassoDellaVisita(visita) } : {}),
   };
+}
+
+// L'incasso scritto sulla visita, se c'è e dice un numero: un «Pagato sul posto»
+// senza cifra non è un incasso, e `saveVisita()` non lo lascia salvare.
+function incassoDellaVisita(visita) {
+  const i = visita && visita.Incasso;
+  if (!i) return null;
+  const testo = String(i.Importo == null ? '' : i.Importo).replace(',', '.').trim();
+  const importo = testo === '' ? NaN : Number(testo);
+  if (isNaN(importo) || importo < 0) return null;
+  return { importo: Number(importo.toFixed(2)), data: i.Data || visita.Data || '' };
 }
 
 function minutiRapportino(hhmm) {
@@ -1120,9 +1135,82 @@ function forseDoppi(clienti, distinti) {
   return coppie;
 }
 
+// ── IL CONTO SUL POSTO ──
+// Un cliente che paga subito, in contanti: in giardino serve il totale, e il
+// listino sta in ufficio. Il telefono ne scarica una copia, con la chiave come
+// l'anagrafica, e la usa **solo** per dire quanto fa: non la modifica, si riscrive
+// intera a ogni scaricamento, e quella vecchia di qualche giorno va bene lo stesso
+// — conta quello che si scrive come incassato, non il totale proposto.
+//
+// Il prezzo di una riga si decide qui, in un posto solo, perché lo usano tutte e
+// due le app: un totale in giardino diverso da quello che esce in ufficio per lo
+// stesso lavoro sarebbe peggio di nessun totale.
+const VERSIONE_LISTINO = 1;
+
+const prezzoValido = p => p !== '' && p != null && !isNaN(Number(p));
+
+function leggiListinoUfficio(grezzo) {
+  let doc = grezzo;
+  if (typeof grezzo === 'string') {
+    try { doc = JSON.parse(grezzo); }
+    catch (e) { throw new Error('Il file non è leggibile: non è JSON valido'); }
+  }
+  if (doc && doc.status === 'error') throw new Error(doc.msg || 'il servizio ha rifiutato');
+  if (!doc || doc.tipo !== 'listino') throw new Error('Questo file non è il listino dell\'ufficio');
+  const versione = Number(doc.versione) || 0;
+  if (versione !== VERSIONE_LISTINO) {
+    throw new Error(`Listino della versione ${versione || '?'}: questa app legge la ${VERSIONE_LISTINO}`);
+  }
+  return {
+    tipo: 'listino', versione, aggiornato: doc.aggiornato || '',
+    voci: (Array.isArray(doc.voci) ? doc.voci : []).filter(v => v && v.voceID).map(v => ({
+      voceID: String(v.voceID), voce: String(v.voce || ''), unita: String(v.unita || ''),
+      prezzo: prezzoValido(v.prezzo) ? Number(v.prezzo) : '', aCorpo: !!v.aCorpo })),
+    prodotti: (Array.isArray(doc.prodotti) ? doc.prodotti : []).filter(p => p && (p.prodottoID || p.id)).map(p => ({
+      prodottoID: String(p.prodottoID || p.id), nome: String(p.nome || ''),
+      prezzo: prezzoValido(p.prezzo) ? Number(p.prezzo) : '', aCorpo: !!p.aCorpo })),
+  };
+}
+
+// Quanto vale una riga del rapportino a listino. Il prezzo delle piante arriva
+// dal cantiere, che lo legge sull'etichetta del vaso; poi il prodotto, quando ha
+// un prezzo suo («Nitrophoska», non «Concime»); poi la voce. Una voce o un
+// prodotto a corpo valgono 1, qualunque sia la quantità.
+function prezzoDellaRiga(doc, riga, listino) {
+  const voci = (listino && listino.voci) || [];
+  const prodotti = (listino && listino.prodotti) || [];
+  const voce = riga.voceID ? voci.find(v => v.voceID === riga.voceID) || null : null;
+  const op = riga.chiave && riga.chiave !== 'manodopera'
+    ? ((doc && doc.operazioni) || []).find(o => o.id && o.id === riga.chiave) || null : null;
+  const prodotto = op && op.prodottoID ? prodotti.find(p => p.prodottoID === op.prodottoID) || null : null;
+  const dalCantiere = prezzoValido(riga.prezzo) ? Number(riga.prezzo) : null;
+  let prezzo = '';
+  if (dalCantiere != null) prezzo = dalCantiere;
+  else if (prodotto && prezzoValido(prodotto.prezzo)) prezzo = Number(prodotto.prezzo);
+  else if (voce && prezzoValido(voce.prezzo)) prezzo = Number(voce.prezzo);
+  const aCorpo = prodotto ? !!prodotto.aCorpo : !!(voce && voce.aCorpo);
+  return { prezzo, dalCantiere, aCorpo, voce, prodotto, operazione: op };
+}
+
+// Il totale del rapportino a listino, e le righe che non ci sono dentro perché
+// manca il prezzo o la quantità: un totale che sembra finito mentre gli manca il
+// noleggio fa incassare meno, e va detto quale manca.
+function contoSulPosto(doc, listino) {
+  let totale = 0;
+  const mancano = [];
+  ((doc && doc.righe) || []).forEach(r => {
+    const p = prezzoDellaRiga(doc, r, listino);
+    const q = p.aCorpo ? 1 : (prezzoValido(r.quantita) ? Number(r.quantita) : null);
+    if (p.prezzo === '' || q == null) mancano.push(r.voce || (p.voce && p.voce.voce) || 'voce senza nome');
+    else totale += q * p.prezzo;
+  });
+  return { totale: Number(totale.toFixed(2)), mancano };
+}
+
 if (typeof module !== 'undefined' && module.exports) {
   module.exports = {
-    VERSIONE_RAPPORTINO, costruisciRapportino, leggiRapportino, nomeFileRapportino,
+    VERSIONE_RAPPORTINO, costruisciRapportino, leggiRapportino, nomeFileRapportino, incassoDellaVisita,
+    VERSIONE_LISTINO, leggiListinoUfficio, prezzoDellaRiga, contoSulPosto,
     VERSIONE_APPUNTAMENTO, costruisciAppuntamento, leggiAppuntamento, nomeFileAppuntamento, origineDellaPrenotazione,
     TIPI_LAVORO, tipiLavoro, tipoLavoro,
     VERSIONE_AGENDA, APPUNTAMENTI_IN_AGENDA, costruisciAgenda, leggiAgenda, etichettaMezzaGiornata,

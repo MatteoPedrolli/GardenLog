@@ -17,8 +17,8 @@
  *
  * PERCHÉ "CHIUNQUE": l'app sul telefono non è collegata a un account Google, e
  * non può autenticarsi. Chi conosce l'indirizzo può depositare un file in questa
- * cartella e leggere l'agenda — nient'altro: non l'archivio, non il listino, non
- * l'anagrafica, e i sopralluoghi solo se ha anche la chiave. Se l'indirizzo
+ * cartella e leggere l'agenda — nient'altro: non l'archivio, e il listino,
+ * l'anagrafica e i sopralluoghi solo se ha anche la chiave. Se l'indirizzo
  * dovesse girare, si rifà la distribuzione e cambia; se gira la chiave, si cambia
  * la proprietà e la si riscrive sul telefono.
  *
@@ -83,6 +83,11 @@ const RISERVATI = {
   // vie, telefoni e mail di tutti i clienti. È il file più delicato che esce di
   // qui, e senza chiave non esce.
   anagrafica: 'clienti.json',
+  // Il listino, per il totale sul posto quando un cliente paga subito in
+  // contanti. Il telefono lo legge e basta: i prezzi si decidono in ufficio.
+  // Non porta dati di persone, ma sono i prezzi dell'azienda, e senza chiave
+  // non escono.
+  listino: 'listino.json',
 };
 
 function doPost(e) {
@@ -120,7 +125,7 @@ function doGet(e) {
     if (!quale) {
       // Dice se la chiave c'è, mai quale sia: serve a verificare da un browser
       // che la distribuzione sia quella giusta e la chiave impostata.
-      return risposta({ status: 'ok', servizio: 'rapportini', versione: 8,
+      return risposta({ status: 'ok', servizio: 'rapportini', versione: 9,
         accetta: Object.keys(CARTELLE), leggibili: Object.keys(LEGGIBILI),
         riservati: Object.keys(RISERVATI), chiave: chiave ? 'impostata' : 'manca' });
     }

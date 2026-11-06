@@ -560,6 +560,15 @@ select.form-control { background-image: url("data:image/svg+xml,%3Csvg xmlns='ht
 .rapp-riga:last-child { border-bottom: none; }
 .rapp-riga.totale { font-weight: 600; color: var(--inchiostro); border-top: 1px solid var(--border); border-bottom: none; }
 .conto-riga { padding: 10px 0; border-bottom: 1px solid var(--border); }
+/* Pagato sul posto: il totale a listino e quanto si è preso. Il riquadro è
+   l'ultimo del conto, prima delle note. */
+.sul-posto { margin-top: 14px; padding: 12px; border: 1px solid var(--border); border-radius: var(--radius-sm); background: var(--earth-light); }
+.sul-posto-testa { display: flex; align-items: center; gap: 8px; font-weight: 600; font-size: 0.9rem; }
+.sul-posto-cifra { display: flex; justify-content: space-between; align-items: baseline; margin: 10px 0 4px; font-size: 0.9rem; }
+.sul-posto-cifra strong { font-size: 1.15rem; }
+.sul-posto-incasso { display: flex; align-items: center; gap: 8px; margin-top: 6px; }
+.sul-posto-incasso input { flex: 1; font-size: 1.05rem; text-align: right; }
+.tag-incasso { font-size: 0.78rem; color: var(--earth); font-weight: 600; }
 .conto-riepilogo { margin-top: 14px; padding-top: 10px; border-top: 1px solid var(--border); font-size: 0.85rem; color: var(--text-mid); }
 .conto-riepilogo-titolo { padding: 2px 0 4px; color: var(--inchiostro-tenue); font-weight: 500; }
 .conto-riepilogo ul { list-style: none; margin: 4px 0 0; padding: 0; }
@@ -773,7 +782,7 @@ select.form-control { background-image: url("data:image/svg+xml,%3Csvg xmlns='ht
     <div id="page-prossimi" class="page">
       <div class="section-title">In programma <span id="agenda-quando" class="agenda-quando"></span></div>
       <div id="agenda-list"></div>
-      <button class="btn btn-secondary" style="margin:0 14px; width:calc(100% - 28px)" onclick="scaricaAgenda({ avvisa: true }); scaricaSopralluoghi(); scaricaAnagrafica()">🔄 Aggiorna dall'ufficio</button>
+      <button class="btn btn-secondary" style="margin:0 14px; width:calc(100% - 28px)" onclick="scaricaAgenda({ avvisa: true }); scaricaSopralluoghi(); scaricaAnagrafica(); scaricaListino()">🔄 Aggiorna dall'ufficio</button>
 
       <div class="section-title">Prenota un appuntamento</div>
       <div class="card" style="padding:14px">
@@ -841,7 +850,7 @@ select.form-control { background-image: url("data:image/svg+xml,%3Csvg xmlns='ht
           <input type="text" class="form-control" id="f-imp-chiave" autocapitalize="off" autocomplete="off"
                  spellcheck="false" oninput="salvaImpostazione('ChiaveLettura', this.value.trim())">
           <div class="dati-nota" style="margin:4px 0 0">La stessa scritta nello script, in
-            CHIAVE_LETTURA. Serve ai sopralluoghi e all'anagrafica dell'ufficio: senza, i
+            CHIAVE_LETTURA. Serve ai sopralluoghi, all'anagrafica e al listino dell'ufficio (il totale di chi paga sul posto): senza, i
             sopralluoghi arrivano col solo nome e i clienti restano quelli del telefono — via,
             telefono e mail non escono dallo script a chi ha solo l'indirizzo.</div>
         </div>
@@ -1266,6 +1275,9 @@ select.form-control { background-image: url("data:image/svg+xml,%3Csvg xmlns='ht
              onblur="aggiungiRigaLibera()">
       <datalist id="voci-conto"></datalist>
       <div id="conto-riepilogo"></div>
+      <!-- Il cliente che paga subito, in contanti: il totale a listino e quanto si è
+           preso. Il conto lo fa lo stesso l'ufficio, e va dritto fra i chiusi. -->
+      <div id="sul-posto"></div>
 
       <div class="rapporto-sez">Note</div>
       <textarea class="form-control" id="f-visita-note" rows="3" placeholder="Osservazioni, variazioni, cose da ricordare..."></textarea>
@@ -1516,6 +1528,10 @@ function normalizzaDB(grezzo) {
   // l'ufficio, tenuta per quando il campo manca. Assente vuol dire «non ancora
   // scaricati», quindi non alza VERSIONE_DATI.
   pulito.sopralluoghi = grezzo?.sopralluoghi && grezzo.sopralluoghi.tipo === 'sopralluoghi' ? grezzo.sopralluoghi : null;
+  // Il listino dell'ufficio, per il totale di chi paga sul posto. Come l'agenda è
+  // una copia: si riscrive intera a ogni scaricamento e non si modifica qui.
+  // Assente vuol dire «non ancora scaricato», e non alza VERSIONE_DATI.
+  pulito.listino = grezzo?.listino && grezzo.listino.tipo === 'listino' ? grezzo.listino : null;
   pulito.defaultAggiunti = Array.isArray(grezzo?.defaultAggiunti) ? grezzo.defaultAggiunti : [];
   return pulito;
 }
@@ -1685,6 +1701,7 @@ async function init() {
   scaricaAgenda();
   scaricaSopralluoghi();
   scaricaAnagrafica();
+  scaricaListino();
   chiediPersistenza();
   registraServiceWorker();
   armaIndietro();
@@ -1922,7 +1939,8 @@ function renderVisite() {
     return `<div class="visit-card">
       <div class="visit-card-header">
         <span class="visit-card-icon">🌿</span>
-        <div style="flex:1"><div class="visit-card-title">${nome}</div><div class="visit-card-date">${data}${v.Ore_Visita ? ' · '+v.Ore_Visita+'h' : ''}${statoConsegna(v)}</div></div>
+        <div style="flex:1"><div class="visit-card-title">${nome}</div><div class="visit-card-date">${data}${v.Ore_Visita ? ' · '+v.Ore_Visita+'h' : ''}${statoConsegna(v)}</div>
+        ${v.Incasso ? `<div class="tag-incasso">💶 pagato sul posto · ${euro(v.Incasso.Importo)}</div>` : ''}</div>
       </div>
       ${v.Note_visita ? `<div style="font-size:0.82rem; color:var(--text-mid); margin-top:8px">${v.Note_visita}</div>` : ''}
       ${etichetteOperazioni(ops)}
@@ -2790,9 +2808,11 @@ function openNuovaVisita() {
   pendingFasce.forEach(f => { f.Data = dataVisitaPrima; });
   clearVisitaCliente();
   contoCorrente = [];
+  incassoCorrente = null;
   popolaVociConto();
   renderFasce();
   renderOperazioni();
+  renderSulPosto();
   aggiornaConto();
   document.getElementById('overlay-visita').classList.add('open');
 }
@@ -2820,9 +2840,11 @@ function openModificaVisita(vid) {
   document.getElementById('drawer-visita-titolo').textContent = 'Modifica Visita';
   bloccaSalvataggio(false);
   contoCorrente = Array.isArray(v.Conto) ? v.Conto.map(r => ({ ...r })) : [];
+  incassoCorrente = v.Incasso ? { ...v.Incasso } : null;
   popolaVociConto();
   renderFasce();
   renderOperazioni();
+  renderSulPosto();
   aggiornaConto();
   document.getElementById('overlay-visita').classList.add('open');
 }
@@ -2955,6 +2977,13 @@ async function saveVisita({ invia = false } = {}) {
   pendingOperazioni.forEach(o => {
     if (o.Settore && !o.TipoID) o.Quantita = String(o.Quantita || '').replace(',', '.').trim();
   });
+  // «Pagato sul posto» senza una cifra non dice niente all'ufficio, e il conto
+  // andrebbe fra i chiusi senza sapere quanto si è preso.
+  if (incassoCorrente && !incassoDellaVisita({ Incasso: incassoCorrente })) {
+    showToast('⚠️ Scrivi quanto hai incassato, o togli «Pagato sul posto»');
+    document.getElementById('f-incassato')?.focus();
+    return;
+  }
 
   const visitaID = editVisitaID || generateID();
   const fasce = pendingFasce.map(({ Data, Inizio, Fine, Persone, Cosa }) =>
@@ -2978,6 +3007,11 @@ async function saveVisita({ invia = false } = {}) {
   };
   // Un campo in più, senza alzare versioni: chi non ce l'ha ha un cliente vero.
   if (passaggio) visita.Passaggio = passaggio; else delete visita.Passaggio;
+  // Anche questo senza alzare versioni: chi non ce l'ha non è stato pagato sul posto.
+  if (incassoCorrente) {
+    visita.Incasso = { Importo: incassoDellaVisita({ Incasso: incassoCorrente }).importo,
+      Data: incassoCorrente.Data || dataISO(new Date()) };
+  } else delete visita.Incasso;
 
   bloccaSalvataggio(true);
   try {
@@ -3180,6 +3214,7 @@ function renderContoRighe() {
             <span>${perValore(quantita(r))}${r.Prezzo != null ? ' · ' + perValore(String(r.Prezzo).replace('.', ',')) + ' € cad.' : ''}</span></li>`).join('')}</ul>
         </div>`
       : '');
+  aggiornaTotaleSulPosto();
 }
 
 // Non ridisegno le righe: si sta scrivendo dentro un campo. La virgola diventa
@@ -3188,6 +3223,7 @@ function modificaRigaConto(i, campo, valore) {
   const r = contoCorrente[i];
   if (!r) return;
   r[campo] = campo === 'Quantita' ? String(valore).replace(',', '.') : valore;
+  aggiornaTotaleSulPosto();
 }
 
 // Le voci che ci sono già, suggerite mentre si scrive. Manodopera e
@@ -3222,6 +3258,131 @@ function aggiungiRigaLibera() {
 function togliRigaConto(i) {
   contoCorrente.splice(i, 1);
   renderContoRighe();
+}
+
+// ── PAGATO SUL POSTO ──
+// Un cliente che paga subito, in contanti. Si faceva il conto a mano, perché sul
+// telefono i prezzi non ci sono: il listino sta in ufficio, in un posto solo. Qui
+// ne arriva una **copia**, scaricata con la chiave come l'anagrafica (`DB.listino`),
+// e serve solo a dire quanto fa: non si modifica, si riscrive intera a ogni
+// scaricamento, e vecchia di qualche giorno va bene lo stesso. Il prezzo di ogni
+// riga lo decide `contoSulPosto()`, in rapportino.js, con la stessa regola
+// dell'ufficio.
+//
+// Il totale **non si scrive da solo** nella casella dell'incasso: è una proposta,
+// e quello che conta è quanto hai preso davvero — arrotondato, con una voce senza
+// prezzo aggiunta a occhio. Lo si prende con un tocco. Il rapportino porta
+// l'incasso, e in ufficio il conto si fa lo stesso e va dritto fra i chiusi.
+let incassoCorrente = null;
+let listinoInCorso = false;
+let listinoScaricatoA = 0;
+
+const euro = n => (Number(n) || 0).toLocaleString('it-IT', { style: 'currency', currency: 'EUR' });
+
+function indirizzoListino() {
+  const url = (DB.impostazioni?.UrlRapportini || '').trim();
+  const chiave = (DB.impostazioni?.ChiaveLettura || '').trim();
+  if (!url || !chiave) return '';
+  return url + (url.includes('?') ? '&' : '?') + 'documento=listino&chiave=' + encodeURIComponent(chiave);
+}
+
+async function scaricaListino({ avvisa = false } = {}) {
+  if (listinoInCorso) return false;
+  const url = indirizzoListino();
+  if (!url || !navigator.onLine) return false;
+  listinoInCorso = true;
+  listinoScaricatoA = Date.now();
+  try {
+    const r = await fetch(url, { cache: 'no-store' });
+    DB.listino = leggiListinoUfficio(await r.text());
+    if (!await salvaDB({ conta: false })) return false;
+    aggiornaTotaleSulPosto();
+    if (avvisa) showToast('💶 Listino aggiornato');
+    return true;
+  } catch (e) {
+    // Come l'agenda: quello scaricato prima resta, e un listino di ieri dice
+    // ancora quanto fa un lavoro. Lo si dice solo a chi l'ha chiesto.
+    if (avvisa) showToast('⚠️ Listino non aggiornato: ' + (e.message || e));
+    return false;
+  } finally {
+    listinoInCorso = false;
+  }
+}
+
+// Il rapportino che partirebbe adesso, da quello che hai davanti, salvato o no:
+// il totale deve seguire le ore e le quantità mentre le scrivi.
+function rapportinoInCorso() {
+  return costruisciRapportino({
+    visita: { VisitaID: editVisitaID || 'in-corso', Data: document.getElementById('f-visita-data')?.value || '',
+      Fasce: pendingFasce, Conto: contoCorrente },
+    cliente: null,
+    operazioni: pendingOperazioni,
+    tipi: DB.tipiOperazione, voci: DB.voci, concimi: DB.concimi, sementi: DB.sementi, fitofarmaci: DB.fitofarmaci,
+  });
+}
+
+function renderSulPosto() {
+  const el = document.getElementById('sul-posto');
+  if (!el) return;
+  if (!incassoCorrente) {
+    el.innerHTML = `<button type="button" class="btn btn-secondary" id="btn-sul-posto" style="margin-top:14px"
+      onclick="pagatoSulPosto(true)">💶 Pagato sul posto</button>`;
+    return;
+  }
+  el.innerHTML = `<div class="sul-posto">
+      <div class="sul-posto-testa"><span style="flex:1">💶 Pagato sul posto, in contanti</span>
+        <button type="button" class="via" onclick="pagatoSulPosto(false)" title="Non è stato pagato sul posto">✕</button></div>
+      <div id="sul-posto-totale"></div>
+      <div class="sul-posto-incasso">
+        <label class="form-label" for="f-incassato" style="margin:0">Incassati</label>
+        <input type="text" inputmode="decimal" class="form-control" id="f-incassato" placeholder="0,00"
+               value="${perValore(formattaQuantita(incassoCorrente.Importo))}" oninput="scriviIncasso(this.value)">
+        <span>€</span>
+      </div>
+    </div>`;
+  aggiornaTotaleSulPosto();
+}
+
+// Si aggiorna solo il totale: nella casella dell'incasso qualcuno può star scrivendo.
+function aggiornaTotaleSulPosto() {
+  const el = document.getElementById('sul-posto-totale');
+  if (!el || !incassoCorrente) return;
+  if (!DB.listino) {
+    el.innerHTML = `<div class="dati-nota" style="margin:8px 0">Il listino dell'ufficio non è ancora arrivato:
+      serve la chiave di lettura in Impostazioni e un po' di rete. Intanto scrivi quanto hai incassato.</div>`;
+    return;
+  }
+  const { totale, mancano } = contoSulPosto(rapportinoInCorso(), DB.listino);
+  const quando = DB.listino.aggiornato
+    ? new Date(DB.listino.aggiornato).toLocaleDateString('it-IT', { day: 'numeric', month: 'long' }) : '';
+  el.innerHTML = `<div class="sul-posto-cifra"><span>A listino</span><strong id="sul-posto-cifra">${euro(totale)}</strong></div>
+    ${mancano.length ? `<div class="dati-nota" style="margin:4px 0; color:var(--red)">Senza prezzo, fuori dal totale:
+      ${mancano.map(perValore).join(', ')}. Aggiungile a occhio.</div>` : ''}
+    <div class="dati-nota" style="margin:2px 0 8px">${quando ? 'Listino dell\'ufficio del ' + perValore(quando) + '.' : ''}
+      In ufficio il conto si rifà coi prezzi veri.</div>
+    <button type="button" class="btn btn-secondary btn-sm" id="btn-usa-totale" onclick="usaTotaleSulPosto()">Incassati ${euro(totale)}</button>`;
+}
+
+function pagatoSulPosto(acceso) {
+  incassoCorrente = acceso ? { Importo: '', Data: dataISO(new Date()) } : null;
+  renderSulPosto();
+  if (acceso) {
+    document.getElementById('f-incassato')?.focus();
+    // Un listino di stamattina basta; uno di giorni fa si prova a rinfrescarlo.
+    if (Date.now() - listinoScaricatoA > 300000) scaricaListino();
+  }
+}
+
+function scriviIncasso(valore) {
+  if (incassoCorrente) incassoCorrente.Importo = String(valore).replace(',', '.').trim();
+}
+
+function usaTotaleSulPosto() {
+  if (!incassoCorrente || !DB.listino) return;
+  const { totale } = contoSulPosto(rapportinoInCorso(), DB.listino);
+  incassoCorrente.Importo = String(totale);
+  const campo = document.getElementById('f-incassato');
+  if (campo) campo.value = formattaQuantita(totale);
 }
 
 // ── IL CONFERIMENTO DEL VERDE ──

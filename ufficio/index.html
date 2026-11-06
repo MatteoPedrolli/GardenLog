@@ -1509,7 +1509,9 @@ async function caricaArrivi() {
     if (archiviato && archiviato.stato === 'fatturato' &&
       Number(archiviato.revisioneVista) >= Number(doc.revisione)) continue;
     arrivi.push({ doc, file: nome, corretto: !!archiviato,
-      chiuso: !!archiviato && archiviato.stato === 'fatturato',
+      // Pagato sul posto non è chiuso come un conto mandato: il cliente non ne ha
+      // il foglio in mano, e la correzione si apre come le altre.
+      chiuso: !!archiviato && archiviato.stato === 'fatturato' && !incassoDi(archiviato),
       inPosta: archiviato && archiviato.stato !== 'fatturato' ? archiviato.inPosta || '' : '',
       verdePrima: archiviato ? kgVerde(archiviato.righe) : null,
       soloVerde: !!archiviato && soloVerdeCambiato(archiviato.rapportino, doc) });
@@ -1604,17 +1606,19 @@ function costruisciConteggio(doc, precedenti) {
       vecchia = vecchie.find(x => stessaRigaAMano(x, r));
       if (vecchia) giaPrese.add(vecchia);
     }
-    const inListino = voceInListino(r.voceID);
-    // Il prodotto, quando c'è, vince sulla voce: «Concime» è una categoria,
-    // «Nitrophoska Gold» è quello che hai comprato. La voce resta la rete per
-    // quando un prodotto nuovo non ha ancora il suo prezzo.
+    // Il prezzo a listino lo decide `prezzoDellaRiga()`, in rapportino.js: è lo
+    // stesso conto che il telefono fa sul posto quando il cliente paga subito, e
+    // due regole diverse farebbero due totali diversi per lo stesso lavoro. Il
+    // prodotto, quando c'è, vince sulla voce: «Concime» è una categoria,
+    // «Nitrophoska Gold» è quello che hai comprato.
+    const daListino = prezzoDellaRiga(doc, r, LISTINO);
+    const inListino = daListino.voce;
     const daProdotto = prodottoDellaRiga(doc, r);
-    const inProdotti = daProdotto ? prodottoInListino(daProdotto.id) : null;
-    const op = operazioneDellaRiga(doc, r);
+    const op = daListino.operazione;
     const pianta = !!op && op.tipoID === 'piantumazione';
     // Il prezzo delle piante arriva dal cantiere, che lo legge sull'etichetta del
     // vaso: conta come un prezzo scritto a mano, e il listino non lo tocca.
-    const dalCantiere = r.prezzo == null || r.prezzo === '' || isNaN(Number(r.prezzo)) ? null : Number(r.prezzo);
+    const dalCantiere = daListino.dalCantiere;
     let prezzo = '';
     let manuale = false;
     let daCantiere = false;
@@ -1629,12 +1633,10 @@ function costruisciConteggio(doc, precedenti) {
       prezzo = dalCantiere;
       manuale = true;
       daCantiere = true;
-    } else if (inProdotti && inProdotti.prezzo !== '' && inProdotti.prezzo != null) {
-      prezzo = Number(inProdotti.prezzo);
-    } else if (inListino && inListino.prezzo !== '' && inListino.prezzo != null) {
-      prezzo = Number(inListino.prezzo);
+    } else {
+      prezzo = daListino.prezzo;
     }
-    const aCorpo = inProdotti ? inProdotti.aCorpo : !!(inListino && inListino.aCorpo);
+    const aCorpo = daListino.aCorpo;
     return {
       chiave: r.chiave || '',
       voceID: r.voceID || '',
@@ -2340,7 +2342,7 @@ function disegnaArrivi() {
             : a.corretto && a.soloVerde && statoVerde(d) === 'confermato' ? ''
             : a.corretto ? '<span class="etichetta corretto">corretto · rev ' + d.revisione + '</span>'
                       : '<span class="etichetta nuovo">nuovo</span>') +
-          etichettaStatoVerde(d) +
+          etichettaStatoVerde(d) + etichettaIncasso(d) +
           '<span class="meta" style="margin-left:auto">' + formattaData(d.data) + '</span>' +
         '</div>' +
         '<div class="meta" style="margin-top:6px">' +
@@ -2457,6 +2459,15 @@ function riassuntoRicontrolla() {
 // La più recente per prima. Le righe sono poche e corte apposta: un elenco lungo
 // non si legge, e quello che non si legge tanto vale non scriverlo.
 const NOVITA = [
+  {
+    versione: '2026-11-06',
+    data: '2026-11-06',
+    titolo: 'Pagato sul posto',
+    righe: [
+      'Un lavoro **pagato sul posto**, in contanti, arriva con scritto «pagato sul posto» e quanto si è preso. Il conto si fa come sempre, e archiviato va **dritto fra i lavori chiusi**: non c\'è niente da mandare né da sollecitare.',
+      'Aperto, il conto dice **se torna con l\'incasso**, e di quanto no. Resta modificabile anche fra i chiusi: il cliente non ne ha il foglio.',
+    ],
+  },
   {
     versione: '2026-11-05',
     data: '2026-11-05',
@@ -5289,6 +5300,43 @@ function disegnaPreventivi() {
   c.innerHTML = html;
 }
 
+// ── PAGATO SUL POSTO ──
+// Un cliente che ha pagato subito, in contanti: il rapportino porta quanto si è
+// preso e quando (`incasso`). Il conto qui si fa lo stesso — è il registro di
+// cosa è stato fatto e a che prezzo — ma non va mandato né sollecitato: si
+// archivia dritto fra i chiusi. Al cliente non va niente, e se un giorno vuole il
+// dettaglio si stampa da qui.
+//
+// Non è un conto mandato e pagato: quello è chiuso davvero, perché il cliente ha
+// in mano il foglio. Questo il cliente non l'ha mai visto, quindi si corregge
+// ancora — un prezzo, il verde pesato dopo — e l'incasso resta quello che è.
+function incassoDi(x) {
+  const d = x && (x.rapportino || x);
+  const i = d && d.incasso;
+  if (!i || i.importo === '' || i.importo == null || isNaN(Number(i.importo))) return null;
+  return { importo: Number(i.importo), data: i.data || '' };
+}
+
+function etichettaIncasso(x) {
+  const i = incassoDi(x);
+  return i ? '<span class="etichetta fatturato">pagato sul posto · ' + formattaEuro(i.importo) + '</span>' : '';
+}
+
+// Il conto a listino e quello che si è preso possono non tornare: un
+// arrotondamento, una voce senza prezzo messa a occhio. Si dice di quanto, e si
+// lascia decidere a chi fa il conto.
+function bloccoIncasso(x, totale) {
+  const i = incassoDi(x);
+  if (!i) return '';
+  const diff = Number((totale - i.importo).toFixed(2));
+  return '<div class="avvertenza incasso">💶 <strong>Pagato sul posto</strong>, in contanti' +
+    (i.data ? ', il ' + formattaData(i.data) : '') + ': <strong>' + formattaEuro(i.importo) + '</strong>.' +
+    (Math.abs(diff) < 0.005 ? ' Il conto torna.'
+      : ' Il conto fa ' + formattaEuro(totale) + ': ' + formattaEuro(Math.abs(diff)) +
+        (diff > 0 ? ' in più' : ' in meno') + ' di quello incassato.') +
+    ' Non va mandato: archiviato, sta fra i lavori chiusi.</div>';
+}
+
 // ── IL VERDE ──
 // Quanti kg di verde porta un conto, gruppi compresi.
 function righeSciolte(righe) {
@@ -5449,7 +5497,11 @@ function apriLavoro(id) {
   LAVORO = {
     doc: arrivo.doc,
     righe: costruisciConteggio(arrivo.doc, precedente ? precedente.righe : null),
-    stato: precedente ? precedente.stato : 'da-fatturare',
+    // Pagato sul posto va dritto fra i chiusi. Se il telefono lo toglie — non era
+    // stato pagato, era un errore — torna fra i da pagare.
+    stato: incassoDi(arrivo.doc) ? 'fatturato'
+      : precedente && incassoDi(precedente) ? 'da-fatturare'
+      : precedente ? precedente.stato : 'da-fatturare',
     corretto: arrivo.corretto,
     soloVerde: arrivo.soloVerde && statoVerde(arrivo.doc) === 'confermato',
   };
@@ -5581,6 +5633,7 @@ function riepilogoConto() {
       (escluse === 1 ? ' riga è fuori dal totale' : ' righe sono fuori dal totale') +
       ': manca la quantità o il prezzo. Il totale qui sopra è incompleto.</div>';
   }
+  html += bloccoIncasso(LAVORO.doc, totale);
   return html;
 }
 
@@ -5634,7 +5687,7 @@ async function tornaAgliArrivi() {
 // prezzi scritti a mano, righe aggiunte e gruppi compresi.
 function modificaArchiviato(id) {
   const l = ARCHIVIO.find(x => x.id === id);
-  if (!l || l.stato === 'fatturato' || !l.rapportino) return;
+  if (!l || (l.stato === 'fatturato' && !incassoDi(l)) || !l.rapportino) return;
   if (l.inPosta && !confirm('Questo conto è già passato alla posta il ' + formattaData(l.inPosta) +
     '.\n\nSe lo cambi, ricordati di rimandarlo al cliente. Continuare?')) return;
   LAVORO = {
@@ -5909,12 +5962,13 @@ function schedaArchivio(l) {
       '<input type="checkbox" class="scegli" title="Per un conto unico con altri lavori dello stesso cliente"' +
         (scelto ? ' checked' : '') + ' onclick="event.stopPropagation(); scegliLavoro(\'' + id + '\', this.checked)">' +
       '<span class="nome-cliente">' + perValore(nome) + '</span>' +
-      '<span class="etichetta ' + (l.stato === 'fatturato' ? 'fatturato">pagato' : 'da-fatturare">da pagare') + '</span>' +
+      (incassoDi(l) && l.stato === 'fatturato' ? etichettaIncasso(l)
+        : '<span class="etichetta ' + (l.stato === 'fatturato' ? 'fatturato">pagato' : 'da-fatturare">da pagare') + '</span>') +
       (l.inPosta ? '<span class="meta">✉️ ' + perValore(daQuandoMandato(l.inPosta)) + '</span>' : '') +
       (!l.inPosta && l.stato !== 'fatturato'
         ? '<button class="secondaria piccola" title="Per un conto stampato e consegnato, o mandato in un altro modo"' +
           ' onclick="event.stopPropagation(); segnaMandato(\'' + id + '\', true)">Segna mandato</button>' : '') +
-      (l.stato !== 'fatturato' && l.rapportino
+      ((l.stato !== 'fatturato' || incassoDi(l)) && l.rapportino
         ? '<button class="secondaria piccola" onclick="event.stopPropagation(); modificaArchiviato(\'' + id + '\')">Modifica</button>' : '') +
       '<span class="meta">' + formattaData(l.data) + '</span>' +
       '<span style="margin-left:auto;font-family:var(--font-display);font-size:1.15rem;font-weight:700">' +
@@ -5967,7 +6021,7 @@ function disegnaArchiviato() {
 
   let html = '<h2 class="titolo-pagina">' + perValore((l.cliente && l.cliente.nome) || 'senza nome') + '</h2>';
   html += '<p class="sottotitolo">' + formattaData(l.data) +
-    ' · ' + (l.stato === 'fatturato' ? 'pagato' : 'da pagare') +
+    ' · ' + (l.stato === 'fatturato' ? (incassoDi(l) ? 'pagato sul posto' : 'pagato') : 'da pagare') +
     (l.inPosta ? ' · mandato al cliente il ' + formattaData(l.inPosta) : '') + '</p>';
 
   html += '<div class="scheda"><div class="titolo-sezione">Conto</div>';
@@ -5990,6 +6044,7 @@ function disegnaArchiviato() {
     html += '<div class="avvertenza">' + conteggio.escluse +
       (conteggio.escluse === 1 ? ' riga è fuori dal totale' : ' righe sono fuori dal totale') + '.</div>';
   }
+  html += bloccoIncasso(l, conteggio.totale);
   html += '</div>';
 
   // Ore e operazioni non vanno sul foglio del cliente, ma qui servono: sono il
@@ -6022,7 +6077,7 @@ function disegnaArchiviato() {
     }
   }
 
-  const modificabile = l.stato !== 'fatturato' && !!l.rapportino;
+  const modificabile = (l.stato !== 'fatturato' || !!incassoDi(l)) && !!l.rapportino;
   html += '<div class="bottoni">' +
     (modificabile ? '<button class="secondaria" onclick="modificaArchiviato(\'' + id + '\')">Modifica il conto</button>' : '') +
     '<button class="secondaria" onclick="stampaConto(\'archivio\', \'' + id + '\')">Stampa</button>' +

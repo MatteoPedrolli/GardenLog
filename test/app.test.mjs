@@ -1398,6 +1398,81 @@ try {
   ok('non riparte lo stesso giorno né il giorno dopo senza modifiche, sì con le modifiche',
     copiaAuto.oggiNo && copiaAuto.ieriSenzaModificheNo && copiaAuto.ieriConModificheSi, JSON.stringify(copiaAuto));
 
+  // ── pagato sul posto ──
+  // Un cliente che paga subito, in contanti: il telefono scarica una copia del
+  // listino con la chiave, dice quanto fa, e il rapportino porta quanto si è preso.
+  await ctx.route(CONSEGNA + '?documento=listino*', r => r.fulfill({ status: 200, contentType: 'application/json',
+    body: JSON.stringify({ tipo: 'listino', versione: 1, aggiornato: '2026-11-02T08:00:00.000Z',
+      voci: [{ voceID: 'manodopera', voce: 'Manodopera', unita: 'h', prezzo: 30 },
+        { voceID: 'trasferimento', voce: 'Trasferimento', unita: '', prezzo: '15' }],
+      prodotti: [], ricette: { x: 1 } }) }));
+  const sulPosto = await page.evaluate(async u => {
+    const r = {};
+    const impPrima = { ...DB.impostazioni };
+    const visitePrima = DB.visite.length;
+    DB.impostazioni.UrlRapportini = u;
+    DB.impostazioni.ChiaveLettura = '';
+    DB.listino = null;
+    r.senzaChiave = await scaricaListino() === false && DB.listino === null;
+    DB.impostazioni.ChiaveLettura = 'segreta';
+    r.scaricato = await scaricaListino() && DB.listino.voci.length === 2 && DB.listino.voci[1].prezzo === 15 &&
+      !('ricette' in DB.listino);
+    r.resta = leggiDati({ ...DB }, VERSIONE_DATI).listino?.voci.length === 2;
+    openNuovaVisita();
+    const c = DB.clienti[0];
+    selectVisitaCliente(c.ClienteID, c.Cliente);
+    pendingFasce = [{ Data: document.getElementById('f-visita-data').value, Inizio: '08:00', Fine: '10:00', Persone: 2, proposta: false }];
+    renderFasce();
+    aggiornaConto();
+    r.bottone = !!document.getElementById('btn-sul-posto');
+    document.getElementById('btn-sul-posto').click();
+    r.cifra = document.getElementById('sul-posto-cifra')?.textContent || '';
+    // Il totale non si scrive da solo nella casella: è una proposta.
+    r.vuoto = document.getElementById('f-incassato').value === '';
+    document.getElementById('f-conto-libera').value = 'Noleggio rullo';
+    aggiungiRigaLibera();
+    r.mancano = (document.getElementById('sul-posto-totale')?.textContent || '').includes('Noleggio rullo');
+    await saveVisita();
+    r.fermato = DB.visite.length === visitePrima;
+    document.getElementById('btn-usa-totale').click();
+    r.preso = document.getElementById('f-incassato').value === '135';
+    const campo = document.getElementById('f-incassato');
+    campo.value = '130,5';
+    campo.dispatchEvent(new Event('input'));
+    await saveVisita();
+    const v = DB.visite.find(x => x.Incasso);
+    r.salvato = !!v && v.Incasso.Importo === 130.5 && v.Incasso.Data === dataISO(new Date());
+    const doc = v ? costruisciRapportino({ visita: v, cliente: c, operazioni: [], tipi: DB.tipiOperazione, voci: DB.voci }) : {};
+    r.nelRapportino = doc.incasso && doc.incasso.importo === 130.5 && doc.incasso.data === dataISO(new Date());
+    renderVisite();
+    r.nelloStorico = (document.getElementById('visite-list')?.textContent || '').includes('pagato sul posto');
+    openModificaVisita(v.VisitaID);
+    r.riaperto = document.getElementById('f-incassato')?.value === '130,5';
+    pagatoSulPosto(false);
+    await saveVisita();
+    const dopo = DB.visite.find(x => x.VisitaID === v.VisitaID);
+    r.tolto = !!dopo && !dopo.Incasso &&
+      !('incasso' in costruisciRapportino({ visita: dopo, cliente: c, operazioni: [], tipi: DB.tipiOperazione, voci: DB.voci }));
+    DB.visite = DB.visite.filter(x => x.VisitaID !== v.VisitaID);
+    DB.operazioni = DB.operazioni.filter(o => o.VisitaID !== v.VisitaID);
+    DB.impostazioni = impPrima;
+    await salvaDB({ conta: false });
+    renderAll();
+    return r;
+  }, CONSEGNA);
+  await ctx.unroute(CONSEGNA + '?documento=listino*');
+  ok('senza chiave il listino non si chiede; con la chiave arriva, senza le ricette, e resta',
+    sulPosto.senzaChiave && sulPosto.scaricato && sulPosto.resta, JSON.stringify(sulPosto));
+  ok('«Pagato sul posto» dice il totale a listino: 2 ore in due a 30 € più il trasferimento',
+    sulPosto.bottone && sulPosto.cifra.replace(/\s/g, ' ').includes('135,00'), JSON.stringify(sulPosto));
+  ok('e quali voci sono fuori perché senza prezzo', sulPosto.mancano, JSON.stringify(sulPosto));
+  ok('il totale non si scrive da solo, e senza una cifra la visita non si salva',
+    sulPosto.vuoto && sulPosto.fermato, JSON.stringify(sulPosto));
+  ok('si prende con un tocco, si corregge con la virgola, e il rapportino porta l\'incasso',
+    sulPosto.preso && sulPosto.salvato && sulPosto.nelRapportino, JSON.stringify(sulPosto));
+  ok('lo storico lo dice, riaprendo lo si ritrova, e togliendolo sparisce dal rapportino',
+    sulPosto.nelloStorico && sulPosto.riaperto && sulPosto.tolto, JSON.stringify(sulPosto));
+
   // ── backup ──
   const backup = await page.evaluate(() =>
     JSON.stringify({ app: 'GiardinoApp', versione: VERSIONE_DATI, esportato: new Date().toISOString(), db: DB }));
@@ -6028,6 +6103,84 @@ try {
     etichetteVerde.anche.includes('corretto · rev 2') && etichetteVerde.anche.includes('smaltimento verde confermato'),
     etichetteVerde.anche);
 
+  // Pagato sul posto: il conto si fa lo stesso, e va dritto fra i chiusi. Il cliente
+  // non ne ha il foglio, quindi si corregge ancora. Il prezzo di una riga lo decide
+  // `prezzoDiListino()`, lo stesso conto che il telefono fa in giardino.
+  const sulPostoU = await pagU.evaluate(async () => {
+    const r = {};
+    const listino = { voci: [{ voceID: 'concime', prezzo: 2 }, { voceID: 'trattamento', prezzo: 40, aCorpo: true },
+      { voceID: 'piante', prezzo: 9 }], prodotti: [{ prodottoID: 'nitro', prezzo: 3 }] };
+    const doc = { operazioni: [{ id: 'o1', prodottoID: 'nitro' }, { id: 'o2', prodottoID: 'altro' }, { id: 'o3', tipoID: 'piantumazione' }],
+      righe: [{ chiave: 'o1', voceID: 'concime', quantita: 10 }, { chiave: 'o2', voceID: 'concime', quantita: 10 },
+        { chiave: 't', voceID: 'trattamento', quantita: 25 }, { chiave: 'o3', voceID: 'piante', quantita: 2, prezzo: 12 },
+        { chiave: 'riga-x', voceID: '', voce: 'Noleggio', quantita: 1 }] };
+    const conto = contoSulPosto(doc, listino);
+    // 10×3 (il prodotto vince) + 10×2 (la voce) + 40 a corpo + 2×12 (dall'etichetta del vaso)
+    r.regole = conto.totale === 114 && conto.mancano.length === 1 && conto.mancano[0] === 'Noleggio';
+    // Ricontrollare la cartella rilegge il listino dal file: il prezzo del verde si
+    // rimette ogni volta, prima di aprire il lavoro.
+    const conVerde = () => { LISTINO = { ...LISTINO, voci: LISTINO.voci.filter(v => v.voceID !== 'smaltimento-verde')
+      .concat([{ voceID: 'smaltimento-verde', voce: 'Smaltimento verde', unita: 'kg', prezzo: 0.1 }]) }; };
+    const arrivi = await CARTELLA.getDirectoryHandle('rapportini', { create: true });
+    const rapportino = (rev, kg, incasso) => costruisciRapportino({
+      visita: { VisitaID: 'sulposto', Data: '2026-11-05', Revisione: rev - 1, Fasce: [],
+        ...(incasso != null ? { Incasso: { Importo: incasso, Data: '2026-11-05' } } : {}),
+        Conto: [{ RigaID: 'r-sp', VoceID: 'smaltimento-verde', Voce: 'Smaltimento verde', Unita: 'kg', Quantita: kg }] },
+      cliente: { ClienteID: 'c-sp', Cliente: 'Contanti Bianchi' }, operazioni: [], tipi: [], voci: [] });
+    const metti = async d => { await scriviTesto(arrivi, nomeFileRapportino(d), JSON.stringify(d)); };
+    await metti(rapportino(1, 150, 14));
+    await ricarica();
+    vaiA('arrivi');
+    const scheda = () => ([...document.querySelectorAll('#pagina-arrivi .scheda')].find(x => x.textContent.includes('Contanti Bianchi')) || {});
+    r.arrivo = scheda().textContent || '';
+    conVerde();
+    apriLavoro('sulposto');
+    r.lavoro = document.getElementById('riepilogo')?.textContent || '';
+    await archivia();
+    const l = ARCHIVIO.find(x => x.id === 'sulposto');
+    r.chiuso = !!l && l.stato === 'fatturato';
+    apriArchivio('fatturato');
+    r.fraIChiusi = (document.getElementById('pagina-archivio')?.textContent || '').includes('pagato sul posto');
+    ARCHIVIATO = 'sulposto';
+    vaiA('archiviato');
+    r.archiviato = document.getElementById('pagina-archiviato')?.textContent || '';
+    r.siModifica = r.archiviato.includes('Modifica il conto');
+    // La pesata arriva dopo: la correzione si apre, e il conto resta fra i chiusi.
+    await metti(rapportino(2, 200, 14));
+    await ricarica();
+    const a = ARRIVI.find(x => x.doc.id === 'sulposto');
+    r.correzioneAperta = !!a && !a.chiuso;
+    conVerde();
+    apriLavoro('sulposto');
+    await archivia();
+    r.restaChiuso = ARCHIVIO.find(x => x.id === 'sulposto').stato === 'fatturato';
+    // Il telefono lo toglie: non era stato pagato. Torna fra i da pagare.
+    await metti(rapportino(3, 200, null));
+    await ricarica();
+    apriLavoro('sulposto');
+    await archivia();
+    r.tornaDaPagare = ARCHIVIO.find(x => x.id === 'sulposto').stato === 'da-fatturare';
+    LAVORO = null;
+    for (const rev of [1, 2, 3]) { try { await arrivi.removeEntry(nomeFileRapportino(rapportino(rev, 1))); } catch (e) { /* già tolto */ } }
+    const fatto = ARCHIVIO.find(x => x.id === 'sulposto');
+    if (fatto) await (await (await CARTELLA.getDirectoryHandle('archivio')).getDirectoryHandle(fatto.anno)).removeEntry(fatto.file);
+    await ricarica();
+    vaiA('arrivi');
+    return r;
+  });
+  ok('il prezzo di una riga: le piante dal vaso, poi il prodotto, poi la voce, a corpo vale uno',
+    sulPostoU.regole, JSON.stringify(sulPostoU));
+  ok('in arrivo un lavoro pagato sul posto lo dice, con quanto si è preso',
+    sulPostoU.arrivo.includes('pagato sul posto') && sulPostoU.arrivo.includes('14,00'), sulPostoU.arrivo);
+  ok('aperto, dice di quanto il conto non torna con l\'incasso',
+    sulPostoU.lavoro.includes('Pagato sul posto') && sulPostoU.lavoro.includes('1,00') && sulPostoU.lavoro.includes('in più'),
+    sulPostoU.lavoro);
+  ok('archiviato, va dritto fra i lavori chiusi, e si può ancora modificare',
+    sulPostoU.chiuso && sulPostoU.fraIChiusi && sulPostoU.archiviato.includes('pagato sul posto') && sulPostoU.siModifica,
+    JSON.stringify(sulPostoU));
+  ok('la correzione col verde pesato si apre e il lavoro resta chiuso; senza incasso torna da pagare',
+    sulPostoU.correzioneAperta && sulPostoU.restaChiuso && sulPostoU.tornaDaPagare, JSON.stringify(sulPostoU));
+
   // Il registro dei conferimenti: i file in conferimenti/, letti e basta.
   const registro = await pagU.evaluate(async () => {
     const cartella = await CARTELLA.getDirectoryHandle('conferimenti', { create: true });
@@ -6142,7 +6295,8 @@ try {
     const sorgente = readFileSync(resolve(RADICE, 'ufficio/ricevi-rapportini.gs'), 'utf8');
     const provaScript = proprieta => {
       const file = { 'agenda.json': '{"tipo":"agenda"}', 'sopralluoghi.json': '{"tipo":"sopralluoghi","telefono":"333"}',
-        'clienti.json': '{"tipo":"anagrafica-ufficio","clienti":[{"telefono":"0461 777"}]}' };
+        'clienti.json': '{"tipo":"anagrafica-ufficio","clienti":[{"telefono":"0461 777"}]}',
+        'listino.json': '{"tipo":"listino","voci":[{"voceID":"manodopera","prezzo":30}]}' };
       const cartella = {
         getFoldersByName: () => ({ hasNext: () => true, next: () => cartella }),
         getFilesByName: n => {
@@ -6182,13 +6336,19 @@ try {
     ok('e lo script accetta le modifiche ai clienti, nella loro cartella',
       JSON.parse(conChiave({})).accetta.includes('cliente'));
     ok('e i conferimenti del verde', JSON.parse(conChiave({})).accetta.includes('conferimento'));
-    ok('e le copie di sicurezza dei telefoni', JSON.parse(conChiave({})).accetta.includes('backup') &&
-      JSON.parse(conChiave({})).versione === 8);
+    ok('e le copie di sicurezza dei telefoni', JSON.parse(conChiave({})).accetta.includes('backup'));
+    // Il listino esce con la chiave, per il totale di chi paga sul posto.
+    ok('il listino esce solo con la chiave giusta, dalla versione 9',
+      !senzaChiaveSulloScript({ documento: 'listino', chiave: '' }).includes('"prezzo"') &&
+      !conChiave({ documento: 'listino', chiave: 'altra' }).includes('"prezzo"') &&
+      conChiave({ documento: 'listino', chiave: 'segreta' }).includes('"prezzo"') &&
+      JSON.parse(conChiave({})).versione === 9);
     ok('l\'agenda resta leggibile senza chiave, come prima',
       senzaChiaveSulloScript({ documento: 'agenda' }).includes('"tipo":"agenda"'));
     // Il nome del file non si prende mai da chi chiama.
     ok('un nome di file qualunque non si legge, chiave o no',
-      conChiave({ documento: 'listino', chiave: 'segreta' }).includes('non leggibile'));
+      conChiave({ documento: 'lavagna', chiave: 'segreta' }).includes('non leggibile') &&
+      conChiave({ documento: 'impostazioni', chiave: 'segreta' }).includes('non leggibile'));
     const stato = JSON.parse(conChiave({}));
     ok('la risposta di controllo dice se la chiave c\'è, mai quale sia',
       stato.chiave === 'impostata' && !JSON.stringify(stato).includes('segreta') &&

@@ -27,7 +27,7 @@ La cartella, dopo un po' di lavoro, ha questa forma:
       2026/
         2026-09-18-mario-rossi-<id>.json
     clienti.json                   ← l'anagrafica dell'ufficio
-    listino.json                   ← i prezzi, solo dell'ufficio
+    listino.json                   ← i prezzi, solo dell'ufficio (il telefono lo legge con la chiave)
     impostazioni.json              ← l'intestazione del conto
     lavagna.json                   ← la pianificazione
     clienti/                       ← ci scrive il telefono: le modifiche ai clienti
@@ -166,6 +166,21 @@ Lo script tiene gli ultimi trenta giorni e butta nel cestino i più vecchi.
 
 Dentro c'è anche la chiave di lettura e i contatti dei clienti: la cartella `backup/`
 non va condivisa con nessuno. Serve lo script alla versione 8.
+
+## Pagato sul posto
+
+Quando un cliente paga subito, in contanti, sul telefono in fondo alla visita si
+tocca **«Pagato sul posto»**: il telefono dice il totale a listino e si scrive quanto
+si è preso. Il listino lo legge da `listino.json`, con la chiave di lettura come
+l'anagrafica, e ne tiene una copia per quando il campo manca: non lo modifica mai.
+
+In ufficio il rapportino arriva con scritto **«pagato sul posto»** e la cifra. Il
+conto si fa come sempre; aperto, dice se torna con l'incasso e di quanto no.
+Archiviato, va **dritto fra i lavori chiusi**: non c'è niente da mandare. Resta
+modificabile anche lì, perché al cliente non è arrivato nessun foglio.
+
+Serve lo script alla versione 9: quello di prima non consegna il listino, e il
+telefono chiede solo quanto si è incassato, senza il totale.
 
 ## Due pezzi da installare, una volta sola
 

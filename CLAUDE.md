@@ -323,7 +323,8 @@ di prima restano dove sono, e si possono togliere.
 invece che su due dispositivi che divergono. Il cantiere dice *cosa* è stato
 fatto e *quanto* — la cosa che solo lui sa — e quanto vale lo decide chi
 fattura. Chi rimette un campo prezzo qui rimette anche il problema di tenerli
-allineati.
+allineati. Il totale di chi **paga sul posto** (sotto) non smentisce la regola: è una
+copia di sola lettura del listino dell'ufficio, e non si scrive niente.
 
 **L'unica eccezione sono le piante**, e è voluta: il prezzo sta sull'etichetta
 del vaso, e in ufficio per saperlo bisognerebbe alzarsi e andare in vivaio. La
@@ -400,6 +401,42 @@ prima ricevono il nome al primo salvataggio, e in ufficio quelle già in archivi
 senza chiave si riconoscono dalla voce, una volta sola (`costruisciConteggio()`); le
 righe aggiunte in ufficio portano `ufficio: true`, e non si scambiano mai per una del
 telefono.
+
+## Pagato sul posto
+
+Un cliente che paga subito, **in contanti** — solo quelli: chi vuole bonifico o POS si fa
+mandare il conto dall'ufficio — e il conto si faceva a mano, perché sul telefono i prezzi
+non ci sono. In fondo alla visita, sotto «Cosa parte per il conto», c'è **«💶 Pagato sul
+posto»**: dice il totale **a listino** e chiede quanto si è preso. Ricevuta niente, acconti
+niente: si incassa tutto, e chi vuole il dettaglio lo chiede in ufficio.
+
+**Il listino arriva dall'ufficio, in sola lettura.** Lo script lo consegna con la chiave,
+come l'anagrafica (`listino` fra i `RISERVATI`, dalla versione 9), e il telefono ne tiene
+una copia in `DB.listino` per quando il campo manca: si riscrive intera a ogni
+scaricamento e non si modifica (`scaricaListino()`, `leggiListinoUfficio()`). Vecchia di
+qualche giorno va bene: conta quello che si scrive come incassato. Assente vuol dire «non
+ancora scaricato», senza alzare `VERSIONE_DATI`, e il riquadro chiede la cifra lo stesso.
+
+**Il prezzo di una riga si decide in un posto solo**, `prezzoDellaRiga()` in
+`rapportino.js`: le piante dal vaso, poi il prodotto, poi la voce, a corpo vale uno. Lo
+usano il totale del telefono (`contoSulPosto()`) e il conteggio dell'ufficio
+(`costruisciConteggio()`): due regole avrebbero fatto due totali per lo stesso lavoro. Le
+righe senza prezzo si **nominano**, fuori dal totale — un noleggio dimenticato fa incassare
+meno.
+
+**Il totale non si scrive da solo nella casella dell'incasso**: è una proposta, e la regola
+è quella delle fasce proposte. Si prende con un tocco («Incassati 239,00 €») o si scrive
+arrotondato; senza una cifra la visita non si salva. La visita porta `Incasso` (`Importo`,
+`Data`), il rapportino `incasso` (`importo`, `data`, `incassoDellaVisita()`), campo arrivato
+senza alzare `VERSIONE_RAPPORTINO`. Nello storico la visita dice «pagato sul posto».
+
+**In ufficio il conto si fa lo stesso**, ed è il registro di cosa è stato fatto e a che
+prezzo. In arrivo dice «pagato sul posto · 14,00 €»; aperto, dice se torna con l'incasso e
+di quanto no (`bloccoIncasso()`), e lascia decidere. Archiviato va **dritto fra i chiusi**
+(`stato: 'fatturato'`). Non è chiuso come un conto mandato e pagato, però: il cliente non ne
+ha il foglio, quindi si **modifica** ancora dall'archivio, e una correzione dal cantiere — il
+verde pesato dopo — si apre come le altre invece di chiedere «Visto» (`incassoDi()`). Se il
+telefono toglie l'incasso, il lavoro torna fra i da pagare.
 
 ## Il verde pesato in discarica
 
@@ -528,8 +565,9 @@ prima. Un file, un solo autore — il telefono deposita, l'ufficio legge, e l'ag
 
 **In lettura lo script sa nominare pochi file.** `doGet` prende il nome da
 `LEGGIBILI` e da `RISERVATI`, non dalla richiesta: un nome che arriva da chi chiama
-farebbe di quel `?documento=` un modo per leggersi il listino o l'anagrafica. Le
-liste sono corte e vanno tenute così.
+farebbe di quel `?documento=` un modo per leggersi la lavagna o le impostazioni. Il
+listino e l'anagrafica escono, ma solo con la chiave. Le liste sono corte e vanno
+tenute così.
 
 ## L'app del capo: la pagina Prossimi e nient'altro
 
