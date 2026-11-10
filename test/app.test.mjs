@@ -3078,12 +3078,13 @@ try {
     dueArchivi.pagati.lista.length === 1 && !dueArchivi.pagati.lista.includes(dueArchivi.aperto), JSON.stringify(dueArchivi.pagati));
   ok('e un lavoro aperto da lì resta sotto la voce da cui si è entrati', dueArchivi.dentro === 'v-pagati', dueArchivi.dentro);
 
-  // Fra i da pagare, due colonne: da mandare e mandati. «Segna mandato» è a mano,
-  // per il conto stampato e consegnato, e si toglie con lo stesso bottone.
+  // Fra i da pagare, tre colonne: da mandare, stampati e mandati. «Segna mandato» è
+  // a mano, per il conto consegnato, e si toglie con lo stesso bottone; «stampato»
+  // lo segna la stampa, e si toglie a mano.
   const mandati = await pagU.evaluate(async () => {
-    const prima = ARCHIVIO.map(l => ({ stato: l.stato, inPosta: l.inPosta }));
+    const prima = ARCHIVIO.map(l => ({ stato: l.stato, inPosta: l.inPosta, stampato: l.stampato || '' }));
     const l = ARCHIVIO[ARCHIVIO.length - 1];
-    await aggiornaArchiviato(l, { stato: 'da-fatturare', inPosta: '' });
+    await aggiornaArchiviato(l, { stato: 'da-fatturare', inPosta: '', stampato: '' });
     apriArchivio('da-fatturare');
     const colonne = () => [...document.querySelectorAll('#elenco-archivio .colonna-archivio')]
       .map(c => ({ titolo: c.querySelector('.titolo-colonna').textContent, schede: c.querySelectorAll('.scheda').length }));
@@ -3095,19 +3096,58 @@ try {
     r.scritto = document.getElementById('elenco-archivio').textContent.includes('mandato il ');
     await segnaMandato(l.id, false);
     r.tolto = colonne();
+    // Stampare lo porta fra gli stampati, e lo scrive sul file.
+    const stampa = window.print, conferma = window.confirm;
+    window.print = () => {}; window.confirm = () => true;
+    stampaConto('archivio', l.id);
+    await new Promise(ok => setTimeout(ok, 50));
+    r.stampato = colonne();
+    r.stampatoSuFile = await (async () => { await ricarica(); return !!ARCHIVIO.find(x => x.id === l.id).stampato; })();
+    apriArchivio('da-fatturare');
+    r.scrittoStampato = document.getElementById('elenco-archivio').textContent.includes('stampato il ');
+    // La stampa per la mail non lo segna: lo segna la posta, se parte.
+    const l2 = ARCHIVIO.find(x => x.id === l.id);
+    await aggiornaArchiviato(l2, { stampato: '' });
+    stampaConto('archivio', l.id, false, true);
+    await new Promise(ok => setTimeout(ok, 50));
+    r.perPostaNo = !ARCHIVIO.find(x => x.id === l.id).stampato;
+    // Mandato vince su stampato, e ristampare un mandato non lo sposta.
+    await aggiornaArchiviato(l2, { stampato: new Date().toISOString(), inPosta: new Date().toISOString() });
+    apriArchivio('da-fatturare');
+    r.mandatoVince = colonne();
+    await aggiornaArchiviato(l2, { stampato: '', inPosta: new Date().toISOString() });
+    stampaConto('archivio', l.id);
+    await new Promise(ok => setTimeout(ok, 50));
+    r.ristampaNo = !ARCHIVIO.find(x => x.id === l.id).stampato;
+    // «Non è stato stampato» lo rimette fra i da mandare.
+    await aggiornaArchiviato(l2, { stampato: new Date().toISOString(), inPosta: '' });
+    ARCHIVIATO = l.id; vaiA('archiviato');
+    r.bottone = document.getElementById('pagina-archiviato').textContent.includes('Non è stato stampato');
+    await nonStampato(l.id);
+    apriArchivio('da-fatturare');
+    r.rimesso = colonne();
+    window.print = stampa; window.confirm = conferma;
     // rimesso com'era
     for (const [k, x] of ARCHIVIO.entries()) await aggiornaArchiviato(x, prima[k] || {});
     apriArchivio('da-fatturare');
     return r;
   });
-  ok('fra i da pagare ci sono due colonne, da mandare e mandati',
-    mandati.prima.length === 2 && mandati.prima[0].titolo.startsWith('Da mandare') && mandati.prima[1].titolo.startsWith('Mandati') &&
-    mandati.prima[0].schede === 1 && mandati.prima[1].schede === 0, JSON.stringify(mandati.prima));
+  const conta = c => c.map(x => x.schede).join(',');
+  ok('fra i da pagare ci sono tre colonne: da mandare, stampati e mandati',
+    mandati.prima.length === 3 && mandati.prima[0].titolo.startsWith('Da mandare') &&
+    mandati.prima[1].titolo.startsWith('Stampati') && mandati.prima[2].titolo.startsWith('Mandati') &&
+    conta(mandati.prima) === '1,0,0', JSON.stringify(mandati.prima));
   ok('«Segna mandato» lo sposta fra i mandati, e resta scritto sul file',
-    mandati.dopo[0].schede === 0 && mandati.dopo[1].schede === 1 && mandati.suFile, JSON.stringify(mandati));
+    conta(mandati.dopo) === '0,0,1' && mandati.suFile, JSON.stringify(mandati));
   ok('e la scheda dice da quando è stato mandato', mandati.scritto);
-  ok('togliendo il segno torna fra quelli da mandare', mandati.tolto[0].schede === 1 && mandati.tolto[1].schede === 0,
-    JSON.stringify(mandati.tolto));
+  ok('togliendo il segno torna fra quelli da mandare', conta(mandati.tolto) === '1,0,0', JSON.stringify(mandati.tolto));
+  ok('stampare il conto lo porta fra gli stampati, scritto sul file e sulla scheda',
+    conta(mandati.stampato) === '0,1,0' && mandati.stampatoSuFile && mandati.scrittoStampato, JSON.stringify(mandati));
+  ok('la stampa per la mail non lo segna stampato', mandati.perPostaNo, JSON.stringify(mandati));
+  ok('mandato vince su stampato, e ristampare un mandato non lo sposta',
+    conta(mandati.mandatoVince) === '0,0,1' && mandati.ristampaNo, JSON.stringify(mandati));
+  ok('«Non è stato stampato» lo rimette fra quelli da mandare',
+    mandati.bottone && conta(mandati.rimesso) === '1,0,0', JSON.stringify(mandati));
   // Solo quanti, non quanto: le somme a schermo il capo non le vuole.
   ok('il gestionale dice quanti, senza le somme', !archivio.includes('stato-somma') && archivio.includes('stato-conta'));
 

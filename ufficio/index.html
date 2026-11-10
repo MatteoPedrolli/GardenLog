@@ -382,10 +382,10 @@ input.vuoto { background: #fffdf5; border-color: #ecdca8; }
 .campione.bloccato { background: var(--earth-light); border: 1px solid var(--earth); }
 .campione.assenza { background: #fbecea; border: 1px solid #e3b5ae; }
 
-.due-colonne-archivio { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 14px; align-items: start; }
+.colonne-archivio { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 14px; align-items: start; }
 .colonna-archivio { min-width: 0; }
 .colonna-archivio .riga-scheda { flex-wrap: wrap; }
-@media (max-width: 1100px) { .due-colonne-archivio { grid-template-columns: minmax(0, 1fr); } }
+@media (max-width: 1100px) { .colonne-archivio { grid-template-columns: minmax(0, 1fr); } }
 .tavolo { display: flex; gap: 14px; align-items: flex-start; }
 
 .coda { width: 290px; flex-shrink: 0; }
@@ -1838,6 +1838,8 @@ async function scriviInArchivio() {
     stato: LAVORO.stato || 'da-fatturare',
     // Riscrivere il conto non dimentica che era già passato alla posta.
     inPosta: (ARCHIVIO.find(l => l.id === doc.id) || {}).inPosta || '',
+    // E nemmeno che era stato stampato.
+    stampato: LAVORO.stampato || (ARCHIVIO.find(l => l.id === doc.id) || {}).stampato || '',
     // Il rapportino ci viaggia dentro per intero: fra due anni questo file deve
     // raccontare il lavoro da solo, anche se la cartella degli arrivi è stata
     // svuotata e il telefono cambiato.
@@ -2103,7 +2105,10 @@ function ibanScritto() {
   return nudo.replace(/(.{4})(?=.)/g, '$1 ');
 }
 
-function stampaConto(origine, id, senzaIntestazione) {
+// `perPosta`: la stampa che fa il PDF da allegare alla mail. Quella non segna
+// «stampato»: il conto lo segna la posta, e annullando la mail resterebbe fra gli
+// stampati un conto che non è mai uscito su carta.
+function stampaConto(origine, id, senzaIntestazione, perPosta) {
   let cliente, data, righe, lavori;
   if (origine === 'insieme') {
     const scelti = lavoriScelti();
@@ -2148,8 +2153,45 @@ function stampaConto(origine, id, senzaIntestazione) {
     ' ' + ((cliente && cliente.nome) || 'cliente');
   document.title = nomeFile;
   window.print();
+  if (!perPosta) segnaStampati(origine, id);
   // Il nome serve a chi manda per mail, per dire quale PDF allegare.
   return nomeFile;
+}
+
+// Un conto stampato passa fra gli **stampati**, da sé: è l'app che apre la stampa,
+// e chi stampa un conto di solito lo consegna. Chrome non dice se la stampa è stata
+// annullata, quindi il segno si toglie a mano («Non è stato stampato»). Un conto già
+// mandato resta fra i mandati, e uno pagato resta chiuso: ristamparlo non cambia
+// dove sta.
+async function segnaStampati(origine, id) {
+  const ora = new Date().toISOString();
+  const daSegnare = l => l && l.stato !== 'fatturato' && !l.inPosta;
+  if (origine === 'lavoro') {
+    if (!LAVORO) return;
+    const esistente = ARCHIVIO.find(l => l.id === LAVORO.doc.id);
+    if (esistente && !daSegnare(esistente)) return;
+    if (!esistente && LAVORO.stato === 'fatturato') return;
+    // Il lavoro in arrivo si archivia: stampare il conto vuol dire averlo finito.
+    LAVORO.stampato = ora;
+    LAVORO.daSalvare = true;
+    await salvaSubito();
+    return;
+  }
+  const lavori = origine === 'insieme' ? lavoriScelti() : ARCHIVIO.filter(l => l.id === id);
+  for (const l of lavori.filter(daSegnare)) {
+    const errore = await aggiornaArchiviato(l, { stampato: ora });
+    if (errore) { avvisa('Stampato, ma non ho potuto segnarlo: ' + errore.message, true); break; }
+  }
+  disegna();
+}
+
+async function nonStampato(id) {
+  const l = ARCHIVIO.find(x => x.id === id);
+  if (!l) return;
+  const errore = await aggiornaArchiviato(l, { stampato: '' });
+  if (errore) { avvisa('Non ho potuto salvare: ' + errore.message, true); return; }
+  disegna();
+  avvisa('Rimesso fra quelli da mandare');
 }
 
 // ── FORMATI ──
@@ -2479,6 +2521,15 @@ function riassuntoRicontrolla() {
 // La più recente per prima. Le righe sono poche e corte apposta: un elenco lungo
 // non si legge, e quello che non si legge tanto vale non scriverlo.
 const NOVITA = [
+  {
+    versione: '2026-11-10b',
+    data: '2026-11-10',
+    titolo: 'I conti stampati',
+    righe: [
+      'In **Da pagare** c\'è una terza colonna, **Stampati**: un conto che stampi ci finisce da solo, con la data. Se era solo una prova, sul lavoro c\'è **«Non è stato stampato»**.',
+      'Un conto già **mandato** resta fra i mandati anche se lo ristampi, e la stampa del PDF per la mail non lo segna stampato.',
+    ],
+  },
   {
     versione: '2026-11-10',
     data: '2026-11-10',
@@ -5924,16 +5975,18 @@ function righeArchivioSole() {
   }
   if (RACCOLTA_ARCHIVIO !== 'cliente') {
     if (STATO_ARCHIVIO === 'fatturato') return lavori.map(schedaArchivio).join('');
-    // Fra i da pagare, due colonne: quelli ancora da mandare al cliente e quelli
-    // già mandati che aspettano il pagamento. Sono due lavori diversi per chi sta
-    // in ufficio — scrivere il conto, o sollecitarlo — e mescolati non si vedeva
-    // quale dei due toccasse.
+    // Fra i da pagare, tre colonne: quelli ancora da mandare al cliente, quelli
+    // stampati, e quelli già mandati che aspettano il pagamento. Sono lavori diversi
+    // per chi sta in ufficio — scrivere il conto, consegnare il foglio, sollecitare —
+    // e mescolati non si vedeva quale toccasse. Stampato e mandato insieme è mandato:
+    // la posta dice di più della stampante.
     const colonna = (titolo, elenco, vuoto) => '<div class="colonna-archivio">' +
       '<h3 class="titolo-colonna">' + titolo + ' · ' + elenco.length + '</h3>' +
       (elenco.length ? elenco.map(schedaArchivio).join('') : '<div class="vuoto-elenco">' + vuoto + '</div>') +
     '</div>';
-    return '<div class="due-colonne-archivio">' +
-      colonna('Da mandare', lavori.filter(l => !l.inPosta), 'Niente da mandare.') +
+    return '<div class="colonne-archivio">' +
+      colonna('Da mandare', lavori.filter(l => !l.inPosta && !l.stampato), 'Niente da mandare.') +
+      colonna('Stampati', lavori.filter(l => !l.inPosta && l.stampato), 'Nessun conto stampato in attesa.') +
       colonna('Mandati', lavori.filter(l => l.inPosta), 'Nessun conto mandato in attesa.') +
     '</div>';
   }
@@ -5992,7 +6045,8 @@ function schedaArchivio(l) {
       '<span class="nome-cliente">' + perValore(nome) + '</span>' +
       (incassoDi(l) && l.stato === 'fatturato' ? etichettaIncasso(l)
         : '<span class="etichetta ' + (l.stato === 'fatturato' ? 'fatturato">pagato' : 'da-fatturare">da pagare') + '</span>') +
-      (l.inPosta ? '<span class="meta">✉️ ' + perValore(daQuandoMandato(l.inPosta)) + '</span>' : '') +
+      (l.inPosta ? '<span class="meta">✉️ ' + perValore(daQuandoMandato(l.inPosta)) + '</span>'
+        : l.stampato && l.stato !== 'fatturato' ? '<span class="meta">🖨️ stampato il ' + formattaData(l.stampato) + '</span>' : '') +
       (!l.inPosta && l.stato !== 'fatturato'
         ? '<button class="secondaria piccola" title="Per un conto stampato e consegnato, o mandato in un altro modo"' +
           ' onclick="event.stopPropagation(); segnaMandato(\'' + id + '\', true)">Segna mandato</button>' : '') +
@@ -6050,7 +6104,8 @@ function disegnaArchiviato() {
   let html = '<h2 class="titolo-pagina">' + perValore((l.cliente && l.cliente.nome) || 'senza nome') + '</h2>';
   html += '<p class="sottotitolo">' + formattaData(l.data) +
     ' · ' + (l.stato === 'fatturato' ? (incassoDi(l) ? 'pagato sul posto' : 'pagato') : 'da pagare') +
-    (l.inPosta ? ' · mandato al cliente il ' + formattaData(l.inPosta) : '') + '</p>';
+    (l.inPosta ? ' · mandato al cliente il ' + formattaData(l.inPosta)
+      : l.stampato && l.stato !== 'fatturato' ? ' · stampato il ' + formattaData(l.stampato) : '') + '</p>';
 
   html += '<div class="scheda"><div class="titolo-sezione">Conto</div>';
   html += '<table class="elenco"><thead><tr><th>Voce</th><th class="num">Quantità</th>' +
@@ -6113,6 +6168,8 @@ function disegnaArchiviato() {
     '<button class="secondaria" onclick="inviaConto(\'' + id + '\')">Invia al cliente</button>' +
     (l.stato !== 'fatturato' ? '<button class="secondaria" onclick="segnaMandato(\'' + id + '\', ' + !l.inPosta + ')">' +
       (l.inPosta ? 'Non è stato mandato' : 'Segna mandato') + '</button>' : '') +
+    (l.stato !== 'fatturato' && !l.inPosta && l.stampato
+      ? '<button class="secondaria" onclick="nonStampato(\'' + id + '\')">Non è stato stampato</button>' : '') +
     '<button class="' + (l.stato === 'fatturato' ? 'secondaria' : 'principale') +
       '" onclick="cambiaStato(\'' + id + '\', \'' +
       (l.stato === 'fatturato' ? 'da-fatturare\')">Rimetti da pagare' : 'fatturato\')">Segna pagato') +
@@ -6220,7 +6277,7 @@ async function inviaConto(id) {
   if (!l) return;
   const indirizzo = await mailPerInvio(l.cliente || {});
   if (!indirizzo) return;
-  const nomeFile = stampaConto('archivio', id);
+  const nomeFile = stampaConto('archivio', id, false, true);
   if (!nomeFile || !(await chiediPdfSalvato(nomeFile))) return;
   const mittente = await scegliMittente();
   if (mittente === null) return;
@@ -6270,7 +6327,7 @@ async function inviaInsieme() {
   if (!cl) { avvisa('Lavori di clienti diversi: scegli a chi intestare il conto', true); return; }
   const indirizzo = await mailPerInvio(cl);
   if (!indirizzo) return;
-  const nomeFile = stampaConto('insieme');
+  const nomeFile = stampaConto('insieme', '', false, true);
   if (!nomeFile || !(await chiediPdfSalvato(nomeFile))) return;
   const mittente = await scegliMittente();
   if (mittente === null) return;

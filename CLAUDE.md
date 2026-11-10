@@ -1413,15 +1413,23 @@ pallino su «Da pagare» conta i conti aperti. «Vedi conti» porta fra i da pag
 quel cliente, o fra i suoi pagati se ha pagato tutto: una pagina vuota direbbe che
 non c'è niente.
 
-**Fra i da pagare, due colonne: «Da mandare» e «Mandati».** Il capo voleva vedere
-quali conti erano già partiti: sono due lavori diversi per l'ufficio — scrivere il
-conto, o sollecitarlo — e mescolati non si capiva quale toccasse. La colonna la
-decide `inPosta`, che «Invia al cliente» segna da sé; per un conto stampato e
+**Fra i da pagare, tre colonne: «Da mandare», «Stampati» e «Mandati».** Il capo voleva
+vedere quali conti erano già partiti: sono lavori diversi per l'ufficio — scrivere il
+conto, consegnare il foglio, sollecitarlo — e mescolati non si capiva quale toccasse.
+La colonna la decide `inPosta`, che «Invia al cliente» segna da sé, e poi `stampato`:
+**stampare un conto lo segna** da solo (`segnaStampati()`, dentro `stampaConto()`),
+perché è l'app che apre la stampa e chi stampa un conto di solito lo consegna. Chrome
+non dice se la stampa è stata annullata, quindi sul lavoro c'è **«Non è stato
+stampato»** (`nonStampato()`). Mandato vince su stampato, e ristampare un conto già
+mandato o pagato non lo sposta. La stampa del PDF per la mail **non** segna stampato
+(`perPosta`): il conto lo segna la posta, e annullando la mail resterebbe fra gli
+stampati un conto mai uscito su carta. Stampato dalla schermata del lavoro in arrivo,
+il lavoro si archivia: stampare il conto vuol dire averlo finito. Per un conto
 consegnato a mano c'è **«Segna mandato»** (`segnaMandato()`), che si toglie con lo
 stesso bottone sul lavoro aperto. Un mandato dice **da quanti giorni aspetta**: chi
-guarda quella colonna sta per alzare il telefono. Raccogliendo per cliente le
-colonne non ci sono — lì la domanda è quanto deve quel cliente — e la scheda dice
-lo stesso se è stato mandato.
+guarda quella colonna sta per alzare il telefono. Raccogliendo per cliente le colonne
+non ci sono — lì la domanda è quanto deve quel cliente — e la scheda dice lo stesso se
+è stato mandato o stampato. `stampato` è arrivato senza alzare `VERSIONE_LAVORO`.
 
 **A sinistra sta il gestionale**: quanti lavori sono **da pagare** e quanti
 **chiusi**, e i due numeri portano all'una o all'altra parte. **Solo quanti, non
