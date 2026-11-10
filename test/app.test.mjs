@@ -4958,7 +4958,17 @@ try {
     const caricato = await new Promise(ok => { const i = new Image(); i.onload = () => ok(i.width + 'x' + i.height); i.src = IMPOSTAZIONI.logo; });
     const inImpostazioni = !!document.getElementById('anteprima-logo');
     Object.assign(IMPOSTAZIONI, { azienda: 'Giardini Prova', citta: '38015 Lavis (TN)', indirizzo: 'Via dei Prati 1' });
+    // Alla stampa il logo dev'essere già caricato: window.print() parte subito dopo
+    // mettiNelFoglio(), e un'immagine appena nata usciva larga zero.
+    // Un logo che nessuno ha ancora guardato, come aprendo l'app al mattino: quello
+    // appena caricato sta a schermo nelle impostazioni, ed è già in memoria.
+    const nuovo = document.createElement('canvas'); nuovo.width = 600; nuovo.height = 150;
+    nuovo.getContext('2d').fillRect(10, 10, 300, 100);
+    IMPOSTAZIONI.logo = nuovo.toDataURL('image/png');
+    await preparaLogo();
     mettiNelFoglio(costruisciFoglioPreventivo({ ...PREVENTIVO.doc, creato: '2026-10-05T08:00:00Z' }));
+    const pronto = () => { const i = document.querySelector('#foglio img'); return !!i && i.complete && i.naturalWidth > 0; };
+    const prontoPreventivo = pronto();
     const f = document.getElementById('foglio');
     const testata = f.querySelector('.prev-testata');
     const r = {
@@ -4969,6 +4979,7 @@ try {
       luogo: (f.querySelector('.prev-luogo-data') || {}).textContent,
       firma: !!f.querySelector('.prev-firma'),
       titolone: !!f.querySelector('h1'),
+      prontoPreventivo,
     };
     // E sul conto lo stesso: il logo a sinistra, l'intestazione a destra; senza
     // intestazione, niente logo, perché la carta intestata ce l'ha già.
@@ -4979,6 +4990,8 @@ try {
       testaConto.lastElementChild.textContent.includes('Giardini Prova');
     conto.innerHTML = costruisciFoglio({ cliente: { nome: 'Mario Rossi' }, data: '2026-10-05', righe: [], senzaIntestazione: true });
     r.contoSenza = !conto.querySelector('img');
+    mettiNelFoglio(costruisciFoglio({ cliente: { nome: 'Mario Rossi' }, data: '2026-10-05', righe: [] }));
+    r.prontoConto = pronto();
     Object.keys(IMPOSTAZIONI).forEach(k => delete IMPOSTAZIONI[k]);
     Object.assign(IMPOSTAZIONI, tenute);
     IMPOSTAZIONI_DA_SALVARE = false;
@@ -4990,6 +5003,8 @@ try {
   ok('sul foglio il logo sta a sinistra e l\'intestazione a destra, senza un titolo in grande',
     formaPrev.logoPrima && formaPrev.aziendaDopo && !formaPrev.titolone, JSON.stringify(formaPrev));
   ok('anche sul conto il logo sta a sinistra e l\'intestazione a destra', formaPrev.contoLogo, JSON.stringify(formaPrev));
+  ok('quando parte la stampa il logo è già caricato, sul preventivo e sul conto',
+    formaPrev.prontoPreventivo && formaPrev.prontoConto, JSON.stringify(formaPrev));
   ok('e stampando senza intestazione il logo non esce', formaPrev.contoSenza, JSON.stringify(formaPrev));
   ok('la tabella è quella dei preventivi veri: Descrizione, UM, Q.tà, Costo un., Totale',
     formaPrev.colonne === 'Descrizione|UM|Q.tà|Costo un.|Totale', formaPrev.colonne);

@@ -1518,7 +1518,11 @@ decisione resta di chi stampa. **Il logo** sta lì con lei (`IMPOSTAZIONI.logo`,
 PNG rimpicciolito a 600 px al caricamento, `caricaLogo()`): il repository è pubblico,
 e un file da tipografia gonfierebbe impostazioni.json per niente. Esce **in alto a
 sinistra su conti e preventivi**, con l'intestazione a destra: per un po' è stato
-solo sul preventivo, e chi l'aveva caricato stampava conti senza vederlo.
+solo sul preventivo, e chi l'aveva caricato stampava conti senza vederlo. Si tiene
+**già pronto in memoria** (`preparaLogo()`): messo nel foglio un attimo prima di
+`window.print()`, un'immagine nuova non è ancora caricata, e la prima stampa dopo
+aver aperto l'app usciva senza logo. Dopo aver guardato le impostazioni invece
+c'era — per questo sembrava capitare solo ogni tanto.
 
 **Il preventivo stampato ricalca quelli veri**, che il cliente ha sempre visto
 così: **logo in alto a sinistra, intestazione a destra**, «Spett.le» a destra come

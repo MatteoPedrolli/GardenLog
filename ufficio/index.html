@@ -1039,6 +1039,7 @@ async function ricarica() {
   NON_LETTI = new Set();
   CARTELLA_VUOTA = !(await cartellaDellUfficio());
   IMPOSTAZIONI = await caricaImpostazioni();
+  preparaLogo();
   CLIENTI = await caricaClienti();
   LAVAGNA = await caricaLavagna();
   LISTINO = await caricaListino();
@@ -1232,6 +1233,7 @@ async function salvaImpostazioni() {
 
 function modificaImpostazione(campo, valore) {
   IMPOSTAZIONI[campo] = valore;
+  if (campo === 'logo') preparaLogo();
   IMPOSTAZIONI_DA_SALVARE = true;
   const cartello = document.getElementById('impostazioni-da-salvare');
   if (cartello) cartello.style.display = 'block';
@@ -2188,7 +2190,25 @@ function formattaOre(n) {
 // tabella si ripetono a ogni pagina, ed è l'unico modo di avere il margine su
 // tutte le pagine dopo aver tolto quello di @page — tolto per non far stampare a
 // Chrome data, titolo e indirizzo dell'app.
+// Il logo si tiene **già pronto in memoria**, decodificato. Messo nel foglio un
+// attimo prima di window.print(), un'immagine nuova non è ancora caricata — anche
+// se è scritta nel file stesso — e Chrome stampava il preventivo senza logo: il
+// logo c'era nel foglio, ma alla stampa era largo zero. Con una copia già pronta,
+// l'immagine del foglio è caricata nell'istante in cui nasce.
+let LOGO_PRONTO = null;
+function preparaLogo() {
+  const src = IMPOSTAZIONI.logo || '';
+  if (!src) { LOGO_PRONTO = null; return Promise.resolve(); }
+  if (LOGO_PRONTO && LOGO_PRONTO.src === src) return LOGO_PRONTO.pronto;
+  const img = new Image();
+  img.src = src;
+  img.pronto = img.decode().catch(() => {});
+  LOGO_PRONTO = img;
+  return img.pronto;
+}
+
 function mettiNelFoglio(html) {
+  preparaLogo();
   document.getElementById('foglio').innerHTML =
     '<table class="foglio-pagina"><thead><tr><td></td></tr></thead>' +
     '<tfoot><tr><td></td></tr></tfoot>' +
@@ -2459,6 +2479,14 @@ function riassuntoRicontrolla() {
 // La più recente per prima. Le righe sono poche e corte apposta: un elenco lungo
 // non si legge, e quello che non si legge tanto vale non scriverlo.
 const NOVITA = [
+  {
+    versione: '2026-11-10',
+    data: '2026-11-10',
+    titolo: 'Il logo in stampa',
+    righe: [
+      'Il **logo** esce su preventivi e conti anche alla prima stampa: a volte partiva senza, perché l\'immagine non era ancora pronta.',
+    ],
+  },
   {
     versione: '2026-11-06',
     data: '2026-11-06',
