@@ -155,6 +155,14 @@ footer button { background: none; border: none; color: var(--text-light); text-d
         <input type="text" id="p-paese" autocomplete="off" placeholder="Facoltativo">
       </div>
     </div>
+    <!-- Sotto il cliente, per poterlo richiamare: in ufficio sta sul cartellino e
+         finisce nella sua scheda dell'anagrafica. -->
+    <div class="riga">
+      <div class="campo">
+        <label for="p-telefono">Telefono</label>
+        <input type="tel" id="p-telefono" autocomplete="off" placeholder="Per richiamarlo">
+      </div>
+    </div>
     <div class="riga">
       <div class="campo">
         <label for="p-settimana">In che settimana</label>
@@ -359,7 +367,7 @@ function disegnaAgenda() {
 // chi pianifica. Il cliente si scrive: qui non c'è un'anagrafica, e l'ufficio lo
 // riconosce dal nome come fa con le prenotazioni del cantiere.
 function apriPrenotazione() {
-  ['p-cliente', 'p-paese', 'p-settimana', 'p-ore', 'p-requisiti', 'p-note']
+  ['p-cliente', 'p-paese', 'p-telefono', 'p-settimana', 'p-ore', 'p-requisiti', 'p-note']
     .forEach(id => { document.getElementById(id).value = ''; });
   document.getElementById('p-sopralluogo').checked = false;
   document.getElementById('p-tipi').innerHTML = TIPI_LAVORO.map(t => '<label class="tipo-scelta" style="--c:' + t.colore + '">' +
@@ -404,7 +412,7 @@ async function salvaPrenotazione() {
     Note: note,
     PrenotatoDa: nome(),
   };
-  const doc = costruisciAppuntamento({ prenotazione, cliente: { Cliente: cliente, Citta: valore('p-paese') } });
+  const doc = costruisciAppuntamento({ prenotazione, cliente: { Cliente: cliente, Citta: valore('p-paese'), Telefono: valore('p-telefono') } });
   salvataggioInCorso = true;
   try {
     // Prima sul telefono, poi verso l'ufficio: al contrario, una consegna riuscita

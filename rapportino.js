@@ -305,6 +305,11 @@ function costruisciAppuntamento({ prenotazione, cliente }) {
       nome: (cliente && cliente.Cliente) || prenotazione.Cliente || '',
       indirizzo: (cliente && cliente.Indirizzo) || '',
       citta: (cliente && cliente.Citta) || '',
+      // Il numero per raggiungerlo, scritto prenotando: quello detto al telefono
+      // vince su quello che c'era in anagrafica. In ufficio sta sul cartellino e
+      // riempie la scheda del cliente. Arrivato dopo, senza alzare la versione: il
+      // file passa dallo script ma non si legge da lì, e nell'agenda non va.
+      telefono: String(prenotazione.Telefono || (cliente && cliente.Telefono) || '').trim(),
     },
     ore: Number(prenotazione.Ore) || 0,
     // La settimana in cui andrebbe fatto, scritta come il lunedì che la apre.

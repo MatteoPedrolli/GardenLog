@@ -593,7 +593,7 @@ prima perdono il ruolo allo stesso modo (`sistemaLavoro()`): il nome non è mai
 stato scritto, e inventarlo sarebbe peggio. Il campo è arrivato senza alzare
 `VERSIONE_APPUNTAMENTO`.
 
-**Il cliente si scrive**, con il paese accanto: sul telefono del capo non c'è
+**Il cliente si scrive**, con il paese accanto e il telefono sotto: sul telefono del capo non c'è
 un'anagrafica, e portarcela vorrebbe dire far viaggiare indirizzi per un indirizzo
 pubblico. I suggerimenti sono i nomi già visti in agenda e nelle sue prenotazioni.
 L'ufficio lo riconosce dal nome, come fa con le prenotazioni del cantiere.
@@ -618,7 +618,7 @@ modifica. Il service worker del telefono lascia stare `/capo/`, come lascia star
 ## I sopralluoghi: i contatti solo con la chiave
 
 Il giro è questo: l'ufficio mette un sopralluogo sulla lavagna — spuntando «È un
-sopralluogo» compaiono **via, telefono e mail** — lo piazza su un giorno, e il
+sopralluogo» compaiono **via e mail**, accanto al telefono che c'è sempre — lo piazza su un giorno, e il
 telefono lo trova nella pagina Rilievi; al tocco il rilievo si apre con
 l'anagrafica già scritta e il filo col sopralluogo (`SopralluogoID` →
 `sopralluogo` nel documento), e torna in ufficio fra i preventivi aperti.
@@ -1335,6 +1335,21 @@ sempre indietro: adesso c'è solo `note`, in tutte e due le app e nel documento
 dell'appuntamento. Le note sono anche l'unica cosa che fa il giro completo, quindi
 quel campo è il posto dove scrivere le operazioni: da lì partono per l'agenda e
 tornano in giardino.
+
+**Il telefono di chi prenota sta subito sotto il cliente**, in «+ Aggiungi appuntamento», nella
+prenotazione del telefono e in quella del capo: si prenota per poterlo richiamare, e stava
+solo sui sopralluoghi. Sul telefono si riempie da sé con quello della scheda. Viaggia
+nell'appuntamento (`cliente.telefono`, arrivato senza alzare `VERSIONE_APPUNTAMENTO`: il file
+passa dallo script ma non si legge da lì, e nell'agenda non va), sta sul lavoro e sul
+cartellino aperto sotto il paese, da toccare per chiamare (`telefonoCart()`; senza, quello
+dell'anagrafica per nome intero). **E finisce nella scheda del cliente**
+(`telefonoInScheda()`): chi non c'è entra in anagrafica, a chi non l'ha si scrive, uno
+diverso **si chiede** — il numero in anagrafica qualcuno l'ha messo apposta — e lo stesso
+scritto con altri spazi no. Senza numero non si crea nessuna scheda: un nome solo, scritto di
+fretta, sarebbe un doppione da unire domani. Dal telefono la scheda cambia come ogni modifica
+a un cliente (`annunciaCliente()`); le prenotazioni che arrivano in ufficio (quelle del capo,
+che un'anagrafica non ce l'ha) creano o riempiono e basta, senza chiedere — un numero diverso
+resta sul cartellino — e non scrivono su un'anagrafica non letta o con modifiche non salvate.
 
 **Un lavoro si corregge anche già piazzato**: la ✎ sta su tutti i cartellini, e il
 modulo è lo stesso della coda. Un numero sbagliato o una nota in più non sono un

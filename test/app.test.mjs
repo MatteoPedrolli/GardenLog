@@ -488,6 +488,51 @@ try {
       closeDrawer('overlay-prenotazione');
       return fermato;
     }));
+  // Il telefono sotto il cliente: si riempie con quello dell'anagrafica, viaggia
+  // con la prenotazione, e uno nuovo finisce nella scheda del cliente.
+  const telPren = await page.evaluate(async () => {
+    const r = {};
+    const c = DB.clienti[0];
+    const telPrima = c.Telefono, prenPrima = DB.prenotazioni.length, codaPrima = DB.coda.slice(), conferma = window.confirm;
+    const mandaPrima = window.svuotaCoda;
+    c.Telefono = '';
+    apriPrenotazione();
+    const campo = document.getElementById('f-pren-telefono');
+    r.campo = !!campo && campo.value === '';
+    scegliClientePrenotazione(c.ClienteID, c.Cliente);
+    r.vuotoSenzaNumero = campo.value === '';
+    campo.value = '333 444 5555';
+    document.getElementById('f-pren-note').value = 'telefono di prova';
+    await salvaPrenotazione();
+    const p = DB.prenotazioni[DB.prenotazioni.length - 1];
+    const doc = (DB.coda.find(v => v.docID === p.PrenotazioneID) || {}).doc || {};
+    r.nellaScheda = c.Telefono === '333 444 5555';
+    r.nelDocumento = doc.cliente && doc.cliente.telefono === '333 444 5555';
+    apriPrenotazione();
+    scegliClientePrenotazione(c.ClienteID, c.Cliente);
+    r.riempito = campo.value === '333 444 5555';
+    // Uno diverso si chiede; con «no» la scheda resta, la prenotazione porta il nuovo.
+    let domande = 0;
+    window.confirm = () => { domande++; return false; };
+    campo.value = '0461 000';
+    document.getElementById('f-pren-note').value = 'telefono diverso';
+    await salvaPrenotazione();
+    const p2 = DB.prenotazioni[DB.prenotazioni.length - 1];
+    const doc2 = (DB.coda.find(v => v.docID === p2.PrenotazioneID) || {}).doc || {};
+    r.chiesto = domande === 1 && c.Telefono === '333 444 5555' && doc2.cliente && doc2.cliente.telefono === '0461 000';
+    window.confirm = conferma;
+    DB.prenotazioni = DB.prenotazioni.slice(0, prenPrima);
+    DB.coda = codaPrima;
+    DB.modificheClienti = (DB.modificheClienti || []).filter(m => m.ClienteID !== c.ClienteID || m.creato);
+    c.Telefono = telPrima;
+    await salvaDB({ conta: false });
+    renderAll();
+    return r;
+  });
+  ok('sotto il cliente della prenotazione c\'è il telefono, e uno nuovo va nella scheda e nel documento',
+    telPren.campo && telPren.vuotoSenzaNumero && telPren.nellaScheda && telPren.nelDocumento, JSON.stringify(telPren));
+  ok('scegliendo il cliente il numero dell\'anagrafica è già scritto', telPren.riempito, JSON.stringify(telPren));
+  ok('uno diverso da quello in scheda si chiede, e la prenotazione porta quello scritto', telPren.chiesto, JSON.stringify(telPren));
   // Non un giorno preciso: quando si prenota in giardino il giorno non si sa
   // ancora, e fingere di saperlo vorrebbe dire spostarlo tre volte.
   ok('porta la settimana, scritta come il lunedì che la apre',
@@ -4160,6 +4205,97 @@ try {
   ok('anche dall\'ufficio un lavoro si etichetta, e la lavagna lo mostra in coda',
     tipiUfficio.tipi === 'potature,prato' && tipiUfficio.tag === 'Potature,Prato' && tipiUfficio.legenda,
     JSON.stringify(tipiUfficio));
+  // Il telefono sotto il cliente, per tutti: sta sul cartellino e finisce nella
+  // scheda dell'anagrafica — chi non c'è ci entra, a chi non l'ha si scrive, uno
+  // diverso si chiede. Anche dalle prenotazioni che arrivano.
+  const telLavagna = await pagU.evaluate(async () => {
+    const r = {};
+    const clientiPrima = CLIENTI.map(c => ({ ...c }));
+    const conferma = window.confirm;
+    vaiA('lavagna');
+    apriModuloLavoro();
+    const campo = document.getElementById('n-telefono');
+    r.visibile = !!campo && !campo.closest('#n-contatti') &&
+      campo.previousElementSibling && campo.previousElementSibling.id === 'n-clienti-noti';
+    document.getElementById('n-cliente').value = 'Telefono Nuovo';
+    document.getElementById('n-luogo').value = 'Lavis';
+    campo.value = '333 111 2222';
+    await salvaModuloLavoro();
+    const nuovo = CLIENTI.find(c => c.nome === 'Telefono Nuovo');
+    r.creato = !!nuovo && nuovo.telefono === '333 111 2222' && nuovo.citta === 'Lavis';
+    r.lavoro = (LAVAGNA.lavori.find(l => l.cliente === 'Telefono Nuovo') || {}).telefono === '333 111 2222';
+    const carta = [...document.querySelectorAll('#pagina-lavagna article.cartellino')].find(a => a.textContent.includes('Telefono Nuovo'));
+    if (carta && !carta.querySelector('.telefono-cart')) carta.click();   // in coda si apre con un clic
+    const aperta = [...document.querySelectorAll('#pagina-lavagna article.cartellino')].find(a => a.textContent.includes('Telefono Nuovo'));
+    const link = aperta && aperta.querySelector('.telefono-cart a');
+    r.link = link ? link.getAttribute('href') : '';
+    r.suFile = await (async () => { await ricarica(); return (CLIENTI.find(c => c.nome === 'Telefono Nuovo') || {}).telefono; })();
+    // Un cliente che c'è e non ha numero: si scrive.
+    CLIENTI.push(sistemaCliente({ id: 'c-senza-tel', nome: 'Senza Numero', citta: 'Trento' }));
+    await salvaClienti();
+    vaiA('lavagna');
+    apriModuloLavoro();
+    document.getElementById('n-cliente').value = 'Senza Numero';
+    document.getElementById('n-telefono').value = '0461 555';
+    await salvaModuloLavoro();
+    r.riempito = (CLIENTI.find(c => c.id === 'c-senza-tel') || {}).telefono === '0461 555';
+    // Uno diverso si chiede: no lo lascia, sì lo cambia. Lo stesso numero scritto
+    // con altri spazi non chiede niente.
+    let domande = 0;
+    window.confirm = () => { domande++; return false; };
+    apriModuloLavoro();
+    document.getElementById('n-cliente').value = 'Senza Numero';
+    document.getElementById('n-telefono').value = '0461 55 5';
+    await salvaModuloLavoro();
+    r.stessoNonChiede = domande === 0;
+    apriModuloLavoro();
+    document.getElementById('n-cliente').value = 'Senza Numero';
+    document.getElementById('n-telefono').value = '340 999 0000';
+    await salvaModuloLavoro();
+    r.noLasciato = domande === 1 && CLIENTI.find(c => c.id === 'c-senza-tel').telefono === '0461 555';
+    window.confirm = () => true;
+    apriModuloLavoro();
+    document.getElementById('n-cliente').value = 'Senza Numero';
+    document.getElementById('n-telefono').value = '340 999 0000';
+    await salvaModuloLavoro();
+    r.siCambiato = CLIENTI.find(c => c.id === 'c-senza-tel').telefono === '340 999 0000';
+    window.confirm = conferma;
+    // Correggendo un lavoro di prima senza numero, il campo prende quello dell'anagrafica.
+    const vecchio = sistemaLavoro({ cliente: 'Senza Numero', stato: 'lista' });
+    LAVAGNA.lavori.push(vecchio);
+    apriModuloLavoro(vecchio.id);
+    r.dallAnagrafica = document.getElementById('n-telefono').value === '340 999 0000';
+    chiudiModuloLavoro();
+    // Una prenotazione che arriva col telefono: sul lavoro, e nella scheda.
+    const cartella = await CARTELLA.getDirectoryHandle('appuntamenti', { create: true });
+    const doc = costruisciAppuntamento({ prenotazione: { PrenotazioneID: 'pren-capo-tel', Note: 'potatura', PrenotatoDa: 'Chiara' },
+      cliente: { Cliente: 'Arrivato Col Numero', Citta: 'Zambana', Telefono: '347 000 1111' } });
+    await scriviTesto(cartella, nomeFileAppuntamento(doc), JSON.stringify(doc));
+    await ricarica();
+    r.arrivatoLavoro = (LAVAGNA.lavori.find(l => l.da === 'pren-capo-tel') || {}).telefono === '347 000 1111';
+    r.arrivatoScheda = (CLIENTI.find(c => c.nome === 'Arrivato Col Numero') || {}).telefono === '347 000 1111';
+    // Si pulisce.
+    await cartella.removeEntry(nomeFileAppuntamento(doc));
+    LAVAGNA.lavori = LAVAGNA.lavori.filter(l => !['Telefono Nuovo', 'Senza Numero', 'Arrivato Col Numero'].includes(l.cliente));
+    await salvaLavagna();
+    CLIENTI = clientiPrima;
+    await scriviClienti();
+    await ricarica();
+    vaiA('lavagna');
+    return r;
+  });
+  ok('nel modulo della lavagna il telefono sta subito sotto il cliente, anche senza sopralluogo',
+    telLavagna.visibile, JSON.stringify(telLavagna));
+  ok('un cliente nuovo col telefono entra in anagrafica, e il numero resta sul file',
+    telLavagna.creato && telLavagna.lavoro && telLavagna.suFile === '333 111 2222', JSON.stringify(telLavagna));
+  ok('sul cartellino il numero si tocca per chiamare', telLavagna.link === 'tel:3331112222', JSON.stringify(telLavagna));
+  ok('a un cliente senza numero si scrive, uno diverso si chiede, lo stesso no',
+    telLavagna.riempito && telLavagna.stessoNonChiede && telLavagna.noLasciato && telLavagna.siCambiato, JSON.stringify(telLavagna));
+  ok('correggendo un lavoro senza numero, il campo prende quello dell\'anagrafica',
+    telLavagna.dallAnagrafica, JSON.stringify(telLavagna));
+  ok('una prenotazione col telefono lo porta sul lavoro e nella scheda del cliente',
+    telLavagna.arrivatoLavoro && telLavagna.arrivatoScheda, JSON.stringify(telLavagna));
+
   // Un appuntamento già piazzato si corregge senza toglierlo dal suo giorno, e il
   // bottone per aggiungerne uno sta fra la settimana e la coda.
   const piazzatoCorretto = await pagU.evaluate(async () => {
@@ -4594,7 +4730,7 @@ try {
       if (v === true) await pagC.check(id); else await pagC.fill(id, v);
     }
   };
-  const ester = { '#p-cliente': 'Ester Rossi', '#p-paese': 'Lavis', '#p-settimana': '2026-11-12', '#p-ore': '4,5',
+  const ester = { '#p-cliente': 'Ester Rossi', '#p-paese': 'Lavis', '#p-telefono': '333 222 1111', '#p-settimana': '2026-11-12', '#p-ore': '4,5',
     '#p-sopralluogo': true, '#p-tipi input[value="potature"]': true };
   await compilaCapo(ester);
   await pagC.click('#p-salva');
@@ -4609,7 +4745,8 @@ try {
   const docCapo = consegneCapo[0] || {};
   ok('con le note parte verso l\'ufficio: un appuntamento come quelli del telefono, col nome di chi ha prenotato',
     docCapo.tipo === 'appuntamento' && docCapo.prenotatoDa === 'Chiara' && docCapo.cliente?.nome === 'Ester Rossi' &&
-    docCapo.cliente?.citta === 'Lavis' && docCapo.settimana === '2026-11-09' && docCapo.ore === 4.5 &&
+    docCapo.cliente?.citta === 'Lavis' && docCapo.cliente?.telefono === '333 222 1111' &&
+    docCapo.settimana === '2026-11-09' && docCapo.ore === 4.5 &&
     docCapo.sopralluogo === true && docCapo.note === 'Guardare la siepe lato strada' &&
     JSON.stringify(docCapo.tipi) === '["potature"]' &&
     String(docCapo.id).startsWith('pren-capo-'), JSON.stringify(docCapo));

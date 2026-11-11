@@ -521,6 +521,8 @@ input.vuoto { background: #fffdf5; border-color: #ecdca8; }
 .cartellino.fatto .spunta-cart { border-color: #2a6f9e; background: #2a6f9e; color: #fff; }
 .cliente-cart { font-weight: 600; font-size: 0.86rem; }
 .luogo-cart { font-size: 0.7rem; color: var(--text-light); }
+.telefono-cart a { color: var(--inchiostro-tenue); text-decoration: none; white-space: nowrap; }
+.telefono-cart a:hover { text-decoration: underline; }
 /* Le note dicono che lavoro è, quindi si leggono: white-space le tiene sulle
    righe in cui sono state scritte invece di impastarle in un blocco solo. */
 .cosa-cart { font-size: 0.78rem; color: var(--text-mid); white-space: pre-line; }
@@ -1138,6 +1140,7 @@ async function assorbiAppuntamenti() {
   const cartella = await sottocartella(CARTELLA, CARTELLA_APPUNTAMENTI, false);
   if (!cartella) return;
   const nuovi = [];
+  const schede = [];
   let recuperati = 0;
   for (const nome of await elencaFile(cartella)) {
     let doc;
@@ -1156,9 +1159,12 @@ async function assorbiAppuntamenti() {
       continue;
     }
     LAVAGNA.visti.push(doc.id);
+    if (doc.cliente.telefono) schede.push({ id: doc.cliente.id, nome: doc.cliente.nome,
+      citta: doc.cliente.citta, via: doc.cliente.indirizzo, telefono: doc.cliente.telefono });
     nuovi.push(sistemaLavoro({
       cliente: doc.cliente.nome || '',
       luogo: doc.cliente.citta || '',
+      telefono: doc.cliente.telefono || '',
       ore: doc.ore,
       note: doc.note || '',
       settimana: doc.settimana || '',
@@ -1173,6 +1179,19 @@ async function assorbiAppuntamenti() {
   }
   if (!nuovi.length && !recuperati) return;
   LAVAGNA.lavori = LAVAGNA.lavori.concat(nuovi);
+  // Il telefono scritto prenotando entra nella scheda del cliente, come dal modulo
+  // della lavagna: chi non c'è ci entra, a chi non l'ha si scrive. Un numero diverso
+  // da quello in anagrafica resta sul cartellino e basta — qui nessuno può dire
+  // quale dei due è giusto. Non si scrive sopra un'anagrafica che non si è letta, né
+  // sopra modifiche dell'ufficio non ancora salvate.
+  if (!NON_LETTI.has(FILE_CLIENTI) && !CLIENTI_DA_SALVARE) {
+    const cambiati = schede.map(telefonoInScheda).map(e => e.cosa)
+      .filter(cosa => cosa === 'aggiunto' || cosa === 'riempito').length;
+    if (cambiati) {
+      try { await scriviClienti(); }
+      catch (e) { avvisa('Telefoni arrivati con le prenotazioni, ma l\'anagrafica non si è salvata: ' + e.message, true); }
+    }
+  }
   await salvaLavagna();
 }
 
@@ -2521,6 +2540,15 @@ function riassuntoRicontrolla() {
 // La più recente per prima. Le righe sono poche e corte apposta: un elenco lungo
 // non si legge, e quello che non si legge tanto vale non scriverlo.
 const NOVITA = [
+  {
+    versione: '2026-11-11',
+    data: '2026-11-11',
+    titolo: 'Il telefono di chi prenota',
+    righe: [
+      'In **«+ Aggiungi appuntamento»** c\'è il **telefono**, subito sotto il cliente, per tutti e non più solo per i sopralluoghi. C\'è anche prenotando dal telefono e dall\'app del capo.',
+      'Il numero **va nella scheda del cliente**: chi non c\'è entra in anagrafica, a chi non l\'aveva si scrive, uno diverso si chiede. Sul cartellino si legge sotto il paese, e un clic lo chiama.',
+    ],
+  },
   {
     versione: '2026-11-10b',
     data: '2026-11-10',
@@ -7061,6 +7089,23 @@ function cartellinoChiuso(l) {
   '</article>';
 }
 
+// Il numero di chi aspetta, sul cartellino aperto: si prenota per poterlo
+// richiamare, e cercarlo in anagrafica a ogni telefonata è il giro che si voleva
+// togliere. Quello scritto sul lavoro, o quello dell'anagrafica per nome intero.
+function telefonoDelLavoro(l) {
+  if (l.telefono) return l.telefono;
+  const c = CLIENTI.find(x => stessoNome(x.nome, l.cliente));
+  return (c && c.telefono) || '';
+}
+
+function telefonoCart(l) {
+  const tel = telefonoDelLavoro(l);
+  if (!tel) return '';
+  // Il clic sul numero chiama, non cambia la penna del cartellino.
+  return '<div class="luogo-cart telefono-cart"><a href="tel:' + perValore(tel.replace(/[^\d+]/g, '')) + '"' +
+    ' draggable="false" onclick="event.stopPropagation()">📞 ' + perValore(tel) + '</a></div>';
+}
+
 function cartellino(l) {
   if (l.pioggia) return cartellinoPioggia(l);
   if (l.assenza) return cartellinoAssenza(l);
@@ -7092,6 +7137,7 @@ function cartellino(l) {
         '<div class="cliente-cart">' + (piazzato(l) && l.ora ? '<span class="ora-cart">' + l.ora + '</span> ' : '') +
           perValore(l.cliente || 'senza nome') + '</div>' +
         (l.luogo ? '<div class="luogo-cart">' + perValore(l.luogo) + '</div>' : '') +
+        telefonoCart(l) +
       '</div>' +
       // La spunta è un comando suo: il clic sul cartellino continua a fare
       // matita/confermato, e con tre stati su un clic solo non sapresti dove sei.
@@ -7551,6 +7597,9 @@ function apriModuloLavoro(id) {
       ' list="n-clienti-noti" onchange="riempiDaAnagrafica()">' +
     '<datalist id="n-clienti-noti">' +
       CLIENTI.map(x => '<option value="' + perValore(x.nome) + '">').join('') + '</datalist>' +
+    // Il telefono subito sotto il nome, per tutti e non solo per i sopralluoghi:
+    // chi prenota vuole poterlo richiamare. Finisce anche nella sua scheda.
+    '<input type="tel" id="n-telefono" placeholder="Telefono" value="' + v('telefono') + '" style="margin-bottom:6px">' +
     '<input type="text" id="n-luogo" placeholder="Dove" value="' + v('luogo') + '" style="margin-bottom:6px">' +
     '<input type="text" id="n-ore" placeholder="Stima ore" value="' +
       perValore(l && l.ore ? formattaQuantita(l.ore) : '') + '" style="margin-bottom:6px">' +
@@ -7566,12 +7615,11 @@ function apriModuloLavoro(id) {
     '<label class="meta" style="display:flex; align-items:center; gap:6px; margin-bottom:6px">' +
       '<input type="checkbox" id="n-sopralluogo"' + (l && l.sopralluogo ? ' checked' : '') +
       ' onchange="mostraContattiSopralluogo()"> È un sopralluogo</label>' +
-    // I contatti servono solo a un sopralluogo: lì si va da qualcuno che spesso
-    // non è ancora cliente, e in giardino serve sapere dove e chi chiamare.
-    // Su un lavoro normale sarebbero tre caselle vuote in più.
+    // Via e mail servono solo a un sopralluogo: lì si va da qualcuno che spesso
+    // non è ancora cliente, e in giardino serve sapere dove andare. Su un lavoro
+    // normale sarebbero due caselle vuote in più.
     '<div id="n-contatti" style="display:' + (l && l.sopralluogo ? 'block' : 'none') + '">' +
       '<input type="text" id="n-via" placeholder="Via e numero" value="' + v('via') + '" style="margin-bottom:6px">' +
-      '<input type="text" id="n-telefono" placeholder="Telefono" value="' + v('telefono') + '" style="margin-bottom:6px">' +
       '<input type="text" id="n-email" placeholder="Email" value="' + v('email') + '" style="margin-bottom:6px">' +
     '</div>' +
     '<textarea id="n-note" rows="3" placeholder="Cosa c\'è da fare, e cosa ricordare — torna in giardino con l\'agenda">' +
@@ -7581,6 +7629,8 @@ function apriModuloLavoro(id) {
         (l ? 'Salva' : 'Metti in coda') + '</button>' +
       '<button class="secondaria piccola" onclick="chiudiModuloLavoro()">Annulla</button>' +
     '</div></div>';
+  // Un lavoro di prima, senza numero: quello dell'anagrafica, se c'è.
+  if (l) riempiDaAnagrafica();
   document.getElementById('n-cliente').focus();
   if (c.scrollIntoView) c.scrollIntoView({ block: 'nearest' });
 }
@@ -7649,6 +7699,42 @@ async function salvaModuloLavoro() {
   chiudiModuloLavoro();
   disegnaLavagna();
   avvisa(esistente ? 'Corretto: ' + cliente : 'In coda: ' + cliente);
+  // Il numero va anche nella scheda del cliente: chi non c'è ci entra, a chi non
+  // l'ha si scrive. Uno diverso da quello che c'è si chiede, perché il numero in
+  // anagrafica qualcuno l'ha messo apposta.
+  let esito = telefonoInScheda({ nome: cliente, citta: campi.luogo, via: campi.via,
+    email: campi.email, telefono: campi.telefono });
+  if (esito.cosa === 'diverso' && confirm(cliente + ' in anagrafica ha il numero ' + esito.cliente.telefono +
+    '.\n\nLo sostituisco con ' + campi.telefono + '?')) {
+    esito.cliente.telefono = campi.telefono;
+    esito = { ...esito, cosa: 'cambiato' };
+  }
+  if (['aggiunto', 'riempito', 'cambiato'].includes(esito.cosa) && await salvaClienti()) {
+    avvisa(esito.cosa === 'aggiunto' ? cliente + ' è in anagrafica, col suo telefono'
+      : 'Telefono di ' + cliente + ' scritto in anagrafica');
+  }
+}
+
+// Il telefono scritto prenotando, nella scheda del cliente. Lo cerca per codice e
+// poi per nome intero; chi non c'è ci entra coi dati del lavoro, a chi non ha un
+// numero si scrive. Uno diverso non si tocca qui: chi chiama decide se cambiarlo.
+// Senza numero non si crea niente: un nome solo, scritto di fretta, in anagrafica
+// sarebbe un doppione da unire domani.
+function telefonoInScheda({ id, nome, citta, via, email, telefono }) {
+  telefono = String(telefono || '').trim();
+  nome = String(nome || '').trim();
+  if (!telefono || !nome) return { cosa: '' };
+  if (id && ANAGRAFICA_EXTRA.eliminati.includes(codiceUnito(id, ANAGRAFICA_EXTRA.uniti))) return { cosa: '' };
+  const c = clienteDaCodice(id) || CLIENTI.find(x => stessoNome(x.nome, nome));
+  if (!c) {
+    const nuovo = sistemaCliente({ id: id || '', nome, citta, indirizzo: via, email, telefono });
+    CLIENTI.push(nuovo);
+    return { cosa: 'aggiunto', cliente: nuovo };
+  }
+  if (!String(c.telefono || '').trim()) { c.telefono = telefono; return { cosa: 'riempito', cliente: c }; }
+  const uguale = cifreTelefono(c.telefono) ? cifreTelefono(c.telefono) === cifreTelefono(telefono)
+    : c.telefono.trim() === telefono;
+  return { cosa: uguale ? '' : 'diverso', cliente: c };
 }
 
 // ── LISTINO ──

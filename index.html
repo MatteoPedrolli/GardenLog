@@ -931,6 +931,13 @@ select.form-control { background-image: url("data:image/svg+xml,%3Csvg xmlns='ht
         </div>
       </div>
 
+      <!-- Sotto il cliente, per poterlo richiamare: arriva sul cartellino in ufficio e
+           finisce nella sua scheda. Si riempie da sé con quello dell'anagrafica. -->
+      <div class="form-group">
+        <label class="form-label">Telefono</label>
+        <input type="tel" class="form-control" id="f-pren-telefono" autocomplete="off" placeholder="Per richiamarlo">
+      </div>
+
       <div class="form-row">
         <div class="form-group">
           <label class="form-label">Stima ore</label>
@@ -3762,7 +3769,7 @@ const etichetteTipi = tipi => tipiLavoro(tipi).map(id => {
 }).join('');
 
 function apriPrenotazione() {
-  ['f-pren-ore', 'f-pren-settimana', 'f-pren-requisiti', 'f-pren-note']
+  ['f-pren-ore', 'f-pren-settimana', 'f-pren-requisiti', 'f-pren-note', 'f-pren-telefono']
     .forEach(id => document.getElementById(id).value = '');
   document.getElementById('f-pren-sopralluogo').checked = false;
   disegnaTipiPrenotazione();
@@ -3786,6 +3793,11 @@ function scegliClientePrenotazione(id, nome) {
   document.getElementById('f-pren-cliente-selected').style.display = 'block';
   document.getElementById('f-pren-cliente-search').style.display = 'none';
   document.getElementById('pren-cliente-suggestions').style.display = 'none';
+  // Il numero dell'anagrafica, se c'è e se non se n'è già scritto uno: quello
+  // appena detto dal cliente vale più di quello vecchio.
+  const tel = document.getElementById('f-pren-telefono');
+  const c = DB.clienti.find(x => x.ClienteID == id);
+  if (tel && !tel.value.trim() && c && c.Telefono) tel.value = c.Telefono;
 }
 
 function scollegaClientePrenotazione() {
@@ -3816,6 +3828,7 @@ async function salvaPrenotazione() {
   if (!cid) { showToast('⚠️ Scegli il cliente'); return; }
   const note = document.getElementById('f-pren-note').value.trim();
   if (!note) { showToast('⚠️ Scrivi cosa c\'è da fare'); return; }
+  const telefono = document.getElementById('f-pren-telefono').value.trim();
 
   const prenotazione = {
     PrenotazioneID: 'pren-' + Date.now().toString(36),
@@ -3826,14 +3839,30 @@ async function salvaPrenotazione() {
     Sopralluogo: document.getElementById('f-pren-sopralluogo').checked ? 'Sì' : '',
     Tipi: tipiScelti(),
     Note: note,
+    Telefono: telefono,
     // Il nome di «Come ti chiami»: in lavagna il cartellino dice «prenotato da …».
     PrenotatoDa: (DB.impostazioni?.NomeMittente || '').trim(),
     Creata: new Date().toISOString(),
     Consegnata: '',
   };
 
+  // Il numero va anche nella scheda del cliente, e da lì in ufficio come ogni
+  // modifica a un cliente. A chi non l'ha si scrive; uno diverso si chiede, perché
+  // quello in anagrafica qualcuno l'ha messo apposta. La prenotazione porta comunque
+  // quello scritto qui.
+  const c = DB.clienti.find(x => x.ClienteID == cid);
+  const cifre = t => cifreTelefono(t) || String(t || '').trim();
+  const cambiaScheda = c && telefono && cifre(telefono) !== cifre(c.Telefono) &&
+    (!String(c.Telefono || '').trim() ||
+      confirm(c.Cliente + ' in anagrafica ha il numero ' + c.Telefono + '.\n\nLo sostituisco con ' + telefono + '?'));
+
   salvataggioInCorso = true;
   try {
+    if (cambiaScheda) {
+      const prima = { ...c };
+      c.Telefono = telefono;
+      annunciaCliente(c, prima);
+    }
     DB.prenotazioni.push(prenotazione);
     accodaAppuntamento(prenotazione);
     // Prima si salva, poi si prova a consegnare: al contrario, una consegna
