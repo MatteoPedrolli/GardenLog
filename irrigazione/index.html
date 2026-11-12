@@ -1,0 +1,619 @@
+<!-- Settori irrigazione — file singolo, funziona offline con doppio clic -->
+<!DOCTYPE html>
+<html lang="it">
+<head>
+<meta charset="utf-8">
+<title>Settori irrigazione</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<style>
+:root{
+  --ink:#1F3A34; --bg:#EEF2EE; --panel:#FFFFFF; --line:#C9D4CD;
+  --water:#2F6F9F; --ok:#3E8E4F; --warn:#C98A1B; --over:#B8412F; --muted:#5E716A;
+}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);font:15px/1.45 "Segoe UI",system-ui,sans-serif}
+h1,h2,.num{font-family:Bahnschrift,"Segoe UI",sans-serif}
+header{padding:18px 28px;border-bottom:3px solid var(--water);background:var(--panel);display:flex;flex-wrap:wrap;gap:16px;align-items:end;justify-content:space-between}
+h1{margin:0;font-size:24px;font-weight:600}
+main{padding:20px 28px;display:grid;gap:20px;grid-template-columns:minmax(0,1fr) 360px;align-items:start}
+@media(max-width:1100px){main{grid-template-columns:1fr}}
+section{background:var(--panel);border:1px solid var(--line);border-radius:6px;padding:16px}
+h2{margin:0 0 12px;font-size:17px;font-weight:600}
+label{font-size:13px;color:var(--muted);display:block;margin-bottom:3px}
+input,select{font:inherit;color:inherit;border:1px solid var(--line);border-radius:4px;padding:5px 7px;background:#fff}
+input:focus,select:focus,button:focus-visible{outline:2px solid var(--water);outline-offset:1px}
+.params{display:flex;flex-wrap:wrap;gap:14px;align-items:end}
+.params input{width:110px}
+.params input#cliente{width:180px}
+button{font:inherit;border:1px solid var(--water);background:#fff;color:var(--water);border-radius:4px;padding:6px 12px;cursor:pointer}
+button.primary{background:var(--water);color:#fff}
+button.del{border-color:transparent;color:var(--over);padding:4px 8px}
+.tools{display:flex;flex-wrap:wrap;gap:8px}
+table{width:100%;border-collapse:collapse}
+th{text-align:left;font-size:13px;font-weight:600;color:var(--muted);border-bottom:1px solid var(--line);padding:6px 4px}
+td{padding:4px;border-bottom:1px solid #E4EAE6;vertical-align:middle}
+td input.n{width:64px}
+td select{max-width:160px}
+.r{text-align:right}
+.info{font-size:13px;color:var(--muted);white-space:nowrap}
+.sect{border:1px solid var(--line);border-left:6px solid var(--ok);border-radius:4px;padding:10px 12px;margin-bottom:10px}
+.sect.warn{border-left-color:var(--warn)} .sect.over{border-left-color:var(--over)}
+.sect-head{display:flex;justify-content:space-between;align-items:baseline}
+.sect-head strong{font-size:16px}
+.pct{font-size:22px;font-weight:600}
+.gauge{height:10px;background:#E4EAE6;border-radius:5px;overflow:hidden;margin:6px 0}
+.gauge i{display:block;height:100%;background:var(--ok)}
+.warn .gauge i{background:var(--warn)} .over .gauge i{background:var(--over)}
+.small{font-size:13px;color:var(--muted)}
+.alert{color:var(--over);font-size:13px;margin-top:4px}
+.msg{font-size:13px;color:var(--muted);margin-top:8px}
+textarea{width:100%;min-height:140px;font:13px Consolas,monospace;border:1px solid var(--line);border-radius:4px;padding:6px}
+details{margin-top:18px}
+details summary{cursor:pointer;color:var(--water)}
+.prova td input{width:80px}
+.cnt{display:inline-flex;align-items:center;gap:4px}
+.cnt button{padding:2px 9px}
+.cnt input{width:52px;text-align:center}
+tr.diff td{background:#FBF1DC}
+.fascia{display:flex;height:8px;margin-top:3px;max-width:140px;border-radius:2px;overflow:hidden;box-shadow:inset 0 0 0 1px rgba(0,0,0,.2)}
+.fascia i{flex:1}
+.pallino{display:inline-block;width:11px;height:11px;border-radius:50%;margin-right:6px;box-shadow:inset 0 0 0 1px rgba(0,0,0,.3);vertical-align:-1px}
+tr.grp td{font-weight:600;padding-top:12px;border-bottom:1px solid var(--line)}
+@media print{.tools,button,details{display:none!important} main{display:block} section{border:none}}
+</style>
+</head>
+<body>
+
+<header>
+  <h1>Settori irrigazione</h1>
+  <div class="params">
+    <div><label for="cliente">Cliente</label><input id="cliente"></div>
+    <div><label for="qdisp">Portata disponibile (l/min)</label><input id="qdisp" type="number" step="0.01" min="0"></div>
+    <div><label for="pdisp">Pressione di lavoro (bar)</label><input id="pdisp" type="number" step="0.1" min="0"></div>
+    <div><label for="soglia">Allarme giallo oltre (%)</label><input id="soglia" type="number" min="50" max="100" value="85"></div>
+  </div>
+</header>
+
+<main>
+  <section>
+    <h2>Irrigatori</h2>
+    <table>
+      <thead><tr>
+        <th>Settore</th><th>Serie</th><th>Modello</th><th>Arco / bar</th><th>Dati ugello</th>
+        <th class="r">Q.tà</th><th class="r">l/min cad.</th><th class="r">l/min tot.</th><th></th>
+      </tr></thead>
+      <tbody id="rows"></tbody>
+    </table>
+    <div class="tools" style="margin-top:12px">
+      <button class="primary" id="addRow">Aggiungi riga</button>
+      <button id="addSect">Aggiungi riga in nuovo settore</button>
+      <button id="save">Salva progetto</button>
+      <button id="openBtn">Apri progetto</button>
+      <button onclick="window.print()">Stampa</button>
+      <input type="file" id="openFile" accept=".json" hidden>
+    </div>
+
+    <details id="gitDet">
+      <summary>Gittate e conteggio ugelli (posati: <span id="gitTot">0</span>)</summary>
+      <div class="tools" style="margin:8px 0;align-items:center">
+        <select id="gitSerie"></select>
+        <label style="display:flex;gap:6px;align-items:center;margin:0"><input type="checkbox" id="gitUsati"> Solo quelli contati o in settori</label>
+        <button id="gitReset">Azzera contatori</button>
+      </div>
+      <p class="small">"Posati" è il contatore manuale mentre disegni in CAD. "In settori" è la quantità già inserita nella tabella sopra. La riga si colora quando i due numeri non coincidono.</p>
+      <table>
+        <thead><tr><th>Modello</th><th class="r">Raggio (m)</th><th class="r">Posati</th><th class="r">In settori</th></tr></thead>
+        <tbody id="gitRows"></tbody>
+      </table>
+    </details>
+
+    <details>
+      <summary>Calcolo portata da prova a secchio</summary>
+      <table class="prova" style="margin-top:8px">
+        <thead><tr><th>Prova</th><th>Litri</th><th>Secondi</th><th>Pressione (bar)</th><th class="r">l/min</th><th></th></tr></thead>
+        <tbody id="prove"></tbody>
+      </table>
+    </details>
+
+    <details>
+      <summary>Catalogo ugelli (<span id="catCount">0</span> voci)</summary>
+      <p class="small">Formato: Serie;Modello;Colore;Arco;Pressione (bar);Raggio (m);Portata (l/min). Nei rotori la portata non dipende dall'arco, quindi la colonna Arco contiene la pressione di esercizio — una riga per combinazione, separatore punto e virgola o tabulazione (va bene il copia-incolla da Excel/Calc). Premendo "Applica catalogo" le voci restano memorizzate nel browser anche dopo la chiusura, e vengono salvate anche dentro il file di progetto.</p>
+      <textarea id="catText"></textarea>
+      <div class="tools" style="margin-top:8px">
+        <button id="catApply" class="primary">Applica catalogo</button>
+        <button id="catCsvBtn">Importa CSV</button>
+        <button id="catDl">Scarica catalogo</button>
+        <button id="catReset">Ripristina catalogo iniziale</button>
+        <input type="file" id="catCsv" accept=".csv,.txt" hidden>
+      </div>
+      <div class="msg" id="catMsg"></div>
+    </details>
+  </section>
+
+  <div style="display:grid;gap:20px;align-content:start">
+    <section>
+      <h2>Riepilogo settori</h2>
+      <div id="summary"></div>
+    </section>
+    <section>
+      <h2>Distinta ugelli</h2>
+      <div id="distinta"></div>
+    </section>
+  </div>
+</main>
+
+<script>
+/* CATALOGO UGELLI — da foglio "Database Ugelli" (Calcolo_Portate.ods).
+   Per aggiornarlo in modo permanente modifica queste righe con Blocco note. */
+const CATALOGO_BASE = `Serie;Modello;Colore;Arco;Pressione;Raggio;Portata
+Hunter Rotator;MP800SR;Arancione;90°;2,8;3,1;0,87
+Hunter Rotator;MP800SR;Arancione;180°;2,8;3;4,59
+Hunter Rotator;MP800SR;Arancione;210°;2,8;3;1,85
+Hunter Rotator;MP800SR;Giallo;360°;2,8;3;2,95
+Hunter Rotator;MP1000;Bordeaux;90°;2,8;4,1;0,8
+Hunter Rotator;MP1000;Bordeaux;180°;2,8;4,1;1,59
+Hunter Rotator;MP1000;Azzurro;270°;2,8;4,1;2,39
+Hunter Rotator;MP1000;Verde oliva;360°;2,8;4,1;3,18
+Hunter Rotator;MP2000;Nero;90°;2,8;6,1;1,63
+Hunter Rotator;MP2000;Nero;180°;2,8;5,8;2,92
+Hunter Rotator;MP2000;Verde;270°;2,8;5,8;4,17
+Hunter Rotator;MP2000;Rosso;360°;2,8;5,8;5,61
+Hunter Rotator;MP3000;Blu;90°;2,8;9,1;3,26
+Hunter Rotator;MP3000;Blu;180°;2,8;9,1;6,9
+Hunter Rotator;MP3000;Giallo;270°;2,8;9,1;10,35
+Hunter Rotator;MP3000;Grigio;360°;2,8;9,1;13,8
+Hunter Rotator;MP3500;Marrone;90°;2,8;10,7;4,84
+Hunter Rotator;MP3500;Marrone;180°;2,8;10,7;10,83
+Hunter Rotator;MP3500;Marrone;210°;2,8;10,7;12,45
+Hunter Rotator;MPLCS-515;Avorio;Striscia;2,8;1,5 x 4,6;0,84
+Hunter Rotator;MPRCS-515;Rame;Striscia;2,8;1,5 x 4,6;0,84
+Hunter Rotator;MPSS-530;Marrone;Striscia;2,8;1,5 x 9;1,66
+Hunter PS;8A;Marrone;90°;2,1;2,4;1,65
+Hunter PS;8A;Marrone;180°;2,1;2,4;3,3
+Hunter PS;8A;Marrone;270°;2,1;2,4;4,95
+Hunter PS;8A;Marrone;360°;2,1;2,4;6,61
+Hunter PS;10A;Rosso;90°;2,1;3;1,89
+Hunter PS;10A;Rosso;180°;2,1;3;3,78
+Hunter PS;10A;Rosso;270°;2,1;3;5,66
+Hunter PS;10A;Rosso;360°;2,1;3;7,55
+Hunter PS;12A;Verde;90°;2,1;3,7;2,46
+Hunter PS;12A;Verde;180°;2,1;3,7;4,92
+Hunter PS;12A;Verde;270°;2,1;3,7;7,38
+Hunter PS;12A;Verde;360°;2,1;3,7;9,84
+Hunter PS;15A;Nero;90°;2,1;4,6;3,57
+Hunter PS;15A;Nero;180°;2,1;4,6;7,14
+Hunter PS;15A;Nero;270°;2,1;4,6;10,71
+Hunter PS;15A;Nero;360°;2,1;4,6;14,28
+Hunter PS;17A;Grigio;90°;2,1;5,2;4,45
+Hunter PS;17A;Grigio;180°;2,1;5,2;8,91
+Hunter PS;17A;Grigio;270°;2,1;5,2;13,36
+Hunter PS;17A;Grigio;360°;2,1;5,2;17,82
+Rainbird HeVan;HE-VAN 8;Verde;90°;2,07;2,44;1,11
+Rainbird HeVan;HE-VAN 8;Verde;180°;2,07;2,44;2,22
+Rainbird HeVan;HE-VAN 8;Verde;270°;2,07;2,44;3,33
+Rainbird HeVan;HE-VAN 8;Verde;360°;2,07;2,44;4,43
+Rainbird HeVan;HE-VAN 10;Blu;90°;2,07;3,05;1,69
+Rainbird HeVan;HE-VAN 10;Blu;180°;2,07;3,05;3,38
+Rainbird HeVan;HE-VAN 10;Blu;270°;2,07;3,05;5,07
+Rainbird HeVan;HE-VAN 10;Blu;360°;2,07;3,05;6,76
+Rainbird HeVan;HE-VAN 12;Marrone;90°;2,1;3,7;2,24
+Rainbird HeVan;HE-VAN 12;Marrone;180°;2,1;3,7;4,48
+Rainbird HeVan;HE-VAN 12;Marrone;270°;2,1;3,7;6,72
+Rainbird HeVan;HE-VAN 12;Marrone;360°;2,1;3,7;8,96
+Rainbird HeVan;HE-VAN 15;Nero;90°;2,1;4,6;3,5
+Rainbird HeVan;HE-VAN 15;Nero;180°;2,1;4,6;7
+Rainbird HeVan;HE-VAN 15;Nero;270°;2,1;4,6;10,51
+Rainbird HeVan;HE-VAN 15;Nero;360°;2,1;4,6;14,01
+Hunter PGP-ADJ;Ug. 1 rosso;Rosso;2,5 bar;2,5;8,5;2,1
+Hunter PGP-ADJ;Ug. 1 rosso;Rosso;3 bar;3;8,8;2,4
+Hunter PGP-ADJ;Ug. 1 rosso;Rosso;3,5 bar;3,5;8,8;2,7
+Hunter PGP-ADJ;Ug. 2 rosso;Rosso;2,5 bar;2,5;8,8;2,9
+Hunter PGP-ADJ;Ug. 2 rosso;Rosso;3 bar;3;9,1;3,2
+Hunter PGP-ADJ;Ug. 2 rosso;Rosso;3,5 bar;3,5;9,1;3,5
+Hunter PGP-ADJ;Ug. 3 rosso;Rosso;2,5 bar;2,5;9,1;3,7
+Hunter PGP-ADJ;Ug. 3 rosso;Rosso;3 bar;3;9,4;4,1
+Hunter PGP-ADJ;Ug. 3 rosso;Rosso;3,5 bar;3,5;9,4;4,5
+Hunter PGP-ADJ;Ug. 4 rosso;Rosso;2,5 bar;2,5;9,8;5
+Hunter PGP-ADJ;Ug. 4 rosso;Rosso;3 bar;3;10,1;5,6
+Hunter PGP-ADJ;Ug. 4 rosso;Rosso;3,5 bar;3,5;10,1;6,2
+Hunter PGP-ADJ;Ug. 5 rosso;Rosso;2,5 bar;2,5;10,4;6,5
+Hunter PGP-ADJ;Ug. 5 rosso;Rosso;3 bar;3;11;7,2
+Hunter PGP-ADJ;Ug. 5 rosso;Rosso;3,5 bar;3,5;11,6;7,7
+Hunter PGP-ADJ;Ug. 6 rosso;Rosso;2,5 bar;2,5;10,7;8,5
+Hunter PGP-ADJ;Ug. 6 rosso;Rosso;3 bar;3;11;9,4
+Hunter PGP-ADJ;Ug. 6 rosso;Rosso;3,5 bar;3,5;11,6;10,2
+Hunter PGP-ADJ;Ug. 7 rosso;Rosso;2,5 bar;2,5;11;10,8
+Hunter PGP-ADJ;Ug. 7 rosso;Rosso;3 bar;3;11,6;12
+Hunter PGP-ADJ;Ug. 7 rosso;Rosso;3,5 bar;3,5;12,2;12,9
+Hunter PGP-ADJ;Ug. 8 rosso;Rosso;2,5 bar;2,5;11,6;13,2
+Hunter PGP-ADJ;Ug. 8 rosso;Rosso;3 bar;3;11,9;14,5
+Hunter PGP-ADJ;Ug. 8 rosso;Rosso;3,5 bar;3,5;12,5;15,6
+Hunter PGP-ADJ;Ug. 1.5 blu;Blu;2,5 bar;2,5;9,4;5,4
+Hunter PGP-ADJ;Ug. 1.5 blu;Blu;3 bar;3;9,8;5,9
+Hunter PGP-ADJ;Ug. 1.5 blu;Blu;3,5 bar;3,5;9,8;6,4
+Hunter PGP-ADJ;Ug. 2.0 blu;Blu;2,5 bar;2,5;10,1;6,5
+Hunter PGP-ADJ;Ug. 2.0 blu;Blu;3 bar;3;10,4;7,2
+Hunter PGP-ADJ;Ug. 2.0 blu;Blu;3,5 bar;3,5;10,4;7,8
+Hunter PGP-ADJ;Ug. 2.5 blu;Blu;2,5 bar;2,5;10,7;8
+Hunter PGP-ADJ;Ug. 2.5 blu;Blu;3 bar;3;10,7;8,9
+Hunter PGP-ADJ;Ug. 2.5 blu;Blu;3,5 bar;3,5;10,7;9,7
+Hunter PGP-ADJ;Ug. 3.0 blu;Blu;2,5 bar;2,5;11;10,2
+Hunter PGP-ADJ;Ug. 3.0 blu;Blu;3 bar;3;11,6;11,4
+Hunter PGP-ADJ;Ug. 3.0 blu;Blu;3,5 bar;3,5;11,9;12,3
+Hunter PGP-ADJ;Ug. 4.0 blu;Blu;2,5 bar;2,5;11,9;13,6
+Hunter PGP-ADJ;Ug. 4.0 blu;Blu;3 bar;3;12,2;15
+Hunter PGP-ADJ;Ug. 4.0 blu;Blu;3,5 bar;3,5;12,2;16,2
+Hunter PGP-ADJ;Ug. 5.0 blu;Blu;2,5 bar;2,5;11,9;17,1
+Hunter PGP-ADJ;Ug. 5.0 blu;Blu;3 bar;3;12,8;19
+Hunter PGP-ADJ;Ug. 5.0 blu;Blu;3,5 bar;3,5;12,8;20,6
+Hunter PGP-ADJ;Ug. 6.0 blu;Blu;2,5 bar;2,5;12,2;20,4
+Hunter PGP-ADJ;Ug. 6.0 blu;Blu;3 bar;3;13,1;22,7
+Hunter PGP-ADJ;Ug. 6.0 blu;Blu;3,5 bar;3,5;13,1;24,5
+Hunter PGP-ADJ;Ug. 8.0 blu;Blu;2,5 bar;2,5;12,5;27,2
+Hunter PGP-ADJ;Ug. 8.0 blu;Blu;3 bar;3;13,4;30,2
+Hunter PGP-ADJ;Ug. 8.0 blu;Blu;3,5 bar;3,5;13,7;32,6
+Hunter PGP-ADJ;Ug. 4 grigio BA;Grigio;2,5 bar;2,5;7;5,9
+Hunter PGP-ADJ;Ug. 4 grigio BA;Grigio;3 bar;3;7,3;6,5
+Hunter PGP-ADJ;Ug. 4 grigio BA;Grigio;3,5 bar;3,5;7,9;7
+Hunter PGP-ADJ;Ug. 5 grigio BA;Grigio;2,5 bar;2,5;7,9;6,7
+Hunter PGP-ADJ;Ug. 5 grigio BA;Grigio;3 bar;3;8,2;7,4
+Hunter PGP-ADJ;Ug. 5 grigio BA;Grigio;3,5 bar;3,5;8,5;8
+Hunter PGP-ADJ;Ug. 6 grigio BA;Grigio;2,5 bar;2,5;9,4;8,8
+Hunter PGP-ADJ;Ug. 6 grigio BA;Grigio;3 bar;3;9,8;9,8
+Hunter PGP-ADJ;Ug. 6 grigio BA;Grigio;3,5 bar;3,5;10,1;10,6
+Hunter PGP-ADJ;Ug. 7 grigio BA;Grigio;2,5 bar;2,5;9,4;11,4
+Hunter PGP-ADJ;Ug. 7 grigio BA;Grigio;3 bar;3;10,1;12,5
+Hunter PGP-ADJ;Ug. 7 grigio BA;Grigio;3,5 bar;3,5;10,7;13,3
+Hunter PGP-ADJ;Ug. 8 grigio BA;Grigio;2,5 bar;2,5;9,8;14,1
+Hunter PGP-ADJ;Ug. 8 grigio BA;Grigio;3 bar;3;10,4;15,5
+Hunter PGP-ADJ;Ug. 8 grigio BA;Grigio;3,5 bar;3,5;11,3;16,6
+Hunter PGP-ADJ;Ug. 9 grigio BA;Grigio;2,5 bar;2,5;10,7;17,9
+Hunter PGP-ADJ;Ug. 9 grigio BA;Grigio;3 bar;3;11,3;19,8
+Hunter PGP-ADJ;Ug. 9 grigio BA;Grigio;3,5 bar;3,5;12,2;21,3
+Hunter PGP-ADJ;Ug. 10 grigio BA;Grigio;2,5 bar;2,5;11,3;23,4
+Hunter PGP-ADJ;Ug. 10 grigio BA;Grigio;3 bar;3;11,6;25,9
+Hunter PGP-ADJ;Ug. 10 grigio BA;Grigio;3,5 bar;3,5;12,2;27,8
+Hunter SRM;Ug. 0.50;;2,5 bar;2,5;4,6;1,8
+Hunter SRM;Ug. 0.50;;3 bar;3;4,6;2
+Hunter SRM;Ug. 0.50;;3,5 bar;3,5;4,9;2,2
+Hunter SRM;Ug. 0.75;;2,5 bar;2,5;4,9;2,7
+Hunter SRM;Ug. 0.75;;3 bar;3;5,2;3
+Hunter SRM;Ug. 0.75;;3,5 bar;3,5;5,2;3,2
+Hunter SRM;Ug. 1.0;;2,5 bar;2,5;5,5;3,5
+Hunter SRM;Ug. 1.0;;3 bar;3;5,8;3,8
+Hunter SRM;Ug. 1.0;;3,5 bar;3,5;5,8;4,1
+Hunter SRM;Ug. 1.5;;2,5 bar;2,5;6,4;5,4
+Hunter SRM;Ug. 1.5;;3 bar;3;6,7;6
+Hunter SRM;Ug. 1.5;;3,5 bar;3,5;6,7;6,4
+Hunter SRM;Ug. 2.0;;2,5 bar;2,5;7,3;7,1
+Hunter SRM;Ug. 2.0;;3 bar;3;7,6;8
+Hunter SRM;Ug. 2.0;;3,5 bar;3,5;7,6;8,8
+Hunter SRM;Ug. 2.5;;2,5 bar;2,5;8,2;9
+Hunter SRM;Ug. 2.5;;3 bar;3;8,5;9,8
+Hunter SRM;Ug. 2.5;;3,5 bar;3,5;8,5;10,5
+Hunter SRM;Ug. 3.0;;2,5 bar;2,5;9,1;10,6
+Hunter SRM;Ug. 3.0;;3 bar;3;9,4;12
+Hunter SRM;Ug. 3.0;;3,5 bar;3,5;9,4;13,1
+Hunter SRM;Ug. 4.0;;2,5 bar;2,5;10,1;14,8
+Hunter SRM;Ug. 4.0;;3 bar;3;10,4;15,7
+Hunter SRM;Ug. 4.0;;3,5 bar;3,5;10,4;16,3`;
+
+let catalog = [], rows = [], uid = 1;
+let prove = [{l:'',s:'',p:''},{l:'',s:'',p:''},{l:'',s:'',p:''}];
+
+const $ = id => document.getElementById(id);
+const num = v => { const n = parseFloat(String(v).replace(',', '.')); return isNaN(n) ? 0 : n; };
+const fmt = n => n.toLocaleString('it-IT', {maximumFractionDigits: 2});
+const esc = s => String(s).replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+const uniq = a => [...new Set(a)];
+
+function parseCatalog(text){
+  const out = [];
+  text.split(/\r?\n/).forEach(line => {
+    if (!line.trim()) return;
+    const c = line.split(line.includes('\t') ? '\t' : ';').map(s => s.trim());
+    if (c.length < 7) return;
+    const q = num(c[6]);
+    if (!q) return; // salta intestazione e righe non valide
+    out.push({serie:c[0], modello:c[1], colore:c[2], arco:c[3], pressione:c[4], raggio:c[5], q});
+  });
+  return out;
+}
+const catalogToText = () => 'Serie;Modello;Colore;Arco;Pressione;Raggio;Portata\n' +
+  catalog.map(x => [x.serie,x.modello,x.colore,x.arco,x.pressione,x.raggio,String(x.q).replace('.',',')].join(';')).join('\n');
+
+const serieList = () => uniq(catalog.map(x => x.serie));
+const modelli = s => uniq(catalog.filter(x => x.serie === s).map(x => x.modello));
+const archi = (s, m) => uniq(catalog.filter(x => x.serie === s && x.modello === m).map(x => x.arco));
+const item = r => catalog.find(x => x.serie === r.serie && x.modello === r.modello && x.arco === r.arco);
+const options = (list, sel) => '<option value="">—</option>' +
+  list.map(v => `<option${v === sel ? ' selected' : ''}>${esc(v)}</option>`).join('');
+
+function addRow(settore){
+  const last = rows[rows.length - 1];
+  rows.push({id: uid++, settore: settore ?? (last ? last.settore : 1),
+    serie: last ? last.serie : '', modello: last ? last.modello : '', arco: '', qta: 1});
+  renderRows();
+}
+
+function renderRows(){
+  $('rows').innerHTML = rows.map(r => {
+    const it = item(r), u = it ? it.q : 0;
+    const info = it ? `${esc(it.colore)} · ${esc(it.raggio)} m · ${esc(it.pressione)} bar` : '';
+    return `<tr data-id="${r.id}">
+      <td><input class="n" type="number" min="1" data-f="settore" value="${r.settore}"></td>
+      <td><select data-f="serie">${options(serieList(), r.serie)}</select></td>
+      <td><select data-f="modello">${options(modelli(r.serie), r.modello)}</select></td>
+      <td><select data-f="arco">${options(archi(r.serie, r.modello), r.arco)}</select></td>
+      <td class="info">${info}</td>
+      <td class="r"><input class="n" type="number" min="0" data-f="qta" value="${r.qta}"></td>
+      <td class="r num">${u ? fmt(u) : '—'}</td>
+      <td class="r num">${u ? fmt(u * r.qta) : '—'}</td>
+      <td><button class="del" title="Elimina riga" aria-label="Elimina riga">✕</button></td>
+    </tr>`;
+  }).join('') || '<tr><td colspan="9" class="small">Nessun irrigatore: usa "Aggiungi riga" per iniziare.</td></tr>';
+  renderSummary();
+}
+
+function renderSummary(){
+  renderGittate();
+  renderDistinta();
+  const disp = num($('qdisp').value);
+  const pl = num($('pdisp').value);
+  const soglia = num($('soglia').value) || 85;
+  const groups = {};
+  rows.forEach(r => {
+    const g = groups[r.settore] ||= {tot:0, n:0, incompleti:0, serie:new Set(), press:new Set()};
+    const it = item(r);
+    if (!it) { g.incompleti++; return; }
+    g.tot += it.q * r.qta; g.n += r.qta;
+    g.serie.add(it.serie); g.press.add(num(it.pressione));
+  });
+  const keys = Object.keys(groups).sort((a, b) => a - b);
+  if (!disp) { $('summary').innerHTML = '<p class="small">Inserisci la portata disponibile (anche dalla prova a secchio).</p>'; return; }
+  if (!keys.length) { $('summary').innerHTML = '<p class="small">Il riepilogo compare dopo aver aggiunto degli irrigatori.</p>'; return; }
+  let totale = 0;
+  $('summary').innerHTML = `<p class="small">Disponibile: <b class="num">${fmt(disp)} l/min</b>${pl ? ` a ${fmt(pl)} bar` : ''}</p>` +
+    keys.map(k => {
+      const g = groups[k]; totale += g.tot;
+      const pct = g.tot / disp * 100;
+      const cls = pct > 100 ? 'over' : pct > soglia ? 'warn' : '';
+      const stato = pct > 100 ? 'Supera la portata' : pct > soglia ? 'Al limite' : 'Entro la portata';
+      const pMax = Math.max(0, ...g.press);
+      return `<div class="sect ${cls}">
+        <div class="sect-head"><strong>Settore ${esc(k)}</strong><span class="pct num">${fmt(pct)}%</span></div>
+        <div class="gauge"><i style="width:${Math.min(pct, 100)}%"></i></div>
+        <div class="small">${stato} · ${fmt(g.tot)} l/min · ${g.n} ugelli · margine ${fmt(disp - g.tot)} l/min</div>
+        ${g.serie.size > 1 ? `<div class="alert">Serie diverse nello stesso settore: ${[...g.serie].map(esc).join(', ')}</div>` : ''}
+        ${pl && pMax > pl ? `<div class="alert">Pressione nominale ugelli (${fmt(pMax)} bar) superiore a quella di lavoro</div>` : ''}
+        ${g.incompleti ? `<div class="alert">${g.incompleti} righe senza modello o arco</div>` : ''}
+      </div>`;
+    }).join('') +
+    `<p class="small">Totale impianto: <b class="num">${fmt(totale)} l/min</b> su ${keys.length} settori · minimo teorico ${Math.ceil(totale / disp)} settori</p>`;
+}
+
+function renderDistinta(){
+  const map = new Map();
+  let tot = 0;
+  rows.forEach(r => {
+    const it = item(r); if (!it) return;
+    const k = `${it.serie}|${it.modello}|${it.colore}`;
+    if (!map.has(k)) map.set(k, {serie:it.serie, modello:it.modello, colore:it.colore, archi:new Set(), n:0});
+    const v = map.get(k);
+    v.n += r.qta; v.archi.add(it.arco); tot += r.qta;
+  });
+  if (!map.size) { $('distinta').innerHTML = '<p class="small">Nessun ugello inserito nella tabella dei settori.</p>'; return; }
+  let html = '<table>', grp = null;
+  map.forEach(v => {
+    if (v.serie !== grp) { grp = v.serie; html += `<tr class="grp"><td colspan="3">${esc(grp)}</td></tr>`; }
+    const col = COLORI[(v.colore || '').toLowerCase()];
+    html += `<tr><td><span class="pallino" style="background:${col || '#fff'}" title="${esc(v.colore)}"></span>${esc(v.modello)}</td>
+      <td class="small">${[...v.archi].map(esc).join(', ')}</td>
+      <td class="r num"><b>${v.n}</b></td></tr>`;
+  });
+  html += `</table><p class="small">Totale: <b class="num">${tot}</b> ugelli</p>`;
+  $('distinta').innerHTML = html;
+}
+
+/* Gittate e contatori — una riga per modello, colori come fascia sotto il nome */
+let conta = {};
+const chiave = x => `${x.serie}|${x.modello}`;
+const COLORI = {arancione:'#F08A24', giallo:'#F2C94C', bordeaux:'#7A1F2B', azzurro:'#6EC1E4',
+  'verde oliva':'#7A8B3A', nero:'#222222', verde:'#3E9A4A', rosso:'#D23A2E', blu:'#2F5DB5',
+  grigio:'#9AA3A0', marrone:'#7B4B2A', avorio:'#F3EBD3', rame:'#B8733A'};
+
+function renderGittate(){
+  const sel = $('gitSerie');
+  const cur = sel.value;
+  sel.innerHTML = '<option value="">Tutte le serie</option>' +
+    serieList().map(s => `<option${s === cur ? ' selected' : ''}>${esc(s)}</option>`).join('');
+  const inSett = {};
+  rows.forEach(r => { const k = chiave(r); inSett[k] = (inSett[k] || 0) + r.qta; });
+  const modelliMap = new Map();
+  catalog.forEach(x => {
+    const k = chiave(x);
+    if (!modelliMap.has(k)) modelliMap.set(k, {serie:x.serie, modello:x.modello, colori:[], raggi:[]});
+    const m = modelliMap.get(k);
+    if (x.colore && !m.colori.includes(x.colore)) m.colori.push(x.colore);
+    if (!m.raggi.includes(x.raggio)) m.raggi.push(x.raggio);
+  });
+  const soloUsati = $('gitUsati').checked;
+  let html = '', grp = null;
+  modelliMap.forEach((m, k) => {
+    if (sel.value && m.serie !== sel.value) return;
+    const c = conta[k] || 0, s = inSett[k] || 0;
+    if (soloUsati && !c && !s) return;
+    if (m.serie !== grp) { grp = m.serie; html += `<tr class="grp"><td colspan="4">${esc(grp)}</td></tr>`; }
+    const fascia = m.colori.map(n => `<i style="background:${COLORI[n.toLowerCase()] || '#fff'}"></i>`).join('');
+    html += `<tr data-k="${esc(k)}" class="${c !== s ? 'diff' : ''}">
+      <td>${esc(m.modello)}<span class="fascia" title="${esc(m.colori.join(', '))}">${fascia}</span></td>
+      <td class="r num"><b>${m.raggi.map(esc).join(' / ')}</b></td>
+      <td class="r"><span class="cnt"><button class="meno" aria-label="Togli uno">−</button>
+        <input type="number" min="0" value="${c}"><button class="piu" aria-label="Aggiungi uno">+</button></span></td>
+      <td class="r num">${s}</td></tr>`;
+  });
+  $('gitRows').innerHTML = html || '<tr><td colspan="4" class="small">Nessun ugello contato: usa + sulla lista completa.</td></tr>';
+  $('gitTot').textContent = Object.values(conta).reduce((a, b) => a + b, 0);
+}
+function setConta(k, v){
+  conta[k] = Math.max(0, v);
+  if (!conta[k]) delete conta[k];
+  renderGittate();
+}
+$('gitRows').addEventListener('click', e => {
+  const tr = e.target.closest('tr[data-k]'); if (!tr) return;
+  const k = tr.dataset.k;
+  if (e.target.classList.contains('piu')) setConta(k, (conta[k] || 0) + 1);
+  if (e.target.classList.contains('meno')) setConta(k, (conta[k] || 0) - 1);
+});
+$('gitRows').addEventListener('change', e => {
+  const tr = e.target.closest('tr[data-k]');
+  if (tr && e.target.tagName === 'INPUT') setConta(tr.dataset.k, parseInt(e.target.value) || 0);
+});
+$('gitSerie').addEventListener('change', renderGittate);
+$('gitUsati').addEventListener('change', renderGittate);
+$('gitReset').onclick = () => { if (confirm('Azzerare tutti i contatori?')) { conta = {}; renderGittate(); } };
+
+/* Prova a secchio */
+function renderProve(){
+  $('prove').innerHTML = prove.map((p, i) => {
+    const q = num(p.s) ? num(p.l) / num(p.s) * 60 : 0;
+    return `<tr data-i="${i}">
+      <td>${i + 1}</td>
+      <td><input data-k="l" value="${esc(p.l)}"></td>
+      <td><input data-k="s" value="${esc(p.s)}"></td>
+      <td><input data-k="p" value="${esc(p.p)}"></td>
+      <td class="r num">${q ? fmt(q) : '—'}</td>
+      <td>${q ? '<button class="use">Usa questa</button>' : ''}</td></tr>`;
+  }).join('');
+}
+$('prove').addEventListener('change', e => {
+  const k = e.target.dataset.k; if (!k) return;
+  prove[e.target.closest('tr').dataset.i][k] = e.target.value;
+  renderProve();
+});
+$('prove').addEventListener('click', e => {
+  if (!e.target.classList.contains('use')) return;
+  const p = prove[e.target.closest('tr').dataset.i];
+  $('qdisp').value = (num(p.l) / num(p.s) * 60).toFixed(2);
+  if (p.p) $('pdisp').value = num(p.p);
+  renderSummary();
+});
+
+/* Eventi tabella */
+$('rows').addEventListener('input', e => {
+  const f = e.target.dataset.f; if (!f) return;
+  const r = rows.find(x => x.id == e.target.closest('tr').dataset.id);
+  if (f === 'settore' || f === 'qta') r[f] = Math.max(0, parseInt(e.target.value) || 0);
+  else r[f] = e.target.value;
+  if (f === 'serie') { r.modello = ''; r.arco = ''; }
+  if (f === 'modello') { r.arco = ''; }
+  if (e.target.tagName === 'SELECT') renderRows();
+  else {
+    const it = item(r);
+    e.target.closest('tr').cells[7].textContent = it ? fmt(it.q * r.qta) : '—';
+    renderSummary();
+  }
+});
+$('rows').addEventListener('click', e => {
+  if (!e.target.classList.contains('del')) return;
+  const id = e.target.closest('tr').dataset.id;
+  rows = rows.filter(x => x.id != id);
+  renderRows();
+});
+$('addRow').onclick = () => addRow();
+$('addSect').onclick = () => addRow(rows.length ? Math.max(...rows.map(r => r.settore)) + 1 : 1);
+['qdisp', 'pdisp', 'soglia'].forEach(id => $(id).addEventListener('input', renderSummary));
+
+/* Catalogo — salvato nel browser, così resta anche dopo la chiusura */
+const CHIAVE = 'settori_irrigazione_catalogo';
+let memoriaOk = true;
+
+function salvaCatalogo(){
+  try { localStorage.setItem(CHIAVE, catalogToText()); }
+  catch { memoriaOk = false; }
+}
+function leggiCatalogo(){
+  try { return localStorage.getItem(CHIAVE); }
+  catch { memoriaOk = false; return null; }
+}
+
+function applyCatalog(text, modo){
+  const c = parseCatalog(text);
+  if (!c.length) { $('catMsg').textContent = 'Nessuna riga valida: servono 7 colonne con la portata numerica in ultima posizione.'; return; }
+  catalog = c;
+  $('catCount').textContent = c.length;
+  $('catText').value = catalogToText();
+  if (modo !== 'avvio') salvaCatalogo();
+  if (modo === 'avvio') $('catMsg').textContent = memoriaOk ? '' :
+    'Questo browser non permette il salvataggio automatico: dopo ogni modifica usa "Scarica catalogo" e reimportalo, oppure aggiorna il file con Blocco note.';
+  else $('catMsg').textContent = memoriaOk
+    ? `Catalogo applicato e salvato nel browser: ${c.length} voci.`
+    : `Catalogo applicato: ${c.length} voci. Attenzione: questo browser non permette il salvataggio automatico, scarica il catalogo per non perderlo.`;
+  renderRows();
+}
+$('catApply').onclick = () => applyCatalog($('catText').value);
+$('catCsvBtn').onclick = () => $('catCsv').click();
+$('catCsv').onchange = e => { const f = e.target.files[0]; if (f) f.text().then(t => applyCatalog(t)); e.target.value = ''; };
+$('catDl').onclick = () => {
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(new Blob([catalogToText()], {type:'text/csv'}));
+  a.download = 'catalogo_ugelli.csv';
+  a.click();
+};
+$('catReset').onclick = () => {
+  if (!confirm('Ripristinare il catalogo iniziale? Le voci aggiunte in seguito andranno perse.')) return;
+  applyCatalog(CATALOGO_BASE);
+};
+
+/* Progetto */
+$('save').onclick = () => {
+  const data = {cliente:$('cliente').value, qdisp:$('qdisp').value, pdisp:$('pdisp').value,
+    soglia:$('soglia').value, prove, rows, catalog, conta};
+  const nome = ($('cliente').value || 'progetto').replace(/[^\w\-]+/g, '_');
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(new Blob([JSON.stringify(data, null, 1)], {type:'application/json'}));
+  a.download = `irrigazione_${nome}.json`;
+  a.click();
+};
+$('openBtn').onclick = () => $('openFile').click();
+$('openFile').onchange = e => {
+  const f = e.target.files[0]; if (!f) return;
+  f.text().then(t => {
+    try {
+      const d = JSON.parse(t);
+      $('cliente').value = d.cliente || ''; $('qdisp').value = d.qdisp || '';
+      $('pdisp').value = d.pdisp || ''; $('soglia').value = d.soglia || 85;
+      prove = d.prove || prove; catalog = d.catalog || catalog; rows = d.rows || []; conta = {};
+      Object.entries(d.conta || {}).forEach(([k, v]) => { const kk = k.split('|').slice(0, 2).join('|'); conta[kk] = (conta[kk] || 0) + v; });
+      uid = Math.max(0, ...rows.map(r => r.id)) + 1;
+      $('catText').value = catalogToText(); $('catCount').textContent = catalog.length;
+      salvaCatalogo();
+      renderProve(); renderRows();
+    } catch { alert('File non riconosciuto: apri un file .json salvato da questo strumento.'); }
+  });
+  e.target.value = '';
+};
+
+/* All'avvio: catalogo salvato nel browser, completato con le eventuali voci
+   nuove del file (le voci aggiunte a mano restano). */
+function avvioCatalogo(){
+  const salvato = leggiCatalogo();
+  if (!salvato) { applyCatalog(CATALOGO_BASE, 'avvio'); return; }
+  const miei = parseCatalog(salvato);
+  const k = x => `${x.serie}|${x.modello}|${x.arco}`;
+  const presenti = new Set(miei.map(k));
+  const mancanti = parseCatalog(CATALOGO_BASE).filter(x => !presenti.has(k(x)));
+  catalog = miei.concat(mancanti);
+  $('catCount').textContent = catalog.length;
+  $('catText').value = catalogToText();
+  if (mancanti.length) { salvaCatalogo(); $('catMsg').textContent = `Aggiunte ${mancanti.length} voci nuove dal file.`; }
+  else if (!memoriaOk) $('catMsg').textContent = 'Questo browser non permette il salvataggio automatico: dopo ogni modifica usa "Scarica catalogo" e reimportalo.';
+  renderRows();
+}
+
+renderProve();
+avvioCatalogo();
+</script>
+</body>
+</html>
