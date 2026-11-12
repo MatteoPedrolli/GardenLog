@@ -1045,7 +1045,9 @@ toglie non se lo ritrova riaprendo; senza prezzo in listino è un buco, non una 
 cliente, e una voce a corpo si porta dietro i suoi componenti. **«+ Voce libera»**
 (`libera`) è quello che non sta né fra le operazioni né in listino, con l'unità scritta a
 mano; **«+ Capitolo a corpo»** è una voce a corpo vuota, da riempire, col prezzo che segue
-la somma finché nessuno lo decide. Dentro ogni voce a corpo un componente **si toglie** con
+la somma finché nessuno lo decide. La ✕ di riga e di componente **chiede conferma**: sta fra
+le frecce, e un clic che manca il ▲ non deve portarsi via una voce. Una riga appena aggiunta e
+ancora vuota si toglie senza domande. Dentro ogni voce a corpo un componente **si toglie** con
 la sua ✕ (`togliComponente()`) — tranne la manodopera del settore, che è la somma delle ore —
 e **se ne aggiunge** un altro da «+ Aggiungi a questa voce…» (`aggiungiComponente()`): un
 materiale di listino, un'operazione (senza voce, in un settore sono ore; fuori, manodopera

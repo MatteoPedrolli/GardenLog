@@ -6110,6 +6110,13 @@ try {
     // Nella siepe: via il telo, dentro una cosa scritta a mano, prima della manodopera.
     const iSiepe = d.righe.findIndex(x => x.chiave === 'p1');
     const jTelo = d.righe[iSiepe].componenti.findIndex(c => c.voceID === 'telo-pacciamante');
+    // La ✕ chiede: con «no» non succede niente.
+    const conferma = window.confirm;
+    let domanda = '';
+    window.confirm = m => { domanda = m; return false; };
+    togliComponente(iSiepe, jTelo);
+    r.chiedeComponente = domanda.includes('Telo pacciamante') && d.righe[iSiepe].componenti.some(c => c.voceID === 'telo-pacciamante');
+    window.confirm = () => true;
     togliComponente(iSiepe, jTelo);
     aggiungiComponente(iSiepe, 'libera');
     const comp = d.righe[iSiepe].componenti;
@@ -6121,7 +6128,17 @@ try {
     const manoVia = [...document.querySelectorAll('#pagina-preventivo tr.mano-settore button.via')].length;
     r.manodoperaResta = manoVia === 0;
     // Via la potatura del campo: si ricorda, e si riprende dal menù.
+    window.confirm = m => { domanda = m; return false; };
     togliRigaPreventivo(d.righe.findIndex(x => x.chiave === 'v1'));
+    r.chiedeRiga = domanda.includes('Potatura olivo') && domanda.includes('fra le tolte') && d.righe.some(x => x.chiave === 'v1');
+    // Una riga appena aggiunta e vuota si toglie senza domande.
+    let domande = 0;
+    window.confirm = () => { domande++; return true; };
+    aggiungiRigaLiberaPreventivo();
+    togliRigaPreventivo(d.righe.length - 1);
+    r.vuotaSenzaDomanda = domande === 0;
+    togliRigaPreventivo(d.righe.findIndex(x => x.chiave === 'v1'));
+    window.confirm = conferma;
     r.tolta = JSON.stringify(d.tolte) === '["v1"]' &&
       !!document.querySelector('#pagina-preventivo optgroup[label="Dal rilievo, tolte"] option[value="rilievo:v1"]');
     r.prima = ordine();
@@ -6153,6 +6170,8 @@ try {
   ok('dentro una voce si toglie un componente e se ne aggiunge un altro, prima della manodopera che resta',
     modifiche.siepe && modifiche.manodoperaResta, JSON.stringify(modifiche));
   ok('una riga del campo tolta si ricorda, e si riprende dal menù', modifiche.tolta && modifiche.rimessa, JSON.stringify(modifiche));
+  ok('togliere una riga o un componente chiede conferma; una riga vuota appena aggiunta no',
+    modifiche.chiedeComponente && modifiche.chiedeRiga && modifiche.vuotaSenzaDomanda, JSON.stringify(modifiche));
   ok('il rilievo corretto tiene l\'ordine deciso: la nuova lavorazione dopo l\'ultima del campo, la tolta non torna',
     modifiche.dopo === 'sezione,p1,n1,trasferimento,libera,capitolo' && modifiche.prima === 'sezione,p1,trasferimento,libera,capitolo',
     modifiche.prima + ' → ' + modifiche.dopo);

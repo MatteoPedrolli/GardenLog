@@ -202,7 +202,7 @@ select.tipo-riga:hover, select.tipo-riga:focus { border-color: var(--border); ba
 table.elenco td.via-col { padding-left: 14px; width: 38px; }
 /* Su e giù accanto alla ✕: l'ordine delle righe è quello del foglio che va al
    cliente, e si decide qui. */
-.comandi-riga { display: flex; flex-direction: column; align-items: center; gap: 2px; }
+.comandi-riga { display: flex; flex-direction: column; align-items: center; gap: 6px; }
 .comandi-riga button.sposta { border: none; background: none; cursor: pointer; padding: 1px 6px;
   font-size: 0.9rem; color: var(--text-mid); line-height: 1.1; }
 .comandi-riga button.sposta:hover:not(:disabled) { color: var(--inchiostro); }
@@ -2554,7 +2554,7 @@ const NOVITA = [
     data: '2026-11-12',
     titolo: 'Il preventivo si modifica tutto',
     righe: [
-      'Ogni riga del preventivo ha **▲ e ▼** per spostarla: l\'ordine è quello del foglio che va al cliente.',
+      'Ogni riga del preventivo ha **▲ e ▼** per spostarla: l\'ordine è quello del foglio che va al cliente. La ✕ in mezzo **chiede conferma** prima di togliere.',
       '**+ Voce libera** per quello che non è né un\'operazione né una voce di listino, e **+ Capitolo a corpo** per una voce da riempire coi suoi componenti.',
       'Dentro ogni voce a corpo un componente **si toglie con la ✕**, e se ne aggiunge un altro da **«+ Aggiungi a questa voce…»**: un materiale, un\'operazione o una cosa scritta a mano.',
       'Se dal campo arriva il rilievo corretto, **ordine, righe tolte e componenti aggiunti restano**. Una lavorazione del campo tolta si riprende dal menù «+ Aggiungi».',
@@ -4329,6 +4329,9 @@ function togliComponente(i, j) {
   const r = PREVENTIVO.doc.righe[i];
   const c = r && Array.isArray(r.componenti) && r.componenti[j];
   if (!c || c.manodoperaSettore) return;
+  const nome = String(c.voce || '').trim();
+  const vuoto = !nome && (c.quantita === '' || c.quantita == null);
+  if (!vuoto && !confirm('Togliere ' + (nome ? '«' + nome + '»' : 'questo componente') + ' da questa voce?')) return;
   if (!c.aggiunta && c.chiave && r.lavorazione) {
     r.tolti = (Array.isArray(r.tolti) ? r.tolti : []).filter(k => k !== c.chiave).concat([c.chiave]);
   }
@@ -4662,6 +4665,13 @@ function togliRigaPreventivo(i) {
   const d = PREVENTIVO.doc;
   const r = d.righe[i];
   if (!r) return;
+  // La ✕ sta fra le frecce: un clic che manca il ▲ non deve portarsi via una
+  // voce. Una riga appena aggiunta e ancora vuota invece si toglie e basta.
+  const vuota = !String(r.descrizione || '').trim() && (r.prezzo === '' || r.prezzo == null) &&
+    !(Array.isArray(r.componenti) && r.componenti.length);
+  const nome = String(r.descrizione || r.voce || '').trim();
+  if (!vuota && !confirm('Togliere ' + (nome ? '«' + nome + '»' : 'questa riga') + ' dal preventivo?' +
+      (r.chiave && r.lavorazione ? '\n\nViene dal rilievo: si riprende dal menù «+ Aggiungi», fra le tolte.' : ''))) return;
   if (r.chiave && r.lavorazione) d.tolte = (Array.isArray(d.tolte) ? d.tolte : []).filter(k => k !== r.chiave).concat([r.chiave]);
   d.righe.splice(i, 1);
   disegnaPreventivo();
