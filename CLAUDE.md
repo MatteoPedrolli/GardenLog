@@ -761,13 +761,24 @@ nell'ufficio. In ufficio a corpo lo decide il listino (`voceACorpo()`), come per
 rapportini: la riga o il componente valgono 1.
 
 **I settori si definiscono sul telefono** (Archivi › Settori della visita): li decide
-chi lavora. L'ufficio non ne ha un elenco suo: il telefono li esporta da ⚙️ Dati in
+chi lavora. L'ufficio non ne ha un elenco suo: il telefono li manda in
 `settori-dal-telefono.json`, nella cartella, e l'ufficio **lo legge a ogni rilettura**
 (`settoriConosciuti()`) invece di importarlo — lì non si modificano, e una copia
 invecchierebbe senza dirlo. Finché il file non c'è valgono prato, aiuole e siepe di
 partenza (`SETTORI_DI_PARTENZA`). Il «Nuovo rilievo» dice da dove vengono e quando
 sono stati esportati: un settore creato ieri sul telefono che in ufficio non compare
 deve far pensare al file, non a un guasto.
+
+**Il file parte da solo**, quando i settori o le operazioni cambiano
+(`preparaSettoriPerUfficio()`): un documento `settori` nella coda dei rapportini, fatto
+**al momento di partire** come la copia di sicurezza (`costruisciSettoriDaMandare()`), e
+il telefono ricorda cosa ha mandato (`META.settoriMandati`) per non rimandare lo stesso
+elenco a ogni giro. Si esportava a mano, e ci si dimenticava: in ufficio le operazioni
+restavano quelle di mesi prima, e Drive salvava la seconda copia come «(1)», che
+l'ufficio non legge. Lo script lo scrive nella cartella GiardinoApp **col nome deciso da
+lui** (`IN_RADICE`), sopra quello di prima, dalla versione 10; quello di prima lo
+respinge, e resta in coda col suo errore. «Esporta settori» resta, per un telefono senza
+script.
 
 Le lavorazioni spuntate **viaggiano con la lavorazione**: un rilievo si deve leggere
 anche se il settore poi cambia. I rilievi fatti con un insieme si leggono come

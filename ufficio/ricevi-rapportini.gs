@@ -57,6 +57,15 @@ const CARTELLE = {
   backup: 'backup',
 };
 
+// I documenti che non stanno in una cartella loro: un file solo, sempre lo stesso,
+// nella cartella GiardinoApp, dove l'ufficio lo legge. I settori e le operazioni
+// del telefono si salvavano a mano nel Drive, e Drive chiamava il secondo
+// «settori-dal-telefono (1).json», che l'ufficio non leggeva. Il nome lo decide
+// questa riga, non chi manda.
+const IN_RADICE = {
+  settori: 'settori-dal-telefono.json',
+};
+
 // Quanti giorni di copie di sicurezza si tengono per ogni telefono. Le più vecchie
 // vanno nel cestino di Drive, che le tiene ancora un mese.
 const GIORNI_COPIE = 30;
@@ -95,11 +104,13 @@ function doPost(e) {
     if (!e || !e.postData || !e.postData.contents) throw new Error('richiesta vuota');
     const doc = JSON.parse(e.postData.contents);
     const dove = CARTELLE[doc.tipo];
-    if (!dove) throw new Error('tipo di documento sconosciuto: ' + doc.tipo);
+    const fisso = IN_RADICE[doc.tipo];
+    if (!dove && !fisso) throw new Error('tipo di documento sconosciuto: ' + doc.tipo);
     if (!doc.id) throw new Error('documento senza identificativo');
 
-    const cartella = sottocartella(sottocartella(DriveApp.getRootFolder(), CARTELLA_RADICE), dove);
-    const nome = nomeFile(doc);
+    const radice = sottocartella(DriveApp.getRootFolder(), CARTELLA_RADICE);
+    const cartella = fisso ? radice : sottocartella(radice, dove);
+    const nome = fisso || nomeFile(doc);
 
     // Stesso rapportino rimandato dopo una correzione: la revisione vecchia va
     // nel cestino, non affianco. Due versioni dello stesso lavoro nella stessa
@@ -125,8 +136,8 @@ function doGet(e) {
     if (!quale) {
       // Dice se la chiave c'è, mai quale sia: serve a verificare da un browser
       // che la distribuzione sia quella giusta e la chiave impostata.
-      return risposta({ status: 'ok', servizio: 'rapportini', versione: 9,
-        accetta: Object.keys(CARTELLE), leggibili: Object.keys(LEGGIBILI),
+      return risposta({ status: 'ok', servizio: 'rapportini', versione: 10,
+        accetta: Object.keys(CARTELLE).concat(Object.keys(IN_RADICE)), leggibili: Object.keys(LEGGIBILI),
         riservati: Object.keys(RISERVATI), chiave: chiave ? 'impostata' : 'manca' });
     }
     // Un nome preso da una lista, non dalla richiesta: così l'indirizzo non

@@ -183,6 +183,15 @@ modificabile anche lì, perché al cliente non è arrivato nessun foglio.
 Serve lo script alla versione 9: quello di prima non consegna il listino, e il
 telefono chiede solo quanto si è incassato, senza il totale.
 
+## I settori e le operazioni del telefono
+
+Il «Nuovo rilievo» e il menù «+ Aggiungi» del preventivo prendono settori e operazioni
+da `settori-dal-telefono.json`, nella cartella GiardinoApp. Il telefono lo manda **da
+solo** quando li cambi in Archivi, dalla stessa coda dei rapportini, e lo script lo
+scrive sempre con quel nome, sopra quello di prima. Serve lo script alla versione 10:
+quello di prima lo respinge, e sul telefono resta «settori per l'ufficio» da consegnare.
+Senza script si fa ancora a mano, da ⚙️ Dati › «Esporta settori».
+
 ## Due pezzi da installare, una volta sola
 
 **1. Lo script che riceve** — `ricevi-rapportini.gs`, da incollare in

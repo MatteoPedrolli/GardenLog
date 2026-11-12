@@ -862,7 +862,8 @@ select.form-control { background-image: url("data:image/svg+xml,%3Csvg xmlns='ht
       <div class="card" style="padding:14px">
         <div class="dati-nota">L'anagrafica, l'elenco dei prodotti e i settori con le loro lavorazioni
           che hai qui, nel formato che l'app dell'ufficio legge. I file vanno messi nella cartella <strong>GiardinoApp</strong> su Drive.
-          L'ufficio aggiunge quello che sa lui — telefoni, mail, prezzi — e importare non glielo cancella.</div>
+          L'ufficio aggiunge quello che sa lui — telefoni, mail, prezzi — e importare non glielo cancella.
+          Con l'indirizzo dello script i <strong>settori</strong> partono da soli quando cambiano: il bottone serve senza.</div>
         <div style="display:flex; gap:8px; flex-wrap:wrap">
           <button class="btn btn-secondary btn-sm" onclick="esportaAnagrafica()">Esporta anagrafica clienti</button>
           <button class="btn btn-secondary btn-sm" onclick="esportaProdotti()">Esporta prodotti</button>
@@ -3707,6 +3708,33 @@ function preparaCopiaDelGiorno() {
   return true;
 }
 
+// ── I SETTORI VANNO IN UFFICIO DA SOLI ──
+// L'ufficio prende settori e operazioni dal telefono, per il «Nuovo rilievo» e il
+// preventivo. Si mandavano con «Esporta settori» e un file salvato a mano nel Drive:
+// ci si dimenticava, e Drive salvava il secondo come «settori-dal-telefono (1).json»,
+// che l'ufficio non leggeva — in ufficio le operazioni restavano quelle di mesi
+// prima senza che niente lo dicesse. Adesso partono dalla stessa coda dei
+// rapportini, quando cambiano: il telefono ricorda cosa ha mandato l'ultima volta
+// (`META.settoriMandati`) e il documento si fa al momento di partire, come la copia
+// di sicurezza. Lo script lo scrive nella cartella col nome che l'ufficio legge,
+// sempre lo stesso (versione 10).
+function improntaSettori(doc) {
+  return JSON.stringify({ settori: doc.settori, operazioni: doc.operazioni });
+}
+
+function costruisciSettoriDaMandare() {
+  return { ...settoriPerUfficio(), id: 'settori-' + dispositivo() };
+}
+
+function preparaSettoriPerUfficio() {
+  if (!(DB.impostazioni?.UrlRapportini || '').trim()) return false;
+  if (DB.coda.some(v => v.tipo === 'settori')) return false;
+  const doc = settoriPerUfficio();
+  if (!doc.settori.length || improntaSettori(doc) === META.settoriMandati) return false;
+  DB.coda.push({ docID: 'settori-' + dispositivo(), tipo: 'settori', doc: null, creato: new Date().toISOString(), tentativi: 0, errore: '' });
+  return true;
+}
+
 function testoCopiaAutomatica() {
   if (!(DB.impostazioni?.UrlRapportini || '').trim()) return 'Copia automatica: spenta finché non c\'è l\'indirizzo di consegna';
   const giorni = giorniDa(META.ultimaCopiaAutomatica);
@@ -4738,7 +4766,7 @@ async function consegnaRapportino(doc) {
 }
 
 const NOMI_DOCUMENTO = { appuntamento: 'prenotazione', rilievo: 'rilievo', cliente: 'modifica a un cliente',
-  conferimento: 'conferimento del verde', backup: 'copia di sicurezza' };
+  conferimento: 'conferimento del verde', backup: 'copia di sicurezza', settori: 'settori per l\'ufficio' };
 
 function comeSiChiama(voce) {
   return (voce && NOMI_DOCUMENTO[voce.tipo]) || 'rapportino';
@@ -4747,7 +4775,8 @@ function comeSiChiama(voce) {
 // Prova a svuotare la coda. Silenziosa di suo: viene chiamata all'avvio, al
 // ritorno della rete e ogni tanto, e non deve interrompere chi sta lavorando.
 async function svuotaCoda({ avvisa = false } = {}) {
-  if (!invioInCorso && preparaCopiaDelGiorno()) await salvaDB({ conta: false });
+  // Tutte e due, non la seconda solo se la prima non ha accodato niente.
+  if (!invioInCorso && (preparaCopiaDelGiorno() | preparaSettoriPerUfficio())) await salvaDB({ conta: false });
   if (invioInCorso || !DB.coda.length) return;
   if (!navigator.onLine) { if (avvisa) showToast('📭 Nessuna rete: quello che c\'è parte appena torna'); return; }
   invioInCorso = true;
@@ -4758,8 +4787,11 @@ async function svuotaCoda({ avvisa = false } = {}) {
         // La copia di sicurezza si fa al momento di partire, non quando entra in
         // coda: sarebbe vecchia, e una copia di tutto il database dentro il
         // database ne raddoppierebbe il peso, che in localStorage è contato.
-        await consegnaRapportino(voce.tipo === 'backup' ? costruisciCopiaSicurezza() : voce.doc);
+        const mandato = voce.tipo === 'backup' ? costruisciCopiaSicurezza()
+          : voce.tipo === 'settori' ? costruisciSettoriDaMandare() : voce.doc;
+        await consegnaRapportino(mandato);
         DB.coda = DB.coda.filter(v => v !== voce);
+        if (voce.tipo === 'settori') META.settoriMandati = improntaSettori(mandato);
         if (voce.tipo === 'backup') {
           META.ultimoBackup = META.ultimaCopiaAutomatica = new Date().toISOString();
           META.modificheDalBackup = 0;

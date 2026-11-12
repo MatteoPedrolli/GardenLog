@@ -323,9 +323,11 @@ try {
     catch (e) { return e.message.includes('indirizzo'); }
   }));
 
-  // La copia di sicurezza del giorno parte anche lei da questa coda: qui si
-  // contano i rapportini, quindi la si segna già fatta. Ha le sue prove più avanti.
-  await page.evaluate(u => { DB.impostazioni.UrlRapportini = u; META.ultimaCopiaAutomatica = new Date().toISOString(); }, CONSEGNA);
+  // La copia di sicurezza del giorno e i settori per l'ufficio partono anche loro
+  // da questa coda: qui si contano i rapportini, quindi li si segna già mandati.
+  // Hanno le loro prove più avanti.
+  await page.evaluate(u => { DB.impostazioni.UrlRapportini = u; META.ultimaCopiaAutomatica = new Date().toISOString();
+    META.settoriMandati = improntaSettori(settoriPerUfficio()); }, CONSEGNA);
   await page.evaluate(async () => { accodaRapportino(DB.visite[0]); await salvaDB({ conta: false }); renderAll(); });
   ok('il rapportino entra in coda', await page.evaluate(() => DB.coda.length) === 1);
   ok('la visita si vede che è da consegnare',
@@ -1442,6 +1444,54 @@ try {
     copiaAuto.svuotata && copiaAuto.segnata && copiaAuto.testo.includes('oggi'), JSON.stringify(copiaAuto));
   ok('non riparte lo stesso giorno né il giorno dopo senza modifiche, sì con le modifiche',
     copiaAuto.oggiNo && copiaAuto.ieriSenzaModificheNo && copiaAuto.ieriConModificheSi, JSON.stringify(copiaAuto));
+
+  // ── i settori vanno in ufficio da soli ──
+  // Si esportavano a mano, e in ufficio le operazioni restavano quelle di mesi
+  // prima. Adesso partono dalla coda quando cambiano, e solo allora.
+  const settoriAuto = await page.evaluate(async () => {
+    const codaPrima = DB.coda.slice(), metaPrima = { ...META }, urlPrima = DB.impostazioni.UrlRapportini, fetchPrima = window.fetch;
+    const r = {};
+    DB.coda = [];
+    META.ultimaCopiaAutomatica = new Date().toISOString();
+    META.settoriMandati = null;
+    DB.impostazioni.UrlRapportini = '';
+    r.senzaIndirizzoNo = !preparaSettoriPerUfficio();
+    DB.impostazioni.UrlRapportini = 'https://consegna.esempio.invalid/exec';
+    const mandati = [];
+    window.fetch = async (url, opz) => { mandati.push(JSON.parse(opz.body)); return new Response('{"status":"ok"}'); };
+    await svuotaCoda();
+    const m = mandati.find(d => d.tipo === 'settori');
+    r.partito = !!m && m.versione === 1 && m.id === 'settori-' + dispositivo() && m.settori.length === settoriPerRilievo().length;
+    r.operazioni = !!m && Array.isArray(m.operazioni) && m.operazioni.length === operazioniPerRilievo().length;
+    r.leggeUfficio = !!m && m.settori.every(st => st.id && st.nome && Array.isArray(st.lavorazioni));
+    r.svuotata = !DB.coda.some(v => v.tipo === 'settori');
+    r.ricordato = !!META.settoriMandati;
+    // Uguali, non ripartono.
+    mandati.length = 0;
+    await svuotaCoda();
+    r.ugualiNo = !mandati.some(d => d.tipo === 'settori');
+    // Cambiati, sì: un tipo nuovo in un settore.
+    const st = DB.settori.find(x => !isSi(x.Libero) && x.Tipi), tipiPrima = st.Tipi;
+    const altro = DB.tipiOperazione.find(t => !st.Tipi.split(',').includes(t.TipoID));
+    st.Tipi = st.Tipi + ',' + altro.TipoID;
+    r.nome = (preparaSettoriPerUfficio(), comeSiChiama(DB.coda.find(v => v.tipo === 'settori')));
+    r.unaSola = !preparaSettoriPerUfficio() && DB.coda.filter(v => v.tipo === 'settori').length === 1;
+    await svuotaCoda();
+    const m2 = mandati.find(d => d.tipo === 'settori');
+    r.cambiatiSi = !!m2 && m2.settori.find(x => x.id === st.SettoreID).lavorazioni.some(l => l.tipoID === altro.TipoID);
+    st.Tipi = tipiPrima;
+    window.fetch = fetchPrima;
+    DB.coda = codaPrima;
+    DB.impostazioni.UrlRapportini = urlPrima;
+    META = metaPrima;
+    await salvaDB({ conta: false });
+    return r;
+  });
+  ok('senza indirizzo dello script i settori non entrano in coda', settoriAuto.senzaIndirizzoNo, JSON.stringify(settoriAuto));
+  ok('con l\'indirizzo partono da soli, coi settori e le operazioni, nel formato che l\'ufficio legge',
+    settoriAuto.partito && settoriAuto.operazioni && settoriAuto.leggeUfficio && settoriAuto.svuotata && settoriAuto.ricordato, JSON.stringify(settoriAuto));
+  ok('uguali non ripartono; cambiati sì, una volta, col loro nome nella coda',
+    settoriAuto.ugualiNo && settoriAuto.cambiatiSi && settoriAuto.unaSola && settoriAuto.nome === 'settori per l\'ufficio', JSON.stringify(settoriAuto));
 
   // ── pagato sul posto ──
   // Un cliente che paga subito, in contanti: il telefono scarica una copia del
@@ -6725,6 +6775,36 @@ try {
     };
     const senzaChiaveSulloScript = provaScript({});
     const conChiave = provaScript({ CHIAVE_LETTURA: 'segreta' });
+    // I settori del telefono vanno nella cartella GiardinoApp, col nome che
+    // l'ufficio legge e sempre quello: salvati a mano, Drive aggiungeva «(1)».
+    const provaPost = doc => {
+      const scritti = [], cestinati = [];
+      const cartellaDi = percorso => ({
+        getFoldersByName: n => { let dato = false; return { hasNext: () => !dato, next: () => { dato = true; return cartellaDi(percorso.concat(n)); } }; },
+        createFolder: n => cartellaDi(percorso.concat(n)),
+        getFilesByName: n => { let dato = false; const c = percorso.join('/') + '/' + n;
+          return { hasNext: () => !dato, next: () => { dato = true; return { setTrashed: () => cestinati.push(c) }; } }; },
+        createFile: (n, testo) => scritti.push({ dove: percorso.join('/') + '/' + n, testo }),
+      });
+      const c = {
+        DriveApp: { getRootFolder: () => cartellaDi([]) },
+        PropertiesService: { getScriptProperties: () => ({ getProperty: () => null }) },
+        ContentService: { MimeType: { JSON: 'json' }, createTextOutput: t => ({ testo: t, setMimeType() { return this; } }) },
+      };
+      vm.createContext(c);
+      vm.runInContext(sorgente, c);
+      const risposta = JSON.parse(c.doPost({ postData: { contents: JSON.stringify(doc) } }).testo);
+      return { risposta, scritti, cestinati };
+    };
+    const settoriMandati = provaPost({ tipo: 'settori', versione: 1, id: 'settori-telefono', settori: [{ id: 'prato', nome: 'Prato' }], operazioni: [] });
+    ok('lo script scrive i settori in GiardinoApp, sopra quelli di prima, col nome che l\'ufficio legge',
+      settoriMandati.risposta.status === 'ok' && settoriMandati.scritti.length === 1 &&
+      settoriMandati.scritti[0].dove === 'GiardinoApp/settori-dal-telefono.json' &&
+      settoriMandati.cestinati.includes('GiardinoApp/settori-dal-telefono.json'), JSON.stringify(settoriMandati));
+    ok('e lo dice nella risposta di controllo, versione 10',
+      JSON.parse(conChiave({})).accetta.includes('settori') && JSON.parse(conChiave({})).versione === 10);
+    ok('un tipo sconosciuto resta respinto',
+      provaPost({ tipo: 'lavagna', id: 'x' }).risposta.status === 'error');
     ok('lo script senza chiave impostata non consegna i sopralluoghi a nessuno',
       !senzaChiaveSulloScript({ documento: 'sopralluoghi', chiave: '' }).includes('333') &&
       !senzaChiaveSulloScript({ documento: 'sopralluoghi', chiave: 'qualunque' }).includes('333'),
@@ -6748,7 +6828,7 @@ try {
       !senzaChiaveSulloScript({ documento: 'listino', chiave: '' }).includes('"prezzo"') &&
       !conChiave({ documento: 'listino', chiave: 'altra' }).includes('"prezzo"') &&
       conChiave({ documento: 'listino', chiave: 'segreta' }).includes('"prezzo"') &&
-      JSON.parse(conChiave({})).versione === 9);
+      JSON.parse(conChiave({})).versione >= 9);
     ok('l\'agenda resta leggibile senza chiave, come prima',
       senzaChiaveSulloScript({ documento: 'agenda' }).includes('"tipo":"agenda"'));
     // Il nome del file non si prende mai da chi chiama.
