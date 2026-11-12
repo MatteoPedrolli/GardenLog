@@ -200,6 +200,15 @@ select.tipo-riga {
 select.tipo-riga:hover, select.tipo-riga:focus { border-color: var(--border); background: var(--white); }
 /* E la ✕ non sta attaccata all'importo. */
 table.elenco td.via-col { padding-left: 14px; width: 38px; }
+/* Su e giù accanto alla ✕: l'ordine delle righe è quello del foglio che va al
+   cliente, e si decide qui. */
+.comandi-riga { display: flex; flex-direction: column; align-items: center; gap: 2px; }
+.comandi-riga button.sposta { border: none; background: none; cursor: pointer; padding: 1px 6px;
+  font-size: 0.9rem; color: var(--text-mid); line-height: 1.1; }
+.comandi-riga button.sposta:hover:not(:disabled) { color: var(--inchiostro); }
+.comandi-riga button.sposta:disabled { opacity: 0.25; cursor: default; }
+tr.componenti.aggiungi-componente td { border-bottom: none; padding-top: 6px; }
+tr.componenti select.aggiungi-componente { width: auto; font-size: 0.78rem; padding: 3px 6px; }
 /* Una tariffa non entra nel totale: si vede che è di un'altra natura. */
 tr.riga-tariffa td { background: var(--foglio); }
 /* I componenti di una riga a corpo: sotto la riga, più piccoli e rientrati. Sono
@@ -2541,6 +2550,17 @@ function riassuntoRicontrolla() {
 // non si legge, e quello che non si legge tanto vale non scriverlo.
 const NOVITA = [
   {
+    versione: '2026-11-12',
+    data: '2026-11-12',
+    titolo: 'Il preventivo si modifica tutto',
+    righe: [
+      'Ogni riga del preventivo ha **▲ e ▼** per spostarla: l\'ordine è quello del foglio che va al cliente.',
+      '**+ Voce libera** per quello che non è né un\'operazione né una voce di listino, e **+ Capitolo a corpo** per una voce da riempire coi suoi componenti.',
+      'Dentro ogni voce a corpo un componente **si toglie con la ✕**, e se ne aggiunge un altro da **«+ Aggiungi a questa voce…»**: un materiale, un\'operazione o una cosa scritta a mano.',
+      'Se dal campo arriva il rilievo corretto, **ordine, righe tolte e componenti aggiunti restano**. Una lavorazione del campo tolta si riprende dal menù «+ Aggiungi».',
+    ],
+  },
+  {
     versione: '2026-11-11',
     data: '2026-11-11',
     titolo: 'Il telefono di chi prenota',
@@ -3599,11 +3619,18 @@ function componentePianta(l, p) {
 const DA_SCEGLIERE = 'da scegliere in ufficio';
 const SCRITTE_IN_UFFICIO = 'scritte in ufficio';
 
-function componentiLavorazione(l, vecchi) {
+// `tolti`: i componenti che l'ufficio ha tolto da questa riga. Rifacendo il
+// preventivo da un rilievo corretto non tornano: chi li ha tolti sapeva perché.
+// Quelli aggiunti qui (`aggiunta`) restano, come le piante in più dell'aiuola.
+function componentiLavorazione(l, vecchi, tolti) {
   const prima = Array.isArray(vecchi) ? vecchi : [];
+  const via = new Set(tolti || []);
   const comp = [];
   const settore = l.genere === 'insieme' && !!l.insieme;
+  const aggiunte = () => prima.filter(x => x.aggiunta && !comp.some(y => y.chiave === x.chiave))
+    .forEach(x => comp.push({ ...x }));
   const metti = c => {
+    if (via.has(c.chiave)) return;
     const gia = prima.find(x => x.chiave === c.chiave);
     const prezzo = prezzoDiListino(c.voceID);
     comp.push({
@@ -3636,7 +3663,8 @@ function componentiLavorazione(l, vecchi) {
         }));
         // Le altre piante dell'aiuola, aggiunte in ufficio: restano quando il
         // campo rimanda il rilievo, come i prezzi decisi qui.
-        prima.filter(x => x.aggiunta).forEach(x => metti(componentePianta(l, { ...x, base: x.base || 'Piante' })));
+        prima.filter(x => x.aggiunta && x.voceID === VOCE_PIANTE)
+          .forEach(x => metti(componentePianta(l, { ...x, base: x.base || 'Piante' })));
         return;
       }
       if (c.voceID === VOCE_MANODOPERA) return;
@@ -3661,6 +3689,7 @@ function componentiLavorazione(l, vecchi) {
         calcolo: l.unita && l.misura > 0 ? 'come la misura: ' + scriviNumero(l.misura) + ' ' + l.unita
           : 'da scrivere in ufficio' });
     });
+    aggiunte();
     comp.push(manodoperaSettore(l, comp, prima.find(x => x.chiave === VOCE_MANODOPERA)));
     return comp;
   }
@@ -3675,6 +3704,7 @@ function componentiLavorazione(l, vecchi) {
     metti({ chiave: VOCE_MANODOPERA, voceID: VOCE_MANODOPERA, voce: (mano && mano.voce) || 'Manodopera',
       unita: 'h', quantita: l.ore, calcolo: 'ore stimate in giardino' });
   }
+  aggiunte();
   return comp;
 }
 
@@ -3781,7 +3811,8 @@ function rigaDaLavorazione(l, giaFatta) {
       lavorazione: l,
     };
   }
-  const componenti = componentiLavorazione(l, giaFatta && giaFatta.componenti);
+  const tolti = (giaFatta && Array.isArray(giaFatta.tolti)) ? giaFatta.tolti : [];
+  const componenti = componentiLavorazione(l, giaFatta && giaFatta.componenti, tolti);
   const somma = sommaComponenti(componenti);
   const deciso = giaFatta && !giaFatta.proposto && giaFatta.prezzo !== '' && giaFatta.prezzo != null;
   // Il prezzo proposto è la somma dei componenti a listino, e segue la somma
@@ -3797,15 +3828,33 @@ function rigaDaLavorazione(l, giaFatta) {
     soluzione: (giaFatta && giaFatta.soluzione) || '',
     lavorazione: l,
     componenti,
+    ...(tolti.length ? { tolti } : {}),
   };
 }
 
-function righePreventivo(rilievo, vecchie) {
+// Rifacendo il preventivo da un rilievo corretto **l'ordine resta quello deciso
+// qui**: le righe del campo si rifanno al loro posto, quelle dell'ufficio — titoli
+// di sezione, voci libere — restano dove sono. Prima finivano tutte in fondo, e un
+// titolo di sezione si staccava dalle righe che introduceva. Una lavorazione nuova
+// entra dopo l'ultima del campo; una tolta qui (`tolte`) non torna, una tolta dal
+// campo sparisce.
+function righePreventivo(rilievo, vecchie, tolte) {
   const prima = Array.isArray(vecchie) ? vecchie : [];
-  const righe = (rilievo.lavorazioni || []).map(l =>
-    rigaDaLavorazione(l, prima.find(x => x.chiave && x.chiave === l.id)));
-  // Le righe aggiunte in ufficio non nascono dal rilievo e restano dove sono.
-  prima.filter(r => !r.chiave).forEach(r => righe.push({ ...r }));
+  const via = new Set(tolte || []);
+  const lavorazioni = (rilievo.lavorazioni || []).filter(l => !via.has(l.id));
+  const righe = [];
+  const usate = new Set();
+  let dopoIlCampo = 0;
+  prima.forEach(r => {
+    if (!r.chiave) { righe.push({ ...r }); return; }
+    const l = lavorazioni.find(x => x.id === r.chiave);
+    if (!l) return;
+    usate.add(l.id);
+    righe.push(rigaDaLavorazione(l, r));
+    dopoIlCampo = righe.length;
+  });
+  const nuove = lavorazioni.filter(l => !usate.has(l.id)).map(l => rigaDaLavorazione(l, null));
+  righe.splice(dopoIlCampo, 0, ...nuove);
   return righe;
 }
 
@@ -3831,8 +3880,11 @@ function costruisciPreventivo(rilievo, precedente) {
     // Vuoto è il caso normale: quasi tutti i preventivi hanno un totale solo.
     soluzioni: (precedente && Array.isArray(precedente.soluzioni)) ? precedente.soluzioni : [],
     scelta: (precedente && precedente.scelta) || '',
-    righe: precedente ? righePreventivo(rilievo, precedente.righe)
+    righe: precedente ? righePreventivo(rilievo, precedente.righe, precedente.tolte)
       : righePreventivo(rilievo, null).concat(rigaTrasferimento()),
+    // Le lavorazioni del rilievo tolte dal preventivo: un rilievo corretto non le
+    // rimette. Si riprendono dal menù «+ Aggiungi», fra quelle tolte.
+    tolte: (precedente && Array.isArray(precedente.tolte)) ? precedente.tolte : [],
     note: (precedente && precedente.note) || '',
     // Quello che l'ufficio ha scritto sul preventivo e il rilievo non sa: le note
     // per il cantiere e le versioni già mandate al cliente. Rifacendolo da un
@@ -4132,6 +4184,8 @@ function righeComponenti(r, i) {
               perValore(formattaQuantita(c.sesto)) + '" ' +
               'oninput="modificaSestoComponente(' + i + ', ' + j + ', this.value)" aria-label="sesto"> m fra le piante</span>' : '') +
           '</span>'
+        : c.libera ? '<input type="text" value="' + perValore(c.voce) + '" placeholder="Cosa" ' +
+            'oninput="modificaTestoComponente(' + i + ', ' + j + ', \'voce\', this.value)" aria-label="voce">'
         : perValore(c.voce)) +
         '<div class="meta" id="calc-comp-' + i + '-' + j + '">' + perValore(c.calcolo || '') + '</div></td>' +
       '<td class="num ore">' + (mano
@@ -4146,15 +4200,19 @@ function righeComponenti(r, i) {
         : '<input type="text" inputmode="decimal" class="stretto" id="qta-comp-' + i + '-' + j + '" value="' +
           perValore(formattaQuantita(c.quantita)) + '" ' +
           'oninput="modificaComponente(' + i + ', ' + j + ', \'quantita\', this.value)" aria-label="quantità">') + '</td>' +
-      '<td>' + perValore(c.unita) + '</td>' +
+      '<td>' + (c.libera ? '<input type="text" class="stretto" value="' + perValore(c.unita) + '" placeholder="UM" ' +
+          'oninput="modificaTestoComponente(' + i + ', ' + j + ', \'unita\', this.value)" aria-label="unità">'
+        : perValore(c.unita)) + '</td>' +
       '<td class="num">' + (c.soloOre ? '' : '<input type="text" inputmode="decimal" class="stretto" value="' +
         perValore(formattaQuantita(c.prezzo)) + '" ' +
         'oninput="modificaComponente(' + i + ', ' + j + ', \'prezzo\', this.value)" aria-label="prezzo">') + '</td>' +
       '<td></td>' +
       '<td class="num importo" id="imp-comp-' + i + '-' + j + '">' + (c.soloOre ? '' :
         (imp == null ? '<span class="meta">—</span>' : formattaEuro(imp))) + '</td>' +
-      '<td class="via-col">' + (c.aggiunta ? '<button class="via" onclick="togliPiantaComponente(' + i + ', ' + j + ')" ' +
-        'title="Togli questa pianta">✕</button>' : '') + '</td>' +
+      // Si toglie tutto tranne la manodopera del settore, che è una somma: le sue
+      // ore di cantiere si portano a zero.
+      '<td class="via-col">' + (mano ? '' : '<button class="via" onclick="togliComponente(' + i + ', ' + j + ')" ' +
+        'title="Togli dalla voce">✕</button>') + '</td>' +
     '</tr>';
     // Un'altra pianta si aggiunge dove si guarda, sotto l'ultima: in fondo alla
     // riga stava dopo telo e manodopera, lontano da quello che si stava scrivendo.
@@ -4163,6 +4221,18 @@ function righeComponenti(r, i) {
         '<button class="secondaria piccola" onclick="aggiungiPiantaComponente(' + i + ')">+ Un\'altra pianta</button></td></tr>';
     }
   });
+  // Un materiale, un'operazione o una cosa scritta a mano dentro questa voce: il
+  // campo non ha visto tutto, e il preventivo lo fa l'ufficio.
+  const operazioni = operazioniConosciute();
+  html += '<tr class="componenti aggiungi-componente"><td colspan="8">' +
+    '<select class="aggiungi-componente" onchange="aggiungiComponente(' + i + ', this.value); this.value=\'\'">' +
+      '<option value="">+ Aggiungi a questa voce…</option>' +
+      '<option value="libera">Una cosa scritta a mano</option>' +
+      (operazioni.length ? '<optgroup label="Operazioni">' + operazioni.map(t => '<option value="operazione:' +
+        perValore(t.tipoID) + '">' + perValore(t.nome) + '</option>').join('') + '</optgroup>' : '') +
+      '<optgroup label="Voci di listino">' + LISTINO.voci.filter(v => v.voceID !== VOCE_MANODOPERA || !settore)
+        .map(v => '<option value="voce:' + perValore(v.voceID) + '">' + perValore(v.voce) + '</option>').join('') +
+      '</optgroup></select></td></tr>';
   return html;
 }
 
@@ -4250,12 +4320,66 @@ function aggiungiPiantaComponente(i) {
   aggiornaRigaACorpo(i);
 }
 
-function togliPiantaComponente(i, j) {
+function togliPiantaComponente(i, j) { togliComponente(i, j); }
+
+// Un componente tolto da una riga del campo si ricorda (`tolti`), o un rilievo
+// corretto lo rimetterebbe; uno aggiunto qui se ne va e basta. La manodopera del
+// settore resta: è la somma delle ore, e si porta a zero.
+function togliComponente(i, j) {
   const r = PREVENTIVO.doc.righe[i];
-  if (!r || !r.componenti[j] || !r.componenti[j].aggiunta) return;
+  const c = r && Array.isArray(r.componenti) && r.componenti[j];
+  if (!c || c.manodoperaSettore) return;
+  if (!c.aggiunta && c.chiave && r.lavorazione) {
+    r.tolti = (Array.isArray(r.tolti) ? r.tolti : []).filter(k => k !== c.chiave).concat([c.chiave]);
+  }
   r.componenti.splice(j, 1);
+  ricalcolaManodoperaSettore(i);
   disegnaPreventivo();
   aggiornaRigaACorpo(i);
+}
+
+// Dentro una voce a corpo si aggiunge quello che il campo non ha visto: un
+// materiale di listino, un'operazione — con la sua voce, o solo ore in un settore —
+// o una cosa scritta a mano. Sta prima della manodopera del settore, che è in fondo
+// perché è la somma, e resta quando il campo rimanda il rilievo.
+function aggiungiComponente(i, valore) {
+  const r = PREVENTIVO.doc.righe[i];
+  if (!r || !Array.isArray(r.componenti) || !valore) return;
+  const settore = !!(r.lavorazione && r.lavorazione.genere === 'insieme');
+  const daVoce = (voceID, nome) => {
+    const v = voceInListino(voceID);
+    const corpo = voceACorpo(voceID);
+    return { voceID, voce: nome || (v && v.voce) || '', unita: corpo ? '' : ((v && v.unita) || ''),
+      quantita: corpo ? 1 : '', prezzo: prezzoDiListino(voceID) };
+  };
+  let c = null;
+  if (valore === 'libera') {
+    c = { voceID: '', voce: '', unita: '', quantita: '', prezzo: '', libera: true };
+  } else if (valore.startsWith('voce:')) {
+    c = daVoce(valore.slice(5));
+  } else if (valore.startsWith('operazione:')) {
+    const t = operazioniConosciute().find(x => x.tipoID === valore.slice(11));
+    if (!t) return;
+    if (t.voceID && t.voceID !== VOCE_MANODOPERA) c = daVoce(t.voceID, t.nome);
+    // Senza voce è lavoro e basta: in un settore sono ore della voce, che vanno
+    // nella manodopera in fondo; fuori, una riga di manodopera col suo nome.
+    else if (settore) c = { voceID: '', voce: t.nome, unita: '', quantita: '', soloOre: true };
+    else c = { ...daVoce(VOCE_MANODOPERA), voce: t.nome, unita: 'h' };
+  }
+  if (!c) return;
+  c = { chiave: 'agg-' + Date.now().toString(36) + '-' + r.componenti.length, aggiunta: true,
+    quantitaMano: true, prezzoMano: false, calcolo: 'aggiunto in ufficio', ...(settore ? { ore: '' } : {}), ...c };
+  const mano = r.componenti.findIndex(x => x.manodoperaSettore);
+  r.componenti.splice(mano >= 0 ? mano : r.componenti.length, 0, c);
+  ricalcolaManodoperaSettore(i);
+  disegnaPreventivo();
+  aggiornaRigaACorpo(i);
+}
+
+function modificaTestoComponente(i, j, campo, valore) {
+  const r = PREVENTIVO.doc.righe[i];
+  const c = r && Array.isArray(r.componenti) && r.componenti[j];
+  if (c && c.libera) c[campo] = valore;
 }
 
 function modificaComponente(i, j, campo, valore) {
@@ -4508,6 +4632,15 @@ function rigaTrasferimento() {
 // voce di listino, che per una potatura non c'è.
 function aggiungiDalListinoPreventivo(valore) {
   if (!valore) return;
+  if (valore.startsWith('rilievo:')) {
+    const d = PREVENTIVO.doc;
+    const l = lavorazioniTolte(d).find(x => x.id === valore.slice(8));
+    if (!l) return;
+    d.tolte = d.tolte.filter(k => k !== l.id);
+    d.righe.push(rigaDaLavorazione(l, null));
+    disegnaPreventivo();
+    return;
+  }
   if (valore.startsWith('operazione:')) {
     const t = operazioniConosciute().find(x => x.tipoID === valore.slice(11));
     if (!t) return;
@@ -4523,8 +4656,47 @@ function aggiungiSezionePreventivo() {
   disegnaPreventivo();
 }
 
+// Una riga del campo tolta si ricorda (`tolte`), o il rilievo corretto la
+// rimetterebbe; si riprende dal menù «+ Aggiungi», fra quelle tolte.
 function togliRigaPreventivo(i) {
-  PREVENTIVO.doc.righe.splice(i, 1);
+  const d = PREVENTIVO.doc;
+  const r = d.righe[i];
+  if (!r) return;
+  if (r.chiave && r.lavorazione) d.tolte = (Array.isArray(d.tolte) ? d.tolte : []).filter(k => k !== r.chiave).concat([r.chiave]);
+  d.righe.splice(i, 1);
+  disegnaPreventivo();
+}
+
+// L'ordine delle righe è quello del foglio che va al cliente: si decide qui, una
+// riga alla volta, e una voce a corpo si porta dietro i suoi componenti.
+function spostaRigaPreventivo(i, verso) {
+  const righe = PREVENTIVO && PREVENTIVO.doc.righe;
+  const j = i + verso;
+  if (!righe || !righe[i] || j < 0 || j >= righe.length) return;
+  [righe[i], righe[j]] = [righe[j], righe[i]];
+  disegnaPreventivo();
+}
+
+function lavorazioniTolte(d) {
+  const tolte = new Set(Array.isArray(d.tolte) ? d.tolte : []);
+  return ((d.daRilievo && d.daRilievo.lavorazioni) || []).filter(l => tolte.has(l.id) &&
+    !d.righe.some(r => r.chiave === l.id));
+}
+
+// Quello che non è un'operazione né una voce di listino: si scrive tutto a mano,
+// anche l'unità.
+function aggiungiRigaLiberaPreventivo() {
+  PREVENTIVO.doc.righe.push({ chiave: '', voceID: '', voce: '', descrizione: '', quantita: '', unita: '',
+    prezzo: '', proposto: false, tipo: 'totale', soluzione: '', libera: true });
+  disegnaPreventivo();
+}
+
+// Una voce a corpo vuota, da riempire coi suoi componenti: il capitolo che il
+// campo non ha portato — «Sistemazione ingresso» — col prezzo che segue la somma
+// finché nessuno lo decide.
+function aggiungiCapitoloPreventivo() {
+  PREVENTIVO.doc.righe.push({ chiave: '', voceID: '', voce: '', descrizione: '', quantita: 1, unita: 'a corpo',
+    prezzo: '', proposto: false, tipo: 'totale', soluzione: '', componenti: [] });
   disegnaPreventivo();
 }
 
@@ -4617,7 +4789,11 @@ function disegnaPreventivo() {
           '<input type="text" inputmode="decimal" class="stretto" value="' +
           perValore(formattaQuantita(r.quantita)) + '" ' +
           'oninput="modificaRigaPreventivo(' + i + ', \'quantita\', this.value)">') + '</td>' +
-        '<td style="white-space:nowrap">' + perValore(r.unita) + '</td>' +
+        '<td style="white-space:nowrap">' + (r.libera
+          // Una voce libera non ha un'unità dal listino: la si scrive.
+          ? '<input type="text" class="stretto" value="' + perValore(r.unita) + '" placeholder="UM" ' +
+            'oninput="modificaRigaPreventivo(' + i + ', \'unita\', this.value)" aria-label="unità">'
+          : perValore(r.unita)) + '</td>' +
         '<td class="num"><input type="text" inputmode="decimal" class="stretto prezzo' +
           (r.proposto ? ' proposto' : '') + '" id="prezzo-riga-' + i + '" value="' + perValore(formattaQuantita(r.prezzo)) + '" ' +
           'oninput="modificaPrezzoRiga(' + i + ', this.value, this)"></td>' +
@@ -4625,7 +4801,12 @@ function disegnaPreventivo() {
             'title="Va bene così">✓</button>' : '') + '</td>' +
         '<td class="num importo" id="imp-riga-' + i + '">' + (r.tipo === 'tariffa' ? '<span class="meta">fuori totale</span>' :
           (imp == null ? '<span class="meta">—</span>' : formattaEuro(imp))) + '</td>') +
-      '<td class="via-col"><button class="via" onclick="togliRigaPreventivo(' + i + ')" title="Togli">✕</button></td>' +
+      '<td class="via-col"><div class="comandi-riga">' +
+        '<button class="sposta" onclick="spostaRigaPreventivo(' + i + ', -1)" title="Sposta su"' + (i === 0 ? ' disabled' : '') + '>▲</button>' +
+        '<button class="via" onclick="togliRigaPreventivo(' + i + ')" title="Togli">✕</button>' +
+        '<button class="sposta" onclick="spostaRigaPreventivo(' + i + ', 1)" title="Sposta giù"' +
+          (i === d.righe.length - 1 ? ' disabled' : '') + '>▼</button>' +
+      '</div></td>' +
     '</tr>';
     if (corpo) html += righeComponenti(r, i) + rigaTotaleACorpo(r, i);
   });
@@ -4648,13 +4829,20 @@ function disegnaPreventivo() {
   html += '<div class="meta" id="fuori-totale">' + (senzaPrezzo
     ? senzaPrezzo + (senzaPrezzo === 1 ? ' riga senza prezzo' : ' righe senza prezzo') : '') + '</div>';
   const operazioni = operazioniConosciute();
+  const tolteDalCampo = lavorazioniTolte(d);
   html += '<select onchange="aggiungiDalListinoPreventivo(this.value); this.value=\'\'" style="margin-top:10px">' +
     '<option value="">+ Aggiungi un\'operazione o una voce di listino…</option>' +
+    (tolteDalCampo.length ? '<optgroup label="Dal rilievo, tolte">' + tolteDalCampo.map(l => '<option value="rilievo:' +
+      perValore(l.id) + '">' + perValore(l.nome || 'Lavorazione') + '</option>').join('') + '</optgroup>' : '') +
     (operazioni.length ? '<optgroup label="Operazioni">' + operazioni.map(t => '<option value="operazione:' + perValore(t.tipoID) + '">' +
       perValore(t.nome) + perValore(etichettaOperazione(t)) + '</option>').join('') + '</optgroup>' : '') +
     '<optgroup label="Voci di listino">' +
     LISTINO.voci.map(v => '<option value="voce:' + perValore(v.voceID) + '">' + perValore(v.voce) + '</option>').join('') +
     '</optgroup></select>';
+  // Quello che non sta né fra le operazioni né in listino: si scrive a mano.
+  html += ' <button class="secondaria" onclick="aggiungiRigaLiberaPreventivo()">+ Voce libera</button>';
+  html += ' <button class="secondaria" onclick="aggiungiCapitoloPreventivo()" ' +
+    'title="Una voce a corpo da riempire coi suoi componenti">+ Capitolo a corpo</button>';
   html += ' <button class="secondaria" onclick="aggiungiSezionePreventivo()">+ Titolo di sezione</button>';
   html += '</div>';
 
@@ -5098,7 +5286,9 @@ function materialiDaOrdinare(righe) {
     somma.set(k, prima);
   };
   righe.forEach(({ r }) => {
-    if (!Array.isArray(r.componenti) || !r.lavorazione || r.lavorazione.genere !== 'insieme') return;
+    // I settori e i capitoli scritti in ufficio: le loro voci sono materiale da
+    // comprare. Una voce a misura con le sue ore no — il verde non si ordina.
+    if (!Array.isArray(r.componenti) || (r.lavorazione && r.lavorazione.genere !== 'insieme')) return;
     r.componenti.filter(c => c.voceID !== VOCE_MANODOPERA && !c.soloOre).forEach(c => aggiungi(c.voce, c.quantita, c.unita));
   });
   return [...somma.values()];

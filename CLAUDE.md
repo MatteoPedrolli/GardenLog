@@ -1040,6 +1040,25 @@ ogni lavoro, e doverlo aggiungere era il modo per dimenticarlo. Entra una volta,
 quando il preventivo nasce (`rigaTrasferimento()`), come riga dell'ufficio: chi lo
 toglie non se lo ritrova riaprendo; senza prezzo in listino è un buco, non una proposta.
 
+**Il preventivo si modifica tutto, e un rilievo corretto non lo disfa.** Ogni riga ha
+**▲ ▼** accanto alla ✕ (`spostaRigaPreventivo()`): l'ordine è quello del foglio che va al
+cliente, e una voce a corpo si porta dietro i suoi componenti. **«+ Voce libera»**
+(`libera`) è quello che non sta né fra le operazioni né in listino, con l'unità scritta a
+mano; **«+ Capitolo a corpo»** è una voce a corpo vuota, da riempire, col prezzo che segue
+la somma finché nessuno lo decide. Dentro ogni voce a corpo un componente **si toglie** con
+la sua ✕ (`togliComponente()`) — tranne la manodopera del settore, che è la somma delle ore —
+e **se ne aggiunge** un altro da «+ Aggiungi a questa voce…» (`aggiungiComponente()`): un
+materiale di listino, un'operazione (senza voce, in un settore sono ore; fuori, manodopera
+col suo nome) o una cosa scritta a mano. Il campo non vede tutto, e il preventivo lo fa
+l'ufficio. **Rifacendolo dal rilievo corretto** (`righePreventivo()`) l'ordine resta quello
+deciso qui: le righe del campo si rifanno al loro posto, quelle dell'ufficio restano dove sono
+— prima finivano tutte in fondo, e un titolo di sezione si staccava dalle righe che
+introduceva — e una lavorazione nuova entra dopo l'ultima del campo. Una riga del campo tolta
+si ricorda in `tolte` sul preventivo e non torna; si riprende dal menù «+ Aggiungi», fra
+«Dal rilievo, tolte». Un componente tolto si ricorda in `tolti` sulla riga, uno aggiunto porta
+`aggiunta` e resta. Tutti campi arrivati senza alzare `VERSIONE_PREVENTIVO`. I componenti dei
+capitoli scritti in ufficio vanno fra i **materiali da ordinare**, come quelli dei settori.
+
 **Un preventivo si elimina**, col bottone rosso 🗑 (`eliminaPreventivo()`), per la
 prova o il doppione. La conferma dice cosa succede dopo, perché non è sempre lo
 stesso: il rilievo del telefono resta in `rilievi/` — non è dell'ufficio — e il

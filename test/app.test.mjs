@@ -6059,6 +6059,106 @@ try {
   ok('un preventivo di prima porta la manodopera in fondo, con le sue ore come ore di cantiere',
     oreVoce.vecchioDopo === 'piante:,telo-pacciamante:24,manodopera:9', oreVoce.vecchioDopo);
 
+  // Il preventivo si modifica tutto: righe su e giù, voci libere, capitoli a corpo
+  // scritti in ufficio, componenti tolti e aggiunti. E un rilievo corretto non
+  // disfa niente: l'ordine resta, quello tolto resta tolto, quello aggiunto resta.
+  const modifiche = await pagU.evaluate(() => {
+    const prima = PREVENTIVO;
+    const lav = [
+      { id: 'p1', genere: 'insieme', nome: 'Siepe', unita: 'm', misura: 24, ore: 8, stile: 'lauro',
+        insieme: { id: 'siepe', nome: 'Siepe', componenti: [
+          { tipoID: 'piantumazione', nome: 'Piantumazione', voceID: 'piante', voce: 'Piante', unita: 'n' },
+          { tipoID: 'telo-pacciamante', nome: 'Telo pacciamante', voceID: 'telo-pacciamante', voce: 'Telo pacciamante', unita: 'm²' }] } },
+      { id: 'v1', genere: 'manodopera', nome: 'Potatura olivo', ore: 3 },
+    ];
+    const rilievo = leggiRilievo({ tipo: 'rilievo', versione: 1, id: 'ril-mod', revisione: 1, origine: 'ufficio',
+      creato: '2026-11-12T08:00:00Z', cliente: { nome: 'Prova Modifiche' }, lavorazioni: lav });
+    const d = costruisciPreventivo(rilievo, null);
+    PREVENTIVO = { doc: d, file: '', anno: '' };
+    disegnaPreventivo();
+    const r = {};
+    const ordine = () => d.righe.map(x => x.chiave || (x.tipo === 'sezione' ? 'sezione' : x.libera ? 'libera'
+      : Array.isArray(x.componenti) ? 'capitolo' : x.voceID || '?')).join(',');
+    r.inizio = ordine();
+    // Su e giù: il titolo di sezione aggiunto in fondo sale in cima.
+    aggiungiSezionePreventivo();
+    const frecce = [...document.querySelectorAll('#pagina-preventivo .comandi-riga')];
+    r.frecce = frecce.length === d.righe.length && frecce[0].querySelector('button.sposta').disabled &&
+      frecce[frecce.length - 1].querySelectorAll('button.sposta')[1].disabled;
+    for (let i = d.righe.length - 1; i > 0; i--) spostaRigaPreventivo(i, -1);
+    r.sezioneSu = ordine();
+    spostaRigaPreventivo(0, -1);   // la prima non sale oltre
+    r.ferma = ordine() === r.sezioneSu;
+    // Una voce libera: tutto a mano, anche l'unità.
+    aggiungiRigaLiberaPreventivo();
+    const iLib = d.righe.length - 1;
+    const um = [...document.querySelectorAll('#pagina-preventivo tbody tr')].some(tr => tr.querySelector('input[aria-label="unità"]'));
+    modificaRigaPreventivo(iLib, 'descrizione', 'Pulizia del tombino');
+    modificaRigaPreventivo(iLib, 'unita', 'cad');
+    modificaRigaPreventivo(iLib, 'quantita', '2');
+    modificaPrezzoRiga(iLib, '15', null);
+    r.libera = um && importoRiga(d.righe[iLib]) === 30 && d.righe[iLib].unita === 'cad';
+    // Un capitolo a corpo scritto in ufficio, coi suoi componenti: il prezzo segue la somma.
+    aggiungiCapitoloPreventivo();
+    const iCap = d.righe.length - 1;
+    aggiungiComponente(iCap, 'libera');
+    modificaTestoComponente(iCap, 0, 'voce', 'Ghiaia lavata');
+    modificaTestoComponente(iCap, 0, 'unita', 'q');
+    modificaComponente(iCap, 0, 'quantita', '3');
+    modificaComponente(iCap, 0, 'prezzo', '12');
+    r.capitolo = d.righe[iCap].prezzo === 36 && d.righe[iCap].proposto === true && d.righe[iCap].componenti[0].voce === 'Ghiaia lavata';
+    // Nella siepe: via il telo, dentro una cosa scritta a mano, prima della manodopera.
+    const iSiepe = d.righe.findIndex(x => x.chiave === 'p1');
+    const jTelo = d.righe[iSiepe].componenti.findIndex(c => c.voceID === 'telo-pacciamante');
+    togliComponente(iSiepe, jTelo);
+    aggiungiComponente(iSiepe, 'libera');
+    const comp = d.righe[iSiepe].componenti;
+    const jAgg = comp.findIndex(c => c.aggiunta);
+    modificaTestoComponente(iSiepe, jAgg, 'voce', 'Pali tutori');
+    r.siepe = comp.map(c => c.manodoperaSettore ? 'manodopera' : c.aggiunta ? 'aggiunta' : c.chiave).join() &&
+      !comp.some(c => c.voceID === 'telo-pacciamante') && comp[comp.length - 1].manodoperaSettore &&
+      jAgg === comp.length - 2 && JSON.stringify(d.righe[iSiepe].tolti) === '["telo-pacciamante"]';
+    const manoVia = [...document.querySelectorAll('#pagina-preventivo tr.mano-settore button.via')].length;
+    r.manodoperaResta = manoVia === 0;
+    // Via la potatura del campo: si ricorda, e si riprende dal menù.
+    togliRigaPreventivo(d.righe.findIndex(x => x.chiave === 'v1'));
+    r.tolta = JSON.stringify(d.tolte) === '["v1"]' &&
+      !!document.querySelector('#pagina-preventivo optgroup[label="Dal rilievo, tolte"] option[value="rilievo:v1"]');
+    r.prima = ordine();
+    // Il campo rimanda il rilievo con una lavorazione in più.
+    const rev = leggiRilievo({ tipo: 'rilievo', versione: 1, id: 'ril-mod', revisione: 2, origine: 'ufficio',
+      creato: '2026-11-12T08:00:00Z', cliente: { nome: 'Prova Modifiche' },
+      lavorazioni: lav.concat([{ id: 'n1', genere: 'manodopera', nome: 'Taglio prato', ore: 2 }]) });
+    const d2 = costruisciPreventivo(rev, d);
+    const ordine2 = d2.righe.map(x => x.chiave || (x.tipo === 'sezione' ? 'sezione' : x.libera ? 'libera'
+      : Array.isArray(x.componenti) ? 'capitolo' : x.voceID || '?')).join(',');
+    r.dopo = ordine2;
+    const siepe2 = d2.righe.find(x => x.chiave === 'p1');
+    r.siepeDopo = !siepe2.componenti.some(c => c.voceID === 'telo-pacciamante') &&
+      siepe2.componenti.some(c => c.aggiunta && c.voce === 'Pali tutori') &&
+      siepe2.componenti[siepe2.componenti.length - 1].manodoperaSettore;
+    r.capitoloDopo = ((d2.righe.find(x => Array.isArray(x.componenti) && !x.chiave) || { componenti: [] }).componenti[0] || {}).voce === 'Ghiaia lavata';
+    // Rimessa dal menù, la potatura torna.
+    aggiungiDalListinoPreventivo('rilievo:v1');
+    r.rimessa = d.righe.some(x => x.chiave === 'v1') && d.tolte.length === 0;
+    PREVENTIVO = prima;
+    disegnaPreventivo();
+    return r;
+  });
+  ok('le righe del preventivo si spostano su e giù, e la prima non sale oltre',
+    modifiche.frecce && modifiche.sezioneSu.startsWith('sezione,') && modifiche.ferma, JSON.stringify(modifiche));
+  ok('una voce libera si scrive tutta a mano, anche l\'unità', modifiche.libera, JSON.stringify(modifiche));
+  ok('un capitolo a corpo scritto in ufficio si riempie coi suoi componenti, e il prezzo segue la somma',
+    modifiche.capitolo, JSON.stringify(modifiche));
+  ok('dentro una voce si toglie un componente e se ne aggiunge un altro, prima della manodopera che resta',
+    modifiche.siepe && modifiche.manodoperaResta, JSON.stringify(modifiche));
+  ok('una riga del campo tolta si ricorda, e si riprende dal menù', modifiche.tolta && modifiche.rimessa, JSON.stringify(modifiche));
+  ok('il rilievo corretto tiene l\'ordine deciso: la nuova lavorazione dopo l\'ultima del campo, la tolta non torna',
+    modifiche.dopo === 'sezione,p1,n1,trasferimento,libera,capitolo' && modifiche.prima === 'sezione,p1,trasferimento,libera,capitolo',
+    modifiche.prima + ' → ' + modifiche.dopo);
+  ok('e nella voce restano tolto il componente tolto e aggiunto quello aggiunto, anche nei capitoli dell\'ufficio',
+    modifiche.siepeDopo && modifiche.capitoloDopo, JSON.stringify(modifiche));
+
   // ── LE SINGOLE OPERAZIONI IN UFFICIO ──
   // Nel nuovo rilievo e nel preventivo si aggiungono anche le operazioni da sole.
   // Il trattamento è a corpo nel listino: vale 1, e non chiede ore né misura.
