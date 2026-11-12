@@ -815,6 +815,10 @@ const CARTELLA_ARCHIVIO = 'archivio';
 const FILE_LISTINO = 'listino.json';
 // Le frasi per le descrizioni dei preventivi: solo dell'ufficio, come il listino.
 const FILE_FRASI = 'frasi-preventivo.json';
+// I materiali d'irrigazione coi prezzi d'acquisto, per codice del fornitore: solo
+// dell'ufficio come il listino, ma in un file suo — sono centinaia di articoli, e il
+// listino viaggia fino al telefono per chi paga sul posto.
+const FILE_LISTINO_IRRIGAZIONE = 'listino-irrigazione.json';
 const FILE_IMPOSTAZIONI = 'impostazioni.json';
 const FILE_LAVAGNA = 'lavagna.json';
 // L'agenda che l'ufficio manda in cantiere: la scrive qui, il telefono la legge
@@ -873,6 +877,8 @@ let LISTINO = { tipo: 'listino', versione: 1, voci: [], prodotti: [], ricette: {
 // resta da salvare, nessuna rilettura della cartella lo deve sovrascrivere: un
 // prezzo appena battuto che sparisce a un Ricontrolla è lavoro perso in silenzio.
 let LISTINO_DA_SALVARE = false;
+let IRRIGAZIONE = { ricarico: '', articoli: [] };
+let IRRIGAZIONE_DA_SALVARE = false;
 let IMPOSTAZIONI = { ...IMPOSTAZIONI_VUOTE };
 let IMPOSTAZIONI_DA_SALVARE = false;
 let LAVAGNA = { tipo: 'lavagna', versione: VERSIONE_LAVAGNA, lavori: [], visti: [] };
@@ -1085,6 +1091,7 @@ async function ricarica() {
   LAVAGNA = await caricaLavagna();
   LISTINO = await caricaListino();
   FRASI = await caricaFrasi();
+  IRRIGAZIONE = await caricaListinoIrrigazione();
   ARCHIVIO = await caricaArchivio();
   ARRIVI = await caricaArrivi();
   RILIEVI = await caricaRilievi();
@@ -1142,7 +1149,7 @@ async function copiaDelGiorno() {
     const oggi = isoData(new Date());
     if (await sottocartella(copie, oggi, false)) return;
     const giorno = await sottocartella(copie, oggi, true);
-    for (const nome of [FILE_LAVAGNA, FILE_CLIENTI, FILE_LISTINO, FILE_IMPOSTAZIONI, FILE_FRASI]) {
+    for (const nome of [FILE_LAVAGNA, FILE_CLIENTI, FILE_LISTINO, FILE_IMPOSTAZIONI, FILE_FRASI, FILE_LISTINO_IRRIGAZIONE]) {
       // Copiare un file che non si legge vorrebbe dire tenersi la copia rotta.
       if (NON_LETTI.has(nome) || !(await esisteFile(CARTELLA, nome))) continue;
       await scriviTesto(giorno, nome, await leggiTesto(CARTELLA, nome));
@@ -2580,6 +2587,16 @@ function riassuntoRicontrolla() {
 // La più recente per prima. Le righe sono poche e corte apposta: un elenco lungo
 // non si legge, e quello che non si legge tanto vale non scriverlo.
 const NOVITA = [
+  {
+    versione: '2026-11-12d',
+    data: '2026-11-12',
+    titolo: 'L\'impianto di irrigazione dal progetto',
+    righe: [
+      'Nel preventivo, **«💧 Impianto di irrigazione dal progetto»** legge il file salvato dal tool dei settori e fa una voce a corpo con tutti i **materiali** dentro: ugelli, corpi, valvole, raccordi, tubi.',
+      'I prezzi vengono dalla nuova sezione **Irrigazione** del Listino: **prezzi d\'acquisto** per codice del fornitore, che si importano dal CSV del fornitore. Sulla riga dell\'impianto c\'è il **ricarico**, e le **ore** della posa si scrivono alla riga Manodopera.',
+      'Reimportando il progetto corretto le quantità si aggiornano, e quello che hai deciso tu resta. La **scheda di cantiere** dice anche quali irrigatori vanno su quale settore.',
+    ],
+  },
   {
     versione: '2026-11-12c',
     data: '2026-11-12',
@@ -4383,7 +4400,7 @@ function togliComponente(i, j) {
   const nome = String(c.voce || '').trim();
   const vuoto = !nome && (c.quantita === '' || c.quantita == null);
   if (!vuoto && !confirm('Togliere ' + (nome ? '«' + nome + '»' : 'questo componente') + ' da questa voce?')) return;
-  if (!c.aggiunta && c.chiave && r.lavorazione) {
+  if (!c.aggiunta && c.chiave && (r.lavorazione || r.irrigazione)) {
     r.tolti = (Array.isArray(r.tolti) ? r.tolti : []).filter(k => k !== c.chiave).concat([c.chiave]);
   }
   r.componenti.splice(j, 1);
@@ -4764,6 +4781,161 @@ function aggiungiCapitoloPreventivo() {
   disegnaPreventivo();
 }
 
+// ── L'IMPIANTO DI IRRIGAZIONE, DAL PROGETTO ──
+// L'impianto si progetta nel tool dei settori (irrigazione/), col CAD accanto: lì
+// si decidono settori, irrigatori, centralina, sensore pioggia e metri di tubo, e
+// lì si contano i materiali. Qui il progetto diventa **una voce a corpo**: i
+// materiali sono i suoi componenti, col prezzo d'acquisto del listino
+// dell'irrigazione più il ricarico della riga, e la manodopera a ore si scrive qui,
+// come per gli altri lavori. Prima il passaggio era una ribattitura a mano, dal
+// tool al foglio della segretaria, e ogni ribattitura è un numero che cambia senza
+// che nessuno se ne accorga.
+const VERSIONE_PROGETTO_IRRIGAZIONE = 1;
+
+// Il file del tool non si prende per buono: un progetto salvato con il tool di
+// prima non ha i materiali, uno di una versione futura non si sa leggere. Si dice,
+// invece di far nascere una voce vuota.
+function leggiProgettoIrrigazione(testo) {
+  let d;
+  try { d = JSON.parse(testo); } catch (e) { throw new Error('il file non è leggibile'); }
+  if (!d || typeof d !== 'object') throw new Error('il file non è un progetto');
+  if (d.tipo !== 'progetto-irrigazione') {
+    if (Array.isArray(d.rows)) throw new Error('è un progetto salvato col tool di prima, senza i materiali: ' +
+      'aprilo nel tool dei settori e salvalo di nuovo');
+    throw new Error('non è un progetto del tool dei settori');
+  }
+  if (d.versione !== VERSIONE_PROGETTO_IRRIGAZIONE) throw new Error('è un progetto della versione ' + d.versione +
+    ', e questo ufficio legge la ' + VERSIONE_PROGETTO_IRRIGAZIONE + ': aggiorna la pagina');
+  if (!d.id || !Array.isArray(d.materiali)) throw new Error('il progetto è incompleto');
+  return {
+    id: String(d.id), cliente: String(d.cliente || ''), salvato: String(d.salvato || ''),
+    settori: (Array.isArray(d.settori) ? d.settori : []).map(x => ({ numero: x.numero, portata: Number(x.portata) || 0,
+      irrigatori: (Array.isArray(x.irrigatori) ? x.irrigatori : []).map(g => ({ serie: String(g.serie || ''),
+        modello: String(g.modello || ''), colore: String(g.colore || ''), arco: String(g.arco || ''),
+        quantita: Number(g.quantita) || 0 })) })),
+    materiali: d.materiali.filter(m => m && String(m.descrizione || '').trim() && Number(m.quantita) > 0)
+      .map(m => ({ codice: String(m.codice || '').trim(), descrizione: String(m.descrizione).trim(),
+        unita: String(m.unita || 'n'), quantita: Number(m.quantita), calcolo: String(m.calcolo || '') })),
+  };
+}
+
+const chiaveIrrigazione = m => 'irr:' + (m.codice ? 'c:' + pulisciTesto(m.codice) : 'd:' + pulisciTesto(m.descrizione));
+const CHIAVE_MANODOPERA_IRRIGAZIONE = 'irr:manodopera';
+
+// La voce a corpo dell'impianto. Rifatta da un progetto corretto, le quantità
+// seguono il progetto e quello che l'ufficio ha deciso resta: un prezzo scritto a
+// mano, una quantità ritoccata, un componente tolto o aggiunto, le ore, la
+// descrizione, il ricarico. È la regola del rilievo corretto.
+function rigaIrrigazione(p, vecchia) {
+  const prima = vecchia && Array.isArray(vecchia.componenti) ? vecchia.componenti : [];
+  const tolti = new Set(vecchia && Array.isArray(vecchia.tolti) ? vecchia.tolti : []);
+  const comp = [];
+  p.materiali.forEach(m => {
+    const chiave = chiaveIrrigazione(m);
+    if (tolti.has(chiave)) return;
+    const doppio = comp.find(x => x.chiave === chiave);
+    if (doppio) { if (!doppio.quantitaMano) doppio.quantita += m.quantita; return; }
+    const gia = prima.find(x => x.chiave === chiave);
+    comp.push({ chiave, irrigazione: true, codice: m.codice, voce: m.descrizione, unita: m.unita,
+      quantita: gia && gia.quantitaMano ? gia.quantita : m.quantita, quantitaMano: !!(gia && gia.quantitaMano),
+      prezzo: gia && gia.prezzoMano ? gia.prezzo : '', prezzoMano: !!(gia && gia.prezzoMano), daProgetto: m.calcolo });
+  });
+  prima.filter(x => x.aggiunta).forEach(x => comp.push({ ...x }));
+  // Le ore non le dice il progetto: si stimano qui, come per gli altri lavori, e
+  // sono anche le mezze giornate che il lavoro prenderà in lavagna.
+  const mano = prima.find(x => x.chiave === CHIAVE_MANODOPERA_IRRIGAZIONE);
+  if (!tolti.has(CHIAVE_MANODOPERA_IRRIGAZIONE)) comp.push(mano ? { ...mano } : {
+    chiave: CHIAVE_MANODOPERA_IRRIGAZIONE, voceID: VOCE_MANODOPERA, voce: 'Manodopera', unita: 'h', quantita: '',
+    quantitaMano: false, prezzo: prezzoDiListino(VOCE_MANODOPERA), prezzoMano: false, calcolo: 'ore da stimare qui' });
+  const settori = p.settori.length;
+  const r = vecchia ? { ...vecchia } : {
+    chiave: '', voceID: '', voce: 'Impianto di irrigazione', quantita: 1, unita: 'a corpo', prezzo: '', proposto: false,
+    tipo: 'totale', soluzione: '',
+    descrizione: 'Fornitura e posa in opera di impianto di irrigazione automatico' +
+      (settori ? ' a ' + settori + (settori === 1 ? ' settore' : ' settori') : ''),
+  };
+  r.irrigazione = { id: p.id, cliente: p.cliente, salvato: p.salvato, file: p.file || '', settori: p.settori,
+    importato: new Date().toISOString(),
+    ricarico: vecchia && vecchia.irrigazione && vecchia.irrigazione.ricarico !== undefined
+      ? vecchia.irrigazione.ricarico : IRRIGAZIONE.ricarico };
+  r.componenti = comp;
+  preparaRigaIrrigazione(r);
+  return r;
+}
+
+// I prezzi dei materiali vengono dal listino dell'irrigazione ogni volta che il
+// preventivo si apre, finché è una bozza: un listino del fornitore aggiornato ieri
+// vale anche per il preventivo cominciato la settimana scorsa. Un prezzo scritto a
+// mano resta.
+function preparaRigaIrrigazione(r) {
+  if (!r || !r.irrigazione || !Array.isArray(r.componenti)) return;
+  const ricarico = numeroDaTesto(r.irrigazione.ricarico);
+  r.componenti.forEach(c => {
+    if (!c.irrigazione) return;
+    const a = articoloIrrigazione(c);
+    c.costo = a && a.costo !== '' ? a.costo : '';
+    if (!c.prezzoMano) c.prezzo = c.costo === '' ? '' : alCentesimoUfficio(c.costo * (1 + ricarico / 100));
+    c.calcolo = [c.codice, c.daProgetto,
+      c.costo === '' ? (a ? 'senza prezzo d\'acquisto' : 'non nel listino dell\'irrigazione')
+        : 'acquisto ' + formattaEuro(c.costo) + (ricarico ? ' + ' + scriviNumero(ricarico) + '%' : ''),
+      c.prezzoMano ? 'prezzo scritto qui' : ''].filter(Boolean).join(' · ');
+  });
+  if (r.proposto || r.prezzo === '' || r.prezzo == null) {
+    const somma = sommaComponenti(r.componenti);
+    r.prezzo = somma.totale > 0 ? somma.totale : '';
+    r.proposto = r.prezzo !== '';
+  }
+}
+
+function riassuntoIrrigazione(x) {
+  const settori = (x.settori || []).length;
+  const irrigatori = (x.settori || []).reduce((t, s) => t + s.irrigatori.reduce((u, g) => u + g.quantita, 0), 0);
+  return [x.file || 'progetto', settori ? settori + (settori === 1 ? ' settore' : ' settori') : '',
+    irrigatori ? irrigatori + ' irrigatori' : '', x.salvato ? 'salvato il ' + formattaData(x.salvato) : ''].filter(Boolean).join(' · ');
+}
+
+// Il ricarico è della riga: il margine lo decide chi firma, preventivo per
+// preventivo. Mentre si scrive seguono la somma e il prezzo proposto; uscendo dal
+// campo si ridisegnano i prezzi dei componenti.
+function modificaRicaricoRiga(i, valore) {
+  const r = PREVENTIVO && PREVENTIVO.doc.righe[i];
+  if (!r || !r.irrigazione) return;
+  r.irrigazione.ricarico = String(valore).trim() === '' ? '' : numeroScritto(valore);
+  preparaRigaIrrigazione(r);
+  aggiornaRigaACorpo(i);
+}
+
+const normaleNome = t => pulisciTesto(t).normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+
+async function importaProgettoIrrigazione(file) {
+  if (!file || !PREVENTIVO) return;
+  let p;
+  try {
+    p = leggiProgettoIrrigazione(await file.text());
+  } catch (e) {
+    avvisa('Non ho potuto usare ' + file.name + ': ' + e.message, true);
+    return;
+  }
+  p.file = file.name;
+  // Il progetto di un altro cliente nel preventivo sbagliato è un errore che si fa
+  // con due file aperti: si chiede, non si rifiuta — il nome nel tool è scritto a mano.
+  const delPreventivo = normaleNome(PREVENTIVO.doc.cliente && PREVENTIVO.doc.cliente.nome);
+  const delProgetto = normaleNome(p.cliente);
+  if (delPreventivo && delProgetto && !delPreventivo.includes(delProgetto) && !delProgetto.includes(delPreventivo) &&
+      !confirm('Il progetto è per «' + p.cliente + '», il preventivo per «' + PREVENTIVO.doc.cliente.nome +
+        '». Usarlo lo stesso?')) return;
+  const righe = PREVENTIVO.doc.righe;
+  const i = righe.findIndex(r => r.irrigazione && r.irrigazione.id === p.id);
+  if (i >= 0) righe[i] = rigaIrrigazione(p, righe[i]);
+  else righe.push(rigaIrrigazione(p));
+  disegnaPreventivo();
+  const r = righe[i >= 0 ? i : righe.length - 1];
+  const senza = r.componenti.filter(c => c.irrigazione && c.costo === '').length;
+  avvisa((i >= 0 ? 'Impianto aggiornato dal progetto: le quantità seguono il progetto, quello deciso qui resta'
+    : 'Impianto di irrigazione aggiunto: ' + r.componenti.filter(c => c.irrigazione).length + ' materiali') +
+    (senza ? ' · ' + senza + (senza === 1 ? ' senza prezzo d\'acquisto' : ' senza prezzo d\'acquisto') : ''), !!senza);
+}
+
 // Totale e coda si aggiornano da soli mentre si scrive, senza ridisegnare: sono
 // le due cose che devono seguire il numero sotto le dita.
 function aggiornaTotalePreventivo() {
@@ -5045,6 +5217,7 @@ function disegnaPreventivo() {
     // resta la descrizione per il cliente.
     const corpo = !sezione && Array.isArray(r.componenti);
     preparaRigaSettore(r);
+    preparaRigaIrrigazione(r);
     html += '<tr class="' + (corpo ? 'riga-corpo' : '') + (r.tipo === 'tariffa' ? ' riga-tariffa' : '') +
         (sezione ? ' riga-sezione' : '') + '">' +
       // La descrizione si allarga col testo: le frasi per il cliente sono lunghe, e in
@@ -5056,7 +5229,11 @@ function disegnaPreventivo() {
         'oninput="modificaRigaPreventivo(' + i + ', \'descrizione\', this.value); allargaDescrizione(this)">' +
         perValore(r.descrizione) + '</textarea>' +
         '<div class="sotto-riga">' +
-        '<span class="meta dal-campo">' + (r.lavorazione ? 'dal campo: ' + perValore(riassuntoLavorazione(r.lavorazione)) : '') + '</span>' +
+        '<span class="meta dal-campo">' + (r.lavorazione ? 'dal campo: ' + perValore(riassuntoLavorazione(r.lavorazione))
+          : r.irrigazione ? 'dal progetto: ' + perValore(riassuntoIrrigazione(r.irrigazione)) +
+            ' · ricarico <input type="text" inputmode="decimal" class="stretto ricarico-riga" value="' +
+            perValore(formattaQuantita(r.irrigazione.ricarico)) + '" oninput="modificaRicaricoRiga(' + i + ', this.value)" ' +
+            'onchange="disegnaPreventivo()" aria-label="ricarico"> %' : '') + '</span>' +
         '<select class="tipo-riga" onchange="cambiaTipoRiga(' + i + ', this.value)">' +
         TIPI_RIGA_PREVENTIVO.map(x => '<option value="' + x.id + '"' +
           (x.id === r.tipo ? ' selected' : '') + '>' + x.nome + '</option>').join('') +
@@ -5131,6 +5308,9 @@ function disegnaPreventivo() {
   html += ' <button class="secondaria" onclick="aggiungiCapitoloPreventivo()" ' +
     'title="Una voce a corpo da riempire coi suoi componenti">+ Capitolo a corpo</button>';
   html += ' <button class="secondaria" onclick="aggiungiSezionePreventivo()">+ Titolo di sezione</button>';
+  html += ' <label class="secondaria bottone-file" title="Il file salvato dal tool dei settori d\'irrigazione">' +
+    '💧 Impianto di irrigazione dal progetto<input type="file" accept=".json" ' +
+    'onchange="importaProgettoIrrigazione(this.files[0]); this.value=\'\'" style="display:none"></label>';
   html += '</div>';
 
   // «Siepe nuda o con telo e porfido»: due varianti dello stesso lavoro con due
@@ -5633,6 +5813,17 @@ function costruisciSchedaCantiere(d) {
           '<td>' + perValore(k.unita) + '</td>' +
           '<td class="num">' + (!k.manodoperaSettore && Number(k.ore) > 0 ? scriviNumero(k.ore) + ' h' : '') + '</td></tr>';
       });
+      // Cosa va su quale valvola: è quello che il tool dei settori dice a chi posa,
+      // e sullo stesso foglio dei materiali non va cercato altrove.
+      if (r.irrigazione && (r.irrigazione.settori || []).length) {
+        r.irrigazione.settori.forEach(st => {
+          html += '<tr><td colspan="4"><strong>Settore ' + perValore(st.numero) + '</strong>' +
+            (st.portata ? ' · ' + scriviNumero(st.portata) + ' l/min' : '') + ': ' +
+            perValore(st.irrigatori.map(g => g.quantita + ' × ' + [g.serie, g.modello,
+              g.colore && !g.modello.toLowerCase().includes(g.colore.toLowerCase()) ? g.colore : '', g.arco]
+              .filter(Boolean).join(' ')).join(', ')) + '</td></tr>';
+        });
+      }
     } else {
       html += '<tr><td>' + perValore(r.descrizione || r.voce) + '</td>' +
         '<td class="num">' + perValore(formattaQuantita(r.quantita)) + '</td>' +
@@ -8310,6 +8501,8 @@ function disegnaListino() {
     html += '</tbody></table></div>';
   }
 
+  html += sezioneListinoIrrigazione();
+
   const nonInListino = vociMancanti();
   if (nonInListino.length) {
     html += '<div class="scheda"><div class="titolo-sezione">Voci viste nei rapportini e non in listino</div>';
@@ -8426,6 +8619,218 @@ function importaVoce(voceID, voce, unita) {
   LISTINO.voci.push({ voceID, voce, unita, prezzo: '', aCorpo: false });
   LISTINO_DA_SALVARE = true;
   disegna();
+}
+
+// ── IL LISTINO DELL'IRRIGAZIONE ──
+// Corpi, ugelli, valvole, raccordi, tubi: li conta il tool dei settori, dal
+// progetto, e qui si trovano i prezzi **per codice del fornitore** — il nome basta
+// cambi una parola per non trovarlo più. Sono **prezzi d'acquisto**, come sul
+// listino del fornitore: il prezzo per il cliente esce nel preventivo col ricarico
+// della riga, che si decide lì. Il margine resta di chi firma.
+async function caricaListinoIrrigazione() {
+  if (IRRIGAZIONE_DA_SALVARE) return IRRIGAZIONE;
+  try {
+    const l = JSON.parse(await leggiTesto(CARTELLA, FILE_LISTINO_IRRIGAZIONE));
+    if (!l || l.tipo !== 'listino-irrigazione') throw new Error('non è il listino dell\'irrigazione');
+    return {
+      ricarico: l.ricarico === '' || l.ricarico == null ? '' : Number(l.ricarico) || 0,
+      articoli: (Array.isArray(l.articoli) ? l.articoli : []).filter(a => a && (a.codice || a.descrizione)).map(a => ({
+        codice: String(a.codice || '').trim(), descrizione: String(a.descrizione || ''), unita: String(a.unita || 'n'),
+        costo: a.costo === '' || a.costo == null || isNaN(Number(a.costo)) ? '' : Number(a.costo),
+      })),
+    };
+  } catch (e) {
+    // Assente vuol dire «nessun articolo ancora»; illeggibile si dice e non si riscrive.
+    await fileNonLetto(FILE_LISTINO_IRRIGAZIONE, e);
+    return { ricarico: '', articoli: [] };
+  }
+}
+
+async function salvaListinoIrrigazione() {
+  try {
+    await scriviTesto(CARTELLA, FILE_LISTINO_IRRIGAZIONE, JSON.stringify({ tipo: 'listino-irrigazione', versione: 1,
+      aggiornato: new Date().toISOString(), ricarico: IRRIGAZIONE.ricarico, articoli: IRRIGAZIONE.articoli }, null, 2));
+  } catch (e) {
+    avvisa('Non ho potuto salvare il listino dell\'irrigazione: ' + e.message, true);
+    return false;
+  }
+  IRRIGAZIONE_DA_SALVARE = false;
+  disegna();
+  avvisa('Listino dell\'irrigazione salvato');
+  return true;
+}
+
+const pulisciTesto = t => String(t || '').trim().toLowerCase().replace(/\s+/g, ' ');
+
+// L'articolo di un materiale del progetto: per codice, se il progetto ce l'ha; se
+// no per nome. Un codice che il listino non conosce non si cerca per nome: due
+// articoli con lo stesso nome e codici diversi sono due prezzi diversi.
+function articoloIrrigazione(m) {
+  if (!m) return null;
+  const codice = pulisciTesto(m.codice);
+  if (codice) return IRRIGAZIONE.articoli.find(a => pulisciTesto(a.codice) === codice) || null;
+  const nome = pulisciTesto(m.descrizione || m.voce);
+  return nome ? IRRIGAZIONE.articoli.find(a => !a.codice && pulisciTesto(a.descrizione) === nome) ||
+    IRRIGAZIONE.articoli.find(a => pulisciTesto(a.descrizione) === nome) || null : null;
+}
+
+// Un prezzo scritto come capita sui listini: «12,40», «1.234,50», «€ 3,2».
+function prezzoDaListinoFornitore(t) {
+  let x = String(t == null ? '' : t).replace(/[€\s]/g, '');
+  if (!x) return '';
+  if (x.includes(',') && x.includes('.')) x = x.replace(/\./g, '').replace(',', '.');
+  else x = x.replace(',', '.');
+  const n = Number(x);
+  return isNaN(n) ? '' : n;
+}
+
+// Il listino del fornitore come esce da Excel: Codice;Descrizione;Unità;Prezzo,
+// col punto e virgola o la tabulazione. Con tre colonne l'unità manca e vale «n».
+// L'intestazione si salta da sé: il suo prezzo non è un numero.
+function leggiCsvIrrigazione(testo) {
+  const out = [];
+  String(testo || '').split(/\r?\n/).forEach(riga => {
+    if (!riga.trim()) return;
+    const c = riga.split(riga.includes('\t') ? '\t' : ';').map(x => x.trim().replace(/^"|"$/g, ''));
+    if (c.length < 3) return;
+    const tre = c.length === 3;
+    const costo = prezzoDaListinoFornitore(tre ? c[2] : c[3]);
+    if (costo === '' || !(c[0] || c[1])) return;
+    out.push({ codice: c[0], descrizione: c[1], unita: tre ? 'n' : (c[2] || 'n'), costo });
+  });
+  return out;
+}
+
+// Un listino nuovo del fornitore aggiorna i prezzi di quelli che ci sono e
+// aggiunge gli altri: è il motivo per cui si importa, i prezzi cambiano ogni anno.
+async function importaListinoIrrigazione(file) {
+  if (!file) return;
+  const nuovi = leggiCsvIrrigazione(await file.text());
+  if (!nuovi.length) {
+    avvisa('Nel file non trovo righe Codice;Descrizione;Unità;Prezzo', true);
+    return;
+  }
+  let aggiornati = 0, aggiunti = 0;
+  nuovi.forEach(n => {
+    const gia = n.codice ? IRRIGAZIONE.articoli.find(a => pulisciTesto(a.codice) === pulisciTesto(n.codice)) : null;
+    if (gia) {
+      gia.costo = n.costo;
+      if (n.descrizione) gia.descrizione = n.descrizione;
+      if (n.unita) gia.unita = n.unita;
+      aggiornati++;
+    } else {
+      IRRIGAZIONE.articoli.push(n);
+      aggiunti++;
+    }
+  });
+  IRRIGAZIONE_DA_SALVARE = true;
+  if (!(await salvaListinoIrrigazione())) return;
+  avvisa('Listino dell\'irrigazione: ' + [aggiunti ? aggiunti + (aggiunti === 1 ? ' articolo nuovo' : ' articoli nuovi') : '',
+    aggiornati ? aggiornati + (aggiornati === 1 ? ' prezzo aggiornato' : ' prezzi aggiornati') : ''].filter(Boolean).join(', '));
+}
+
+function segnaIrrigazioneDaSalvare() {
+  IRRIGAZIONE_DA_SALVARE = true;
+  const el = document.getElementById('irrigazione-da-salvare');
+  if (el) el.style.display = 'block';
+}
+
+function modificaArticoloIrrigazione(j, campo, valore) {
+  const a = IRRIGAZIONE.articoli[j];
+  if (!a) return;
+  a[campo] = campo === 'costo' ? prezzoDaListinoFornitore(valore) : valore;
+  segnaIrrigazioneDaSalvare();
+}
+
+function modificaRicaricoIrrigazione(valore) {
+  IRRIGAZIONE.ricarico = String(valore).trim() === '' ? '' : numeroScritto(valore);
+  segnaIrrigazioneDaSalvare();
+}
+
+function aggiungiArticoloIrrigazione(codice, descrizione, unita) {
+  IRRIGAZIONE.articoli.unshift({ codice: codice || '', descrizione: descrizione || '', unita: unita || 'n', costo: '' });
+  IRRIGAZIONE_DA_SALVARE = true;
+  disegnaListino();
+}
+
+function togliArticoloIrrigazione(j) {
+  const a = IRRIGAZIONE.articoli[j];
+  if (!a) return;
+  if (!confirm('Togliere «' + (a.descrizione || a.codice || 'senza nome') + '» dal listino dell\'irrigazione?')) return;
+  IRRIGAZIONE.articoli.splice(j, 1);
+  IRRIGAZIONE_DA_SALVARE = true;
+  disegnaListino();
+}
+
+// Si nascondono le righe, non si ridisegna: il campo della ricerca resta sotto le dita.
+function cercaArticoliIrrigazione(testo) {
+  const t = pulisciTesto(testo);
+  document.querySelectorAll('#articoli-irrigazione tr[data-cerca]').forEach(tr => {
+    tr.style.display = !t || tr.dataset.cerca.includes(t) ? '' : 'none';
+  });
+}
+
+// Gli articoli dei preventivi che il listino non conosce: senza questo elenco te
+// ne accorgeresti solo da una somma più bassa del dovuto.
+function articoliIrrigazioneMancanti() {
+  const visti = new Map();
+  // Anche quello aperto e non ancora salvato: è quello per cui si viene qui.
+  const docs = PREVENTIVI.map(p => p.doc).concat(PREVENTIVO ? [PREVENTIVO.doc] : []);
+  docs.forEach(d => (d.righe || []).forEach(r => (r.componenti || []).forEach(c => {
+    if (!c.irrigazione || articoloIrrigazione(c)) return;
+    const k = pulisciTesto(c.codice) || pulisciTesto(c.voce);
+    if (k && !visti.has(k)) visti.set(k, { codice: c.codice || '', descrizione: c.voce || '', unita: c.unita || 'n' });
+  })));
+  return [...visti.values()];
+}
+
+function sezioneListinoIrrigazione() {
+  let html = '<div class="scheda" id="listino-irrigazione"><div class="titolo-sezione">Irrigazione · prezzi d\'acquisto</div>';
+  html += '<p class="meta">I materiali che il tool dei settori conta dal progetto, col <strong>codice del fornitore</strong>: ' +
+    'è da lì che il preventivo trova il prezzo. Sono prezzi d\'acquisto; quello per il cliente esce nel preventivo ' +
+    'col ricarico, che sulla riga dell\'impianto si cambia.</p>';
+  html += '<div id="irrigazione-da-salvare" class="avvertenza" style="display:' + (IRRIGAZIONE_DA_SALVARE ? 'block' : 'none') + '">' +
+    'Ci sono modifiche non ancora scritte su file. Restano qui finché premi Salva.</div>';
+  html += '<div style="display:flex;gap:16px;align-items:center;flex-wrap:wrap;margin:8px 0"><label style="white-space:nowrap">Ricarico di partenza ' +
+    '<input type="text" inputmode="decimal" class="stretto" id="ricarico-irrigazione" value="' +
+    perValore(formattaQuantita(IRRIGAZIONE.ricarico)) + '" oninput="modificaRicaricoIrrigazione(this.value)"> %</label> ' +
+    '<input type="text" placeholder="Cerca per codice o nome" oninput="cercaArticoliIrrigazione(this.value)" ' +
+      'style="max-width:280px" aria-label="cerca articolo"></div>';
+  html += '<table class="elenco" id="articoli-irrigazione"><thead><tr><th>Codice</th><th>Descrizione</th><th>Unità</th>' +
+    '<th class="num">Acquisto</th><th></th></tr></thead><tbody>';
+  if (!IRRIGAZIONE.articoli.length) {
+    html += '<tr><td colspan="5"><div class="vuoto-elenco">Nessun articolo. Importa il listino del fornitore ' +
+      '(Codice;Descrizione;Unità;Prezzo, da Excel salvato come CSV) o aggiungili uno per uno.</div></td></tr>';
+  }
+  IRRIGAZIONE.articoli.forEach((a, j) => {
+    html += '<tr data-cerca="' + perValore(pulisciTesto(a.codice + ' ' + a.descrizione)) + '">' +
+      '<td><input type="text" style="width:130px" value="' + perValore(a.codice) + '" ' +
+        'oninput="modificaArticoloIrrigazione(' + j + ', \'codice\', this.value)" aria-label="codice"></td>' +
+      '<td><input type="text" value="' + perValore(a.descrizione) + '" ' +
+        'oninput="modificaArticoloIrrigazione(' + j + ', \'descrizione\', this.value)" aria-label="descrizione"></td>' +
+      '<td><input type="text" style="width:60px" value="' + perValore(a.unita) + '" ' +
+        'oninput="modificaArticoloIrrigazione(' + j + ', \'unita\', this.value)" aria-label="unità"></td>' +
+      '<td class="num"><input type="text" inputmode="decimal" class="prezzo' + (a.costo === '' ? ' vuoto' : '') + '" value="' +
+        perValore(formattaQuantita(a.costo)) + '" oninput="modificaArticoloIrrigazione(' + j + ', \'costo\', this.value)" ' +
+        'aria-label="prezzo d\'acquisto"></td>' +
+      '<td class="num"><button class="pericolo piccola" onclick="togliArticoloIrrigazione(' + j + ')">✕</button></td></tr>';
+  });
+  html += '</tbody></table>';
+  html += '<div class="bottoni">' +
+    '<button class="secondaria" onclick="aggiungiArticoloIrrigazione()">+ Aggiungi un articolo</button>' +
+    '<label class="secondaria bottone-file">Importa il listino del fornitore (CSV)<input type="file" accept=".csv,.txt" ' +
+      'onchange="importaListinoIrrigazione(this.files[0]); this.value=\'\'" style="display:none"></label>' +
+    '<button class="principale" onclick="salvaListinoIrrigazione()">Salva</button></div>';
+  const mancanti = articoliIrrigazioneMancanti();
+  if (mancanti.length) {
+    html += '<div class="titolo-sezione" style="margin-top:14px">Nei preventivi e non in listino</div>' +
+      '<p class="meta">Finché non hanno un prezzo qui, restano fuori dalla somma dell\'impianto.</p><table class="elenco"><tbody>' +
+      mancanti.map(m => '<tr><td>' + perValore(m.codice || '—') + '</td><td>' + perValore(m.descrizione) + '</td>' +
+        '<td class="meta">' + perValore(m.unita) + '</td><td class="num"><button class="secondaria piccola" ' +
+        'onclick="aggiungiArticoloIrrigazione(\'' + perOnclick(m.codice) + '\', \'' + perOnclick(m.descrizione) + '\', \'' +
+        perOnclick(m.unita) + '\')">Mettilo in listino</button></td></tr>').join('') + '</tbody></table>';
+  }
+  return html + '</div>';
 }
 
 // ── IMPOSTAZIONI ──

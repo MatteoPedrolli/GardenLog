@@ -192,6 +192,25 @@ scrive sempre con quel nome, sopra quello di prima. Serve lo script alla version
 quello di prima lo respinge, e sul telefono resta «settori per l'ufficio» da consegnare.
 Senza script si fa ancora a mano, da ⚙️ Dati › «Esporta settori».
 
+## L'impianto di irrigazione
+
+Il progetto si fa col **tool dei settori**, `irrigazione/index.html` (si apre anche
+con un doppio clic, senza rete): settori, irrigatori e, in fondo, i **materiali
+dell'impianto**. Gli ugelli escono dalla distinta, corpi, valvole, raccordi e pozzetti
+dalle regole del *Catalogo materiali e regole*; centralina, sensore pioggia e metri di
+tubo si aggiungono a mano. Ogni materiale ha il **codice del fornitore**: va scritto
+una volta nel catalogo, ed è con quello che l'ufficio trova il prezzo.
+
+«Salva progetto» scarica `irrigazione_<cliente>.json`: conviene metterlo nella
+cartella GiardinoApp, in `irrigazione/`. In ufficio, nel preventivo,
+**«💧 Impianto di irrigazione dal progetto»** lo legge e fa una voce a corpo con i
+materiali dentro. I prezzi sono quelli d'acquisto della sezione **Irrigazione** del
+Listino (`listino-irrigazione.json`, si importa dal CSV del fornitore:
+Codice;Descrizione;Unità;Prezzo) più il **ricarico**, che sta sulla riga
+dell'impianto e si cambia lì. Le ore della posa si scrivono nel preventivo, alla
+riga «Manodopera». Correggendo il progetto e reimportandolo, le quantità seguono il
+progetto e quello deciso in ufficio resta.
+
 ## Due pezzi da installare, una volta sola
 
 **1. Lo script che riceve** — `ricevi-rapportini.gs`, da incollare in

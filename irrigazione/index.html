@@ -59,6 +59,14 @@ tr.diff td{background:#FBF1DC}
 .fascia i{flex:1}
 .pallino{display:inline-block;width:11px;height:11px;border-radius:50%;margin-right:6px;box-shadow:inset 0 0 0 1px rgba(0,0,0,.3);vertical-align:-1px}
 tr.grp td{font-weight:600;padding-top:12px;border-bottom:1px solid var(--line)}
+section.materiali{grid-column:1/-1}
+#materiali td input.desc{width:100%;min-width:200px}
+#materiali td input.cod{width:120px}
+#materiali td input.um{width:52px}
+#materiali td input.q{width:72px;text-align:right}
+.calc{font-size:12px;color:var(--muted)}
+.senza-codice{color:var(--warn);font-size:12px}
+tr.mano td input.q{background:#FBF1DC}
 @media print{.tools,button,details{display:none!important} main{display:block} section{border:none}}
 </style>
 </head>
@@ -140,6 +148,37 @@ tr.grp td{font-weight:600;padding-top:12px;border-bottom:1px solid var(--line)}
       <div id="distinta"></div>
     </section>
   </div>
+
+  <section class="materiali">
+    <h2>Materiali dell'impianto</h2>
+    <p class="small">Quello che serve per il preventivo: gli ugelli della distinta, i materiali che escono dalle regole del catalogo
+      (per irrigatore, per settore…) e quello che aggiungi tu — tubi, cavo, centralina, sensore pioggia.
+      Una quantità che correggi resta tua anche se cambiano i settori. I prezzi li mette l'ufficio, dal codice del fornitore.</p>
+    <table>
+      <thead><tr><th>Codice</th><th>Materiale</th><th class="r">Q.tà</th><th>UM</th><th>Da dove</th><th></th></tr></thead>
+      <tbody id="materiali"></tbody>
+    </table>
+    <div class="tools" style="margin-top:12px;align-items:center">
+      <select id="aggiungiMateriale"></select>
+      <button id="rimettiTolti" hidden>Rimetti quelli tolti</button>
+    </div>
+    <div class="msg" id="senzaCodice"></div>
+
+    <details>
+      <summary>Catalogo materiali e regole (<span id="matCount">0</span> voci)</summary>
+      <p class="small">Formato: Codice;Descrizione;Unità;Per;Ogni;Quanti. <b>Codice</b> è quello del fornitore: è con quello che
+        l'ufficio trova il prezzo. <b>Per</b> dice da cosa si contano: <code>irrigatore</code> (tutti),
+        <code>irrigatore Hunter PS</code> (solo quella serie), <code>settore</code>, <code>impianto</code>; vuoto vuol dire che
+        si aggiunge a mano. <b>Ogni</b> e <b>Quanti</b>: «settore;3;1» è un pozzetto ogni tre settori, «settore;1;2» due raccordi
+        per settore. Il codice di un ugello si scrive come ottava colonna del catalogo ugelli.</p>
+      <textarea id="matText"></textarea>
+      <div class="tools" style="margin-top:8px">
+        <button id="matApply" class="primary">Applica catalogo materiali</button>
+        <button id="matReset">Ripristina catalogo iniziale</button>
+      </div>
+      <div class="msg" id="matMsg"></div>
+    </details>
+  </section>
 </main>
 
 <script>
@@ -315,12 +354,14 @@ function parseCatalog(text){
     if (c.length < 7) return;
     const q = num(c[6]);
     if (!q) return; // salta intestazione e righe non valide
-    out.push({serie:c[0], modello:c[1], colore:c[2], arco:c[3], pressione:c[4], raggio:c[5], q});
+    out.push({serie:c[0], modello:c[1], colore:c[2], arco:c[3], pressione:c[4], raggio:c[5], q, codice:c[7] || ''});
   });
   return out;
 }
-const catalogToText = () => 'Serie;Modello;Colore;Arco;Pressione;Raggio;Portata\n' +
-  catalog.map(x => [x.serie,x.modello,x.colore,x.arco,x.pressione,x.raggio,String(x.q).replace('.',',')].join(';')).join('\n');
+// Il codice del fornitore è un'ottava colonna, facoltativa: i cataloghi di prima
+// ne hanno sette e si leggono uguali.
+const catalogToText = () => 'Serie;Modello;Colore;Arco;Pressione;Raggio;Portata;Codice\n' +
+  catalog.map(x => [x.serie,x.modello,x.colore,x.arco,x.pressione,x.raggio,String(x.q).replace('.',','),x.codice || ''].join(';')).join('\n');
 
 const serieList = () => uniq(catalog.map(x => x.serie));
 const modelli = s => uniq(catalog.filter(x => x.serie === s).map(x => x.modello));
@@ -358,6 +399,7 @@ function renderRows(){
 function renderSummary(){
   renderGittate();
   renderDistinta();
+  renderMateriali();
   const disp = num($('qdisp').value);
   const pl = num($('pdisp').value);
   const soglia = num($('soglia').value) || 85;
@@ -568,8 +610,10 @@ $('catReset').onclick = () => {
 
 /* Progetto */
 $('save').onclick = () => {
-  const data = {cliente:$('cliente').value, qdisp:$('qdisp').value, pdisp:$('pdisp').value,
-    soglia:$('soglia').value, prove, rows, catalog, conta};
+  const data = {...progettoPerIlPreventivo(),
+    cliente:$('cliente').value, qdisp:$('qdisp').value, pdisp:$('pdisp').value,
+    soglia:$('soglia').value, prove, rows, catalog, conta,
+    statoMateriali, catalogoMateriali: materialiToText()};
   const nome = ($('cliente').value || 'progetto').replace(/[^\w\-]+/g, '_');
   const a = document.createElement('a');
   a.href = URL.createObjectURL(new Blob([JSON.stringify(data, null, 1)], {type:'application/json'}));
@@ -584,7 +628,10 @@ $('openFile').onchange = e => {
       const d = JSON.parse(t);
       $('cliente').value = d.cliente || ''; $('qdisp').value = d.qdisp || '';
       $('pdisp').value = d.pdisp || ''; $('soglia').value = d.soglia || 85;
-      prove = d.prove || prove; catalog = d.catalog || catalog; rows = d.rows || []; conta = {};
+      prove = d.prove || prove; catalog = (d.catalog || catalog).map(x => ({codice: '', ...x})); rows = d.rows || []; conta = {};
+      progettoID = d.id || nuovoID();
+      statoMateriali = {mano: {}, tolti: [], aggiunti: [], ...(d.statoMateriali || {})};
+      if (d.catalogoMateriali) applicaMateriali(d.catalogoMateriali, 'apertura');
       Object.entries(d.conta || {}).forEach(([k, v]) => { const kk = k.split('|').slice(0, 2).join('|'); conta[kk] = (conta[kk] || 0) + v; });
       uid = Math.max(0, ...rows.map(r => r.id)) + 1;
       $('catText').value = catalogToText(); $('catCount').textContent = catalog.length;
@@ -612,7 +659,266 @@ function avvioCatalogo(){
   renderRows();
 }
 
+/* ── MATERIALI DELL'IMPIANTO ──
+   Il preventivo di un impianto non è la distinta degli ugelli: sono corpi, valvole,
+   raccordi, pozzetti, tubi e cavo, e si ricopiavano a mano dal progetto al foglio
+   della segretaria. Qui si contano dove il progetto c'è: gli ugelli dalla distinta,
+   il resto da regole scritte nel catalogo materiali (un corpo per irrigatore di quella
+   serie, un'elettrovalvola per settore, un pozzetto ogni tre settori), e quello che
+   dipende dal disegno — i metri di tubo, la centralina, il sensore pioggia — si
+   aggiunge a mano. Niente prezzi: li mette l'ufficio dal codice del fornitore, in un
+   listino solo. Un listino anche qui sarebbe il secondo, e i due divergerebbero. */
+const MATERIALI_BASE = `Codice;Descrizione;Unità;Per;Ogni;Quanti
+;Corpo statico a scomparsa 10 cm;n;irrigatore Hunter Rotator;1;1
+;Corpo statico a scomparsa 10 cm;n;irrigatore Hunter PS;1;1
+;Corpo statico a scomparsa 10 cm;n;irrigatore Rainbird HeVan;1;1
+;Rotore PGP-ADJ;n;irrigatore Hunter PGP-ADJ;1;1
+;Rotore SRM;n;irrigatore Hunter SRM;1;1
+;Presa a staffa;n;irrigatore;1;1
+;Raccordo snodato;n;irrigatore;1;1
+;Elettrovalvola 1";n;settore;1;1
+;Raccordo maschio 1";n;settore;1;2
+;Connettore stagno;n;settore;1;2
+;Pozzetto rettangolare;n;settore;3;1
+;Centralina;n;;;
+;Sensore pioggia;n;;;
+;Cavo multipolare;m;;;
+;Tubo PE ø32 linea principale;m;;;
+;Tubo PE ø25 linee dei settori;m;;;`;
+const CHIAVE_MATERIALI = 'settori_irrigazione_materiali';
+
+let materialiCatalogo = [];
+// Quello che si è deciso a mano: le quantità corrette (per chiave), le proposte
+// tolte, le righe aggiunte. Sta nel file di progetto, come i settori.
+let statoMateriali = {mano: {}, tolti: [], aggiunti: []};
+const nuovoID = () => 'irr-' + Date.now().toString(36) + '-' + Math.random().toString(36).slice(2, 7);
+let progettoID = nuovoID();
+
+function parseMateriali(text){
+  const out = [];
+  text.split(/\r?\n/).forEach((line, i) => {
+    if (!line.trim()) return;
+    const c = line.split(line.includes('\t') ? '\t' : ';').map(s => s.trim());
+    if (c.length < 3 || !c[1] || (i === 0 && /^codice$/i.test(c[0]))) return;
+    out.push({codice: c[0] || '', descrizione: c[1], unita: c[2] || 'n', per: (c[3] || '').trim(),
+      ogni: Math.max(1, num(c[4]) || 1), quanti: num(c[5]) || 1});
+  });
+  return out;
+}
+const materialiToText = () => 'Codice;Descrizione;Unità;Per;Ogni;Quanti\n' + materialiCatalogo.map(m =>
+  [m.codice, m.descrizione, m.unita, m.per, m.per ? m.ogni : '', m.per ? String(m.quanti).replace('.', ',') : ''].join(';')).join('\n');
+
+function applicaMateriali(text, modo){
+  const m = parseMateriali(text);
+  if (!m.length) { $('matMsg').textContent = 'Nessuna riga valida: servono almeno codice, descrizione e unità.'; return; }
+  materialiCatalogo = m;
+  $('matCount').textContent = m.length;
+  $('matText').value = materialiToText();
+  if (modo !== 'avvio') { try { localStorage.setItem(CHIAVE_MATERIALI, materialiToText()); } catch {} }
+  if (modo === 'applica') $('matMsg').textContent = `Catalogo materiali applicato: ${m.length} voci.`;
+  renderMateriali();
+}
+
+// La chiave di un materiale: il codice, se c'è, o la descrizione. Due regole che
+// danno lo stesso articolo — il corpo statico per tre serie — fanno una riga sola.
+const chiaveMateriale = m => (m.codice ? 'c:' + m.codice : 'd:' + m.descrizione).toLowerCase();
+
+// Quello che il progetto conta: irrigatori (per serie) e settori.
+function conteggiProgetto(){
+  const perSerie = {}, settori = new Set();
+  let irrigatori = 0;
+  rows.forEach(r => {
+    const it = item(r); if (!it || !r.qta) return;
+    irrigatori += r.qta;
+    perSerie[it.serie] = (perSerie[it.serie] || 0) + r.qta;
+    settori.add(r.settore);
+  });
+  return {irrigatori, perSerie, settori: settori.size};
+}
+
+const plurale = (n, uno, tanti) => n + ' ' + (n === 1 ? uno : tanti);
+// Nelle caselle niente separatore delle migliaia: «1.200» metri di tubo si
+// rileggerebbero come uno virgola due.
+const scrivi = n => String(Math.round((Number(n) || 0) * 100) / 100).replace('.', ',');
+
+// Le proposte: gli ugelli della distinta, poi le regole del catalogo.
+function materialiProposti(){
+  const out = new Map();
+  const metti = (m, quantita, calcolo) => {
+    if (!(quantita > 0)) return;
+    const k = chiaveMateriale(m);
+    const gia = out.get(k);
+    if (gia) { gia.quantita += quantita; gia.calcolo += ' + ' + calcolo; return; }
+    out.set(k, {chiave: k, codice: m.codice || '', descrizione: m.descrizione, unita: m.unita || 'n', quantita, calcolo});
+  };
+  // Gli ugelli: uno per irrigatore, raggruppati come nella distinta. Il nome dice
+  // serie, modello e colore, che è come si chiedono al fornitore.
+  const ugelli = new Map();
+  rows.forEach(r => {
+    const it = item(r); if (!it || !r.qta) return;
+    const k = `${it.serie}|${it.modello}|${it.colore}`;
+    if (!ugelli.has(k)) ugelli.set(k, {it, n: 0});
+    ugelli.get(k).n += r.qta;
+  });
+  ugelli.forEach(({it, n}) => {
+    const colore = it.colore && !it.modello.toLowerCase().includes(it.colore.toLowerCase()) ? ' ' + it.colore : '';
+    metti({codice: it.codice || '', descrizione: `Ugello ${it.serie} ${it.modello}${colore}`, unita: 'n'}, n, 'dalla distinta');
+  });
+  const c = conteggiProgetto();
+  materialiCatalogo.forEach(m => {
+    const per = m.per.toLowerCase();
+    if (!per) return;
+    let quanti = 0, cosa = '';
+    if (per === 'irrigatore') { quanti = c.irrigatori; cosa = plurale(quanti, 'irrigatore', 'irrigatori'); }
+    else if (per.startsWith('irrigatore ')) {
+      const serie = m.per.slice(11).trim();
+      quanti = Object.entries(c.perSerie).filter(([s]) => s.toLowerCase() === serie.toLowerCase()).reduce((a, [, n]) => a + n, 0);
+      cosa = plurale(quanti, 'irrigatore ' + serie, 'irrigatori ' + serie);
+    }
+    else if (per === 'settore') { quanti = c.settori; cosa = plurale(quanti, 'settore', 'settori'); }
+    else if (per === 'impianto') { quanti = c.irrigatori ? 1 : 0; cosa = "l'impianto"; }
+    else return;
+    if (!quanti) return;
+    const q = Math.ceil(quanti / m.ogni) * m.quanti;
+    const cosa1 = per.split(' ')[0];
+    const regola = m.ogni > 1 ? `${fmt(m.quanti)} ogni ${m.ogni} ${cosa1 === 'settore' ? 'settori' : 'irrigatori'}`
+      : `${fmt(m.quanti)} per ${cosa1}`;
+    metti(m, q, `${regola} · ${cosa}`);
+  });
+  return [...out.values()];
+}
+
+// L'elenco che va al preventivo: le proposte meno quelle tolte, con le quantità
+// corrette a mano, e in fondo le righe aggiunte.
+function elencoMateriali(){
+  const tolti = new Set(statoMateriali.tolti);
+  const proposti = materialiProposti().filter(m => !tolti.has(m.chiave)).map(m => {
+    const mano = statoMateriali.mano[m.chiave];
+    return mano != null ? {...m, quantita: mano, mano: true, calcolo: m.calcolo + ' · corretto a mano (erano ' + fmt(m.quantita) + ')'} : m;
+  });
+  const aggiunti = statoMateriali.aggiunti.map(m => ({...m, aggiunto: true, calcolo: 'aggiunto a mano'}));
+  return proposti.concat(aggiunti);
+}
+
+function renderMateriali(){
+  if (!$('materiali')) return;
+  const elenco = elencoMateriali();
+  $('materiali').innerHTML = elenco.map(m => {
+    const senza = '';
+    if (m.aggiunto) return `<tr data-chiave="${esc(m.chiave)}" class="aggiunto">
+      <td><input class="cod" data-f="codice" value="${esc(m.codice)}" placeholder="codice"></td>
+      <td><input class="desc" data-f="descrizione" value="${esc(m.descrizione)}" placeholder="cosa" list="elencoMateriali"></td>
+      <td class="r"><input class="q" data-f="quantita" inputmode="decimal" value="${m.quantita === '' ? '' : esc(scrivi(m.quantita))}"></td>
+      <td><input class="um" data-f="unita" value="${esc(m.unita)}"></td>
+      <td class="calc">aggiunto a mano</td>
+      <td><button class="del" data-azione="togli" title="Togli" aria-label="Togli">✕</button></td></tr>`;
+    return `<tr data-chiave="${esc(m.chiave)}" class="${m.mano ? 'mano' : ''}">
+      <td>${m.codice ? esc(m.codice) : '<span class="senza-codice" title="Senza codice l\'ufficio cerca il prezzo dal nome">— senza codice</span>'}</td>
+      <td>${esc(m.descrizione)}</td>
+      <td class="r"><input class="q" data-f="quantita" inputmode="decimal" value="${esc(scrivi(m.quantita))}"></td>
+      <td>${esc(m.unita)}</td>
+      <td class="calc">${esc(m.calcolo)}${m.mano ? ' <button class="del" data-azione="ricalcola" title="Torna alla proposta">↺</button>' : ''}</td>
+      <td><button class="del" data-azione="togli" title="Togli" aria-label="Togli">✕</button></td></tr>`;
+  }).join('') || '<tr><td colspan="6" class="small">Nessun materiale: compare con gli irrigatori, o aggiungilo dal menù qui sotto.</td></tr>';
+  const senzaRegola = materialiCatalogo.filter(m => !m.per);
+  $('aggiungiMateriale').innerHTML = '<option value="">+ Aggiungi materiale…</option>' +
+    '<option value="mano">Scritto a mano</option>' +
+    (senzaRegola.length ? '<optgroup label="Dal catalogo">' + senzaRegola.map((m, i) =>
+      `<option value="cat:${materialiCatalogo.indexOf(m)}">${esc(m.descrizione)}</option>`).join('') + '</optgroup>' : '');
+  $('rimettiTolti').hidden = !statoMateriali.tolti.length;
+  // Il prezzo in ufficio si trova dal codice del fornitore; senza, dal nome, che
+  // basta cambi una parola per non trovarlo più. Si dice quanti mancano, una volta.
+  const senzaCodice = elenco.filter(m => !m.codice && String(m.descrizione || '').trim()).length;
+  $('senzaCodice').textContent = senzaCodice ? (senzaCodice === 1 ? 'Un materiale non ha' : senzaCodice + ' materiali non hanno') +
+    ' il codice del fornitore: scrivilo nel catalogo materiali (o, per un ugello, in quello degli ugelli).' : '';
+  let dl = $('elencoMateriali');
+  if (!dl) { dl = document.createElement('datalist'); dl.id = 'elencoMateriali'; document.body.appendChild(dl); }
+  dl.innerHTML = materialiCatalogo.map(m => `<option value="${esc(m.descrizione)}">`).join('');
+}
+
+$('materiali').addEventListener('input', e => {
+  const f = e.target.dataset.f; if (!f) return;
+  const k = e.target.closest('tr').dataset.chiave;
+  const agg = statoMateriali.aggiunti.find(m => m.chiave === k);
+  if (agg) {
+    agg[f] = f === 'quantita' ? (e.target.value.trim() === '' ? '' : num(e.target.value)) : e.target.value;
+    // Scritta la descrizione di una voce del catalogo, codice e unità vengono da lì.
+    if (f === 'descrizione') {
+      const c = materialiCatalogo.find(m => m.descrizione.toLowerCase() === e.target.value.trim().toLowerCase());
+      if (c) { agg.codice = c.codice; agg.unita = c.unita; const tr = e.target.closest('tr');
+        tr.querySelector('[data-f=codice]').value = c.codice; tr.querySelector('[data-f=unita]').value = c.unita; }
+    }
+    return;
+  }
+  if (f === 'quantita') {
+    // Non si ridisegna mentre si scrive: il campo sparirebbe da sotto le dita.
+    statoMateriali.mano[k] = e.target.value.trim() === '' ? 0 : num(e.target.value);
+    e.target.closest('tr').classList.add('mano');
+  }
+});
+$('materiali').addEventListener('change', e => { if (e.target.dataset.f === 'quantita') renderMateriali(); });
+$('materiali').addEventListener('click', e => {
+  const azione = e.target.dataset.azione; if (!azione) return;
+  const k = e.target.closest('tr').dataset.chiave;
+  if (azione === 'ricalcola') delete statoMateriali.mano[k];
+  if (azione === 'togli') {
+    const agg = statoMateriali.aggiunti.find(m => m.chiave === k);
+    if (agg) statoMateriali.aggiunti = statoMateriali.aggiunti.filter(m => m !== agg);
+    else { statoMateriali.tolti = statoMateriali.tolti.filter(x => x !== k).concat([k]); delete statoMateriali.mano[k]; }
+  }
+  renderMateriali();
+});
+$('aggiungiMateriale').addEventListener('change', e => {
+  const v = e.target.value; e.target.value = '';
+  if (!v) return;
+  const c = v.startsWith('cat:') ? materialiCatalogo[Number(v.slice(4))] : null;
+  statoMateriali.aggiunti.push({chiave: 'agg-' + Date.now().toString(36) + '-' + statoMateriali.aggiunti.length,
+    codice: c ? c.codice : '', descrizione: c ? c.descrizione : '', unita: c ? c.unita : 'n', quantita: ''});
+  renderMateriali();
+  const righe = $('materiali').querySelectorAll('tr.aggiunto');
+  const ultima = righe[righe.length - 1];
+  if (ultima) ultima.querySelector(c ? '[data-f=quantita]' : '[data-f=descrizione]').focus();
+});
+$('rimettiTolti').onclick = () => { statoMateriali.tolti = []; renderMateriali(); };
+$('matApply').onclick = () => applicaMateriali($('matText').value, 'applica');
+$('matReset').onclick = () => {
+  if (!confirm('Ripristinare il catalogo materiali iniziale? I codici scritti andranno persi.')) return;
+  applicaMateriali(MATERIALI_BASE, 'applica');
+};
+
+// Quello che il preventivo legge: un documento con la sua versione, come il
+// rapportino fra telefono e ufficio. Due programmi che si scambiano un file senza
+// un patto scritto prima o poi smettono di capirsi senza che nessuno lo noti.
+// I settori servono alla scheda di cantiere (cosa va su quale valvola), i
+// materiali al preventivo; il resto del file è il progetto da riaprire qui.
+const VERSIONE_PROGETTO = 1;
+function progettoPerIlPreventivo(){
+  const settori = new Map();
+  rows.forEach(r => {
+    const it = item(r); if (!it || !r.qta) return;
+    if (!settori.has(r.settore)) settori.set(r.settore, {numero: r.settore, portata: 0, irrigatori: []});
+    const s = settori.get(r.settore);
+    s.portata = Math.round((s.portata + it.q * r.qta) * 100) / 100;
+    s.irrigatori.push({serie: it.serie, modello: it.modello, colore: it.colore, arco: it.arco, quantita: r.qta});
+  });
+  return {
+    tipo: 'progetto-irrigazione', versione: VERSIONE_PROGETTO, id: progettoID,
+    salvato: new Date().toISOString(),
+    settori: [...settori.values()].sort((a, b) => a.numero - b.numero),
+    materiali: elencoMateriali().filter(m => String(m.descrizione || '').trim() && Number(m.quantita) > 0)
+      .map(m => ({codice: m.codice || '', descrizione: m.descrizione.trim(), unita: m.unita || 'n',
+        quantita: Number(m.quantita), calcolo: m.calcolo || ''})),
+  };
+}
+
+function avvioMateriali(){
+  let salvato = null;
+  try { salvato = localStorage.getItem(CHIAVE_MATERIALI); } catch {}
+  applicaMateriali(salvato || MATERIALI_BASE, 'avvio');
+}
+
 renderProve();
+avvioMateriali();
 avvioCatalogo();
 </script>
 </body>

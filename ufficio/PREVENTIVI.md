@@ -76,6 +76,11 @@ da sé. **Un preventivo è un conto che si fa prima.**
 
 ## Il tool dei settori ha già il ponte
 
+> **Fatto, il 12/11/2026.** Il tool sta in `irrigazione/index.html`, conta i
+> materiali con le regole del suo catalogo e li salva nel progetto; l'ufficio li
+> importa nel preventivo. Come funziona sta in `CLAUDE.md`, *L'impianto di
+> irrigazione*. Quello che segue è il ragionamento di partenza.
+
 `settori_irrigazione.html` è un file singolo che gira offline, separato da questa
 suite. Due cose che ha già dentro e che servono al preventivo:
 
@@ -392,6 +397,7 @@ ancora — sono i preventivi da richiamare, non quelli persi.
 - **Il rilievo delle misure sul telefono** è stato messo in fondo alla lista. Il
   buco vero è fra i numeri del titolare e il preventivo, non fra il giardino e i
   numeri. Se la beta dice il contrario, si riapre.
-- **Come si importa il file del tool dei settori**: un bottone in ufficio che
-  legge `irrigazione_*.json`, oppure un'esportazione dedicata dal tool. Da
-  decidere guardando un preventivo d'impianto vero.
+- ~~**Come si importa il file del tool dei settori**~~: deciso. Le regole dei
+  materiali stanno nel tool, dove il progetto c'è; il file di progetto porta i
+  materiali, e in ufficio «💧 Impianto di irrigazione dal progetto» li prezza dal
+  listino dell'irrigazione. Vedi `CLAUDE.md`.

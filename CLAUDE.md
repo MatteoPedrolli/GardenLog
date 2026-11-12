@@ -9,6 +9,8 @@ persona sola, quasi sempre dal telefono, spesso in giardino senza campo.
 - `index.html` — l'app del cantiere: stili, markup e codice in un file solo
 - `ufficio/index.html` — l'app dell'ufficio, stessa forma, un file solo
 - `capo/index.html` — l'app del capo: solo la pagina Prossimi, con il suo service worker
+- `irrigazione/index.html` — il tool dei settori d'irrigazione, per progettare un impianto
+  e contarne i materiali: un file solo, si apre anche con un doppio clic
 - `rapportino.js` — il documento che le due app si scambiano, caricato da entrambe
 - `sw.js` — service worker, serve l'app dalla cache così si apre offline
 - `manifest.json` + icone — installazione sulla schermata home
@@ -1101,6 +1103,72 @@ un rilievo, come non lo riscrive un'importazione. Il riquadro sta in cima, coi
 contatti: con un preventivo in mano, la prima cosa che si fa è richiamare.
 
 Quello che manca è in `ufficio/PREVENTIVI.md`.
+
+## L'impianto di irrigazione: il tool conta, l'ufficio prezza
+
+L'impianto si progetta col CAD e col **tool dei settori** (`irrigazione/index.html`):
+irrigatori per settore, portate, la distinta degli ugelli. Era un file a parte, fatto
+fuori da qui, e il preventivo lo ribatteva a mano — gli ugelli, poi corpi, valvole,
+raccordi, tubi — sul foglio della segretaria. È entrato nel repository perché i due
+programmi si scambiano un file, e due programmi che lo fanno da posti diversi prima o
+poi smettono di capirsi senza che nessuno lo noti. Resta **un file solo, senza
+dipendenze**, che si apre anche con un doppio clic: non carica `rapportino.js`, e il
+service worker del telefono lo lascia stare come lascia stare `/ufficio/`.
+
+**Le regole dei materiali stanno nel tool**, non in ufficio: sensore pioggia, quale
+centralina, quanti metri di tubo si capiscono col progetto sotto mano, ed è lì che si
+decide. Nel *Catalogo materiali e regole* ogni articolo ha il codice del fornitore e,
+se si conta da solo, una regola — `irrigatore`, `irrigatore <serie>`, `settore`,
+`impianto`, con *ogni* e *quanti* («settore;3;1», un pozzetto ogni tre settori,
+arrotondato per eccesso) (`materialiProposti()`). Gli ugelli escono dalla distinta, col
+codice come ottava colonna del catalogo ugelli, facoltativa: i cataloghi di prima ne
+hanno sette. Lo stesso articolo da due regole — il corpo statico per tre serie — è una
+riga sola (`chiaveMateriale()`: il codice, o il nome). Quello che non ha regola si
+aggiunge a mano. Una quantità corretta, una proposta tolta, una riga aggiunta stanno in
+`statoMateriali` e restano quando cambiano i settori. Nelle caselle niente separatore
+delle migliaia (`scrivi()`): «1.200» metri di tubo si rileggevano come 1,2.
+
+**Nel tool niente prezzi.** Sarebbe un secondo listino, e due listini divergono.
+
+**«Salva progetto» è anche il documento per l'ufficio**: lo stesso file di sempre, con
+in più `tipo: 'progetto-irrigazione'`, `versione`, un `id` che resta fra un salvataggio
+e l'altro, i `settori` coi loro irrigatori e i `materiali` (codice, descrizione, unità,
+quantità, da dove) — `progettoPerIlPreventivo()`. Un file solo da tenere, invece di un
+progetto e un'esportazione che possono non andare d'accordo. Il progetto di prima si
+apre ancora nel tool; in ufficio si rifiuta dicendo di risalvarlo
+(`leggiProgettoIrrigazione()`), come un documento di un'altra versione.
+
+**In ufficio il progetto è una voce a corpo** («💧 Impianto di irrigazione dal
+progetto», `importaProgettoIrrigazione()`, `rigaIrrigazione()`): i materiali sono i
+componenti, e in fondo la **manodopera a ore, che si scrive in ufficio** — il progetto
+non le sa, e sono anche le mezze giornate in lavagna. Il prezzo di un materiale è il
+**prezzo d'acquisto** del listino dell'irrigazione **più il ricarico della riga**
+(`preparaRigaIrrigazione()`): il listino del fornitore dice quanto costa, il margine lo
+decide chi firma, e il ricarico di partenza in Listino è solo la proposta. Il prezzo a
+corpo è la somma, proposta e da confermare come gli altri. Un materiale che il listino
+non ha è un buco, e il Listino lo elenca fra «Nei preventivi e non in listino». Si cerca
+**per codice**; per nome solo se il progetto il codice non ce l'ha — due articoli con lo
+stesso nome e codici diversi sono due prezzi.
+
+**Reimportato, il progetto corretto aggiorna la stessa riga** (stesso `id`): le
+quantità seguono il progetto, e restano quello che l'ufficio ha deciso — prezzi scritti
+a mano, quantità ritoccate, componenti tolti (`tolti`) o aggiunti, ore, descrizione,
+ricarico. È la regola del rilievo corretto. Finché il preventivo è una bozza i prezzi
+d'acquisto si rileggono dal listino a ogni apertura: un listino del fornitore
+aggiornato ieri vale anche per il preventivo della settimana scorsa. Il progetto di un
+altro cliente si chiede prima di usarlo: il nome nel tool è scritto a mano.
+
+**Il listino dell'irrigazione è un file suo**, `listino-irrigazione.json` — codice,
+descrizione, unità, prezzo d'acquisto, ricarico di partenza —, e non sta in
+`listino.json`: sono centinaia di articoli, e il listino viaggia fino al telefono per
+chi paga sul posto. Solo dell'ufficio come il listino: illeggibile non si riscrive, ed
+entra nella copia del giorno. Si riempie dal **CSV del fornitore**
+(Codice;Descrizione;Unità;Prezzo, «1.234,50» compreso, `leggiCsvIrrigazione()`): un
+listino nuovo aggiorna i prezzi di quelli che ci sono e aggiunge gli altri.
+
+**La scheda di cantiere dice cosa va su quale settore** — «Settore 1 · 17,74 l/min:
+4 × Hunter Rotator MP2000 Nero 90°» —, sotto i materiali, senza prezzi. Al cliente va
+la voce a corpo con la sua descrizione, senza codici né prezzi d'acquisto.
 
 ## L'app dell'ufficio
 

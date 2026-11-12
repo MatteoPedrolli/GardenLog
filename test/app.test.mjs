@@ -6323,6 +6323,235 @@ try {
   ok('e nella voce restano tolto il componente tolto e aggiunto quello aggiunto, anche nei capitoli dell\'ufficio',
     modifiche.siepeDopo && modifiche.capitoloDopo, JSON.stringify(modifiche));
 
+  // ── L'IMPIANTO DI IRRIGAZIONE: DAL TOOL DEI SETTORI AL PREVENTIVO ──
+  // Il tool conta i materiali dal progetto e li salva col progetto; l'ufficio li
+  // prende e ci mette i prezzi d'acquisto del listino dell'irrigazione, per codice,
+  // col ricarico della riga. Il file è quello vero salvato dal tool: se i due
+  // programmi smettono di capirsi, si vede qui.
+  const pagI = await ctxU.newPage();
+  const erroriI = [];
+  pagI.on('pageerror', e => erroriI.push(String(e)));
+  pagI.on('dialog', d => d.accept());
+  await pagI.goto(BASE + 'irrigazione/', { waitUntil: 'load' });
+  const tool = await pagI.evaluate(() => {
+    const r = {};
+    applicaMateriali(`Codice;Descrizione;Unità;Per;Ogni;Quanti
+PROS-04;Corpo statico a scomparsa 10 cm;n;irrigatore Hunter Rotator;1;1
+PROS-04;Corpo statico a scomparsa 10 cm;n;irrigatore Hunter PS;1;1
+PGP-ADJ;Rotore PGP-ADJ;n;irrigatore Hunter PGP-ADJ;1;1
+PGV-101;Elettrovalvola 1";n;settore;1;1
+;Raccordo maschio 1";n;settore;1;2
+PZ-RECT;Pozzetto rettangolare;n;settore;3;1
+X-CORE-4;Centralina 4 stazioni;n;;;
+PE25;Tubo PE ø25;m;;;`, 'applica');
+    catalog.find(x => x.serie === 'Hunter Rotator' && x.modello === 'MP2000' && x.colore === 'Nero').codice = 'MP2000-90';
+    rows = [
+      {id:1, settore:1, serie:'Hunter Rotator', modello:'MP2000', arco:'90°', qta:4},
+      {id:2, settore:1, serie:'Hunter Rotator', modello:'MP2000', arco:'180°', qta:2},
+      {id:3, settore:2, serie:'Hunter PS', modello:'12A', arco:'180°', qta:3},
+      {id:4, settore:3, serie:'Hunter PGP-ADJ', modello:'Ug. 3 rosso', arco:'3 bar', qta:2},
+      {id:5, settore:4, serie:'Hunter PS', modello:'12A', arco:'90°', qta:2},
+    ];
+    uid = 6;
+    document.getElementById('cliente').value = 'Rossi Irrigazione';
+    renderRows();
+    const m = () => progettoPerIlPreventivo().materiali;
+    const trova = d => m().find(x => x.descrizione === d) || {};
+    r.ugello = trova('Ugello Hunter Rotator MP2000 Nero').quantita === 6 && trova('Ugello Hunter Rotator MP2000 Nero').codice === 'MP2000-90';
+    // Lo stesso articolo da due regole è una riga sola.
+    r.corpo = trova('Corpo statico a scomparsa 10 cm').quantita === 11 &&
+      m().filter(x => x.codice === 'PROS-04').length === 1;
+    r.rotore = trova('Rotore PGP-ADJ').quantita === 2;
+    r.valvole = trova('Elettrovalvola 1"').quantita === 4 && trova('Raccordo maschio 1"').quantita === 8;
+    r.pozzetti = trova('Pozzetto rettangolare').quantita === 2 && trova('Pozzetto rettangolare').calcolo.includes('ogni 3 settori');
+    // Senza regola non si propone: centralina e tubo si aggiungono a mano.
+    r.senzaRegola = !trova('Centralina 4 stazioni').quantita;
+    // Una quantità corretta resta tua anche se i settori cambiano.
+    const vv = document.querySelector('#materiali tr[data-chiave="c:pgv-101"] input[data-f=quantita]');
+    // Sette, non cinque: col settore in più la regola darebbe cinque da sola.
+    vv.value = '7'; vv.dispatchEvent(new Event('input', { bubbles: true })); vv.dispatchEvent(new Event('change', { bubbles: true }));
+    rows.push({id:6, settore:5, serie:'Hunter PS', modello:'12A', arco:'90°', qta:1});
+    renderRows();
+    r.mano = trova('Elettrovalvola 1"').quantita === 7 && trova('Raccordo maschio 1"').quantita === 10;
+    // Tolta una proposta, non torna.
+    document.querySelector('#materiali tr[data-chiave="d:raccordo maschio 1\\""] button[data-azione=togli]').click();
+    r.tolto = !trova('Raccordo maschio 1"').quantita && !document.getElementById('rimettiTolti').hidden;
+    // Aggiunti a mano: la centralina dal catalogo (col codice) e 120 m di tubo.
+    const agg = document.getElementById('aggiungiMateriale');
+    agg.value = 'cat:' + materialiCatalogo.findIndex(x => x.codice === 'X-CORE-4'); agg.dispatchEvent(new Event('change'));
+    let q = [...document.querySelectorAll('#materiali tr.aggiunto input[data-f=quantita]')].pop();
+    q.value = '1'; q.dispatchEvent(new Event('input', { bubbles: true }));
+    agg.value = 'mano'; agg.dispatchEvent(new Event('change'));
+    const ultima = [...document.querySelectorAll('#materiali tr.aggiunto')].pop();
+    const d = ultima.querySelector('[data-f=descrizione]');
+    d.value = 'tubo pe ø25'; d.dispatchEvent(new Event('input', { bubbles: true }));
+    q = ultima.querySelector('[data-f=quantita]'); q.value = '1200'; q.dispatchEvent(new Event('input', { bubbles: true }));
+    r.aggiunti = trova('Centralina 4 stazioni').codice === 'X-CORE-4' && trova('Centralina 4 stazioni').quantita === 1 &&
+      (m().find(x => x.codice === 'PE25') || {}).quantita === 1200;
+    // Mille e duecento metri restano milleduecento quando si ridisegna.
+    renderMateriali();
+    r.migliaia = (m().find(x => x.codice === 'PE25') || {}).quantita === 1200 &&
+      [...document.querySelectorAll('#materiali input[data-f=quantita]')].some(x => x.value === '1200');
+    r.senzaCodice = document.getElementById('senzaCodice').textContent.includes('codice del fornitore');
+    return r;
+  });
+  ok('il tool conta gli ugelli dalla distinta, col codice del catalogo', tool.ugello, JSON.stringify(tool));
+  ok('e dalle regole corpi, rotori, valvole e raccordi, con lo stesso articolo in una riga sola',
+    tool.corpo && tool.rotore && tool.valvole, JSON.stringify(tool));
+  ok('«ogni 3 settori» arrotonda per eccesso, e quello senza regola non si propone', tool.pozzetti && tool.senzaRegola, JSON.stringify(tool));
+  ok('una quantità corretta resta quando i settori cambiano, le altre seguono', tool.mano, JSON.stringify(tool));
+  ok('una proposta tolta non torna, e si può rimettere', tool.tolto, JSON.stringify(tool));
+  ok('si aggiunge a mano dal catalogo o scrivendo, e il codice viene dal nome', tool.aggiunti, JSON.stringify(tool));
+  ok('1200 metri non diventano 1,2 ridisegnando, e il tool dice quanti materiali non hanno codice',
+    tool.migliaia && tool.senzaCodice, JSON.stringify(tool));
+
+  // Salva progetto: il file vero, scaricato.
+  const [scaricato] = await Promise.all([pagI.waitForEvent('download'), pagI.click('#save')]);
+  const { readFileSync: leggiFileI } = await import('node:fs');
+  const progettoTesto = leggiFileI(await scaricato.path(), 'utf8');
+  const progetto = JSON.parse(progettoTesto);
+  ok('il progetto salvato dice cosa è, la versione, i settori e i materiali',
+    progetto.tipo === 'progetto-irrigazione' && progetto.versione === 1 && progetto.id &&
+    progetto.settori.length === 5 && progetto.settori[0].irrigatori.length === 2 &&
+    progetto.materiali.some(m => m.codice === 'PGV-101' && m.quantita === 7) &&
+    scaricato.suggestedFilename() === 'irrigazione_Rossi_Irrigazione.json', scaricato.suggestedFilename());
+  // Riaperto, torna com'era: le quantità corrette, i tolti, gli aggiunti, lo stesso id.
+  await pagI.reload({ waitUntil: 'load' });
+  await pagI.setInputFiles('#openFile', { name: 'irrigazione_Rossi_Irrigazione.json', mimeType: 'application/json',
+    buffer: Buffer.from(progettoTesto) });
+  await pagI.waitForFunction(() => rows.length === 6);
+  const riaperto = await pagI.evaluate(() => ({ id: progettoID, materiali: progettoPerIlPreventivo().materiali }));
+  ok('riaperto nel tool, il progetto torna com\'era, con lo stesso identificativo',
+    riaperto.id === progetto.id && JSON.stringify(riaperto.materiali) === JSON.stringify(progetto.materiali),
+    JSON.stringify(riaperto.materiali.map(m => m.descrizione + ' ' + m.quantita)));
+  // Un progetto salvato col tool di prima si apre lo stesso.
+  await pagI.setInputFiles('#openFile', { name: 'vecchio.json', mimeType: 'application/json',
+    buffer: Buffer.from(JSON.stringify({ cliente: 'Vecchio', qdisp: '30', rows: [{ id: 1, settore: 1, serie: 'Hunter PS',
+      modello: '12A', arco: '90°', qta: 2 }], catalog: [{ serie: 'Hunter PS', modello: '12A', colore: 'Verde', arco: '90°',
+      pressione: '2,1', raggio: '3,7', q: 2.46 }], conta: {} })) });
+  await pagI.waitForFunction(() => document.getElementById('cliente').value === 'Vecchio');
+  const vecchio = await pagI.evaluate(() => progettoPerIlPreventivo().materiali.map(m => m.descrizione + ' ' + m.quantita));
+  ok('un progetto salvato col tool di prima si apre, e i materiali escono dalle regole', vecchio.includes('Ugello Hunter PS 12A Verde 2') &&
+    vecchio.some(x => x.startsWith('Elettrovalvola')), vecchio.join(', '));
+  ok('nessun errore JavaScript nel tool dei settori', erroriI.length === 0, erroriI.join(' | '));
+  await pagI.close();
+
+  // L'ufficio: il listino dell'irrigazione e il progetto nel preventivo.
+  const irrUff = await pagU.evaluate(async ({ testo, vecchioTesto }) => {
+    const prima = PREVENTIVO, conferma = window.confirm;
+    const r = {};
+    // Il listino del fornitore come esce da Excel, con un prezzo «1.234,50».
+    await importaListinoIrrigazione(new File([
+      'Codice;Descrizione;Unità;Prezzo\n' +
+      'PROS-04;Corpo Pro-Spray 10 cm;n;4,20\n' +
+      'MP2000-90;Ugello MP2000 90-210;n;6,10\n' +
+      'PGV-101;Elettrovalvola PGV 1";n;28,00\n' +
+      'X-CORE-4;Centralina X-Core 4;n;1.234,50\n' +
+      'PE25;Tubo PE 25;m;0,90\n'], 'listino.csv'));
+    r.importato = IRRIGAZIONE.articoli.length === 5 && articoloIrrigazione({ codice: 'x-core-4' }).costo === 1234.5 &&
+      JSON.parse(await leggiTesto(CARTELLA, FILE_LISTINO_IRRIGAZIONE)).articoli.length === 5;
+    // Un listino nuovo aggiorna i prezzi e aggiunge, non raddoppia.
+    await importaListinoIrrigazione(new File(['PGV-101;Elettrovalvola PGV 1";n;30\nPZ-RECT;Pozzetto;n;15'], 'nuovo.csv'));
+    r.aggiornato = IRRIGAZIONE.articoli.length === 6 && articoloIrrigazione({ codice: 'PGV-101' }).costo === 30;
+    IRRIGAZIONE.ricarico = 30; IRRIGAZIONE_DA_SALVARE = true;
+    await salvaListinoIrrigazione();
+    await ricarica();
+    r.riletto = IRRIGAZIONE.ricarico === 30 && IRRIGAZIONE.articoli.length === 6;
+
+    // Il progetto nel preventivo.
+    const rilievo = leggiRilievo({ tipo: 'rilievo', versione: 1, id: 'ril-irr', revisione: 1, origine: 'ufficio',
+      creato: '2026-11-12T08:00:00Z', cliente: { nome: 'Rossi Irrigazione' }, disegno: true, lavorazioni: [
+        { id: 'l1', genere: 'manodopera', nome: 'Pulizia', ore: 2 }] });
+    const d = costruisciPreventivo(rilievo, null);
+    PREVENTIVO = { doc: d, file: '', anno: '' };
+    vaiA('preventivo');
+    await importaProgettoIrrigazione(new File([testo], 'irrigazione_Rossi_Irrigazione.json'));
+    const i = d.righe.findIndex(x => x.irrigazione);
+    const riga = d.righe[i];
+    const comp = k => riga.componenti.find(c => c.codice === k) || {};
+    r.riga = i >= 0 && riga.unita === 'a corpo' && /5 settori/.test(riga.descrizione);
+    // Prezzo d'acquisto più il ricarico; quello che il listino non ha è un buco.
+    r.prezzi = comp('PGV-101').prezzo === 39 && comp('PGV-101').quantita === 7 && comp('PROS-04').prezzo === 5.46 &&
+      comp('PE25').quantita === 1200 && comp('PGP-ADJ').prezzo === '' && /non nel listino/.test(comp('PGP-ADJ').calcolo);
+    r.dice = /acquisto/.test(comp('PGV-101').calcolo) && /\+ 30%/.test(comp('PGV-101').calcolo);
+    // Il prezzo a corpo è una proposta: la somma, da confermare.
+    r.proposto = riga.proposto && riga.prezzo === sommaComponenti(riga.componenti).totale;
+    // Le ore si scrivono qui, e fanno le mezze giornate.
+    const mano = riga.componenti.find(c => c.chiave === CHIAVE_MANODOPERA_IRRIGAZIONE);
+    mano.quantita = 14;
+    r.mezze = mezzePreventivo(d).ore === 16 && mezzePreventivo(d).mezze === 2;
+    // Deciso in ufficio: un prezzo, un componente tolto, il ricarico della riga.
+    comp('PROS-04').prezzo = 5; comp('PROS-04').prezzoMano = true;
+    window.confirm = () => true;
+    togliComponente(i, riga.componenti.findIndex(c => c.codice === 'PZ-RECT'));
+    modificaRicaricoRiga(i, '50');
+    r.ricarico = comp('PGV-101').prezzo === 45 && comp('PROS-04').prezzo === 5;
+    // Il progetto corretto: 6 valvole invece di 5. Stesso id, stessa riga.
+    const corretto = JSON.parse(testo);
+    corretto.materiali.find(m => m.codice === 'PGV-101').quantita = 6;
+    await importaProgettoIrrigazione(new File([JSON.stringify(corretto)], 'irrigazione_Rossi_Irrigazione.json'));
+    const riga2 = d.righe.find(x => x.irrigazione);
+    const comp2 = k => riga2.componenti.find(c => c.codice === k) || {};
+    r.reimport = d.righe.filter(x => x.irrigazione).length === 1 && comp2('PGV-101').quantita === 6 &&
+      comp2('PROS-04').prezzo === 5 && !comp2('PZ-RECT').codice && riga2.irrigazione.ricarico === 50 &&
+      riga2.componenti.find(c => c.chiave === CHIAVE_MANODOPERA_IRRIGAZIONE).quantita === 14;
+    // La scheda di cantiere: i settori con i loro irrigatori, e niente prezzi.
+    const scheda = costruisciSchedaCantiere(d);
+    r.scheda = scheda.includes('Settore 1') && scheda.includes('4 × Hunter Rotator MP2000 Nero 90°') &&
+      scheda.includes('Elettrovalvola 1') && !scheda.includes('€') && !scheda.includes('acquisto');
+    // Al cliente va la riga a corpo, non i codici né i prezzi d'acquisto.
+    const foglio = costruisciFoglioPreventivo(d);
+    r.foglio = foglio.includes('impianto di irrigazione automatico') && !foglio.includes('PGV-101') && !foglio.includes('acquisto');
+    // Il listino dice cosa manca, e lo si mette con un clic.
+    vaiA('listino');
+    r.mancanti = document.getElementById('listino-irrigazione').textContent.includes('Nei preventivi e non in listino') &&
+      document.getElementById('listino-irrigazione').textContent.includes('Rotore PGP-ADJ');
+    // Un progetto salvato col tool di prima si rifiuta dicendo cosa fare.
+    let errore = '';
+    const avvisaPrima = window.avvisa;
+    window.avvisa = (t) => { errore = t; };
+    vaiA('preventivo');
+    await importaProgettoIrrigazione(new File([vecchioTesto], 'vecchio.json'));
+    r.vecchio = /salvalo di nuovo/.test(errore) && d.righe.filter(x => x.irrigazione).length === 1;
+    await importaProgettoIrrigazione(new File([JSON.stringify({ ...JSON.parse(testo), versione: 2 })], 'futuro.json'));
+    r.futuro = /versione 2/.test(errore);
+    // Il progetto di un altro cliente si chiede.
+    let chiesto = '';
+    window.confirm = t => { chiesto = t; return false; };
+    await importaProgettoIrrigazione(new File([JSON.stringify({ ...JSON.parse(testo), id: 'altro', cliente: 'Bianchi' })], 'b.json'));
+    r.altroCliente = /Bianchi/.test(chiesto) && d.righe.filter(x => x.irrigazione).length === 1;
+    window.avvisa = avvisaPrima;
+    // Un listino dell'irrigazione che non si legge non si riscrive.
+    await scriviTesto(CARTELLA, FILE_LISTINO_IRRIGAZIONE, '{"tipo":"listino-irr');
+    await ricarica();
+    r.nonLetto = NON_LETTI.has(FILE_LISTINO_IRRIGAZIONE) && !(await salvaListinoIrrigazione()) &&
+      (await leggiTesto(CARTELLA, FILE_LISTINO_IRRIGAZIONE)) === '{"tipo":"listino-irr';
+    await CARTELLA.removeEntry(FILE_LISTINO_IRRIGAZIONE);
+    window.confirm = conferma;
+    await ricarica();
+    PREVENTIVO = prima;
+    vaiA('preventivi');
+    return r;
+  }, { testo: progettoTesto, vecchioTesto: JSON.stringify({ cliente: 'Vecchio', rows: [], catalog: [] }) });
+  ok('il listino del fornitore si importa da CSV, con «1.234,50», e il file si scrive', irrUff.importato, JSON.stringify(irrUff));
+  ok('un listino nuovo aggiorna i prezzi e aggiunge gli articoli, e il ricarico resta rileggendo',
+    irrUff.aggiornato && irrUff.riletto, JSON.stringify(irrUff));
+  ok('il progetto diventa una voce a corpo dell\'impianto, coi settori nella descrizione', irrUff.riga, JSON.stringify(irrUff));
+  ok('i materiali hanno il prezzo d\'acquisto più il ricarico, trovati per codice; quello che manca è un buco',
+    irrUff.prezzi && irrUff.dice, JSON.stringify(irrUff));
+  ok('il prezzo a corpo è la somma proposta, e le ore scritte qui fanno le mezze giornate',
+    irrUff.proposto && irrUff.mezze, JSON.stringify(irrUff));
+  ok('il ricarico della riga cambia i prezzi, non quello scritto a mano', irrUff.ricarico, JSON.stringify(irrUff));
+  ok('il progetto corretto aggiorna la stessa riga: quantità nuove, e restano prezzo, tolti, ricarico e ore',
+    irrUff.reimport, JSON.stringify(irrUff));
+  ok('la scheda di cantiere dice cosa va su quale settore, senza prezzi', irrUff.scheda, JSON.stringify(irrUff));
+  ok('al cliente va la voce a corpo, senza codici né prezzi d\'acquisto', irrUff.foglio, JSON.stringify(irrUff));
+  ok('il listino dice quali articoli dei preventivi non ci sono', irrUff.mancanti, JSON.stringify(irrUff));
+  ok('un progetto del tool di prima o di una versione futura si rifiuta dicendo cosa fare',
+    irrUff.vecchio && irrUff.futuro, JSON.stringify(irrUff));
+  ok('il progetto di un altro cliente si chiede prima di usarlo', irrUff.altroCliente, JSON.stringify(irrUff));
+  ok('un listino dell\'irrigazione che non si legge non si riscrive', irrUff.nonLetto, JSON.stringify(irrUff));
+
   // ── LE SINGOLE OPERAZIONI IN UFFICIO ──
   // Nel nuovo rilievo e nel preventivo si aggiungono anche le operazioni da sole.
   // Il trattamento è a corpo nel listino: vale 1, e non chiede ore né misura.
