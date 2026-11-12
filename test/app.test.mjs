@@ -6172,6 +6172,101 @@ try {
   ok('una riga del campo tolta si ricorda, e si riprende dal menù', modifiche.tolta && modifiche.rimessa, JSON.stringify(modifiche));
   ok('togliere una riga o un componente chiede conferma; una riga vuota appena aggiunta no',
     modifiche.chiedeComponente && modifiche.chiedeRiga && modifiche.vuotaSenzaDomanda, JSON.stringify(modifiche));
+
+  // Le frasi per le descrizioni: a destra, per categoria o senza, e con un clic
+  // nella voce scelta, al punto del cursore. Stanno in un file dell'ufficio.
+  const frasi = await pagU.evaluate(async () => {
+    const prima = PREVENTIVO, conferma = window.confirm;
+    const r = {};
+    const rilievo = leggiRilievo({ tipo: 'rilievo', versione: 1, id: 'ril-frasi', revisione: 1, origine: 'ufficio',
+      creato: '2026-11-12T08:00:00Z', cliente: { nome: 'Prova Frasi' }, lavorazioni: [
+        { id: 's1', genere: 'insieme', nome: 'Siepe', unita: 'm', misura: 10, ore: 4, stile: 'lauro',
+          insieme: { id: 'siepe', nome: 'Siepe', componenti: [
+            { tipoID: 'piantumazione', nome: 'Piantumazione', voceID: 'piante', voce: 'Piante', unita: 'n' }] } }] });
+    const d = costruisciPreventivo(rilievo, null);
+    PREVENTIVO = { doc: d, file: '', anno: '' };
+    vaiA('preventivo');
+    r.pannello = !!document.getElementById('pannello-frasi') &&
+      document.getElementById('pannello-frasi').textContent.includes('Nessuna frase ancora');
+    // Una frase nuova, con la sua categoria.
+    FRASE_IN_MODIFICA = 'nuova'; ridisegnaFrasi();
+    document.getElementById('frase-categoria').value = 'Prato';
+    document.getElementById('frase-testo').value = 'Formazione di tappeto erboso con lavorazione del terreno e apporto di terriccio';
+    await salvaFrase('');
+    const prato = FRASI[0];
+    r.salvataSuFile = JSON.parse(await leggiTesto(CARTELLA, FILE_FRASI)).frasi.length === 1;
+    // La voce scelta è l'ultima descrizione cliccata.
+    const campo = document.querySelector('#pagina-preventivo textarea[data-riga="0"]');
+    r.textarea = !!campo;
+    campo.focus();
+    r.scelta = FRASE_DOVE === 0 && document.getElementById('dove-frasi').textContent.includes('Vanno in') &&
+      !!campo.closest('tr.riga-scelta-frasi');
+    // Al punto del cursore, con gli spazi giusti.
+    d.righe[0].descrizione = 'Siepe: e basta'; campo.value = d.righe[0].descrizione;
+    campo.focus(); campo.setSelectionRange(6, 6);
+    usaFrase(prato.id);
+    r.alCursore = d.righe[0].descrizione === 'Siepe: ' + prato.testo + ' e basta';
+    // In una descrizione vuota è la descrizione.
+    d.righe[1].descrizione = '';
+    disegnaPreventivo();
+    document.querySelector('#pagina-preventivo textarea[data-riga="1"]').focus();
+    usaFrase(prato.id);
+    r.vuota = d.righe[1].descrizione === prato.testo;
+    // Una descrizione scritta bene diventa una frase, col settore come categoria.
+    d.righe[0].descrizione = 'Fornitura e messa a dimora di siepe di lauro';
+    disegnaPreventivo();
+    document.querySelector('#pagina-preventivo textarea[data-riga="0"]').focus();
+    fraseDallaDescrizione();
+    r.bozza = document.getElementById('frase-categoria').value === 'Siepe' &&
+      document.getElementById('frase-testo').value === 'Fornitura e messa a dimora di siepe di lauro';
+    await salvaFrase('');
+    // Raccolte per categoria; quella del settore della voce scelta viene prima, aperta:
+    // basta cliccare nella sua descrizione.
+    document.querySelector('#pagina-preventivo textarea[data-riga="1"]').focus();
+    document.querySelector('#pagina-preventivo textarea[data-riga="0"]').focus();
+    const gruppi = [...document.querySelectorAll('#pannello-frasi details')].map(x => x.querySelector('summary').textContent.split(' ·')[0] + (x.open ? '+' : '-'));
+    r.gruppi = gruppi.join(',');
+    // La ricerca non bada ad accenti e maiuscole.
+    FRASI_CERCA = 'TAPPETO'; ridisegnaFrasi();
+    r.cerca = document.querySelectorAll('#pannello-frasi .testo-frase').length === 1;
+    FRASI_CERCA = ''; ridisegnaFrasi();
+    // Rileggendo la cartella ci sono ancora.
+    await ricarica();
+    r.riletto = FRASI.length === 2;
+    // Togliere chiede.
+    window.confirm = () => false;
+    await togliFrase(FRASI[0].id);
+    r.togliChiede = FRASI.length === 2;
+    window.confirm = () => true;
+    await togliFrase(FRASI[0].id);
+    r.tolta = FRASI.length === 1 && JSON.parse(await leggiTesto(CARTELLA, FILE_FRASI)).frasi.length === 1;
+    // Sul foglio una frase va a capo dove l'ha messa chi l'ha scritta.
+    r.foglio = costruisciFoglioPreventivo({ ...d, righe: [{ ...d.righe[1], descrizione: 'riga uno\nriga due' }] }).includes('class="desc"');
+    // Un file delle frasi che c'è e non si legge non si riscrive.
+    await scriviTesto(CARTELLA, FILE_FRASI, '{"tipo":"frasi-prev');
+    await ricarica();
+    r.nonLetto = NON_LETTI.has(FILE_FRASI) && FRASI.length === 0 && !(await salvaFrasi()) &&
+      (await leggiTesto(CARTELLA, FILE_FRASI)) === '{"tipo":"frasi-prev';
+    await CARTELLA.removeEntry(FILE_FRASI);
+    window.confirm = conferma;
+    await ricarica();
+    PREVENTIVO = prima;
+    disegnaPreventivo();
+    return r;
+  });
+  ok('a destra del preventivo c\'è il pannello delle frasi, e una frase nuova si salva sul file',
+    frasi.pannello && frasi.salvataSuFile && frasi.textarea, JSON.stringify(frasi));
+  ok('la voce scelta è l\'ultima descrizione cliccata, e il pannello dice quale', frasi.scelta, JSON.stringify(frasi));
+  ok('un clic mette la frase al punto del cursore con gli spazi giusti, e in una descrizione vuota è la descrizione',
+    frasi.alCursore && frasi.vuota, JSON.stringify(frasi));
+  ok('una descrizione scritta diventa una frase, col settore come categoria', frasi.bozza, JSON.stringify(frasi));
+  ok('le frasi stanno per categoria, e quella del settore della voce scelta viene prima, aperta',
+    frasi.gruppi === 'Siepe+,Prato-', frasi.gruppi);
+  ok('la ricerca non bada a maiuscole, e rileggendo la cartella le frasi ci sono',
+    frasi.cerca && frasi.riletto, JSON.stringify(frasi));
+  ok('togliere una frase chiede, e il file segue', frasi.togliChiede && frasi.tolta, JSON.stringify(frasi));
+  ok('sul foglio una descrizione va a capo dove l\'ha messa chi l\'ha scritta', frasi.foglio);
+  ok('un file delle frasi che non si legge non si riscrive', frasi.nonLetto, JSON.stringify(frasi));
   ok('il rilievo corretto tiene l\'ordine deciso: la nuova lavorazione dopo l\'ultima del campo, la tolta non torna',
     modifiche.dopo === 'sezione,p1,n1,trasferimento,libera,capitolo' && modifiche.prima === 'sezione,p1,trasferimento,libera,capitolo',
     modifiche.prima + ' → ' + modifiche.dopo);

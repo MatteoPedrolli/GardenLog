@@ -208,6 +208,29 @@ table.elenco td.via-col { padding-left: 14px; width: 38px; }
 .comandi-riga button.sposta:hover:not(:disabled) { color: var(--inchiostro); }
 .comandi-riga button.sposta:disabled { opacity: 0.25; cursor: default; }
 tr.componenti.aggiungi-componente td { border-bottom: none; padding-top: 6px; }
+/* Il preventivo a sinistra, le frasi a destra: si scrive guardando le frasi. */
+.preventivo-con-frasi { display: grid; grid-template-columns: minmax(0, 1fr) 300px; gap: 16px; align-items: start; }
+.preventivo-righe { min-width: 0; overflow-x: auto; }
+.pannello-frasi { position: sticky; top: 12px; max-height: calc(100vh - 24px); overflow-y: auto;
+  background: var(--white); border: 1px solid var(--border); border-radius: var(--radius-sm); padding: 12px; }
+/* La tabella del preventivo vuole circa 780 px: sotto, il pannello passa sotto
+   invece di finirle sopra. */
+@media (max-width: 1400px) {
+  .preventivo-con-frasi { grid-template-columns: minmax(0, 1fr); }
+  .pannello-frasi { position: static; max-height: none; }
+}
+textarea.descrizione-riga { resize: vertical; min-height: 34px; overflow: hidden; line-height: 1.35; }
+tr.riga-scelta-frasi > td:first-child textarea.descrizione-riga { border-color: var(--ocra); box-shadow: 0 0 0 2px rgba(168,137,74,0.18); }
+.pannello-frasi .dove-frasi { font-size: 0.78rem; color: var(--text-mid); margin: 4px 0 8px; }
+.pannello-frasi details { margin-bottom: 6px; }
+.pannello-frasi summary { cursor: pointer; font-weight: 600; font-size: 0.85rem; padding: 4px 0; }
+.frase { display: flex; gap: 4px; align-items: flex-start; border: 1px solid var(--border); border-radius: 8px;
+  padding: 6px 8px; margin: 4px 0; font-size: 0.8rem; line-height: 1.35; background: var(--cream); }
+.frase .testo-frase { flex: 1; cursor: pointer; white-space: pre-line; }
+.frase .testo-frase:hover { color: var(--inchiostro); }
+.frase button { border: none; background: none; cursor: pointer; color: var(--text-light); padding: 0 2px; font-size: 0.8rem; }
+.frase button:hover { color: var(--inchiostro); }
+.pannello-frasi textarea, .pannello-frasi input[type=text] { font-size: 0.8rem; }
 tr.componenti select.aggiungi-componente { width: auto; font-size: 0.78rem; padding: 3px 6px; }
 /* Una tariffa non entra nel totale: si vede che è di un'altra natura. */
 tr.riga-tariffa td { background: var(--foglio); }
@@ -364,6 +387,9 @@ input.vuoto { background: #fffdf5; border-color: #ecdca8; }
    in mezze giornate. Niente si muove da solo. */
 #pagina-lavagna { max-width: none; }
 #contenuto:has(#pagina-lavagna.attiva) { max-width: none; }
+/* Il preventivo con le frasi accanto: la pagina si allarga quanto il pannello, o il
+   pannello ruberebbe spazio alla tabella. */
+#contenuto:has(#pagina-preventivo.attiva .preventivo-con-frasi) { max-width: 1440px; }
 
 .testata-lavagna {
   display: flex; align-items: center; gap: 14px; flex-wrap: wrap; margin-bottom: 14px;
@@ -693,6 +719,8 @@ input.vuoto { background: #fffdf5; border-color: #ecdca8; }
 :is(#foglio, .anteprima) .prev table.griglia th { background: #eee; font-size: 0.78rem; letter-spacing: 0; text-transform: none; font-weight: 700; }
 :is(#foglio, .anteprima) .prev table.griglia td.num, :is(#foglio, .anteprima) .prev table.griglia th.num { padding-right: 7px; }
 :is(#foglio, .anteprima) .prev .centro { text-align: center; }
+/* Una frase lunga può andare a capo dove l'ha messa chi l'ha scritta. */
+:is(#foglio, .anteprima) .prev td.desc { white-space: pre-line; }
 /* Importi e unità su una riga: «1.599,20» con l'euro a capo si legge male. */
 :is(#foglio, .anteprima) .prev table.griglia td.num, :is(#foglio, .anteprima) .prev table.griglia td.centro { white-space: nowrap; width: 1%; }
 :is(#foglio, .anteprima) .prev table.griglia .riga-totale td { border: 1px solid #000; border-top: 2px solid #000; padding-top: 7px; font-size: 0.98rem; }
@@ -785,6 +813,8 @@ const CARTELLA_CLIENTI = 'clienti';
 const CARTELLA_RILIEVI = 'rilievi';
 const CARTELLA_ARCHIVIO = 'archivio';
 const FILE_LISTINO = 'listino.json';
+// Le frasi per le descrizioni dei preventivi: solo dell'ufficio, come il listino.
+const FILE_FRASI = 'frasi-preventivo.json';
 const FILE_IMPOSTAZIONI = 'impostazioni.json';
 const FILE_LAVAGNA = 'lavagna.json';
 // L'agenda che l'ufficio manda in cantiere: la scrive qui, il telefono la legge
@@ -1054,6 +1084,7 @@ async function ricarica() {
   CLIENTI = await caricaClienti();
   LAVAGNA = await caricaLavagna();
   LISTINO = await caricaListino();
+  FRASI = await caricaFrasi();
   ARCHIVIO = await caricaArchivio();
   ARRIVI = await caricaArrivi();
   RILIEVI = await caricaRilievi();
@@ -1111,7 +1142,7 @@ async function copiaDelGiorno() {
     const oggi = isoData(new Date());
     if (await sottocartella(copie, oggi, false)) return;
     const giorno = await sottocartella(copie, oggi, true);
-    for (const nome of [FILE_LAVAGNA, FILE_CLIENTI, FILE_LISTINO, FILE_IMPOSTAZIONI]) {
+    for (const nome of [FILE_LAVAGNA, FILE_CLIENTI, FILE_LISTINO, FILE_IMPOSTAZIONI, FILE_FRASI]) {
       // Copiare un file che non si legge vorrebbe dire tenersi la copia rotta.
       if (NON_LETTI.has(nome) || !(await esisteFile(CARTELLA, nome))) continue;
       await scriviTesto(giorno, nome, await leggiTesto(CARTELLA, nome));
@@ -2549,6 +2580,16 @@ function riassuntoRicontrolla() {
 // La più recente per prima. Le righe sono poche e corte apposta: un elenco lungo
 // non si legge, e quello che non si legge tanto vale non scriverlo.
 const NOVITA = [
+  {
+    versione: '2026-11-12b',
+    data: '2026-11-12',
+    titolo: 'Le frasi per le descrizioni',
+    righe: [
+      'Nel preventivo, **a destra**, ci sono le **frasi** per descrivere le voci al cliente: clicchi nella descrizione di una voce, poi sulla frase, e ci va dentro dove c\'è il cursore.',
+      'Si raccolgono **per categoria** (Prato, Siepe…) o senza: **+ Nuova frase**, oppure **«Salva la descrizione come frase»** da una voce già scritta bene. Quella del settore della voce scelta viene prima.',
+      'La descrizione di ogni voce **si allarga col testo**, e sul foglio va a capo dove l\'hai messa a capo tu.',
+    ],
+  },
   {
     versione: '2026-11-12',
     data: '2026-11-12',
@@ -4130,6 +4171,7 @@ function apriPreventivo(id) {
   const gia = PREVENTIVI.find(p => p.doc.id === id);
   const rilievo = RILIEVI.find(r => r.doc.id === id);
   if (!rilievo && !gia) { avvisa('Rilievo non trovato: ricontrolla la cartella', true); return; }
+  FRASE_DOVE = null;
   // Se il campo ha rimandato il rilievo corretto, il preventivo si rifà su
   // quello **tenendo i prezzi già decisi**: le quantità cambiano, il giudizio no.
   // Uno già consegnato invece resta com'è partito: il cliente ha in mano quello.
@@ -4674,6 +4716,7 @@ function togliRigaPreventivo(i) {
       (r.chiave && r.lavorazione ? '\n\nViene dal rilievo: si riprende dal menù «+ Aggiungi», fra le tolte.' : ''))) return;
   if (r.chiave && r.lavorazione) d.tolte = (Array.isArray(d.tolte) ? d.tolte : []).filter(k => k !== r.chiave).concat([r.chiave]);
   d.righe.splice(i, 1);
+  if (FRASE_DOVE === i) FRASE_DOVE = null; else if (FRASE_DOVE != null && FRASE_DOVE > i) FRASE_DOVE--;
   disegnaPreventivo();
 }
 
@@ -4684,6 +4727,8 @@ function spostaRigaPreventivo(i, verso) {
   const j = i + verso;
   if (!righe || !righe[i] || j < 0 || j >= righe.length) return;
   [righe[i], righe[j]] = [righe[j], righe[i]];
+  // La voce scelta per le frasi la segue.
+  if (FRASE_DOVE === i) FRASE_DOVE = j; else if (FRASE_DOVE === j) FRASE_DOVE = i;
   disegnaPreventivo();
 }
 
@@ -4751,6 +4796,223 @@ function ricordaSchedaPreventivo(k, aperta) {
   if (aperta) SCHEDE_APERTE_PREVENTIVO.add(k); else SCHEDE_APERTE_PREVENTIVO.delete(k);
 }
 
+// ── LE FRASI PER LE DESCRIZIONI ──
+// Le descrizioni per il cliente sono frasi lunghe che tornano uguali da un
+// preventivo all'altro — «Formazione di tappeto erboso con lavorazione del terreno
+// e apporto di terriccio» — e riscriverle ogni volta è il modo per scriverle ogni
+// volta un po' diverse. Stanno in un file dell'ufficio, raccolte per categoria (o
+// senza, a blocchi liberi), e con un clic vanno nella voce su cui si sta lavorando:
+// l'ultima descrizione cliccata. Si aggiungono, si correggono e si tolgono dal
+// pannello stesso, e si salvano subito.
+let FRASI = [];
+let FRASE_DOVE = null;      // l'indice della riga dove vanno le frasi
+let FRASE_IN_MODIFICA = ''; // l'id della frase aperta per correggerla
+let FRASI_CERCA = '';
+
+async function caricaFrasi() {
+  try {
+    const f = JSON.parse(await leggiTesto(CARTELLA, FILE_FRASI));
+    if (!f || f.tipo !== 'frasi-preventivo') throw new Error('non sono le frasi dei preventivi');
+    return (Array.isArray(f.frasi) ? f.frasi : []).filter(x => x && x.testo)
+      .map(x => ({ id: String(x.id || 'f' + Math.random().toString(36).slice(2)), categoria: String(x.categoria || ''),
+        testo: String(x.testo) }));
+  } catch (e) {
+    // Assente vuol dire «nessuna frase ancora»; illeggibile si dice, e non si riscrive.
+    await fileNonLetto(FILE_FRASI, e);
+    return [];
+  }
+}
+
+async function salvaFrasi() {
+  try {
+    await scriviTesto(CARTELLA, FILE_FRASI, JSON.stringify({ tipo: 'frasi-preventivo', versione: 1,
+      aggiornato: new Date().toISOString(), frasi: FRASI }, null, 2));
+    return true;
+  } catch (e) {
+    avvisa('Non ho potuto salvare le frasi: ' + e.message, true);
+    return false;
+  }
+}
+
+function allargaDescrizione(el) {
+  if (!el) return;
+  el.style.height = 'auto';
+  el.style.height = el.scrollHeight + 2 + 'px';
+}
+
+// Cambiando voce cambia anche quale categoria serve: il pannello si ridisegna,
+// lui solo, con quella del settore in cima e aperta.
+function scegliRigaFrasi(i) {
+  if (FRASE_DOVE === i) { segnaRigaFrasi(); return; }
+  FRASE_DOVE = i;
+  ridisegnaFrasi();
+}
+
+function rigaDelleFrasi() {
+  const r = PREVENTIVO && FRASE_DOVE != null ? PREVENTIVO.doc.righe[FRASE_DOVE] : null;
+  return r ? r : null;
+}
+
+// La riga scelta si vede, e il pannello dice quale: una frase che finisce nella
+// voce sbagliata è un preventivo da rileggere.
+function segnaRigaFrasi() {
+  document.querySelectorAll('#pagina-preventivo tr.riga-scelta-frasi').forEach(tr => tr.classList.remove('riga-scelta-frasi'));
+  const campo = FRASE_DOVE != null && document.querySelector('#pagina-preventivo textarea[data-riga="' + FRASE_DOVE + '"]');
+  if (campo) campo.closest('tr').classList.add('riga-scelta-frasi');
+  const dove = document.getElementById('dove-frasi');
+  const r = rigaDelleFrasi();
+  if (dove) dove.innerHTML = r
+    ? 'Vanno in: <strong>' + perValore(String(r.descrizione || r.voce || 'riga ' + (FRASE_DOVE + 1)).slice(0, 60)) + '</strong>'
+    : 'Clicca nella descrizione di una voce: le frasi vanno lì.';
+}
+
+function categorieFrasi() {
+  const nomi = new Set(FRASI.map(f => f.categoria.trim()).filter(Boolean));
+  settoriConosciuti().forEach(x => x && x.nome && nomi.add(x.nome));
+  return [...nomi].sort((a, b) => a.localeCompare(b));
+}
+
+function pannelloFrasi() {
+  const cerca = perCercareFrasi(FRASI_CERCA);
+  const trovate = FRASI.filter(f => !cerca || perCercareFrasi(f.testo + ' ' + f.categoria).includes(cerca));
+  const gruppi = new Map();
+  trovate.forEach(f => {
+    const k = f.categoria.trim() || '';
+    if (!gruppi.has(k)) gruppi.set(k, []);
+    gruppi.get(k).push(f);
+  });
+  // La categoria del settore della voce scelta viene prima, aperta: è quella che serve.
+  const r = rigaDelleFrasi();
+  const vicina = r && r.lavorazione ? String((r.lavorazione.insieme && r.lavorazione.insieme.nome) || r.lavorazione.nome || '').toLowerCase() : '';
+  const chiavi = [...gruppi.keys()].sort((a, b) => {
+    const va = a && vicina.includes(a.toLowerCase()) ? 0 : 1, vb = b && vicina.includes(b.toLowerCase()) ? 0 : 1;
+    if (va !== vb) return va - vb;
+    if (!a) return 1; if (!b) return -1;
+    return a.localeCompare(b);
+  });
+  let html = '<div class="titolo-sezione" style="margin:0">Frasi</div>' +
+    '<div class="dove-frasi" id="dove-frasi"></div>' +
+    '<input type="search" placeholder="Cerca una frase…" value="' + perValore(FRASI_CERCA) + '" ' +
+      'oninput="FRASI_CERCA = this.value; ridisegnaFrasi(true)" style="margin-bottom:8px">';
+  if (!FRASI.length) {
+    html += '<p class="meta">Nessuna frase ancora. Scrivine una qui sotto, o clicca nella descrizione di una voce già ' +
+      'scritta e salvala con «Salva la descrizione come frase».</p>';
+  } else if (!trovate.length) {
+    html += '<p class="meta">Nessuna frase con queste parole.</p>';
+  }
+  chiavi.forEach(k => {
+    const elenco = gruppi.get(k);
+    const aperta = cerca || chiavi.length === 1 || (k && vicina.includes(k.toLowerCase()));
+    html += '<details' + (aperta ? ' open' : '') + '><summary>' + perValore(k || 'Senza categoria') +
+      ' <span class="meta">· ' + elenco.length + '</span></summary>' +
+      elenco.map(f => FRASE_IN_MODIFICA === f.id ? moduloFrase(f) :
+        '<div class="frase"><span class="testo-frase" title="Mettila nella voce scelta" ' +
+          'onmousedown="event.preventDefault()" onclick="usaFrase(\'' + perOnclick(f.id) + '\')">' + perValore(f.testo) + '</span>' +
+          '<button onclick="FRASE_IN_MODIFICA = \'' + perOnclick(f.id) + '\'; ridisegnaFrasi()" title="Correggi">✎</button>' +
+          '<button onclick="togliFrase(\'' + perOnclick(f.id) + '\')" title="Togli">✕</button></div>').join('') +
+      '</details>';
+  });
+  html += FRASE_IN_MODIFICA === 'nuova' ? moduloFrase(null) :
+    '<div class="bottoni" style="margin-top:8px">' +
+      '<button class="secondaria piccola" onclick="FRASE_IN_MODIFICA = \'nuova\'; ridisegnaFrasi()">+ Nuova frase</button>' +
+      '<button class="secondaria piccola" onmousedown="event.preventDefault()" onclick="fraseDallaDescrizione()" ' +
+        'title="La descrizione della voce scelta diventa una frase">Salva la descrizione come frase</button>' +
+    '</div>';
+  html += '<datalist id="categorie-frasi">' + categorieFrasi().map(n => '<option value="' + perValore(n) + '">').join('') + '</datalist>';
+  return html;
+}
+
+function moduloFrase(f) {
+  return '<div class="frase" style="display:block">' +
+    '<input type="text" id="frase-categoria" list="categorie-frasi" placeholder="Categoria (facoltativa): Prato, Siepe…" ' +
+      'value="' + perValore(f ? f.categoria : FRASE_BOZZA.categoria) + '" style="margin-bottom:4px">' +
+    '<textarea id="frase-testo" rows="4" placeholder="La frase come va al cliente">' +
+      perValore(f ? f.testo : FRASE_BOZZA.testo) + '</textarea>' +
+    '<div class="bottoni" style="margin-top:4px">' +
+      '<button class="principale piccola" onclick="salvaFrase(\'' + perOnclick(f ? f.id : '') + '\')">Salva</button>' +
+      '<button class="secondaria piccola" onclick="FRASE_IN_MODIFICA = \'\'; ridisegnaFrasi()">Annulla</button>' +
+    '</div></div>';
+}
+let FRASE_BOZZA = { categoria: '', testo: '' };
+
+function perCercareFrasi(t) {
+  return String(t || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().trim();
+}
+
+// Si ridisegna solo il pannello: il preventivo a sinistra può avere un campo
+// aperto sotto le dita.
+function ridisegnaFrasi(tieniCerca) {
+  const el = document.getElementById('pannello-frasi');
+  if (!el) return;
+  el.innerHTML = pannelloFrasi();
+  segnaRigaFrasi();
+  if (tieniCerca) {
+    const c = el.querySelector('input[type=search]');
+    if (c) { c.focus(); c.setSelectionRange(c.value.length, c.value.length); }
+  }
+}
+
+// La frase va dove si sta scrivendo: al posto del testo selezionato, o al punto
+// del cursore; in una descrizione vuota è la descrizione. Accanto a un testo già
+// scritto non si incolla attaccata: ci va uno spazio.
+function usaFrase(id) {
+  const f = FRASI.find(x => x.id === id);
+  const r = rigaDelleFrasi();
+  if (!f) return;
+  if (!r) { avvisa('Clicca prima nella descrizione della voce dove va la frase', true); return; }
+  const campo = document.querySelector('#pagina-preventivo textarea[data-riga="' + FRASE_DOVE + '"]');
+  const prima = String(r.descrizione || '');
+  let inizio = prima.length, fine = prima.length;
+  if (campo && document.activeElement === campo) { inizio = campo.selectionStart; fine = campo.selectionEnd; }
+  const sinistra = prima.slice(0, inizio), destra = prima.slice(fine);
+  const spazio = sinistra && !/\s$/.test(sinistra) ? ' ' : '';
+  const dopo = destra && !/^\s/.test(destra) ? ' ' : '';
+  r.descrizione = sinistra + spazio + f.testo + dopo + destra;
+  if (campo) {
+    campo.value = r.descrizione;
+    allargaDescrizione(campo);
+    const pos = (sinistra + spazio + f.testo).length;
+    campo.focus();
+    campo.setSelectionRange(pos, pos);
+  }
+  segnaRigaFrasi();
+}
+
+async function salvaFrase(id) {
+  const categoria = ((document.getElementById('frase-categoria') || {}).value || '').trim();
+  const testo = ((document.getElementById('frase-testo') || {}).value || '').trim();
+  if (!testo) { avvisa('Scrivi la frase', true); return; }
+  const f = id ? FRASI.find(x => x.id === id) : null;
+  if (f) Object.assign(f, { categoria, testo });
+  else FRASI.push({ id: 'f' + Date.now().toString(36), categoria, testo });
+  if (!(await salvaFrasi())) return;
+  FRASE_IN_MODIFICA = '';
+  FRASE_BOZZA = { categoria: '', testo: '' };
+  ridisegnaFrasi();
+}
+
+async function togliFrase(id) {
+  const f = FRASI.find(x => x.id === id);
+  if (!f || !confirm('Togliere questa frase?\n\n«' + f.testo.slice(0, 120) + (f.testo.length > 120 ? '…' : '') + '»')) return;
+  FRASI = FRASI.filter(x => x.id !== id);
+  if (!(await salvaFrasi())) return;
+  ridisegnaFrasi();
+}
+
+// Una descrizione scritta bene in un preventivo diventa una frase per i prossimi:
+// è il modo più svelto per riempire il pannello, partendo da quello che si usa.
+function fraseDallaDescrizione() {
+  const r = rigaDelleFrasi();
+  if (!r || !String(r.descrizione || '').trim()) {
+    avvisa('Clicca nella descrizione di una voce già scritta', true);
+    return;
+  }
+  const l = r.lavorazione;
+  FRASE_BOZZA = { categoria: (l && l.insieme && l.insieme.nome) || '', testo: r.descrizione.trim() };
+  FRASE_IN_MODIFICA = 'nuova';
+  ridisegnaFrasi();
+}
+
 function disegnaPreventivo() {
   const c = document.getElementById('pagina-preventivo');
   if (!PREVENTIVO) { c.innerHTML = '<div class="vuoto-elenco">Nessun preventivo aperto.</div>'; return; }
@@ -4776,8 +5038,14 @@ function disegnaPreventivo() {
     preparaRigaSettore(r);
     html += '<tr class="' + (corpo ? 'riga-corpo' : '') + (r.tipo === 'tariffa' ? ' riga-tariffa' : '') +
         (sezione ? ' riga-sezione' : '') + '">' +
-      '<td' + (sezione || corpo ? ' colspan="7"' : '') + '><input type="text" value="' + perValore(r.descrizione) + '" ' +
-        'oninput="modificaRigaPreventivo(' + i + ', \'descrizione\', this.value)">' +
+      // La descrizione si allarga col testo: le frasi per il cliente sono lunghe, e in
+      // una casella di una riga se ne leggeva l'inizio. Cliccandoci dentro diventa la
+      // voce dove vanno le frasi del pannello a destra.
+      '<td' + (sezione || corpo ? ' colspan="7"' : '') + '><textarea class="descrizione-riga" rows="1" data-riga="' + i + '" ' +
+        'placeholder="Descrizione per il cliente" ' +
+        'onfocus="scegliRigaFrasi(' + i + ')" ' +
+        'oninput="modificaRigaPreventivo(' + i + ', \'descrizione\', this.value); allargaDescrizione(this)">' +
+        perValore(r.descrizione) + '</textarea>' +
         '<div class="sotto-riga">' +
         '<span class="meta dal-campo">' + (r.lavorazione ? 'dal campo: ' + perValore(riassuntoLavorazione(r.lavorazione)) : '') + '</span>' +
         '<select class="tipo-riga" onchange="cambiaTipoRiga(' + i + ', this.value)">' +
@@ -4929,7 +5197,12 @@ function disegnaPreventivo() {
     (PREVENTIVO.file || rilievoDellUfficio(d.id)
       ? '<button class="pericolo" style="margin-left:auto" onclick="eliminaPreventivo()" title="Elimina il preventivo">🗑 Elimina</button>' : '') +
     '</div>';
-  c.innerHTML = html;
+  // A destra le frasi per le descrizioni: si guardano mentre si scrive, e si
+  // mettono nella voce con un clic. Sotto i 1100 px stanno sotto il preventivo.
+  c.innerHTML = '<div class="preventivo-con-frasi"><div class="preventivo-righe">' + html + '</div>' +
+    '<aside class="pannello-frasi" id="pannello-frasi">' + pannelloFrasi() + '</aside></div>';
+  document.querySelectorAll('#pagina-preventivo textarea.descrizione-riga').forEach(allargaDescrizione);
+  segnaRigaFrasi();
   aggiornaCodaPreventivo();
 }
 
@@ -5440,12 +5713,12 @@ function costruisciFoglioPreventivo(d) {
   // di lauro 80-100» sì.
   const rigaStampata = r => {
     if (r.tipo === 'sezione') {
-      return '<tr class="sezione-foglio"><td colspan="5">' +
+      return '<tr class="sezione-foglio"><td colspan="5" class="desc">' +
         perValore(r.descrizione || r.voce) + '</td></tr>';
     }
     const imp = importoRiga(r);
     return '<tr>' +
-      '<td>' + perValore(r.descrizione || r.voce) + '</td>' +
+      '<td class="desc">' + perValore(r.descrizione || r.voce) + '</td>' +
       '<td class="centro">' + perValore(r.unita) + '</td>' +
       '<td class="num">' + perValore(formattaQuantita(r.quantita)) + '</td>' +
       '<td class="num">' + (r.prezzo === '' || r.prezzo == null ? '' : formattaEuro(r.prezzo)) + '</td>' +

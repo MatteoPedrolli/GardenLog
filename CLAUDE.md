@@ -1061,6 +1061,22 @@ si ricorda in `tolte` sul preventivo e non torna; si riprende dal menù «+ Aggi
 `aggiunta` e resta. Tutti campi arrivati senza alzare `VERSIONE_PREVENTIVO`. I componenti dei
 capitoli scritti in ufficio vanno fra i **materiali da ordinare**, come quelli dei settori.
 
+**A destra, le frasi per le descrizioni** (`pannelloFrasi()`). Le descrizioni per il cliente
+sono frasi lunghe che tornano uguali da un preventivo all'altro — «Formazione di tappeto
+erboso con lavorazione del terreno e apporto di terriccio» — e riscriverle ogni volta voleva
+dire scriverle ogni volta un po' diverse. Stanno in `frasi-preventivo.json`, nella cartella,
+solo dell'ufficio come il listino (illeggibile non si riscrive, ed entra nella copia del
+giorno), raccolte per **categoria facoltativa**: chi le vuole per settore le ha, chi le vuole a
+blocchi liberi le lascia «Senza categoria». Si clicca nella descrizione di una voce — è la
+**voce scelta**, si vede e il pannello la nomina (`FRASE_DOVE`) — e poi sulla frase, che va
+**al punto del cursore** o al posto del testo selezionato, con gli spazi giusti (`usaFrase()`;
+il clic sulla frase non toglie il fuoco alla descrizione). La categoria del settore della voce
+scelta viene prima, aperta. Si aggiungono, si correggono e si tolgono dal pannello, e si
+salvano subito; **«Salva la descrizione come frase»** fa di una descrizione scritta bene una
+frase, ed è il modo più svelto di riempire il pannello. La descrizione di ogni riga è un campo
+che **si allarga col testo**, e sul foglio va a capo dove l'ha messa chi l'ha scritta. Sotto i
+1400 px il pannello sta sotto il preventivo; sopra, la pagina si allarga quanto lui.
+
 **Un preventivo si elimina**, col bottone rosso 🗑 (`eliminaPreventivo()`), per la
 prova o il doppione. La conferma dice cosa succede dopo, perché non è sempre lo
 stesso: il rilievo del telefono resta in `rilievi/` — non è dell'ufficio — e il

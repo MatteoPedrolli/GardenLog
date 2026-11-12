@@ -28,6 +28,7 @@ La cartella, dopo un po' di lavoro, ha questa forma:
         2026-09-18-mario-rossi-<id>.json
     clienti.json                   ← l'anagrafica dell'ufficio
     listino.json                   ← i prezzi, solo dell'ufficio (il telefono lo legge con la chiave)
+    frasi-preventivo.json          ← le frasi per le descrizioni dei preventivi
     impostazioni.json              ← l'intestazione del conto
     lavagna.json                   ← la pianificazione
     clienti/                       ← ci scrive il telefono: le modifiche ai clienti
