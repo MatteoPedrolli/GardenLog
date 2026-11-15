@@ -200,6 +200,55 @@ select.tipo-riga {
 select.tipo-riga:hover, select.tipo-riga:focus { border-color: var(--border); background: var(--white); }
 /* E la ✕ non sta attaccata all'importo. */
 table.elenco td.via-col { padding-left: 14px; width: 38px; }
+/* ── LE VOCI DEL PREVENTIVO: UNA SCHEDA CIASCUNA ──
+   Erano righe di una tabella sola, tutte uguali: la voce che legge il cliente e il
+   conto che le sta dietro non si distinguevano, e fra una voce e l'altra non c'era
+   stacco. Ogni voce è un <tbody> disegnato come una scheda — la tabella resta una,
+   così le colonne dei componenti cadono sotto quelle della voce — con in testa la
+   descrizione e sotto la riga del prezzo, sempre lì; i componenti stanno chiusi. */
+table.tabella-voci { border-collapse: separate; border-spacing: 0; }
+table.tabella-voci thead th { border-bottom: none; padding-bottom: 6px; }
+table.tabella-voci thead th:first-child { padding-left: 15px; }
+table.tabella-voci thead th:last-child { padding-right: 10px; }
+table.tabella-voci tbody.voce > tr > td { background: var(--white); }
+table.tabella-voci tbody.voce > tr > td:first-child { border-left: 1px solid var(--border); padding-left: 14px; }
+table.tabella-voci tbody.voce > tr > td:last-child { border-right: 1px solid var(--border); padding-right: 10px; }
+table.tabella-voci tbody.voce > tr.testa-voce > td { border-top: 1px solid var(--border); border-bottom: none;
+  padding-top: 12px; padding-bottom: 2px; }
+table.tabella-voci tbody.voce > tr.testa-voce > td:first-child { border-top-left-radius: var(--radius-sm); }
+table.tabella-voci tbody.voce > tr.testa-voce > td:last-child { border-top-right-radius: var(--radius-sm); }
+table.tabella-voci tbody.voce > tr.prezzo-voce > td { border-bottom: none; padding-top: 4px; padding-bottom: 6px; }
+/* Le ore della voce non stanno attaccate alla casella della quantità: «10 h1». */
+table.tabella-voci tbody.voce > tr.prezzo-voce > td.ore { padding-right: 12px; white-space: nowrap; color: var(--text-mid); font-size: 0.86rem; }
+table.tabella-voci tbody.voce > tr.piede-voce > td { height: 8px; padding: 0; border-bottom: 1px solid var(--border);
+  border-radius: 0 0 var(--radius-sm) var(--radius-sm); }
+table.tabella-voci tbody.stacco td { height: 10px; padding: 0; border: none; }
+/* Su una riga sola: andando a capo, il menù «Nel totale» finiva sotto il riepilogo
+   nelle voci larghe e accanto in quelle strette. */
+.riepilogo-voce { display: flex; align-items: center; gap: 10px; min-height: 30px; }
+.riepilogo-voce .somma-componenti { margin: 0; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.riepilogo-voce .scelte-voce { margin-left: auto; display: flex; gap: 4px; flex: none; }
+button.apri-voce { flex: none; }
+.riepilogo-voce .manca { color: var(--earth); font-weight: 600; }
+button.apri-voce { background: var(--foglio); border: 1px solid var(--border); border-radius: 999px;
+  padding: 3px 12px 3px 9px; font-size: 0.8rem; color: var(--text-mid); white-space: nowrap; }
+button.apri-voce:hover { border-color: var(--ocra); }
+button.apri-voce .freccia { display: inline-block; transition: transform 0.15s; }
+tbody.voce.aperta button.apri-voce { background: var(--inchiostro-tenue); color: var(--white); border-color: var(--inchiostro-tenue); }
+tbody.voce.aperta button.apri-voce .freccia { transform: rotate(90deg); }
+/* Chiusa, una voce è descrizione e prezzo: il conto dietro si apre quando serve. */
+table.tabella-voci tbody.voce:not(.aperta) > tr.componenti { display: none; }
+table.tabella-voci tbody.voce > tr.componenti > td { background: #fcfaf4; }
+table.tabella-voci tbody.voce > tr.componenti > td:first-child { padding-left: 34px; }
+table.tabella-voci tbody.voce.aperta > tr.prezzo-voce > td { border-bottom: 1px solid var(--border); }
+table.tabella-voci tbody.voce.tariffa > tr > td { background: var(--foglio); }
+/* Un titolo di sezione non è una scheda: sta sulla pagina, sopra le voci che introduce. */
+table.tabella-voci tbody.voce.sezione > tr > td { background: transparent; border-color: transparent; padding-top: 6px; }
+tbody.voce.sezione textarea.descrizione-riga { font-weight: 600; font-size: 1rem; background: transparent; border-color: transparent; }
+tbody.voce.sezione textarea.descrizione-riga:hover, tbody.voce.sezione textarea.descrizione-riga:focus {
+  border-color: var(--border); background: var(--white); }
+table.tabella-voci tbody.totali td { border-bottom: none; padding-left: 15px; font-weight: 600; font-size: 1rem; }
+table.tabella-voci tbody.totali td.importo { padding-left: 0; font-family: var(--font-display); font-size: 1.15rem; }
 /* Su e giù accanto alla ✕: l'ordine delle righe è quello del foglio che va al
    cliente, e si decide qui. */
 .comandi-riga { display: flex; flex-direction: column; align-items: center; gap: 6px; }
@@ -2615,6 +2664,15 @@ function riassuntoRicontrolla() {
 // non si legge, e quello che non si legge tanto vale non scriverlo.
 const NOVITA = [
   {
+    versione: '2026-11-15c',
+    data: '2026-11-15',
+    titolo: 'Nel preventivo ogni voce è una scheda',
+    righe: [
+      'Ogni voce del preventivo è una **scheda**: in testa la descrizione, e subito sotto **quantità, prezzo e importo**, sempre nello stesso posto — per una voce a corpo come per una a misura.',
+      'I **componenti** (materiali e ore) stanno chiusi: la voce dice quanti sono, quanto fanno a listino, le ore, e se ce n\'è qualcuno **da completare**. Si aprono dal bottone **«▸ 4 componenti»**, una voce alla volta.',
+    ],
+  },
+  {
     versione: '2026-11-15b',
     data: '2026-11-15',
     titolo: 'Il preventivo si salva da solo',
@@ -4361,34 +4419,134 @@ function righeComponenti(r, i) {
   return html;
 }
 
-// Il totale della riga a corpo, in fondo ai suoi componenti: il prezzo che va al
-// cliente, con accanto quanto fa la somma a listino.
-function rigaTotaleACorpo(r, i) {
-  const somma = sommaComponenti(r.componenti);
+// ── UNA VOCE, UNA SCHEDA ──
+// In testa la descrizione per il cliente, sotto la riga del prezzo — quantità,
+// unità, prezzo, importo — **sempre lì**, per una voce a corpo come per una a
+// misura: erano due impaginazioni, il prezzo in fondo ai componenti per l'una e a
+// destra della descrizione per l'altra, e l'occhio doveva cercarlo ogni volta.
+// I componenti stanno sotto, chiusi: sono il conto dietro il prezzo, e con cinque
+// voci aperte la pagina era alta tre schermi. Chiusa, la voce dice quanti sono,
+// quanto fanno a listino e se manca qualcosa; se ne apre **una alla volta**, come
+// i settori sul telefono.
+function vocePreventivo(d, r, i, soluzioni) {
+  const sezione = r.tipo === 'sezione';
+  const corpo = !sezione && Array.isArray(r.componenti);
+  const tariffa = r.tipo === 'tariffa';
+  const aperta = corpo && PREVENTIVO.aperta === r;
+  const dalCampo = r.lavorazione ? 'dal campo: ' + perValore(riassuntoLavorazione(r.lavorazione))
+    : r.irrigazione ? 'dal progetto: ' + perValore(riassuntoIrrigazione(r.irrigazione)) +
+      ' · ricarico <input type="text" inputmode="decimal" class="stretto ricarico-riga" value="' +
+      perValore(formattaQuantita(r.irrigazione.ricarico)) + '" oninput="modificaRicaricoRiga(' + i + ', this.value)" ' +
+      'onchange="disegnaPreventivo()" aria-label="ricarico"> %' : '';
+  let html = '<tbody class="voce' + (sezione ? ' sezione' : '') + (corpo ? ' corpo' : '') + (aperta ? ' aperta' : '') +
+      (tariffa ? ' tariffa' : '') + '" data-voce="' + i + '">' +
+    '<tr class="testa-voce' + (corpo ? ' riga-corpo' : '') + (tariffa ? ' riga-tariffa' : '') + (sezione ? ' riga-sezione' : '') + '">' +
+      // La descrizione si allarga col testo: le frasi per il cliente sono lunghe, e in
+      // una casella di una riga se ne leggeva l'inizio. Cliccandoci dentro diventa la
+      // voce dove vanno le frasi del pannello a destra.
+      '<td colspan="7"><textarea class="descrizione-riga" rows="1" data-riga="' + i + '" ' +
+        'placeholder="' + (sezione ? 'Titolo di sezione' : 'Descrizione per il cliente') + '" ' +
+        'onfocus="scegliRigaFrasi(' + i + ')" ' +
+        'oninput="modificaRigaPreventivo(' + i + ', \'descrizione\', this.value); allargaDescrizione(this)">' +
+        perValore(r.descrizione) + '</textarea>' +
+        (dalCampo || sezione ? '<div class="sotto-riga"><span class="meta dal-campo">' + dalCampo + '</span>' +
+          (sezione ? menuTipoRiga(r, i) : '') + '</div>' : '') + '</td>' +
+      '<td class="via-col"><div class="comandi-riga">' +
+        '<button class="sposta" onclick="spostaRigaPreventivo(' + i + ', -1)" title="Sposta su"' + (i === 0 ? ' disabled' : '') + '>▲</button>' +
+        '<button class="via" onclick="togliRigaPreventivo(' + i + ')" title="Togli">✕</button>' +
+        '<button class="sposta" onclick="spostaRigaPreventivo(' + i + ', 1)" title="Sposta giù"' +
+          (i === d.righe.length - 1 ? ' disabled' : '') + '>▼</button>' +
+      '</div></td>' +
+    '</tr>';
+  if (!sezione) html += rigaPrezzoVoce(r, i, corpo, aperta, soluzioni);
+  if (corpo) html += righeComponenti(r, i);
+  // Il piede chiude la scheda, lo stacco la separa dalla prossima.
+  return html + '<tr class="piede-voce"><td colspan="8"></td></tr></tbody>' +
+    '<tbody class="stacco"><tr><td colspan="8"></td></tr></tbody>';
+}
+
+function menuTipoRiga(r, i) {
+  return '<select class="tipo-riga" onchange="cambiaTipoRiga(' + i + ', this.value)">' +
+    TIPI_RIGA_PREVENTIVO.map(x => '<option value="' + x.id + '"' +
+      (x.id === r.tipo ? ' selected' : '') + '>' + x.nome + '</option>').join('') + '</select>';
+}
+
+function testoOreVoce(r) {
+  const ore = Array.isArray(r.componenti) ? oreManodopera([r]) : 0;
+  return ore > 0 ? scriviNumero(ore) + ' h' : '';
+}
+
+function etichettaComponenti(r) {
+  const n = r.componenti.length;
+  return n ? n + (n === 1 ? ' componente' : ' componenti') : 'Nessun componente';
+}
+
+// La riga del prezzo: quello che va al cliente. A sinistra, per una voce a corpo,
+// il bottone che apre i componenti e quanto fanno a listino; in colonna le ore
+// della voce, che sono anche le sue mezze giornate in lavagna.
+function rigaPrezzoVoce(r, i, corpo, aperta, soluzioni) {
+  const tariffa = r.tipo === 'tariffa';
   const imp = r.tipo === 'totale' ? importoRiga(r) : null;
-  return '<tr class="componenti somma' + (r.tipo === 'tariffa' ? ' riga-tariffa' : '') + '">' +
-    '<td colspan="2"><strong>Totale ' + perValore(r.voce || (r.lavorazione && r.lavorazione.nome) || '') + '</strong>' +
-      (r.componenti.length ? '' : '<div class="meta">Nessun componente: il prezzo si scrive a mano.</div>') +
-      '<div class="meta somma-componenti" id="somma-riga-' + i + '">' + testoSommaComponenti(r, somma, i) + '</div></td>' +
-    '<td class="num qta">' + (r.tipo === 'tariffa' ? '<span class="meta">—</span>' :
+  return '<tr class="prezzo-voce' + (tariffa ? ' riga-tariffa' : '') + '">' +
+    '<td><div class="riepilogo-voce">' +
+      (corpo ? '<button class="apri-voce" onclick="apriVoce(' + i + ')" aria-expanded="' + (aperta ? 'true' : 'false') + '" ' +
+          'title="Il conto dietro il prezzo: materiali e ore. Al cliente non arriva">' +
+          '<span class="freccia">▸</span> ' + etichettaComponenti(r) + '</button>' +
+        '<span class="meta somma-componenti" id="somma-riga-' + i + '">' +
+          testoSommaComponenti(r, sommaComponenti(r.componenti), i) + '</span>' : '') +
+      '<span class="scelte-voce">' + menuTipoRiga(r, i) +
+        // Il menù della soluzione compare solo quando ci sono alternative: finché
+        // il preventivo ha un totale solo sarebbe una scelta che non si fa mai.
+        (soluzioni.length ? '<select class="tipo-riga" onchange="cambiaSoluzioneRiga(' + i + ', this.value)">' +
+          '<option value="">Comune a tutte</option>' +
+          soluzioni.map(sol => '<option value="' + perValore(sol.id) + '"' +
+            (sol.id === r.soluzione ? ' selected' : '') + '>Solo in ' + perValore(sol.nome) + '</option>').join('') +
+          '</select>' : '') +
+      '</span>' +
+    '</div></td>' +
+    '<td class="num ore" id="ore-riga-' + i + '">' + testoOreVoce(r) + '</td>' +
+    '<td class="num qta">' + (tariffa ? '<span class="meta">—</span>' :
       '<input type="text" inputmode="decimal" class="stretto" value="' + perValore(formattaQuantita(r.quantita)) + '" ' +
-      'oninput="modificaRigaPreventivo(' + i + ', \'quantita\', this.value)">') + '</td>' +
-    '<td style="white-space:nowrap">' + perValore(r.unita) + '</td>' +
+      'oninput="modificaRigaPreventivo(' + i + ', \'quantita\', this.value)" aria-label="quantità">') + '</td>' +
+    '<td style="white-space:nowrap">' + (r.libera && !corpo
+      // Una voce libera non ha un'unità dal listino: la si scrive.
+      ? '<input type="text" class="stretto" value="' + perValore(r.unita) + '" placeholder="UM" ' +
+        'oninput="modificaRigaPreventivo(' + i + ', \'unita\', this.value)" aria-label="unità">'
+      : perValore(r.unita)) + '</td>' +
     '<td class="num"><input type="text" inputmode="decimal" class="stretto prezzo' +
       (r.proposto ? ' proposto' : '') + '" id="prezzo-riga-' + i + '" value="' + perValore(formattaQuantita(r.prezzo)) + '" ' +
-      'oninput="modificaPrezzoRiga(' + i + ', this.value, this)"></td>' +
+      'oninput="modificaPrezzoRiga(' + i + ', this.value, this)" aria-label="prezzo"></td>' +
     '<td class="conferma-col">' + (r.proposto ? '<button class="conferma" onclick="confermaPrezzo(' + i + ')" ' +
         'title="Va bene così">✓</button>' : '') + '</td>' +
-    '<td class="num importo" id="imp-riga-' + i + '">' + (r.tipo === 'tariffa' ? '<span class="meta">fuori totale</span>' :
+    '<td class="num importo" id="imp-riga-' + i + '">' + (tariffa ? '<span class="meta">fuori totale</span>' :
       (imp == null ? '<span class="meta">—</span>' : formattaEuro(imp))) + '</td>' +
     '<td></td></tr>';
 }
 
+// Una voce aperta alla volta. Non si ridisegna: i componenti ci sono già, nascosti,
+// e si mostrano — così i campi delle altre voci restano dove sono. Quale è aperta
+// sta sul preventivo a schermo e non nel documento: non è un dato, e aprire una
+// voce non deve sembrare una modifica da salvare.
+function apriVoce(i) {
+  const r = PREVENTIVO && PREVENTIVO.doc.righe[i];
+  if (!r) return;
+  PREVENTIVO.aperta = PREVENTIVO.aperta === r ? null : r;
+  document.querySelectorAll('#pagina-preventivo tbody.voce').forEach(tb => {
+    const aperta = !!PREVENTIVO.aperta && PREVENTIVO.doc.righe[Number(tb.dataset.voce)] === PREVENTIVO.aperta;
+    tb.classList.toggle('aperta', aperta);
+    const b = tb.querySelector('button.apri-voce');
+    if (b) b.setAttribute('aria-expanded', aperta ? 'true' : 'false');
+  });
+}
+
 function testoSommaComponenti(r, somma, i) {
   const decisa = !r.proposto && r.prezzo !== '' && r.prezzo != null;
-  return 'A listino: <strong>' + formattaEuro(somma.totale) + '</strong>' +
-    (somma.mancano ? ' · ' + somma.mancano + (somma.mancano === 1 ? ' componente senza quantità o prezzo'
-      : ' componenti senza quantità o prezzo') : '') +
+  // Una voce senza componenti non ha una somma: il prezzo si scrive e basta.
+  if (!r.componenti.length) return 'il prezzo si scrive a mano';
+  return 'a listino <strong>' + formattaEuro(somma.totale) + '</strong>' +
+    // Quello che manca si legge anche a voce chiusa: è il motivo per aprirla.
+    (somma.mancano ? ' · <span class="manca" title="' + (somma.mancano === 1 ? 'Un componente' : somma.mancano + ' componenti') +
+      ' senza quantità o prezzo: resta fuori dalla somma">' + somma.mancano + ' da completare</span>' : '') +
     // Deciso il prezzo, la somma resta accanto: è il listino contro il giudizio,
     // e la differenza si vede senza farsi il conto.
     (decisa && alCentesimoUfficio(Number(r.prezzo)) !== somma.totale
@@ -4583,6 +4741,8 @@ function aggiornaRigaACorpo(i) {
   }
   const el = document.getElementById('somma-riga-' + i);
   if (el) el.innerHTML = testoSommaComponenti(r, somma, i);
+  const ore = document.getElementById('ore-riga-' + i);
+  if (ore) ore.textContent = testoOreVoce(r);
   aggiornaImportoRiga(i);
   aggiornaCodaPreventivo();
   aggiornaTotalePreventivo();
@@ -4839,6 +4999,8 @@ function aggiungiRigaLiberaPreventivo() {
 function aggiungiCapitoloPreventivo() {
   PREVENTIVO.doc.righe.push({ chiave: '', voceID: '', voce: '', descrizione: '', quantita: 1, unita: 'a corpo',
     prezzo: '', proposto: false, tipo: 'totale', soluzione: '', componenti: [] });
+  // Nasce aperto: è vuoto, e la prima cosa che si fa è riempirlo.
+  PREVENTIVO.aperta = PREVENTIVO.doc.righe[PREVENTIVO.doc.righe.length - 1];
   disegnaPreventivo();
 }
 
@@ -4989,8 +5151,10 @@ async function importaProgettoIrrigazione(file) {
   const i = righe.findIndex(r => r.irrigazione && r.irrigazione.id === p.id);
   if (i >= 0) righe[i] = rigaIrrigazione(p, righe[i]);
   else righe.push(rigaIrrigazione(p));
-  disegnaPreventivo();
   const r = righe[i >= 0 ? i : righe.length - 1];
+  // Si apre: appena importato, i materiali e i loro prezzi sono quello da guardare.
+  PREVENTIVO.aperta = r;
+  disegnaPreventivo();
   const senza = r.componenti.filter(c => c.irrigazione && c.costo === '').length;
   avvisa((i >= 0 ? 'Impianto aggiornato dal progetto: le quantità seguono il progetto, quello deciso qui resta'
     : 'Impianto di irrigazione aggiunto: ' + r.componenti.filter(c => c.irrigazione).length + ' materiali') +
@@ -5272,74 +5436,16 @@ function disegnaPreventivo() {
 
   html += '<div id="da-confermare" class="avvertenza" style="display:none"></div>';
 
-  html += '<div class="scheda"><table class="elenco"><thead><tr>' +
+  html += '<table class="elenco tabella-voci"><thead><tr>' +
     '<th>Descrizione</th><th class="num">Ore</th><th class="num">Q.tà</th><th>UM</th><th class="num">Prezzo</th><th></th>' +
-    '<th class="num importo">Importo</th><th></th></tr></thead><tbody>';
+    '<th class="num importo">Importo</th><th></th></tr></thead>';
   const soluzioni = soluzioniDi(d);
   d.righe.forEach((r, i) => {
-    const imp = r.tipo === 'totale' ? importoRiga(r) : null;
-    const sezione = r.tipo === 'sezione';
-    // Una riga a corpo ha il suo totale in fondo, sotto i componenti: in testa
-    // resta la descrizione per il cliente.
-    const corpo = !sezione && Array.isArray(r.componenti);
     preparaRigaSettore(r);
     preparaRigaIrrigazione(r);
-    html += '<tr class="' + (corpo ? 'riga-corpo' : '') + (r.tipo === 'tariffa' ? ' riga-tariffa' : '') +
-        (sezione ? ' riga-sezione' : '') + '">' +
-      // La descrizione si allarga col testo: le frasi per il cliente sono lunghe, e in
-      // una casella di una riga se ne leggeva l'inizio. Cliccandoci dentro diventa la
-      // voce dove vanno le frasi del pannello a destra.
-      '<td' + (sezione || corpo ? ' colspan="7"' : '') + '><textarea class="descrizione-riga" rows="1" data-riga="' + i + '" ' +
-        'placeholder="Descrizione per il cliente" ' +
-        'onfocus="scegliRigaFrasi(' + i + ')" ' +
-        'oninput="modificaRigaPreventivo(' + i + ', \'descrizione\', this.value); allargaDescrizione(this)">' +
-        perValore(r.descrizione) + '</textarea>' +
-        '<div class="sotto-riga">' +
-        '<span class="meta dal-campo">' + (r.lavorazione ? 'dal campo: ' + perValore(riassuntoLavorazione(r.lavorazione))
-          : r.irrigazione ? 'dal progetto: ' + perValore(riassuntoIrrigazione(r.irrigazione)) +
-            ' · ricarico <input type="text" inputmode="decimal" class="stretto ricarico-riga" value="' +
-            perValore(formattaQuantita(r.irrigazione.ricarico)) + '" oninput="modificaRicaricoRiga(' + i + ', this.value)" ' +
-            'onchange="disegnaPreventivo()" aria-label="ricarico"> %' : '') + '</span>' +
-        '<select class="tipo-riga" onchange="cambiaTipoRiga(' + i + ', this.value)">' +
-        TIPI_RIGA_PREVENTIVO.map(x => '<option value="' + x.id + '"' +
-          (x.id === r.tipo ? ' selected' : '') + '>' + x.nome + '</option>').join('') +
-        '</select>' +
-        // Il menù della soluzione compare solo quando ci sono alternative: finché
-        // il preventivo ha un totale solo sarebbe una scelta che non si fa mai.
-        (soluzioni.length && !sezione ? '<select class="tipo-riga" ' +
-          'onchange="cambiaSoluzioneRiga(' + i + ', this.value)">' +
-          '<option value="">Comune a tutte</option>' +
-          soluzioni.map(sol => '<option value="' + perValore(sol.id) + '"' +
-            (sol.id === r.soluzione ? ' selected' : '') + '>Solo in ' + perValore(sol.nome) + '</option>').join('') +
-          '</select>' : '') +
-        '</div></td>' +
-      (sezione || corpo ? '' :
-        '<td class="num ore"></td>' +
-        '<td class="num qta">' + (r.tipo === 'tariffa' ? '<span class="meta">—</span>' :
-          '<input type="text" inputmode="decimal" class="stretto" value="' +
-          perValore(formattaQuantita(r.quantita)) + '" ' +
-          'oninput="modificaRigaPreventivo(' + i + ', \'quantita\', this.value)">') + '</td>' +
-        '<td style="white-space:nowrap">' + (r.libera
-          // Una voce libera non ha un'unità dal listino: la si scrive.
-          ? '<input type="text" class="stretto" value="' + perValore(r.unita) + '" placeholder="UM" ' +
-            'oninput="modificaRigaPreventivo(' + i + ', \'unita\', this.value)" aria-label="unità">'
-          : perValore(r.unita)) + '</td>' +
-        '<td class="num"><input type="text" inputmode="decimal" class="stretto prezzo' +
-          (r.proposto ? ' proposto' : '') + '" id="prezzo-riga-' + i + '" value="' + perValore(formattaQuantita(r.prezzo)) + '" ' +
-          'oninput="modificaPrezzoRiga(' + i + ', this.value, this)"></td>' +
-        '<td class="conferma-col">' + (r.proposto ? '<button class="conferma" onclick="confermaPrezzo(' + i + ')" ' +
-            'title="Va bene così">✓</button>' : '') + '</td>' +
-        '<td class="num importo" id="imp-riga-' + i + '">' + (r.tipo === 'tariffa' ? '<span class="meta">fuori totale</span>' :
-          (imp == null ? '<span class="meta">—</span>' : formattaEuro(imp))) + '</td>') +
-      '<td class="via-col"><div class="comandi-riga">' +
-        '<button class="sposta" onclick="spostaRigaPreventivo(' + i + ', -1)" title="Sposta su"' + (i === 0 ? ' disabled' : '') + '>▲</button>' +
-        '<button class="via" onclick="togliRigaPreventivo(' + i + ')" title="Togli">✕</button>' +
-        '<button class="sposta" onclick="spostaRigaPreventivo(' + i + ', 1)" title="Sposta giù"' +
-          (i === d.righe.length - 1 ? ' disabled' : '') + '>▼</button>' +
-      '</div></td>' +
-    '</tr>';
-    if (corpo) html += righeComponenti(r, i) + rigaTotaleACorpo(r, i);
+    html += vocePreventivo(d, r, i, soluzioni);
   });
+  html += '<tbody class="totali">';
   if (t.unico) {
     html += '<tr class="riga-totale"><td colspan="6">Totale (IVA inclusa)</td>' +
       '<td class="num importo" id="totale-preventivo">' + formattaEuro(t.unico.totale) + '</td><td></td></tr>';
@@ -5354,7 +5460,7 @@ function disegnaPreventivo() {
         '<td class="num importo" id="totale-' + perValore(sol.id) + '">' + formattaEuro(sol.totale) + '</td><td></td></tr>';
     });
   }
-  html += '</tbody></table>';
+  html += '</tbody></table><div class="scheda aggiungi-voci">';
   const senzaPrezzo = t.unico ? t.unico.escluse : t.soluzioni.reduce((m, x) => Math.max(m, x.escluse), 0);
   html += '<div class="meta" id="fuori-totale">' + (senzaPrezzo
     ? senzaPrezzo + (senzaPrezzo === 1 ? ' riga senza prezzo' : ' righe senza prezzo') : '') + '</div>';

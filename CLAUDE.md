@@ -900,9 +900,25 @@ segue finché nessuno l'ha guardato; deciso, resta, e la somma gli sta accanto c
 «Usa la somma». Una voce a misura senza ore — il verde da smaltire — resta una riga
 a misura col suo prezzo unitario: spesso diventa una tariffa.
 
-**Il totale della riga sta in fondo**, sotto i componenti (`rigaTotaleACorpo()`):
-in testa resta la descrizione per il cliente, e il prezzo si legge dopo quello che
-lo compone. Le colonne sono Descrizione, **Ore**, Q.tà, UM, Prezzo, Importo.
+**Ogni voce è una scheda** (`vocePreventivo()`): in testa la descrizione per il
+cliente, e subito sotto la **riga del prezzo** — quantità, unità, prezzo, importo
+(`rigaPrezzoVoce()`) — **sempre lì**, per una voce a corpo come per una a misura. Erano
+due impaginazioni: il prezzo in fondo ai componenti per l'una, a destra della
+descrizione per l'altra, e voci e componenti avevano lo stesso aspetto, senza stacco.
+Per un po' il totale è stato in fondo apposta, «dopo quello che lo compone»: con le
+voci chiuse non c'è più niente da scavalcare, e il prezzo sta dove lo si cerca. Le
+colonne sono Descrizione, **Ore**, Q.tà, UM, Prezzo, Importo.
+
+**I componenti stanno chiusi, e se ne apre una voce alla volta** (`apriVoce()`), come i
+settori sul telefono: con cinque voci aperte la pagina era alta tre schermi. Chiusa, la
+voce dice **quanti sono, quanto fanno a listino, le ore, e quanti restano da
+completare** — nascondere un buco è il modo migliore per dimenticarlo. Aprire non
+ridisegna: i componenti ci sono già, nascosti, e i campi delle altre voci restano dove
+sono. Quale voce è aperta sta sul preventivo a schermo (`PREVENTIVO.aperta`) e non nel
+documento: non è un dato, e non deve sembrare una modifica da salvare. Un capitolo
+appena aggiunto e un impianto appena importato nascono aperti. La tabella resta **una**,
+con un `<tbody>` per voce disegnato come scheda: i componenti devono cadere nelle
+colonne della voce (sotto, *Cose da sapere*).
 
 **In un settore ogni voce ha le sue ore**, scritte in ufficio (`ore` sul
 componente), e **la manodopera in fondo è una somma** (`manodoperaSettore()`): le
@@ -1950,6 +1966,9 @@ lì: può darsi che sia già stato ragionato.
 - Nel preventivo i **componenti** di una riga a corpo sono righe della stessa
   tabella (`tr.componenti`), non una tabella dentro una cella: con una tabella loro
   le colonne non cadevano sotto quelle della riga, e l'occhio non scendeva dritto.
+  Per lo stesso motivo le schede delle voci sono `<tbody>` della stessa tabella, non
+  riquadri separati. E una prova che **misura** quelle righe deve prima aprire la
+  voce: chiuse non occupano niente, e misurano zero senza che niente fallisca.
 - Una colonna della lavagna cresce fino al suo contenuto più largo e sborda su
   quella accanto: è già successo con la fila `−/1 mezza/+`, che non andava a capo
   e spingeva le ore sopra il «MATTINA» del giorno dopo. Si vede solo a occhio, per

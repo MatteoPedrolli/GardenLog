@@ -5062,9 +5062,12 @@ try {
   // loro riga: la regola generale dei campi stava sotto quella che li stringe, e un
   // «1» finiva in una casella larga mezzo schermo, con i componenti fuori colonna.
   const colonnePrev = await pagU.evaluate(() => {
-    // La quantità della riga a corpo sta nel suo totale, in fondo ai componenti.
-    const comp = document.querySelector('#pagina-preventivo tr.componenti:not(.somma)');
-    const tot = document.querySelector('#pagina-preventivo tr.componenti.somma');
+    // La quantità della voce a corpo sta nella riga del prezzo, in testa; i
+    // componenti si misurano a voce aperta, o non occupano niente.
+    const voce = document.querySelector('#pagina-preventivo tbody.voce.corpo');
+    if (voce && !voce.classList.contains('aperta')) apriVoce(Number(voce.dataset.voce));
+    const comp = voce && voce.querySelector('tr.componenti');
+    const tot = voce && voce.querySelector('tr.prezzo-voce');
     const q = tot && tot.querySelector('td.qta input.stretto');
     const qc = comp && comp.querySelector('td.qta input.stretto');
     if (!q || !qc) return null;
@@ -5283,10 +5286,15 @@ try {
     // Ogni numero allineato a destra seguito da del testo: è la coppia che si
     // incolla, ovunque capiti. Guardarne solo una — quella della quantità —
     // lascerebbe fuori tutte le altre tabelle, che hanno lo stesso difetto.
+    // Con una voce aperta, o i suoi componenti non si misurano.
+    const prima = document.querySelector('#pagina-preventivo tbody.voce.corpo');
+    if (prima && !prima.classList.contains('aperta')) apriVoce(Number(prima.dataset.voce));
     [...document.querySelectorAll('#foglio td.num, #foglio th.num, ' +
       '#pagina-preventivo td.num, #pagina-preventivo th.num')].forEach(cella => {
       const dopo = cella.nextElementSibling;
       if (!dopo || dopo.classList.contains('num')) return;
+      // I componenti delle voci chiuse non sono a schermo: non c'è niente da misurare.
+      if (!cella.getClientRects().length) return;
       if (!cella.textContent.trim() || !dopo.textContent.trim()) return;
       const a = quantoOccupa(cella), b = quantoOccupa(dopo);
       if (b.left - a.right < 6) stretti.push(
@@ -6066,12 +6074,19 @@ try {
     const jLiv = r.componenti.findIndex(c => c.soloOre);
     const jMano = r.componenti.findIndex(c => c.manodoperaSettore);
     const jPiante = r.componenti.findIndex(c => c.voceID === VOCE_PIANTE);
-    const righe = [...document.querySelectorAll('#pagina-preventivo tbody tr')];
-    const capo = righe.findIndex(x => x.classList.contains('riga-corpo'));
-    const blocco = righe.slice(capo, righe.findIndex(x => x.classList.contains('somma')) + 1);
-    const ultima = blocco[blocco.length - 1];
-    const dopoPiante = blocco[jPiante + 2];
-    const sesto = blocco[jPiante + 1].textContent;
+    // La scheda della voce: testa, riga del prezzo, poi i componenti e il piede.
+    const scheda0 = document.querySelector('#pagina-preventivo tbody.voce.corpo');
+    const blocco = [...scheda0.querySelectorAll('tr')];
+    const dopoPiante = blocco[jPiante + 3];
+    const sesto = blocco[jPiante + 2].textContent;
+    // Si guarda lo stile e non l'ingombro: qui la pagina del preventivo non è quella a schermo.
+    const visibili = () => blocco.filter(tr => getComputedStyle(tr).display !== 'none').map(tr => tr.className.split(' ')[0]).join();
+    const chiusa = { righe: visibili(), riepilogo: scheda0.querySelector('.riepilogo-voce').textContent,
+      ore: document.getElementById('ore-riga-0').textContent };
+    apriVoce(0);
+    const aperta = scheda0.classList.contains('aperta') && visibili().includes('componenti');
+    apriVoce(0);
+    const richiusa = !scheda0.classList.contains('aperta') && visibili() === chiusa.righe;
     // Livellamento senza ore e piante senza ore: nessun buco in più.
     const mancanoSoloOre = sommaComponenti([r.componenti[jLiv]]).mancano;
     modificaOreComponente(0, jTelo, '2');
@@ -6100,8 +6115,10 @@ try {
     disegnaPreventivo();
     return {
       chiavi, mano0: mano0.oreCantiere + '|' + mano0.quantita + '|' + mano0.calcolo,
-      totaleInFondo: !!(ultima && ultima.querySelector('#prezzo-riga-0') && ultima.querySelector('#imp-riga-0')) &&
-        !blocco[0].querySelector('#prezzo-riga-0'),
+      prezzoInTesta: blocco[0].classList.contains('testa-voce') && !!blocco[0].querySelector('textarea.descrizione-riga') &&
+        !!blocco[1].querySelector('#prezzo-riga-0') && !!blocco[1].querySelector('#imp-riga-0') &&
+        blocco[2].classList.contains('componenti'),
+      chiusa, aperta, richiusa,
       altraPianta: !!(dopoPiante && dopoPiante.classList.contains('altra-pianta')),
       sesto, mancanoSoloOre, dopoVoci, dopoCantiere, mezze, scheda,
       oreTelo2: r2.componenti.find(c => c.voceID === 'telo-pacciamante').ore,
@@ -6111,8 +6128,13 @@ try {
   ok('in un settore la manodopera sta in fondo, dopo le voci e anche le lavorazioni senza voce',
     oreVoce.chiavi === 'piante,telo-pacciamante,ore:livellamento,manodopera' &&
     oreVoce.mano0 === '8|8|ore di cantiere', oreVoce.chiavi + ' / ' + oreVoce.mano0);
-  ok('il totale della riga sta in fondo, e «+ Un\'altra pianta» sotto l\'ultima pianta',
-    oreVoce.totaleInFondo && oreVoce.altraPianta, JSON.stringify(oreVoce));
+  ok('ogni voce è una scheda: in testa la descrizione, sotto la riga del prezzo, poi i componenti',
+    oreVoce.prezzoInTesta, JSON.stringify(oreVoce));
+  ok('chiusa mostra solo descrizione e prezzo, e dice quanti componenti ha, quanto fanno e le ore',
+    oreVoce.chiusa.righe === 'testa-voce,prezzo-voce,piede-voce' && /4 componenti/.test(oreVoce.chiusa.riepilogo) &&
+    /a listino/.test(oreVoce.chiusa.riepilogo) && oreVoce.chiusa.ore === '8 h', JSON.stringify(oreVoce.chiusa));
+  ok('si apre e si richiude con un clic, senza ridisegnare', oreVoce.aperta && oreVoce.richiusa, JSON.stringify(oreVoce));
+  ok('«+ Un\'altra pianta» sta sotto l\'ultima pianta', oreVoce.altraPianta, JSON.stringify(oreVoce));
   ok('il sesto dice cos\'è: metri fra le piante', oreVoce.sesto.includes('m fra le piante'), oreVoce.sesto);
   ok('una lavorazione senza voce e senza ore non è un buco', oreVoce.mancanoSoloOre === 0);
   ok('le ore delle voci si sommano alla manodopera mentre si scrivono, e lo dice',
