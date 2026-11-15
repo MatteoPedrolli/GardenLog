@@ -2588,6 +2588,14 @@ function riassuntoRicontrolla() {
 // non si legge, e quello che non si legge tanto vale non scriverlo.
 const NOVITA = [
   {
+    versione: '2026-11-15',
+    data: '2026-11-15',
+    titolo: 'Il trasferimento entra nel totale del preventivo',
+    righe: [
+      'In un preventivo nuovo il **trasferimento** nasce con quantità **1**: prima, col prezzo in listino, restava senza quantità e **fuori dal totale**. Nei preventivi già cominciati va scritto l\'1 a mano.',
+    ],
+  },
+  {
     versione: '2026-11-12d',
     data: '2026-11-12',
     titolo: 'L\'impianto di irrigazione dal progetto',
@@ -4693,7 +4701,11 @@ function aggiungiRigaPreventivo(voceID, descrizione) {
 // il prezzo è un buco da riempire.
 function rigaTrasferimento() {
   const riga = rigaVocePreventivo(VOCE_TRASFERIMENTO, 'Trasferimento');
-  if (!riga.voceID) Object.assign(riga, { voceID: VOCE_TRASFERIMENTO, voce: 'Trasferimento', quantita: 1 });
+  if (!riga.voceID) Object.assign(riga, { voceID: VOCE_TRASFERIMENTO, voce: 'Trasferimento' });
+  // Uno, sempre: col trasferimento in listino la riga nasceva col prezzo e senza
+  // quantità, e restava fuori dal totale dicendo «1 riga senza prezzo» — con il
+  // prezzo scritto accanto. Doverla completare a mano era il modo per dimenticarlo.
+  if (riga.quantita === '' || riga.quantita == null) riga.quantita = 1;
   return riga;
 }
 

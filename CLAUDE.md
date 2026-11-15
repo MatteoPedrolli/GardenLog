@@ -80,6 +80,10 @@ Le correzioni del beta testing sono **piccole** e vanno su `main`: i lavori gros
 (i preventivi) vanno avanti su un ramo loro, e un rifacimento fatto qui ci si
 scontrerebbe. Prima di ogni modifica `git fetch origin main`.
 
+Di domenica i browser del giro di prova credono che sia lunedì (`contestoDelGiro()`):
+la domenica sulla lavagna non ha colonna, e le prove che piazzano un cartellino su
+«oggi» fermavano il giro a metà, come se l'app fosse rotta.
+
 I test vanno lanciati prima di ogni commit. Coprono le cose che rompendosi non
 si fanno notare: il calcolo di azoto e potassio, la persistenza dopo la
 ricarica, il backup, le eliminazioni a cascata, l'apertura offline. Se una
@@ -1051,7 +1055,9 @@ se quel foglio è andato al cliente — e c'è «Consegnato a mano».
 **Un preventivo nuovo ha già il trasferimento**, come il conto del telefono: c'è a
 ogni lavoro, e doverlo aggiungere era il modo per dimenticarlo. Entra una volta,
 quando il preventivo nasce (`rigaTrasferimento()`), come riga dell'ufficio: chi lo
-toglie non se lo ritrova riaprendo; senza prezzo in listino è un buco, non una proposta.
+toglie non se lo ritrova riaprendo; senza prezzo in listino è un buco, non una proposta. Nasce
+con quantità 1 anche quando il listino ne ha il prezzo: per un po' lì restava senza
+quantità, fuori dal totale, sotto la scritta «1 riga senza prezzo».
 
 **Il preventivo si modifica tutto, e un rilievo corretto non lo disfa.** Ogni riga ha
 **▲ ▼** accanto alla ✕ (`spostaRigaPreventivo()`): l'ordine è quello del foglio che va al

@@ -18,7 +18,17 @@ const ok = (nome, condizione, extra = '') =>
 
 const { url: BASE, chiudi } = await avviaServer(RADICE);
 const browser = await chromium.launch();
-const ctx = await browser.newContext();
+// La domenica sulla lavagna non ha colonna, e molte prove piazzano i cartellini
+// su «oggi»: lanciato di domenica il giro si fermava a metà, come se l'app fosse
+// rotta. Di domenica i browser del giro credono che sia lunedì — l'orologio
+// continua a camminare, parte solo un giorno più avanti.
+const DOMENICA = new Date().getDay() === 0;
+const contestoDelGiro = async () => {
+  const c = await browser.newContext();
+  if (DOMENICA) await c.clock.install({ time: new Date(Date.now() + 86400000) });
+  return c;
+};
+const ctx = await contestoDelGiro();
 const page = await ctx.newPage();
 
 const erroriJS = [];
@@ -2153,7 +2163,7 @@ try {
   // in un punto solo. Il documento che le diamo in pasto non è inventato — è
   // quello che l'app del cantiere ha prodotto poche righe sopra: se le due app
   // non si capiscono, si vede qui.
-  const ctxU = await browser.newContext();
+  const ctxU = await contestoDelGiro();
   const pagU = await ctxU.newPage();
   const erroriU = [];
   pagU.on('pageerror', e => erroriU.push(String(e)));
@@ -5015,6 +5025,17 @@ try {
   const trasf = await pagU.evaluate(() => PREVENTIVO.doc.righe.filter(r => r.voceID === 'trasferimento')
     .map(r => r.descrizione + ':' + r.quantita + ':' + r.chiave).join());
   ok('un preventivo nuovo ha già la riga del trasferimento, come riga dell\'ufficio', trasf === 'Trasferimento:1:', trasf);
+  // Col trasferimento in listino la riga nasceva col prezzo e senza quantità, e
+  // restava fuori dal totale: ne vale uno anche lì.
+  const trasfListino = await pagU.evaluate(() => {
+    const prima = LISTINO.voci.slice();
+    LISTINO.voci = LISTINO.voci.filter(v => v.voceID !== 'trasferimento')
+      .concat([{ voceID: 'trasferimento', voce: 'Trasferimento', unita: 'n', prezzo: 25, aCorpo: false }]);
+    const r = rigaTrasferimento();
+    LISTINO.voci = prima;
+    return r.quantita + '|' + r.prezzo + '|' + importoRiga(r);
+  });
+  ok('e col trasferimento in listino vale uno ed entra nel totale', trasfListino === '1|25|25', trasfListino);
   ok('il preventivo porta le righe del rilievo, con quantità e prezzo',
     campiPrev.includes('240') && schermoPrev.includes('m²'),
     campiPrev + ' § ' + schermoPrev.slice(0, 120));
