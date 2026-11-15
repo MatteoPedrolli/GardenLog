@@ -5565,7 +5565,7 @@ try {
     const tenuto = { stato: d.stato, mandato: d.mandato };
     d.stato = 'bozza';
     disegnaPreventivo();
-    [...document.querySelectorAll('#pagina-preventivo .bottoni button')]
+    [...document.querySelectorAll('#pagina-preventivo .barra-preventivo button')]
       .find(b => b.textContent.includes('Consegnato a mano')).click();
     await new Promise(r => setTimeout(r, 200));
     const r = { stato: PREVENTIVO.doc.stato, data: !!PREVENTIVO.doc.mandato,
@@ -6343,6 +6343,135 @@ try {
     modifiche.prima + ' → ' + modifiche.dopo);
   ok('e nella voce restano tolto il componente tolto e aggiunto quello aggiunto, anche nei capitoli dell\'ufficio',
     modifiche.siepeDopo && modifiche.capitoloDopo, JSON.stringify(modifiche));
+
+  // ── IL PREVENTIVO SI SALVA DA SOLO ──
+  // C'era «Salva» in fondo alla pagina, e uscendo senza premerlo le modifiche
+  // sparivano in silenzio. Qui si guarda il file, non la memoria: è lì che il
+  // lavoro deve arrivare.
+  const daSolo = await pagU.evaluate(async () => {
+    const prima = PREVENTIVO, scriviVero = window.scriviTesto, conferma = window.confirm;
+    const r = {};
+    const aspetta = ms => new Promise(ok => setTimeout(ok, ms));
+    const cartRilievi = await sottocartella(CARTELLA, CARTELLA_RILIEVI, true);
+    const rilievo = rev => JSON.stringify({ tipo: 'rilievo', versione: 1, id: 'ril-dasolo', revisione: rev, origine: 'ufficio',
+      creato: '2026-11-15T08:00:00Z', cliente: { nome: 'Prova Dasolo' },
+      lavorazioni: [{ id: 'l1', genere: 'manodopera', nome: 'Potatura', ore: rev === 1 ? 4 : 6 }] });
+    await scriviTesto(cartRilievi, 'ril-dasolo.json', rilievo(1));
+    await ricarica();
+    const suFile = async () => {
+      const radice = await sottocartella(CARTELLA, CARTELLA_PREVENTIVI, false);
+      const anno = radice && await sottocartella(radice, '2026', false);
+      if (!anno) return null;
+      const nome = (await elencaFile(anno)).find(n => n.includes('ril-dasolo'));
+      return nome ? JSON.parse(await leggiTesto(anno, nome)) : null;
+    };
+    const scrivi = (selettore, testo) => {
+      const el = document.querySelector('#pagina-preventivo ' + selettore);
+      el.value = testo;
+      el.dispatchEvent(new Event('input', { bubbles: true }));
+    };
+    const stato = () => (document.getElementById('stato-preventivo') || {}).textContent || '';
+
+    // Aprire non è modificare: niente file, e il rilievo resta da preventivare.
+    apriPreventivo('ril-dasolo');
+    await aspetta(1000);
+    r.apertoSenzaFile = !(await suFile()) && rilieviDaPreventivare().some(x => x.doc.id === 'ril-dasolo') &&
+      stato().includes('Non ancora salvato') && !!document.getElementById('salva-ora');
+    // La barra: fissa in fondo, coi bottoni in gruppi, e senza più «Salva» fra i bottoni.
+    const barra = document.getElementById('barra-preventivo');
+    r.barra = getComputedStyle(barra).position === 'sticky' &&
+      [...barra.querySelectorAll('.etichetta-gruppo')].map(x => x.textContent).join() === 'Documento,Il cliente' &&
+      ![...document.querySelectorAll('#pagina-preventivo button')].some(b => b.textContent.trim() === 'Salva') &&
+      document.querySelector('#pagina-preventivo button.torna-indietro').textContent.includes('Tutti i preventivi');
+    r.barraTotale = document.getElementById('barra-totale').textContent;
+
+    // Una modifica si scrive nel file un momento dopo, senza toccare niente.
+    scrivi('textarea[data-riga="0"]', 'Potatura di contenimento di tre aceri');
+    r.subitoDice = stato().includes('da salvare');
+    const campo = document.querySelector('#pagina-preventivo textarea[data-riga="0"]');
+    campo.focus();
+    await aspetta(1100);
+    const f1 = await suFile();
+    r.scritto = !!f1 && f1.righe[0].descrizione === 'Potatura di contenimento di tre aceri';
+    r.campoResta = document.activeElement === campo && document.contains(campo);
+    r.dice = /^Salvato alle \d\d:\d\d$/.test(stato()) && !document.getElementById('salva-ora');
+    r.inElenco = PREVENTIVI.some(x => x.doc.id === 'ril-dasolo' && x.doc.righe[0].descrizione.includes('tre aceri')) &&
+      !rilieviDaPreventivare().some(x => x.doc.id === 'ril-dasolo');
+    r.eliminaCompare = !!document.querySelector('#barra-preventivo button.pericolo');
+
+    // Il totale della barra segue il numero sotto le dita.
+    const prezzo = document.querySelector('#pagina-preventivo input.prezzo');
+    prezzo.value = '500'; prezzo.dispatchEvent(new Event('input', { bubbles: true }));
+    r.barraSegue = document.getElementById('barra-totale').textContent !== r.barraTotale &&
+      document.getElementById('barra-totale').textContent.includes('500');
+
+    // Uscendo subito, quello che aspettava si scrive lo stesso: è il guasto di prima.
+    scrivi('textarea[data-riga="0"]', 'Potatura — uscito senza aspettare');
+    document.getElementById('v-lavagna').click();
+    await aspetta(300);
+    r.uscendo = (await suFile()).righe[0].descrizione === 'Potatura — uscito senza aspettare';
+    apriPreventivo('ril-dasolo');
+    r.riaperto = PREVENTIVO.doc.righe[0].descrizione === 'Potatura — uscito senza aspettare' &&
+      Number(PREVENTIVO.doc.righe[0].prezzo) === 500;
+
+    // Un salvataggio fallito si legge nella barra, in rosso, e non si perde niente:
+    // tornando all'elenco e riaprendo c'è ancora quello scritto, e «Riprova» lo salva.
+    window.scriviTesto = async () => { throw new Error('disco pieno'); };
+    scrivi('textarea[data-riga="0"]', 'Potatura — col disco pieno');
+    await aspetta(1100);
+    r.fallito = stato().includes('Non salvato: disco pieno') &&
+      !!document.querySelector('#barra-preventivo .stato-salvataggio.brutto') &&
+      document.getElementById('salva-ora').textContent === 'Riprova';
+    vaiA('preventivi');
+    await aspetta(200);
+    apriPreventivo('ril-dasolo');
+    r.nonPerso = PREVENTIVO.doc.righe[0].descrizione === 'Potatura — col disco pieno' &&
+      (await suFile()).righe[0].descrizione === 'Potatura — uscito senza aspettare';
+    window.scriviTesto = scriviVero;
+    document.getElementById('salva-ora').click();
+    await aspetta(300);
+    r.riprovato = (await suFile()).righe[0].descrizione === 'Potatura — col disco pieno' && stato().startsWith('Salvato alle');
+
+    // Il rilievo corretto: il preventivo si rifà, ma non si salva da solo all'apertura.
+    await scriviTesto(cartRilievi, 'ril-dasolo.json', rilievo(2));
+    await ricarica();
+    apriPreventivo('ril-dasolo');
+    await aspetta(1000);
+    r.rifatto = stato().includes('Rifatto dal rilievo corretto') && (await suFile()).rilievo === 1 &&
+      rilieviDaPreventivare().some(x => x.doc.id === 'ril-dasolo');
+    document.getElementById('salva-ora').click();
+    await aspetta(300);
+    r.rifattoSalvato = (await suFile()).rilievo === 2 && !rilieviDaPreventivare().some(x => x.doc.id === 'ril-dasolo');
+
+    // Eliminato con una modifica ancora in attesa, il file non ricompare.
+    scrivi('textarea[data-riga="0"]', 'Potatura — da buttare');
+    window.confirm = () => true;
+    await eliminaPreventivo();
+    await aspetta(1100);
+    r.eliminato = !(await suFile()) && !PREVENTIVI.some(x => x.doc.id === 'ril-dasolo');
+    window.confirm = conferma;
+    window.scriviTesto = scriviVero;
+    PREVENTIVO = prima;
+    vaiA('preventivi');
+    return r;
+  });
+  ok('aprire un rilievo non è modificarlo: niente file, resta da preventivare, e la barra offre «Salva ora»',
+    daSolo.apertoSenzaFile, JSON.stringify(daSolo));
+  ok('la barra del preventivo resta in fondo alla finestra, coi bottoni in gruppi, e l\'elenco si raggiunge dall\'alto',
+    daSolo.barra, JSON.stringify(daSolo));
+  ok('una modifica si scrive nel file da sola, e lo dice prima e dopo', daSolo.subitoDice && daSolo.scritto && daSolo.dice, JSON.stringify(daSolo));
+  ok('salvando da solo il campo non sparisce da sotto le dita', daSolo.campoResta, JSON.stringify(daSolo));
+  ok('salvato, il rilievo non è più da preventivare, l\'elenco lo sa e compare «Elimina»',
+    daSolo.inElenco && daSolo.eliminaCompare, JSON.stringify(daSolo));
+  ok('il totale della barra segue il numero sotto le dita', daSolo.barraSegue, JSON.stringify(daSolo));
+  ok('uscendo dalla schermata senza aspettare, la modifica è nel file e riaprendo si ritrova',
+    daSolo.uscendo && daSolo.riaperto, JSON.stringify(daSolo));
+  ok('un salvataggio fallito si legge nella barra in rosso, con «Riprova»', daSolo.fallito, JSON.stringify(daSolo));
+  ok('e non si perde: riaprendo c\'è ancora quello scritto, e riprovando arriva nel file',
+    daSolo.nonPerso && daSolo.riprovato, JSON.stringify(daSolo));
+  ok('rifatto da un rilievo corretto non si salva da solo all\'apertura: lo dice, e si salva con un clic',
+    daSolo.rifatto && daSolo.rifattoSalvato, JSON.stringify(daSolo));
+  ok('eliminato con una modifica in attesa, il file non ricompare', daSolo.eliminato, JSON.stringify(daSolo));
 
   // ── L'IMPIANTO DI IRRIGAZIONE: DAL TOOL DEI SETTORI AL PREVENTIVO ──
   // Il tool conta i materiali dal progetto e li salva col progetto; l'ufficio li

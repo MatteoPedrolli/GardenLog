@@ -210,7 +210,30 @@ table.elenco td.via-col { padding-left: 14px; width: 38px; }
 tr.componenti.aggiungi-componente td { border-bottom: none; padding-top: 6px; }
 /* Il preventivo a sinistra, le frasi a destra: si scrive guardando le frasi. */
 .preventivo-con-frasi { display: grid; grid-template-columns: minmax(0, 1fr) 300px; gap: 16px; align-items: start; }
+.preventivo-colonna { min-width: 0; }
 .preventivo-righe { min-width: 0; overflow-x: auto; }
+/* La barra del preventivo resta in fondo alla finestra mentre si scorre: totale,
+   stato del salvataggio e bottoni stavano in fondo a una pagina alta tre schermi.
+   Sta fuori da .preventivo-righe apposta: lì dentro c'è un overflow, e un
+   elemento «sticky» dentro un contenitore che scorre non segue più la finestra. */
+.barra-preventivo { position: sticky; bottom: 0; z-index: 20; margin-top: 18px; padding: 10px 14px 12px;
+  background: var(--white); border: 1px solid var(--border); border-bottom: none;
+  border-radius: var(--radius-sm) var(--radius-sm) 0 0; box-shadow: 0 -6px 18px rgba(36,33,28,0.10); }
+.barra-riepilogo { display: flex; gap: 4px 20px; align-items: baseline; flex-wrap: wrap; font-size: 0.86rem; color: var(--text-mid); }
+.barra-riepilogo .totale-barra strong { font-family: var(--font-display); font-size: 1.3rem; color: var(--text); margin-left: 6px; }
+.barra-riepilogo .da-guardare { color: var(--earth); font-weight: 600; }
+.barra-riepilogo .stato-salvataggio { margin-left: auto; display: flex; gap: 8px; align-items: center; }
+.barra-azioni { display: flex; gap: 8px 14px; flex-wrap: wrap; align-items: center; margin-top: 8px; padding-top: 8px;
+  border-top: 1px solid var(--border); }
+/* Stretti: con le frasi a destra la colonna è larga 950 px, e «Elimina» andava a capo da solo. */
+.barra-azioni button.piccola { padding: 6px 9px; font-size: 0.8rem; }
+.gruppo-azioni { display: flex; gap: 5px; align-items: center; flex-wrap: wrap; }
+.etichetta-gruppo { font-size: 0.7rem; text-transform: uppercase; letter-spacing: 0.05em; color: var(--text-light); margin-right: 2px; }
+.barra-azioni .in-fondo { margin-left: auto; }
+/* L'avviso passa sopra la barra, o le coprirebbe i bottoni. */
+body:has(#pagina-preventivo.attiva .barra-preventivo) #avviso { bottom: 132px; }
+button.torna-indietro { background: none; border: none; padding: 0 0 6px; color: var(--text-light); font-size: 0.86rem; cursor: pointer; }
+button.torna-indietro:hover { color: var(--inchiostro-tenue); }
 .pannello-frasi { position: sticky; top: 12px; max-height: calc(100vh - 24px); overflow-y: auto;
   background: var(--white); border: 1px solid var(--border); border-radius: var(--radius-sm); padding: 12px; }
 /* La tabella del preventivo vuole circa 780 px: sotto, il pannello passa sotto
@@ -2387,6 +2410,10 @@ function vaiA(pagina) {
   // Uscendo dalla schermata del lavoro quello che resta da salvare si salva ora:
   // il conto si legge subito, prima del primo await, quindi va bene anche così.
   if (PAGINA === 'lavoro' && pagina !== 'lavoro') salvaSubito();
+  // Lo stesso per il preventivo: quello che aspettava il suo momento si scrive adesso.
+  if (PAGINA === 'preventivo' && pagina !== 'preventivo' && PREVENTIVO && PREVENTIVO.daSalvare) {
+    salvaPreventivoDaSolo(PREVENTIVO);
+  }
   PAGINA = pagina;
   document.querySelectorAll('.pagina').forEach(p => p.classList.remove('attiva'));
   const p = document.getElementById('pagina-' + pagina);
@@ -2587,6 +2614,16 @@ function riassuntoRicontrolla() {
 // La più recente per prima. Le righe sono poche e corte apposta: un elenco lungo
 // non si legge, e quello che non si legge tanto vale non scriverlo.
 const NOVITA = [
+  {
+    versione: '2026-11-15b',
+    data: '2026-11-15',
+    titolo: 'Il preventivo si salva da solo',
+    righe: [
+      'Il preventivo **si salva da solo**, come il conto: non c\'è più «Salva» da premere, e passando a un\'altra pagina le modifiche non si perdono. In basso leggi **«Salvato alle…»**; se non riesce lo dice in rosso, con «Riprova».',
+      'In fondo alla finestra c\'è una **barra che resta sempre a vista**: totale, mezze giornate, prezzi da confermare e i bottoni divisi fra **Documento** (stampa, mail, scheda di cantiere) e **Il cliente** (consegnato a mano, ha detto sì, ha detto no).',
+      'Per tornare all\'elenco c\'è **«‹ Tutti i preventivi»** in cima. Un rilievo appena aperto si salva alla prima modifica: se va bene com\'è, c\'è **«Salva ora»**.',
+    ],
+  },
   {
     versione: '2026-11-15',
     data: '2026-11-15',
@@ -4206,12 +4243,24 @@ function apriPreventivo(id) {
   const rilievo = RILIEVI.find(r => r.doc.id === id);
   if (!rilievo && !gia) { avvisa('Rilievo non trovato: ricontrolla la cartella', true); return; }
   FRASE_DOVE = null;
+  // Riaperto mentre ancora si sta salvando — o dopo un salvataggio fallito — è
+  // quello che c'era a schermo, non quello del file: rifarlo dal file butterebbe
+  // via proprio le modifiche che non ci sono ancora arrivate.
+  if (PREVENTIVO && PREVENTIVO.doc.id === id && PREVENTIVO.daSalvare) {
+    VISTA_CANTIERE = false;
+    vaiA('preventivo');
+    return;
+  }
   // Se il campo ha rimandato il rilievo corretto, il preventivo si rifà su
   // quello **tenendo i prezzi già decisi**: le quantità cambiano, il giudizio no.
   // Uno già consegnato invece resta com'è partito: il cliente ha in mano quello.
   PREVENTIVO = rilievo && !(gia && preventivoConsegnato(gia.doc))
     ? { doc: costruisciPreventivo(rilievo.doc, gia ? gia.doc : null), file: gia ? gia.file : '', anno: gia ? gia.anno : '' }
     : { doc: JSON.parse(JSON.stringify(gia.doc)), file: gia.file, anno: gia.anno };
+  // Rifatto da un rilievo corretto e non ancora scritto: non si salva da solo
+  // all'apertura — sarebbe dare per guardate quantità che nessuno ha guardato —
+  // e la barra lo dice, con «Salva ora».
+  PREVENTIVO.daRifare = !!(rilievo && gia && !preventivoConsegnato(gia.doc) && !(gia.doc.rilievo >= rilievo.doc.revisione));
   VISTA_CANTIERE = false;
   vaiA('preventivo');
 }
@@ -4968,9 +5017,11 @@ function aggiornaTotalePreventivo() {
   // Anche le mezze giornate seguono il numero: le ore sono una riga come le altre.
   const mezze = document.getElementById('mezze-preventivo');
   if (mezze) mezze.textContent = etichettaMezzePreventivo(PREVENTIVO.doc);
+  ridisegnaBarraPreventivo();
 }
 
 function aggiornaCodaPreventivo() {
+  ridisegnaBarraPreventivo();
   const el = document.getElementById('da-confermare');
   if (!el || !PREVENTIVO) return;
   const n = prezziDaConfermare(PREVENTIVO.doc.righe);
@@ -5214,7 +5265,10 @@ function disegnaPreventivo() {
   if (preventivoConsegnato(d)) { disegnaPreventivoConsegnato(c, d); return; }
   const t = totaliPreventivo(d);
 
-  let html = testataPreventivo(d);
+  // «Torna all'elenco» stava in fondo, in fila coi bottoni: è una strada, non
+  // un'azione sul preventivo, e si cerca in cima.
+  let html = '<button class="torna-indietro" onclick="vaiA(\'preventivi\')">‹ Tutti i preventivi</button>' +
+    testataPreventivo(d);
 
   html += '<div id="da-confermare" class="avvertenza" style="display:none"></div>';
 
@@ -5383,28 +5437,156 @@ function disegnaPreventivo() {
 
   html += bloccoVersioniPrecedenti(d);
 
-  html += '<div class="bottoni">' +
-    '<button class="principale" onclick="salvaPreventivo()">Salva</button>' +
-    '<button class="secondaria" onclick="stampaPreventivo()">Stampa o salva in PDF</button>' +
-    '<button class="secondaria" onclick="apriCantierePreventivo()">Scheda di cantiere</button>' +
-    '<button class="secondaria" onclick="inviaPreventivo()">Manda per mail</button>' +
-    (rilievoDellUfficio(d.id) ? '<button class="secondaria" onclick="modificaRilievoUfficio(\'' + perOnclick(d.id) + '\')">Modifica il rilievo</button>' : '') +
-    (d.stato === 'bozza' ? '<button class="secondaria" onclick="consegnatoAMano()">Consegnato a mano</button>' : '') +
-    (d.stato === 'accettato' || soluzioni.length ? '' :
-      '<button class="secondaria" onclick="accettaPreventivo()">Il cliente ha detto sì</button>') +
-    (d.stato === 'bozza' || d.stato === 'mandato'
-      ? '<button class="secondaria" onclick="rifiutaPreventivo()">Il cliente ha detto no</button>' : '') +
-    '<button class="secondaria" onclick="vaiA(\'preventivi\')">Torna all\'elenco</button>' +
-    (PREVENTIVO.file || rilievoDellUfficio(d.id)
-      ? '<button class="pericolo" style="margin-left:auto" onclick="eliminaPreventivo()" title="Elimina il preventivo">🗑 Elimina</button>' : '') +
-    '</div>';
   // A destra le frasi per le descrizioni: si guardano mentre si scrive, e si
-  // mettono nella voce con un clic. Sotto i 1100 px stanno sotto il preventivo.
-  c.innerHTML = '<div class="preventivo-con-frasi"><div class="preventivo-righe">' + html + '</div>' +
+  // mettono nella voce con un clic. Sotto i 1400 px stanno sotto il preventivo.
+  // In fondo alla colonna la barra, che resta a vista mentre si scorre.
+  c.innerHTML = '<div class="preventivo-con-frasi"><div class="preventivo-colonna">' +
+    '<div class="preventivo-righe">' + html + '</div>' +
+    '<div class="barra-preventivo" id="barra-preventivo"></div></div>' +
     '<aside class="pannello-frasi" id="pannello-frasi">' + pannelloFrasi() + '</aside></div>';
   document.querySelectorAll('#pagina-preventivo textarea.descrizione-riga').forEach(allargaDescrizione);
   segnaRigaFrasi();
   aggiornaCodaPreventivo();
+  // La prima volta si fotografa com'è nato: da lì in poi ogni differenza è una
+  // modifica da salvare. Dopo il disegno, perché disegnando i prezzi d'acquisto
+  // dell'irrigazione si rileggono dal listino.
+  if (!PREVENTIVO.impronta) PREVENTIVO.impronta = improntaPreventivo(d);
+  else guardaPreventivo();
+  ridisegnaBarraPreventivo();
+}
+
+// ── IL PREVENTIVO SI SALVA DA SOLO ──
+// Come il conto. C'era il bottone «Salva» in fondo alla pagina, e passando a
+// un'altra schermata senza premerlo le modifiche sparivano senza che niente lo
+// dicesse: mezz'ora passata a decidere i prezzi, e riaprendo c'erano quelli di
+// prima. Adesso ogni modifica si scrive nel file un momento dopo, e uscendo dalla
+// schermata quello che resta si scrive subito.
+//
+// Non si chiama da ogni funzione che tocca il preventivo — sono decine, e la
+// prossima se ne dimenticherebbe: si **confronta** il documento con com'era
+// all'ultimo salvataggio (`impronta`), a ogni tasto, clic e ridisegno della
+// pagina. Una modifica che nessuna funzione ha annunciato si salva lo stesso.
+//
+// **Aprire non è modificare**: un preventivo appena nato da un rilievo, o rifatto
+// da un rilievo corretto, non si scrive finché non lo si tocca — il rilievo resta
+// «da preventivare», perché nessuno ci ha ancora messo mano. Per quello che va
+// bene com'è c'è «Salva ora», nella barra.
+let TIMER_PREVENTIVO = null;
+
+function improntaPreventivo(d) {
+  const { aggiornato, ...resto } = d;
+  return JSON.stringify(resto);
+}
+
+function guardaPreventivo() {
+  const p = PREVENTIVO;
+  // Uno già uscito non si modifica: i suoi cambi di stato si salvano da sé.
+  if (!p || !p.impronta || preventivoConsegnato(p.doc)) return;
+  if (improntaPreventivo(p.doc) === p.impronta) return;
+  if (!p.daSalvare) { p.daSalvare = true; ridisegnaBarraPreventivo(); }
+  clearTimeout(TIMER_PREVENTIVO);
+  TIMER_PREVENTIVO = setTimeout(() => salvaPreventivoDaSolo(p), 800);
+}
+
+// Scrive il file e basta, senza rileggere la cartella né ridisegnare la pagina:
+// si sta scrivendo, e il campo non deve sparire da sotto le dita.
+async function salvaPreventivoDaSolo(p) {
+  p = p || PREVENTIVO;
+  if (!p || !p.daSalvare) return true;
+  if (p === PREVENTIVO) clearTimeout(TIMER_PREVENTIVO);
+  const ok = await scriviPreventivo(p);
+  if (p === PREVENTIVO) ridisegnaBarraPreventivo();
+  // L'elenco, se nel frattempo ci si è tornati, mostra quello appena scritto.
+  if (ok && PAGINA === 'preventivi') disegna();
+  return ok;
+}
+
+function salvaPreventivoOra() {
+  if (!PREVENTIVO) return;
+  PREVENTIVO.daSalvare = true;
+  ridisegnaBarraPreventivo();
+  return salvaPreventivoDaSolo(PREVENTIVO);
+}
+
+// Chiudendo la finestra con qualcosa ancora da scrivere, il browser chiede: è
+// l'unico momento in cui un salvataggio in corso si può perdere. Vale anche per
+// il conto di un lavoro. Passando a un'altra scheda del browser si scrive subito.
+window.addEventListener('beforeunload', e => {
+  const preventivo = PREVENTIVO && PREVENTIVO.daSalvare;
+  const conto = typeof LAVORO !== 'undefined' && LAVORO && LAVORO.daSalvare;
+  if (!preventivo && !conto) return;
+  if (preventivo) salvaPreventivoDaSolo(PREVENTIVO);
+  if (conto) salvaSubito();
+  e.preventDefault();
+  e.returnValue = '';
+});
+document.addEventListener('visibilitychange', () => {
+  if (document.visibilityState === 'hidden' && PREVENTIVO && PREVENTIVO.daSalvare) salvaPreventivoDaSolo(PREVENTIVO);
+});
+['input', 'change', 'click'].forEach(tipo => document.addEventListener(tipo, e => {
+  if (PAGINA === 'preventivo' && e.target && e.target.closest && e.target.closest('#pagina-preventivo')) guardaPreventivo();
+}));
+
+// ── LA BARRA DEL PREVENTIVO ──
+// Totale, mezze giornate, quanti prezzi aspettano e lo stato del salvataggio,
+// sempre a vista; sotto i bottoni, in gruppi. Erano otto in fila in fondo alla
+// pagina, tutti con lo stesso peso — stampare, «il cliente ha detto no», tornare
+// all'elenco — e per arrivarci si scorrevano tutte le voci. Non ha campi da
+// scrivere, quindi si ridisegna intera ogni volta che un numero cambia.
+function statoSalvataggioPreventivo(p) {
+  if (p.daSalvare && p.erroreSalvataggio) return { testo: 'Non salvato: ' + p.erroreSalvataggio, brutto: true, bottone: 'Riprova' };
+  if (p.daSalvare) return { testo: 'Modifiche da salvare…' };
+  if (!p.file) return { testo: 'Non ancora salvato: si salva da solo alla prima modifica', bottone: 'Salva ora' };
+  if (p.daRifare) return { testo: 'Rifatto dal rilievo corretto, non ancora salvato', bottone: 'Salva ora' };
+  return { testo: p.salvato ? 'Salvato alle ' + new Date(p.salvato).toLocaleTimeString('it-IT', { hour: '2-digit', minute: '2-digit' })
+    : 'Salvato' };
+}
+
+function barraPreventivo() {
+  const p = PREVENTIVO;
+  const d = p.doc;
+  const t = totaliPreventivo(d);
+  const soluzioni = soluzioniDi(d);
+  const conferme = prezziDaConfermare(d.righe);
+  const buchi = t.unico ? t.unico.escluse : t.soluzioni.reduce((m, x) => Math.max(m, x.escluse), 0);
+  const stato = statoSalvataggioPreventivo(p);
+  const bottone = (testo, azione, titolo) => '<button class="secondaria piccola" onclick="' + azione + '"' +
+    (titolo ? ' title="' + perValore(titolo) + '"' : '') + '>' + testo + '</button>';
+  return '<div class="barra-riepilogo">' +
+      '<span class="totale-barra">Totale' + (soluzioni.length ? '' : ' (IVA inclusa)') +
+        '<strong id="barra-totale">' + forchettaPreventivo(d) + '</strong></span>' +
+      '<span id="barra-mezze">' + perValore(etichettaMezzePreventivo(d)) + '</span>' +
+      (conferme ? '<span class="da-guardare" id="barra-conferme">' + conferme +
+        (conferme === 1 ? ' prezzo da confermare' : ' prezzi da confermare') + '</span>' : '') +
+      // «Senza prezzo» non bastava: una riga resta fuori anche col prezzo e senza quantità.
+      (buchi ? '<span class="da-guardare" id="barra-buchi">' + buchi + (buchi === 1
+        ? ' riga fuori dal totale: manca quantità o prezzo' : ' righe fuori dal totale: manca quantità o prezzo') + '</span>' : '') +
+      '<span class="stato-salvataggio' + (stato.brutto ? ' brutto' : '') + '"><span id="stato-preventivo">' +
+        perValore(stato.testo) + '</span>' +
+        (stato.bottone ? '<button class="secondaria piccola" id="salva-ora" onclick="salvaPreventivoOra()">' + stato.bottone + '</button>' : '') +
+      '</span>' +
+    '</div>' +
+    '<div class="barra-azioni">' +
+      '<span class="gruppo-azioni"><span class="etichetta-gruppo">Documento</span>' +
+        bottone('Stampa o PDF', 'stampaPreventivo()') +
+        bottone('Manda per mail', 'inviaPreventivo()') +
+        bottone('Scheda di cantiere', 'apriCantierePreventivo()', 'Per chi lavora: misure, materiali e ore, senza prezzi') +
+      '</span>' +
+      '<span class="gruppo-azioni"><span class="etichetta-gruppo">Il cliente</span>' +
+        (d.stato === 'bozza' ? bottone('Consegnato a mano', 'consegnatoAMano()') : '') +
+        // Con le alternative il sì si dà sulla riga della soluzione scelta.
+        (d.stato === 'accettato' || soluzioni.length ? '' : bottone('Ha detto sì', 'accettaPreventivo()')) +
+        (d.stato === 'bozza' || d.stato === 'mandato' ? bottone('Ha detto no', 'rifiutaPreventivo()') : '') +
+      '</span>' +
+      (rilievoDellUfficio(d.id) ? bottone('Modifica il rilievo', 'modificaRilievoUfficio(\'' + perOnclick(d.id) + '\')') : '') +
+      (p.file || rilievoDellUfficio(d.id)
+        ? '<button class="pericolo piccola in-fondo" onclick="eliminaPreventivo()" title="Elimina il preventivo">🗑 Elimina</button>' : '') +
+    '</div>';
+}
+
+function ridisegnaBarraPreventivo() {
+  const el = document.getElementById('barra-preventivo');
+  if (el && PREVENTIVO) el.innerHTML = barraPreventivo();
 }
 
 // Nome, stato e contatti: uguali sul preventivo aperto e su quello consegnato,
@@ -5600,24 +5782,49 @@ async function salvaPreventivo() {
 // cantiere si salvano mentre si scrive, e un ridisegno porterebbe via il campo da
 // sotto le dita.
 async function scriviPreventivo(p) {
+  // Una scrittura alla volta: salvandosi da solo mentre si scrive, due scritture
+  // dello stesso file che si accavallano lo lascerebbero a metà.
+  const prima = p.inScrittura;
+  let finita;
+  p.inScrittura = new Promise(ok => { finita = ok; });
+  if (prima) await prima;
   const d = p.doc;
   d.aggiornato = new Date().toISOString();
   const anno = p.anno || String(d.creato || '').slice(0, 4) || String(new Date().getFullYear());
   const nome = p.file || nomeFilePreventivo(d);
+  // Quello che si scrive, fotografato adesso: una modifica fatta mentre il file
+  // si scrive resta da salvare.
+  const testo = JSON.stringify(d, null, 2);
+  const impronta = improntaPreventivo(d);
   try {
     const radice = await sottocartella(CARTELLA, CARTELLA_PREVENTIVI, true);
     if (!radice) throw new Error('non riesco a creare la cartella preventivi');
     const cartellaAnno = await sottocartella(radice, anno, true);
     if (!cartellaAnno) throw new Error('non riesco a creare la cartella ' + anno);
-    await scriviTesto(cartellaAnno, nome, JSON.stringify(d, null, 2));
+    await scriviTesto(cartellaAnno, nome, testo);
   } catch (e) {
     // Un salvataggio fallito si dice a chiaro schermo: in console sparirebbe, e
     // con lui il lavoro di mezz'ora passato a decidere i prezzi.
+    p.erroreSalvataggio = e.message;
     avvisa('Non ho potuto salvare il preventivo: ' + e.message, true);
+    finita();
     return false;
   }
   p.file = nome;
   p.anno = anno;
+  p.impronta = impronta;
+  p.salvato = d.aggiornato;
+  p.erroreSalvataggio = '';
+  p.daRifare = false;
+  p.daSalvare = improntaPreventivo(p.doc) !== impronta;
+  // L'elenco in memoria segue il file senza rileggere la cartella: tornando
+  // all'elenco e riaprendolo si ritrova quello appena scritto, non quello di prima.
+  try {
+    const copia = { file: nome, anno, doc: leggiPreventivo(testo) };
+    const i = PREVENTIVI.findIndex(x => x.doc.id === d.id);
+    if (i >= 0) PREVENTIVI[i] = copia; else PREVENTIVI.unshift(copia);
+  } catch (e) { /* alla prossima rilettura della cartella */ }
+  finita();
   return true;
 }
 
@@ -5656,6 +5863,9 @@ async function eliminaPreventivo() {
     avvisa('Non ho potuto eliminare: ' + e.message, true);
     return;
   }
+  // Niente che aspetti di salvarsi deve riscrivere il file appena tolto.
+  clearTimeout(TIMER_PREVENTIVO);
+  PREVENTIVO.daSalvare = false;
   PREVENTIVO = null;
   vaiA('preventivi');
   await ricarica();

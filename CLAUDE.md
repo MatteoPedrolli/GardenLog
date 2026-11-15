@@ -1096,6 +1096,33 @@ frase, ed è il modo più svelto di riempire il pannello. La descrizione di ogni
 che **si allarga col testo**, e sul foglio va a capo dove l'ha messa chi l'ha scritta. Sotto i
 1400 px il pannello sta sotto il preventivo; sopra, la pagina si allarga quanto lui.
 
+**Il preventivo si salva da solo**, come il conto. C'era «Salva» in fondo alla pagina, e
+passando a un'altra schermata senza premerlo le modifiche sparivano senza che niente lo
+dicesse: prezzi decisi in mezz'ora, e riaprendo c'erano quelli di prima. Ogni modifica si
+scrive nel file un momento dopo (`guardaPreventivo()`, `salvaPreventivoDaSolo()`), e
+uscendo dalla schermata quello che aspettava si scrive subito (`vaiA()`). Le funzioni che
+toccano un preventivo sono decine, e la prossima si dimenticherebbe di annunciarlo: non
+si chiama da ognuna, **si confronta** il documento con com'era all'ultimo salvataggio
+(`improntaPreventivo()`) a ogni tasto, clic e ridisegno. Si scrive il file e basta
+(`scriviPreventivo()`, una scrittura alla volta), senza rileggere la cartella né
+ridisegnare, o il campo sparirebbe da sotto le dita; l'elenco in memoria segue il file.
+**Aprire non è modificare**: un preventivo appena nato da un rilievo, o rifatto da un
+rilievo corretto (`daRifare`), non si scrive finché non lo si tocca — il rilievo resta «da
+preventivare», perché nessuno ci ha messo mano — e per quello che va bene com'è c'è
+«Salva ora». Un salvataggio fallito si legge nella barra, in rosso, con «Riprova», e
+riaprendo lo stesso preventivo si ritrova quello scritto, non quello del file. Chiudendo
+la finestra con qualcosa da scrivere il browser chiede (vale anche per il conto).
+
+**La barra del preventivo resta in fondo alla finestra** (`barraPreventivo()`): totale,
+mezze giornate, prezzi da confermare, righe fuori dal totale, stato del salvataggio, e
+sotto i bottoni **in gruppi** — il documento (stampa, mail, scheda di cantiere), la
+risposta del cliente (consegnato a mano, sì, no), «Elimina» a parte. Erano otto in fila in
+fondo a una pagina alta tre schermi, tutti con lo stesso peso. «Torna all'elenco» è una
+strada e non un'azione, e sta in cima («‹ Tutti i preventivi»). La barra non ha campi,
+quindi si ridisegna intera a ogni numero che cambia. Sta **fuori** da `.preventivo-righe`,
+che ha un overflow: un elemento `sticky` dentro un contenitore che scorre non segue più
+la finestra.
+
 **Un preventivo si elimina**, col bottone rosso 🗑 (`eliminaPreventivo()`), per la
 prova o il doppione. La conferma dice cosa succede dopo, perché non è sempre lo
 stesso: il rilievo del telefono resta in `rilievi/` — non è dell'ufficio — e il
