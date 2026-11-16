@@ -2681,6 +2681,14 @@ function riassuntoRicontrolla() {
 // non si legge, e quello che non si legge tanto vale non scriverlo.
 const NOVITA = [
   {
+    versione: '2026-11-16e',
+    data: '2026-11-16',
+    titolo: 'I clienti dell\'anagrafica nei dati del preventivo',
+    righe: [
+      'In **«✎ Modifica i dati»** del preventivo il nome **suggerisce i clienti dell\'anagrafica**: scelto uno, via, paese, telefono e mail arrivano da lì, e il preventivo si lega a quella scheda.',
+    ],
+  },
+  {
     versione: '2026-11-16d',
     data: '2026-11-16',
     titolo: 'I dati del cliente nel preventivo',
@@ -4327,29 +4335,49 @@ function modificaClientePreventivo() {
   const noto = clienteDelPreventivo(d);
   const valore = k => cc[k] || (k !== 'nome' && noto && noto[k]) || '';
   const pannello = document.getElementById('pannello-posta');
+  // Il cliente in anagrafica a cui si riferiscono i dati: quello del preventivo, o
+  // quello scelto fra i suggerimenti — un preventivo fatto per «Rossi M.» che in
+  // anagrafica è «Mario Rossi».
+  let scheda = noto;
+  const campo = k => pannello.querySelector('[data-campo="' + k + '"]');
+  const notaAnagrafica = () => scheda
+    ? '<label style="display:flex;gap:8px;align-items:center"><input type="checkbox" id="cliente-anche-anagrafica" checked ' +
+      'style="width:auto"> Correggi anche in anagrafica (' + perValore(scheda.nome) + ')</label>'
+    : '<p class="meta">Non è in anagrafica: i dati restano sul preventivo, e da lì si aggiunge.</p>';
+  // Scelto un nome dall'elenco, via, paese, telefono e mail arrivano dall'anagrafica
+  // invece di essere ribattuti: come nel modulo della lavagna.
+  window.__nomeClientePreventivo = testo => {
+    const nome = String(testo || '').trim().toLowerCase();
+    const trovato = nome && CLIENTI.find(x => x.nome.trim().toLowerCase() === nome);
+    if (!trovato || trovato === scheda) return;
+    scheda = trovato;
+    CAMPI_CLIENTE_PREVENTIVO.forEach(([k]) => { if (k !== 'nome' && campo(k)) campo(k).value = trovato[k] || ''; });
+    pannello.querySelector('#nota-anagrafica-preventivo').innerHTML = notaAnagrafica();
+  };
   window.__clientePreventivo = async ok => {
     if (ok) {
       const scritti = {};
-      CAMPI_CLIENTE_PREVENTIVO.forEach(([k]) => {
-        const el = pannello.querySelector('[data-campo="' + k + '"]');
-        if (el) scritti[k] = el.value.trim();
-      });
+      CAMPI_CLIENTE_PREVENTIVO.forEach(([k]) => { if (campo(k)) scritti[k] = campo(k).value.trim(); });
       if (!scritti.nome) { avvisa('Il nome del cliente non può restare vuoto', true); return; }
       const anche = pannello.querySelector('#cliente-anche-anagrafica');
-      const inAnagrafica = !!(anche && anche.checked && noto);
+      const inAnagrafica = !!(anche && anche.checked && scheda);
       const cambiati = {};
       CAMPI_CLIENTE_PREVENTIVO.forEach(([k]) => { if (scritti[k] !== valore(k)) cambiati[k] = scritti[k]; });
+      // Scelto un altro cliente, il preventivo si lega alla sua scheda.
+      if (scheda && scheda !== noto) cambiati.id = scheda.id;
+      const perScheda = {};
+      if (inAnagrafica) CAMPI_CLIENTE_PREVENTIVO.forEach(([k]) => { if (scritti[k] !== (scheda[k] || '')) perScheda[k] = scritti[k]; });
       chiudi();
-      if (!Object.keys(cambiati).length) return;
+      if (!Object.keys(cambiati).length && !Object.keys(perScheda).length) return;
       d.cliente = { ...cc, ...cambiati };
       d.clienteUfficio = { ...(d.clienteUfficio || {}), ...cambiati };
-      if (inAnagrafica) {
-        Object.assign(noto, cambiati);
+      if (Object.keys(perScheda).length) {
+        Object.assign(scheda, perScheda);
         CLIENTI_DA_SALVARE = true;
         if (!(await salvaClienti())) { disegnaPreventivo(); return; }
       }
       disegnaPreventivo();
-      avvisa(inAnagrafica ? 'Dati del cliente corretti, anche in anagrafica' : 'Dati del cliente corretti');
+      avvisa(Object.keys(perScheda).length ? 'Dati del cliente corretti, anche in anagrafica' : 'Dati del cliente corretti');
       return;
     }
     chiudi();
@@ -4358,15 +4386,17 @@ function modificaClientePreventivo() {
     pannello.classList.remove('aperto');
     pannello.innerHTML = '';
     delete window.__clientePreventivo;
+    delete window.__nomeClientePreventivo;
   };
   pannello.innerHTML = '<div class="scheda-novita dati-cliente-preventivo" style="min-width:360px;max-width:480px">' +
     '<div class="titolo-novita">Dati del cliente</div>' +
     CAMPI_CLIENTE_PREVENTIVO.map(([k, nome]) => '<label class="etichetta-campo" style="display:block;margin-top:10px">' +
-      nome + '<input type="text" data-campo="' + k + '" value="' + perValore(valore(k)) + '"></label>').join('') +
-    (noto ? '<label style="display:flex;gap:8px;align-items:center;margin-top:14px">' +
-      '<input type="checkbox" id="cliente-anche-anagrafica" checked style="width:auto"> Correggi anche in anagrafica (' +
-      perValore(noto.nome) + ')</label>'
-      : '<p class="meta" style="margin-top:12px">Non è in anagrafica: i dati restano sul preventivo, e da lì si aggiunge.</p>') +
+      nome + '<input type="text" data-campo="' + k + '" value="' + perValore(valore(k)) + '"' +
+      (k === 'nome' ? ' list="clienti-preventivo" autocomplete="off" oninput="__nomeClientePreventivo(this.value)"' : '') +
+      '></label>').join('') +
+    '<datalist id="clienti-preventivo">' + CLIENTI.map(x => '<option value="' + perValore(x.nome) + '">' +
+      perValore(x.citta || '') + '</option>').join('') + '</datalist>' +
+    '<div id="nota-anagrafica-preventivo" style="margin-top:14px">' + notaAnagrafica() + '</div>' +
     '<div class="bottoni" style="margin-top:14px">' +
       '<button class="principale" onclick="__clientePreventivo(true)">Salva</button>' +
       '<button class="secondaria" onclick="__clientePreventivo(false)">Annulla</button>' +

@@ -1174,7 +1174,10 @@ contatti, `modificaClientePreventivo()`), non sul rilievo: quello del telefono n
 tocca. Quello che l'ufficio scrive sta in `clienteUfficio` e **vince sul rilievo** anche
 quando ne arriva uno corretto, come i prezzi decisi qui; il resto segue il campo. Chi è in
 anagrafica si corregge anche lì, con una spunta già messa che si può togliere: il numero
-giusto serve anche ai conti e all'agenda. Un preventivo uscito no — nome e via stanno sul
+giusto serve anche ai conti e all'agenda. Il nome **suggerisce i clienti dell'anagrafica**,
+come nel modulo della lavagna: scelto uno, via, paese, telefono e mail arrivano dalla sua
+scheda e il preventivo ci si lega (`id`) — il preventivo fatto per «Rossi M.» che in
+anagrafica è «Mario Rossi». Un preventivo uscito no — nome e via stanno sul
 foglio che il cliente ha in mano. Campo arrivato senza alzare `VERSIONE_PREVENTIVO`.
 
 **Dal preventivo all'anagrafica**: chi non c'è si aggiunge con un clic, a chi c'è

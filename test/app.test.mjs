@@ -6717,6 +6717,27 @@ try {
     disegnaPreventivo();
     r.uscito = !bottone();
     d.stato = 'bozza'; d.mandato = '';
+    // Il nome si sceglie fra quelli dell'anagrafica, e gli altri dati arrivano da lì:
+    // il preventivo si lega a quella scheda, e l'anagrafica non cambia.
+    const altro = sistemaCliente({ nome: 'Mario Rossi Suggerito', indirizzo: 'Via dei Pini 9', citta: 'Mezzocorona',
+      telefono: '340 555', email: 'mario@example.com' });
+    CLIENTI.push(altro);
+    disegnaPreventivo();
+    bottone().click();
+    r.suggerito = [...pannello.querySelectorAll('#clienti-preventivo option')].some(o => o.value === 'Mario Rossi Suggerito');
+    const nome = pannello.querySelector('[data-campo="nome"]');
+    nome.value = 'Mario Rossi Suggerito';
+    nome.dispatchEvent(new Event('input', { bubbles: true }));
+    r.riempito = pannello.querySelector('[data-campo="telefono"]').value === '340 555' &&
+      pannello.querySelector('[data-campo="citta"]').value === 'Mezzocorona' &&
+      !!pannello.querySelector('#cliente-anche-anagrafica');
+    pannello.querySelector('button.principale').click();
+    await new Promise(x => setTimeout(x, 300));
+    r.legato = d.cliente.id === altro.id && d.cliente.nome === 'Mario Rossi Suggerito' && d.cliente.telefono === '340 555' &&
+      clienteDelPreventivo(d) === altro && altro.indirizzo === 'Via dei Pini 9' && !CLIENTI_DA_SALVARE;
+    CLIENTI.splice(CLIENTI.indexOf(altro), 1);
+    d.cliente = { nome: 'Prova Dati Cliente', telefono: '333 222', indirizzo: 'Via Nuova 3', citta: 'Lavis' };
+    delete d.clienteUfficio;
     // In anagrafica: si corregge anche lì, se lo si lascia spuntato.
     const noto = sistemaCliente({ nome: 'Prova Dati Cliente', telefono: '333 111' });
     CLIENTI.push(noto);
@@ -6741,6 +6762,9 @@ try {
     JSON.stringify(datiCliente));
   ok('i dati corretti in ufficio restano quando arriva il rilievo corretto', datiCliente.resta, JSON.stringify(datiCliente));
   ok('un preventivo uscito non li corregge da qui', datiCliente.uscito, JSON.stringify(datiCliente));
+  ok('il nome suggerisce i clienti dell\'anagrafica, e sceglierne uno riempie via, paese, telefono e mail',
+    datiCliente.suggerito && datiCliente.riempito, JSON.stringify(datiCliente));
+  ok('e il preventivo si lega a quella scheda, senza toccarla', datiCliente.legato, JSON.stringify(datiCliente));
   ok('chi è in anagrafica si corregge anche lì, se lo si lascia spuntato', datiCliente.spunta && datiCliente.anagrafica,
     JSON.stringify(datiCliente));
 
