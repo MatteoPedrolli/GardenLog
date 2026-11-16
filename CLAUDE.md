@@ -1478,6 +1478,11 @@ può fallire senza conseguenze: senza rete o senza paese la nuvola non c'è e la
 lavagna è quella di sempre. Si chiede **una volta l'ora**, non a ogni mossa, e non
 si scrive nella cartella: le previsioni invecchiano in un'ora, e il backup del PC
 non deve portarsele dietro. Le coordinate del paese restano in `localStorage`.
+Il paese si cerca **senza CAP né provincia, comunque scritta** (`paeseMeteo()`): con la
+sola regola del foglio, «(TN)» fra parentesi, un «38015 Lavis TN» non si trovava e la
+nuvola spariva senza dire niente. Adesso, se le previsioni non arrivano, la legenda sotto
+la lavagna **dice perché** (`METEO_NON_ARRIVATO`): il paese che manca, quello che non si
+trova, la rete — o non si sa se è la rete, il paese o un guasto.
 
 **In coda i cartellini stanno chiusi**, sempre, e si aprono con un clic: con la coda
 piena erano un muro. Chiusi portano però quello che serve a scegliere — nome, la
@@ -1616,7 +1621,8 @@ pallino su «Da pagare» conta i conti aperti. «Vedi conti» porta fra i da pag
 quel cliente, o fra i suoi pagati se ha pagato tutto: una pagina vuota direbbe che
 non c'è niente.
 
-**Fra i da pagare, tre colonne: «Da mandare», «Stampati» e «Mandati».** Il capo voleva
+**Fra i da pagare, tre colonne: «Da mandare», «Stampati» e «Mandati»**, larghe quanto
+la finestra: nei 1100 px delle altre pagine erano strette. Il capo voleva
 vedere quali conti erano già partiti: sono lavori diversi per l'ufficio — scrivere il
 conto, consegnare il foglio, sollecitarlo — e mescolati non si capiva quale toccasse.
 La colonna la decide `inPosta`, che «Invia al cliente» segna da sé, e poi `stampato`:

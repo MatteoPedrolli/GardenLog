@@ -502,6 +502,9 @@ input.vuoto { background: #fffdf5; border-color: #ecdca8; }
 .campione.bloccato { background: var(--earth-light); border: 1px solid var(--earth); }
 .campione.assenza { background: #fbecea; border: 1px solid #e3b5ae; }
 
+/* Le tre colonne dei da pagare prendono tutta la finestra: dentro i 1100 px di
+   una pagina normale erano strette, e ogni conto andava a capo due volte. */
+#contenuto:has(#pagina-archivio.attiva .colonne-archivio) { max-width: none; }
 .colonne-archivio { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 14px; align-items: start; }
 .colonna-archivio { min-width: 0; }
 .colonna-archivio .riga-scheda { flex-wrap: wrap; }
@@ -676,6 +679,7 @@ input.vuoto { background: #fffdf5; border-color: #ecdca8; }
 .cartellino.assenza { border: 1px solid #e3b5ae; background: #fbecea; cursor: grab; }
 .cartellino.assenza .cliente-cart { color: #7a2e25; }
 .cartellino.assenza .cosa-cart { color: #8f4a41; }
+.meteo-non-arrivato { color: var(--ocra); font-weight: 600; }
 .meteo-giorno { margin-left: auto; font-size: 0.74rem; color: var(--text-mid); white-space: nowrap; }
 /* Né grigio né verde né blu: quelli sono gli stati. Lo dice la parola. */
 .sopralluogo-cart {
@@ -2676,6 +2680,15 @@ function riassuntoRicontrolla() {
 // La più recente per prima. Le righe sono poche e corte apposta: un elenco lungo
 // non si legge, e quello che non si legge tanto vale non scriverlo.
 const NOVITA = [
+  {
+    versione: '2026-11-16c',
+    data: '2026-11-16',
+    titolo: 'Da pagare più larga, e il meteo che si fa trovare',
+    righe: [
+      'In **Da pagare** le tre colonne — da mandare, stampati, mandati — prendono **tutta la larghezza** dello schermo.',
+      'La **probabilità di pioggia** sopra i giorni della lavagna trova il paese anche scritto «38015 Lavis TN». Se le previsioni non arrivano, la legenda sotto la lavagna **dice perché**.',
+    ],
+  },
   {
     versione: '2026-11-16b',
     data: '2026-11-16',
@@ -8413,7 +8426,9 @@ function disegnaLavagna() {
     '<span><i class="campione fatto"></i><b>Fatto</b> — spuntato, è storia</span>' +
     '<span><i class="campione bloccato"></i><b>Bloccato</b> — manca qualcosa per poterlo fare</span>' +
     '<span><span class="sopralluogo-cart">sopralluogo</span> si va a guardare, non a lavorare</span>' +
-    '<span><b>🌧️ Pioggia</b> — un giorno in cui non si lavora · sopra ogni giorno la probabilità di pioggia</span>' +
+    '<span><b>🌧️ Pioggia</b> — un giorno in cui non si lavora · sopra ogni giorno la probabilità di pioggia' +
+      '<span id="meteo-non-arrivato" class="meteo-non-arrivato">' + (METEO_NON_ARRIVATO ? ' — previsioni non arrivate: ' +
+        perValore(METEO_NON_ARRIVATO) : '') + '</span></span>' +
     '<span><i class="campione assenza"></i><b>Assenza</b> — qualcuno non c\'è, e perché</span>' +
     '<span>' + TIPI_LAVORO.map(t => '<span class="tipo-cart" style="background:' + t.colore + '">' +
       perValore(t.nome) + '</span>').join(' ') + ' che lavoro è, segnato prenotando</span>' +
@@ -8437,6 +8452,7 @@ function disegnaLavagna() {
 // del PC non deve portarsele dietro.
 let METEO = null;
 let METEO_IN_CORSO = false;
+let METEO_NON_ARRIVATO = '';
 const METEO_DURA = 60 * 60 * 1000;
 const CHIAVE_LUOGO_METEO = 'giardino-ufficio-meteo-luogo';
 
@@ -8450,6 +8466,8 @@ function testoMeteo(iso) {
 
 function aggiornaMeteoLavagna() {
   document.querySelectorAll('.meteo-giorno').forEach(el => { el.innerHTML = testoMeteo(el.dataset.giorno); });
+  const nota = document.getElementById('meteo-non-arrivato');
+  if (nota) nota.textContent = METEO_NON_ARRIVATO ? ' — previsioni non arrivate: ' + METEO_NON_ARRIVATO : '';
 }
 
 // Dove sta il paese: il nome si cerca una volta e le coordinate restano su questo
@@ -8459,18 +8477,33 @@ async function luogoMeteo(paese) {
     const salvato = JSON.parse(localStorage.getItem(CHIAVE_LUOGO_METEO) || 'null');
     if (salvato && salvato.paese === paese) return salvato;
   } catch (e) { /* senza localStorage si cerca ogni volta */ }
-  const r = await fetch('https://geocoding-api.open-meteo.com/v1/search?count=1&language=it&country=IT&name=' +
-    encodeURIComponent(paese));
-  const trovato = ((await r.json()).results || [])[0];
-  if (!trovato) throw new Error('paese non trovato');
+  // Il nome intero, e se non lo trova la prima parola: «San Michele all'Adige» si
+  // trova intero, un «Lavis Trento» scritto di fretta solo dalla prima.
+  let trovato = null;
+  for (const nome of [...new Set([paese, paese.split(/\s+/)[0]])]) {
+    const r = await fetch('https://geocoding-api.open-meteo.com/v1/search?count=1&language=it&countryCode=IT&name=' +
+      encodeURIComponent(nome));
+    trovato = ((await r.json()).results || [])[0];
+    if (trovato) break;
+  }
+  if (!trovato) throw new Error('«' + paese + '» non si trova');
   const luogo = { paese, nome: trovato.name, lat: trovato.latitude, lon: trovato.longitude };
   try { localStorage.setItem(CHIAVE_LUOGO_METEO, JSON.stringify(luogo)); } catch (e) { /* pazienza */ }
   return luogo;
 }
 
+// Il paese da cercare: quello della sede senza CAP e senza provincia, scritta in
+// qualunque modo — «38015 Lavis (TN)», «38015 Lavis TN», «Lavis - Trento». Con la
+// sola regola del foglio («(TN)» fra parentesi) un «Lavis TN» non si trovava, e la
+// nuvola spariva senza dire perché.
+function paeseMeteo() {
+  return localitaAzienda().split(/\s+[-–,]\s+|,/)[0].replace(/\s+[A-Z]{2}$/, '').trim();
+}
+
 async function caricaMeteo() {
-  const paese = localitaAzienda();
-  if (!paese || METEO_IN_CORSO) return;
+  const paese = paeseMeteo();
+  if (!paese) { METEO_NON_ARRIVATO = 'manca il paese della sede in Impostazioni'; aggiornaMeteoLavagna(); return; }
+  if (METEO_IN_CORSO) return;
   if (METEO && METEO.paese === paese && Date.now() - METEO.quando < METEO_DURA) return;
   METEO_IN_CORSO = true;
   try {
@@ -8484,11 +8517,15 @@ async function caricaMeteo() {
       if (p != null && !isNaN(p)) giorni[g] = Math.round(p);
     });
     METEO = { paese, luogo: luogo.nome || paese, quando: Date.now(), giorni };
+    METEO_NON_ARRIVATO = '';
     aggiornaMeteoLavagna();
   } catch (e) {
-    // Niente previsioni: niente nuvola, e la lavagna resta quella di sempre.
-    // Si riprova fra un'ora, non a ogni mossa.
+    // Niente previsioni: niente nuvola, e la lavagna resta quella di sempre. Ma lo
+    // dice, in piccolo sotto la lavagna: sparita in silenzio, non si sapeva se fosse
+    // la rete, il paese o un guasto. Si riprova fra un'ora, non a ogni mossa.
     METEO = { paese, luogo: paese, quando: Date.now(), giorni: (METEO && METEO.giorni) || {} };
+    METEO_NON_ARRIVATO = e instanceof TypeError ? 'Open-Meteo non risponde (rete?)' : e.message;
+    aggiornaMeteoLavagna();
   } finally {
     METEO_IN_CORSO = false;
   }

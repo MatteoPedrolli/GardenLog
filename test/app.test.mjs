@@ -3193,7 +3193,7 @@ try {
     apriArchivio('da-fatturare');
     const colonne = () => [...document.querySelectorAll('#elenco-archivio .colonna-archivio')]
       .map(c => ({ titolo: c.querySelector('.titolo-colonna').textContent, schede: c.querySelectorAll('.scheda').length }));
-    const r = { prima: colonne() };
+    const r = { prima: colonne(), tuttaLarghezza: getComputedStyle(document.getElementById('contenuto')).maxWidth };
     await segnaMandato(l.id, true);
     r.dopo = colonne();
     r.suFile = await (async () => { await ricarica(); return !!ARCHIVIO.find(x => x.id === l.id).inPosta; })();
@@ -3242,6 +3242,7 @@ try {
     mandati.prima.length === 3 && mandati.prima[0].titolo.startsWith('Da mandare') &&
     mandati.prima[1].titolo.startsWith('Stampati') && mandati.prima[2].titolo.startsWith('Mandati') &&
     conta(mandati.prima) === '1,0,0', JSON.stringify(mandati.prima));
+  ok('le tre colonne prendono tutta la larghezza della finestra', mandati.tuttaLarghezza === 'none', mandati.tuttaLarghezza);
   ok('«Segna mandato» lo sposta fra i mandati, e resta scritto sul file',
     conta(mandati.dopo) === '0,0,1' && mandati.suFile, JSON.stringify(mandati));
   ok('e la scheda dice da quando è stato mandato', mandati.scritto);
@@ -4238,6 +4239,30 @@ try {
     meteo.titolo.includes('Lavis') && meteo.titolo.includes('Open-Meteo'), JSON.stringify(meteo));
   ok('e si chiedono una volta l\'ora, non a ogni mossa sulla lavagna', meteoChieste - primaDelMeteo === 1,
     String(meteoChieste - primaDelMeteo));
+  // Il paese scritto in un altro modo si trova lo stesso; e quando le previsioni non
+  // arrivano la lavagna dice perché, invece di perdere la nuvola in silenzio.
+  const meteoScritto = await pagU.evaluate(async () => {
+    const citta = IMPOSTAZIONI.citta;
+    const r = {};
+    IMPOSTAZIONI.citta = '38015 Lavis TN';
+    METEO = null;
+    try { localStorage.removeItem(CHIAVE_LUOGO_METEO); } catch (e) {}
+    await caricaMeteo();
+    r.cercato = JSON.parse(localStorage.getItem(CHIAVE_LUOGO_METEO) || '{}').paese;
+    r.arrivato = !!(METEO && Object.keys(METEO.giorni).length) && !METEO_NON_ARRIVATO;
+    IMPOSTAZIONI.citta = '';
+    METEO = null;
+    vaiA('lavagna');
+    await new Promise(ok => setTimeout(ok, 100));
+    r.nota = (document.getElementById('meteo-non-arrivato') || {}).textContent || '';
+    IMPOSTAZIONI.citta = citta;
+    METEO = null;
+    METEO_NON_ARRIVATO = '';
+    return r;
+  });
+  ok('«38015 Lavis TN» si cerca come Lavis, e le previsioni arrivano', meteoScritto.cercato === 'Lavis' && meteoScritto.arrivato,
+    JSON.stringify(meteoScritto));
+  ok('senza previsioni la lavagna dice perché', meteoScritto.nota.includes('manca il paese della sede'), JSON.stringify(meteoScritto));
 
   const tipiUfficio = await pagU.evaluate(async () => {
     vaiA('lavagna');
