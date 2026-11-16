@@ -2677,6 +2677,15 @@ function riassuntoRicontrolla() {
 // non si legge, e quello che non si legge tanto vale non scriverlo.
 const NOVITA = [
   {
+    versione: '2026-11-16b',
+    data: '2026-11-16',
+    titolo: 'Un settore intero nel preventivo',
+    righe: [
+      'Nel menù **«+ Aggiungi al preventivo…»** ci sono anche i **settori** del telefono — Prato, Aiuole, Siepe… Scelto uno, si **spuntano le sue lavorazioni** e si scrive la misura, se la sai: nasce la voce a corpo con i materiali, le ore per voce e la manodopera in fondo, come quella che arriva dal rilievo.',
+      'Un settore scritto a mano, come l\'irrigazione, diventa un **capitolo a corpo** col suo nome, da riempire.',
+    ],
+  },
+  {
     versione: '2026-11-16',
     data: '2026-11-16',
     titolo: 'Il preventivo, più in ordine',
@@ -4461,7 +4470,9 @@ function vocePreventivo(d, r, i, soluzioni) {
   const corpo = !sezione && Array.isArray(r.componenti);
   const tariffa = r.tipo === 'tariffa';
   const aperta = corpo && PREVENTIVO.aperta === r;
-  const dalCampo = r.lavorazione ? 'dal campo: ' + perValore(riassuntoLavorazione(r.lavorazione))
+  // Un settore aggiunto qui non viene dal campo, e dirlo farebbe cercare un rilievo
+  // che non l'ha mai avuto.
+  const dalCampo = r.lavorazione ? (r.lavorazione.ufficio ? 'settore: ' : 'dal campo: ') + perValore(riassuntoLavorazione(r.lavorazione))
     : r.irrigazione ? 'dal progetto: ' + perValore(riassuntoIrrigazione(r.irrigazione)) +
       ' · ricarico <input type="text" inputmode="decimal" class="stretto ricarico-riga" value="' +
       perValore(formattaQuantita(r.irrigazione.ricarico)) + '" oninput="modificaRicaricoRiga(' + i + ', this.value)" ' +
@@ -4941,6 +4952,7 @@ function aggiungiDalListinoPreventivo(valore) {
     disegnaPreventivo();
     return;
   }
+  if (valore.startsWith('settore:')) return aggiungiSettorePreventivo(valore.slice(8));
   if (valore.startsWith('operazione:')) {
     const t = operazioniConosciute().find(x => x.tipoID === valore.slice(11));
     if (!t) return;
@@ -4948,6 +4960,66 @@ function aggiungiDalListinoPreventivo(valore) {
     return;
   }
   aggiungiRigaPreventivo(valore.replace(/^voce:/, ''));
+}
+
+// Un settore aggiunto in ufficio è la stessa voce a corpo che nasce da un rilievo
+// — componenti, ore per voce, manodopera in fondo — ma è dell'ufficio: senza
+// `chiave`, così un rilievo corretto non la riconosce come sua e non la toglie
+// rifacendo il preventivo. Le lavorazioni si spuntano prima, come sul telefono:
+// un prato con tutte le sue otto lavorazioni dentro voleva dire toglierne sei.
+async function aggiungiSettorePreventivo(id) {
+  const st = settoriConosciuti().find(x => x.id === id);
+  if (!st || !PREVENTIVO) return;
+  // L'irrigazione cambia ogni volta: un capitolo col suo nome, da riempire.
+  if (st.libero) {
+    aggiungiCapitoloPreventivo();
+    PREVENTIVO.doc.righe[PREVENTIVO.doc.righe.length - 1].descrizione = st.nome;
+    disegnaPreventivo();
+    return;
+  }
+  const scelta = await scegliLavorazioniSettore(st);
+  if (!scelta || !PREVENTIVO) return;
+  const l = { id: 'uff-' + Date.now().toString(36), genere: 'insieme', nome: st.nome, unita: st.unita || '',
+    misura: scelta.misura, voceID: '', pianta: '', sesto: '', piante: '', stile: '', ore: '', note: '',
+    insieme: { id: st.id, nome: st.nome, componenti: scelta.lavorazioni }, ufficio: true };
+  const riga = { ...rigaDaLavorazione(l, null), chiave: '' };
+  PREVENTIVO.doc.righe.push(riga);
+  // Nasce aperta, come un capitolo: la prima cosa che si fa è guardarne i pezzi.
+  PREVENTIVO.aperta = riga;
+  disegnaPreventivo();
+}
+
+function scegliLavorazioniSettore(st) {
+  const pannello = document.getElementById('pannello-posta');
+  return new Promise(risolvi => {
+    window.__settoreScelto = ok => {
+      let valore = null;
+      if (ok) {
+        const spuntate = [...pannello.querySelectorAll('input[type=checkbox]:checked')].map(x => Number(x.value));
+        const misura = pannello.querySelector('#settore-misura');
+        valore = { lavorazioni: st.lavorazioni.filter((t, k) => spuntate.includes(k)).map(t => ({ ...t })),
+          misura: misura ? (numeroScritto(misura.value) || '') : '' };
+      }
+      pannello.classList.remove('aperto');
+      pannello.innerHTML = '';
+      delete window.__settoreScelto;
+      risolvi(valore);
+    };
+    pannello.innerHTML = '<div class="scheda-novita scelta-settore" style="min-width:340px;max-width:460px">' +
+      '<div class="titolo-novita">' + perValore(st.nome) + ': cosa c\'è da fare?</div>' +
+      (st.lavorazioni.length ? '<div class="spunte-settore" style="margin-top:12px">' + st.lavorazioni.map((t, k) =>
+        '<label><input type="checkbox" value="' + k + '"> ' + perValore(t.nome || t.voce) + '</label>').join('') + '</div>'
+        : '<p class="meta" style="margin-top:10px">Questo settore non ha lavorazioni: la voce nasce vuota, e la riempi tu.</p>') +
+      (st.unita ? '<label class="etichetta-campo" style="display:block;margin-top:14px">Misura, se la sai ' +
+        '<input type="text" inputmode="decimal" id="settore-misura" class="stretto" style="width:90px"> ' +
+        perValore(st.unita) + '</label>' +
+        '<p class="meta">I materiali partono quanto la misura; si corregge anche dopo, voce per voce.</p>' : '') +
+      '<div class="bottoni" style="margin-top:14px">' +
+        '<button class="principale" onclick="__settoreScelto(true)">Aggiungi al preventivo</button>' +
+        '<button class="secondaria" onclick="__settoreScelto(false)">Annulla</button>' +
+      '</div></div>';
+    pannello.classList.add('aperto');
+  });
 }
 
 function aggiungiSezionePreventivo() {
@@ -5517,6 +5589,12 @@ function disegnaPreventivo() {
     '</optgroup>' +
     (tolteDalCampo.length ? '<optgroup label="Dal rilievo, tolte">' + tolteDalCampo.map(l => '<option value="rilievo:' +
       perValore(l.id) + '">' + perValore(l.nome || 'Lavorazione') + '</option>').join('') + '</optgroup>' : '') +
+    // I settori, come sul telefono: si sceglie Aiuole e si spuntano le sue
+    // lavorazioni. Prima c'erano solo le operazioni una per una, e un'aiuola
+    // scritta in ufficio andava ricomposta pezzo per pezzo in un capitolo.
+    '<optgroup label="Settori">' + settoriConosciuti().map(x => '<option value="settore:' + perValore(x.id) + '">' +
+      perValore(x.nome) + (x.libero ? ' · da riempire' : (x.unita ? ' · a ' + perValore(x.unita) : ' · solo ore')) +
+      '</option>').join('') + '</optgroup>' +
     (operazioni.length ? '<optgroup label="Operazioni">' + operazioni.map(t => '<option value="operazione:' + perValore(t.tipoID) + '">' +
       perValore(t.nome) + perValore(etichettaOperazione(t)) + '</option>').join('') + '</optgroup>' : '') +
     '<optgroup label="Voci di listino">' +

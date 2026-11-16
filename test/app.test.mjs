@@ -6574,6 +6574,83 @@ try {
     pulizia.tabellaIntera, pulizia.strette + ' a ' + pulizia.larghezza + ' px');
   ok('la scelta resta ridisegnando, e la ✕ le richiude', pulizia.resta && pulizia.richiuse, JSON.stringify(pulizia));
 
+  // ── UN SETTORE INTERO NEL PREVENTIVO ──
+  // Dal menù «+ Aggiungi» si sceglie un settore, se ne spuntano le lavorazioni e
+  // nasce la stessa voce a corpo di un rilievo: materiali quanto la misura, ore per
+  // voce, manodopera in fondo. È dell'ufficio, e un rilievo corretto non la toglie.
+  const settorePrev = await pagU.evaluate(async () => {
+    const prima = PREVENTIVO, primiSettori = SETTORI_TELEFONO;
+    const r = {};
+    const voce = LISTINO.voci.find(v => v.voceID && v.voceID !== VOCE_MANODOPERA && !v.aCorpo && v.unita);
+    SETTORI_TELEFONO = { esportato: '2026-11-16T08:00:00Z', operazioni: [], settori: [
+      { id: 'aiuole', nome: 'Aiuole', unita: 'm²', libero: false, lavorazioni: [
+        { tipoID: 'telo', nome: 'Telo pacciamante', voceID: voce.voceID, voce: voce.voce, unita: voce.unita },
+        { tipoID: 'piantumazione', nome: 'Piantumazione', voceID: 'piante', voce: 'Piante', unita: 'n' },
+        { tipoID: 'livellamento', nome: 'Livellamento', voceID: '', voce: '', unita: '' }] },
+      { id: 'irrigazione', nome: 'Irrigazione', unita: '', libero: true, lavorazioni: [] }] };
+    const rilievo = leggiRilievo({ tipo: 'rilievo', versione: 1, id: 'ril-settore', revisione: 1, origine: 'ufficio',
+      creato: '2026-11-16T08:00:00Z', cliente: { nome: 'Prova Settore' },
+      lavorazioni: [{ id: 'm1', genere: 'manodopera', nome: 'Pulizia', ore: 2 }] });
+    const d = costruisciPreventivo(rilievo, null);
+    PREVENTIVO = { doc: d, file: '', anno: '' };
+    vaiA('preventivo');
+    const attesa = () => new Promise(x => setTimeout(x, 0));
+    const scegli = v => { const m = document.getElementById('aggiungi-al-preventivo'); m.value = v;
+      m.dispatchEvent(new Event('change', { bubbles: true })); };
+    const menu = document.getElementById('aggiungi-al-preventivo');
+    r.nelMenu = [...menu.querySelectorAll('optgroup[label="Settori"] option')].map(o => o.value).join() === 'settore:aiuole,settore:irrigazione';
+    const quante = d.righe.length;
+    // Annullando non si aggiunge niente.
+    scegli('settore:aiuole');
+    const pannello = document.getElementById('pannello-posta');
+    r.chiede = pannello.classList.contains('aperto') && pannello.querySelectorAll('input[type=checkbox]').length === 3 &&
+      !!pannello.querySelector('#settore-misura');
+    pannello.querySelector('button.secondaria').click();
+    await attesa();
+    r.annulla = d.righe.length === quante && !pannello.classList.contains('aperto');
+    // Telo e livellamento, 18 m².
+    scegli('settore:aiuole');
+    const spunte = pannello.querySelectorAll('input[type=checkbox]');
+    spunte[0].checked = true; spunte[2].checked = true;
+    pannello.querySelector('#settore-misura').value = '18,5';
+    pannello.querySelector('button.principale').click();
+    await attesa();
+    const riga = d.righe[d.righe.length - 1];
+    const comp = riga.componenti || [];
+    r.riga = d.righe.length === quante + 1 && riga.chiave === '' && riga.unita === 'a corpo' && riga.lavorazione.ufficio === true;
+    r.componenti = comp.length === 3 && comp[0].voceID === voce.voceID && comp[0].quantita === 18.5 &&
+      comp[1].soloOre === true && comp[1].voce === 'Livellamento' && comp[2].manodoperaSettore === true &&
+      !comp.some(c => c.voceID === 'piante');
+    r.componentiVisti = comp.map(c => (c.voce || '') + ':' + c.quantita).join('|');
+    r.aperta = PREVENTIVO.aperta === riga;
+    const scheda = document.querySelector('#pagina-preventivo tbody.voce.aperta');
+    r.dice = !!scheda && scheda.textContent.includes('settore: Aiuole') && !scheda.textContent.includes('dal campo');
+    // Un rilievo corretto non la toglie.
+    const rifatto = costruisciPreventivo({ ...rilievo, revisione: 2 }, d);
+    r.resta = rifatto.righe.some(x => x.lavorazione && x.lavorazione.ufficio && x.componenti.length === 3);
+    // L'irrigazione, che è scritta a mano, diventa un capitolo col suo nome.
+    scegli('settore:irrigazione');
+    await attesa();
+    const irr = d.righe[d.righe.length - 1];
+    r.libero = d.righe.length === quante + 2 && Array.isArray(irr.componenti) && irr.descrizione === 'Irrigazione' &&
+      PREVENTIVO.aperta === irr;
+    clearTimeout(TIMER_PREVENTIVO);
+    PREVENTIVO.daSalvare = false;
+    SETTORI_TELEFONO = primiSettori;
+    PREVENTIVO = prima;
+    vaiA('preventivi');
+    return r;
+  });
+  ok('nel menù «+ Aggiungi» del preventivo ci sono i settori del telefono', settorePrev.nelMenu, JSON.stringify(settorePrev));
+  ok('scegliendo un settore se ne spuntano le lavorazioni, e annullando non si aggiunge niente',
+    settorePrev.chiede && settorePrev.annulla, JSON.stringify(settorePrev));
+  ok('nasce una voce a corpo dell\'ufficio, aperta, che dice da dove viene',
+    settorePrev.riga && settorePrev.aperta && settorePrev.dice, JSON.stringify(settorePrev));
+  ok('dentro, solo le lavorazioni spuntate: il materiale quanto la misura, le ore, la manodopera in fondo',
+    settorePrev.componenti, settorePrev.componentiVisti);
+  ok('un rilievo corretto non la toglie', settorePrev.resta, JSON.stringify(settorePrev));
+  ok('un settore scritto a mano, come l\'irrigazione, diventa un capitolo col suo nome', settorePrev.libero, JSON.stringify(settorePrev));
+
   // ── L'IMPIANTO DI IRRIGAZIONE: DAL TOOL DEI SETTORI AL PREVENTIVO ──
   // Il tool conta i materiali dal progetto e li salva col progetto; l'ufficio li
   // prende e ci mette i prezzi d'acquisto del listino dell'irrigazione, per codice,

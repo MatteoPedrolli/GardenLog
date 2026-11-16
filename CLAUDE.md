@@ -1100,7 +1100,14 @@ si ricorda in `tolte` sul preventivo e non torna; si riprende dal menù «+ Aggi
 «Dal rilievo, tolte». **Per aggiungere c'è un menù solo** (`aggiungiDalListinoPreventivo()`):
 erano un menù e quattro bottoni in fila — voce libera, capitolo, titolo, impianto — per dire
 la stessa cosa. In cima quello che si scrive a mano, poi quello che si sceglie da un elenco;
-l'impianto apre da lì la scelta del file del progetto. Un componente tolto si ricorda in `tolti` sulla riga, uno aggiunto porta
+l'impianto apre da lì la scelta del file del progetto. Nel menù ci sono anche i **settori**
+(`aggiungiSettorePreventivo()`): erano solo nel «Nuovo rilievo», e un'aiuola decisa in ufficio
+andava ricomposta operazione per operazione in un capitolo. Scelto il settore se ne **spuntano
+le lavorazioni** e si scrive la misura (`scegliLavorazioniSettore()`) — un prato con tutte le sue
+lavorazioni dentro voleva dire toglierne sei — e nasce la voce a corpo di un rilievo, con
+`lavorazione.ufficio` e **senza `chiave`**: con una chiave, rifacendo il preventivo da un rilievo
+corretto sparirebbe come una lavorazione tolta dal campo. Dice «settore:» e non «dal campo:». Un
+settore `Libero` diventa un capitolo col suo nome. Un componente tolto si ricorda in `tolti` sulla riga, uno aggiunto porta
 `aggiunta` e resta. Tutti campi arrivati senza alzare `VERSIONE_PREVENTIVO`. I componenti dei
 capitoli scritti in ufficio vanno fra i **materiali da ordinare**, come quelli dei settori.
 
