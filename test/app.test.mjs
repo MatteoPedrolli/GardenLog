@@ -3242,6 +3242,53 @@ try {
     mandati.prima.length === 3 && mandati.prima[0].titolo.startsWith('Da mandare') &&
     mandati.prima[1].titolo.startsWith('Stampati') && mandati.prima[2].titolo.startsWith('Mandati') &&
     conta(mandati.prima) === '1,0,0', JSON.stringify(mandati.prima));
+  // I lavori chiusi: il mese in corso a vista, i mesi passati dell'anno chiusi uno per
+  // uno, gli anni prima raccolti per anno coi loro mesi dentro. Date relative a oggi,
+  // o la prova invecchierebbe.
+  const raccolti = await pagU.evaluate(() => {
+    const oggi = new Date();
+    const anno = oggi.getFullYear(), mese = oggi.getMonth() + 1;
+    const d = (a, m, g) => a + '-' + String(m).padStart(2, '0') + '-' + String(g).padStart(2, '0');
+    const finto = (id, data) => ({ id, data, stato: 'fatturato', cliente: { nome: 'Chiuso ' + id }, totale: 10 });
+    const lavori = [finto('ora', d(anno, mese, 1))];
+    if (mese > 1) lavori.push(finto('prima-1', d(anno, mese - 1, 3)), finto('prima-2', d(anno, mese - 1, 2)));
+    lavori.push(finto('vecchio-dic', d(anno - 1, 12, 5)), finto('vecchio-mar', d(anno - 1, 3, 5)), finto('antico', d(anno - 3, 6, 1)));
+    const prima = { filtro: FILTRO_ARCHIVIO, cliente: CLIENTE_ARCHIVIO, aperti: new Set(CHIUSI_APERTI) };
+    FILTRO_ARCHIVIO = ''; CLIENTE_ARCHIVIO = ''; CHIUSI_APERTI = new Set();
+    const box = document.createElement('div');
+    box.innerHTML = chiusiRaccolti(lavori);
+    const fuori = [...box.children].filter(x => x.matches('.scheda')).map(x => x.textContent.includes('Chiuso ora'));
+    const gruppi = [...box.querySelectorAll(':scope > details.gruppo-chiusi')].map(g => ({
+      chiave: g.dataset.gruppo, aperto: g.open, titolo: g.querySelector('summary').textContent,
+      mesi: [...g.querySelectorAll(':scope > .dentro-gruppo > details.gruppo-chiusi')].map(x => x.dataset.gruppo),
+    }));
+    const r = { fuori, gruppi, gennaio: mese === 1 };
+    // Aperto a mano resta aperto ridisegnando; cercando un nome stanno tutti aperti.
+    segnaGruppoChiusi(String(anno - 1), true);
+    box.innerHTML = chiusiRaccolti(lavori);
+    r.resta = box.querySelector('details[data-gruppo="' + (anno - 1) + '"]').open;
+    CHIUSI_APERTI = new Set();
+    FILTRO_ARCHIVIO = 'chiuso';
+    box.innerHTML = chiusiRaccolti(lavori);
+    r.cercando = [...box.querySelectorAll('details.gruppo-chiusi')].every(g => g.open);
+    FILTRO_ARCHIVIO = prima.filtro; CLIENTE_ARCHIVIO = prima.cliente; CHIUSI_APERTI = prima.aperti;
+    r.anno = anno;
+    return r;
+  });
+  {
+    const g = raccolti.gruppi, a = raccolti.anno;
+    const attesi = (raccolti.gennaio ? [] : [null]).concat([String(a - 1), String(a - 3)]);
+    ok('fra i lavori chiusi, quelli del mese in corso stanno a vista', raccolti.fuori.length === 1 && raccolti.fuori[0],
+      JSON.stringify(raccolti));
+    ok('i mesi passati dell\'anno stanno chiusi, uno per mese, e dicono quanti lavori hanno',
+      raccolti.gennaio || (g[0].chiave.slice(0, 4) === String(a) && !g[0].aperto && g[0].titolo.includes('2 lavori')),
+      JSON.stringify(g));
+    ok('gli anni di prima sono raccolti per anno, coi loro mesi dentro',
+      g.length === attesi.length && g.slice(-2).map(x => x.chiave).join() === attesi.slice(-2).join() &&
+      g[g.length - 2].mesi.join() === (a - 1) + '-12,' + (a - 1) + '-03' && g.every(x => !x.aperto), JSON.stringify(g));
+    ok('un gruppo aperto resta aperto ridisegnando, e cercando stanno tutti aperti', raccolti.resta && raccolti.cercando,
+      JSON.stringify(raccolti));
+  }
   ok('le tre colonne prendono tutta la larghezza della finestra', mandati.tuttaLarghezza === 'none', mandati.tuttaLarghezza);
   ok('«Segna mandato» lo sposta fra i mandati, e resta scritto sul file',
     conta(mandati.dopo) === '0,0,1' && mandati.suFile, JSON.stringify(mandati));

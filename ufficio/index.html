@@ -527,6 +527,13 @@ input.vuoto { background: #fffdf5; border-color: #ecdca8; }
 @media (max-width: 900px) {
   .coda-lista.pronti { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 }
+details.gruppo-chiusi { margin: 0 0 8px; }
+details.gruppo-chiusi > summary {
+  cursor: pointer; padding: 10px 14px; background: var(--white); border: 1px solid var(--border);
+  border-radius: var(--radius); font-weight: 600;
+}
+details.gruppo-chiusi[open] > summary { margin-bottom: 8px; }
+details.gruppo-chiusi .dentro-gruppo { padding-left: 14px; }
 .titolo-colonna {
   font-size: 0.72rem; font-weight: 600; text-transform: uppercase;
   letter-spacing: 0.06em; color: var(--text-light); margin: 0 0 8px;
@@ -2680,6 +2687,15 @@ function riassuntoRicontrolla() {
 // La più recente per prima. Le righe sono poche e corte apposta: un elenco lungo
 // non si legge, e quello che non si legge tanto vale non scriverlo.
 const NOVITA = [
+  {
+    versione: '2026-11-16f',
+    data: '2026-11-16',
+    titolo: 'I lavori chiusi, raccolti per mese e per anno',
+    righe: [
+      'In **Lavori chiusi** quelli del **mese in corso** si vedono tutti; i **mesi passati** di quest\'anno stanno chiusi, uno per mese, e gli **anni di prima** raccolti per anno coi loro mesi dentro. Si aprono con un clic.',
+      'Cercando un cliente, o con «Vedi conti», i gruppi stanno aperti.',
+    ],
+  },
   {
     versione: '2026-11-16e',
     data: '2026-11-16',
@@ -7215,6 +7231,62 @@ function lavoriArchivio() {
     .sort((a, b) => String(b.data).localeCompare(String(a.data)));
 }
 
+// I lavori chiusi si raccolgono per data del lavoro: il mese in corso tutto a vista,
+// i mesi passati di quest'anno chiusi uno per uno, gli anni di prima raccolti per
+// anno coi loro mesi dentro. Era un elenco solo, e dopo un anno di lavoro i conti di
+// questo mese stavano in cima a un muro di cinquecento schede. Chiusi dicono quanti
+// lavori hanno, non quanto: le somme il capo le ha volute togliere da qui. Cercando un
+// cliente o un nome i gruppi stanno aperti, o quello che si cerca resterebbe nascosto.
+let CHIUSI_APERTI = new Set();
+
+function gruppoChiusi(chiave, titolo, elenco, dentro, aperto) {
+  const quanti = elenco.length + (elenco.length === 1 ? ' lavoro' : ' lavori');
+  return '<details class="gruppo-chiusi" data-gruppo="' + perValore(chiave) + '"' +
+    (aperto || CHIUSI_APERTI.has(chiave) ? ' open' : '') +
+    ' ontoggle="segnaGruppoChiusi(\'' + perOnclick(chiave) + '\', this.open)">' +
+    '<summary><span class="nome-gruppo">' + perValore(titolo) + '</span> <span class="meta">· ' + quanti + '</span></summary>' +
+    '<div class="dentro-gruppo">' + dentro + '</div></details>';
+}
+
+function segnaGruppoChiusi(chiave, aperto) {
+  if (aperto) CHIUSI_APERTI.add(chiave); else CHIUSI_APERTI.delete(chiave);
+}
+
+function chiusiRaccolti(lavori) {
+  const oggi = isoData(new Date());
+  const meseOra = oggi.slice(0, 7), annoOra = oggi.slice(0, 4);
+  const cercando = !!(FILTRO_ARCHIVIO.trim() || CLIENTE_ARCHIVIO);
+  const mese = l => String(l.data || '').slice(0, 7);
+  const nomeDelMese = m => { const n = Number(m.slice(5, 7)); return (MESI_REGISTRO[n - 1] || m).replace(/^./, c => c.toUpperCase()); };
+  const perMese = elenco => {
+    const mesi = new Map();
+    elenco.forEach(l => { const m = mese(l); if (!mesi.has(m)) mesi.set(m, []); mesi.get(m).push(l); });
+    return [...mesi.entries()];
+  };
+  // Questo mese, e un lavoro con la data più avanti (sbagliata, ma da vedere).
+  const adesso = lavori.filter(l => mese(l) >= meseOra);
+  const quest = lavori.filter(l => mese(l) < meseOra && mese(l).slice(0, 4) === annoOra);
+  const prima = lavori.filter(l => mese(l).slice(0, 4) < annoOra && /^\d{4}-\d{2}/.test(mese(l)));
+  const senzaData = lavori.filter(l => !/^\d{4}-\d{2}/.test(mese(l)));
+  let html = '';
+  if (adesso.length) {
+    html += '<h3 class="titolo-colonna">' + perValore(nomeDelMese(meseOra) + ' ' + annoOra) + ' · ' + adesso.length + '</h3>' +
+      adesso.map(schedaArchivio).join('');
+  }
+  perMese(quest).forEach(([m, elenco]) => {
+    html += gruppoChiusi(m, nomeDelMese(m) + ' ' + m.slice(0, 4), elenco, elenco.map(schedaArchivio).join(''), cercando);
+  });
+  const anni = new Map();
+  prima.forEach(l => { const a = mese(l).slice(0, 4); if (!anni.has(a)) anni.set(a, []); anni.get(a).push(l); });
+  anni.forEach((elenco, anno) => {
+    const mesi = perMese(elenco).map(([m, del]) =>
+      gruppoChiusi(m, nomeDelMese(m), del, del.map(schedaArchivio).join(''), cercando)).join('');
+    html += gruppoChiusi(anno, anno, elenco, mesi, cercando);
+  });
+  if (senzaData.length) html += gruppoChiusi('senza-data', 'Senza data', senzaData, senzaData.map(schedaArchivio).join(''), cercando);
+  return html;
+}
+
 function righeArchivio() {
   return barraScelti() + righeArchivioSole();
 }
@@ -7228,7 +7300,7 @@ function righeArchivioSole() {
       '</div></div>';
   }
   if (RACCOLTA_ARCHIVIO !== 'cliente') {
-    if (STATO_ARCHIVIO === 'fatturato') return lavori.map(schedaArchivio).join('');
+    if (STATO_ARCHIVIO === 'fatturato') return chiusiRaccolti(lavori);
     // Fra i da pagare, tre colonne: quelli ancora da mandare al cliente, quelli
     // stampati, e quelli già mandati che aspettano il pagamento. Sono lavori diversi
     // per chi sta in ufficio — scrivere il conto, consegnare il foglio, sollecitare —

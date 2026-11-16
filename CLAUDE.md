@@ -1651,6 +1651,14 @@ guarda quella colonna sta per alzare il telefono. Raccogliendo per cliente le co
 non ci sono — lì la domanda è quanto deve quel cliente — e la scheda dice lo stesso se
 è stato mandato o stampato. `stampato` è arrivato senza alzare `VERSIONE_LAVORO`.
 
+**Fra i chiusi, il tempo raccoglie** (`chiusiRaccolti()`), per data del lavoro: il **mese
+in corso** a vista, i **mesi passati** dell'anno chiusi uno per uno, gli **anni di prima**
+raccolti per anno coi loro mesi dentro. Era un elenco solo, e dopo un anno i conti di questo
+mese stavano in cima a un muro di schede. Chiusi dicono **quanti lavori**, non quanto — le
+somme il capo le ha tolte da qui. Un gruppo aperto resta aperto ridisegnando
+(`CHIUSI_APERTI`, a schermo e non nei file); cercando un nome o con «Vedi conti» stanno
+tutti aperti, o quello che si cerca resterebbe nascosto.
+
 **A sinistra sta il gestionale**: quanti lavori sono **da pagare** e quanti
 **chiusi**, e i due numeri portano all'una o all'altra parte. **Solo quanti, non
 quanto**: le somme c'erano — nel gestionale, in testa alle colonne, sui gruppi per
