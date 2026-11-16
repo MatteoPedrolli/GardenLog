@@ -5637,33 +5637,20 @@ try {
   ok('e la virgola si scrive come viene naturale', pianteSesto.virgola === 61);
   ok('senza i numeri non inventa un risultato',
     pianteSesto.vuoto === null && pianteSesto.zero === null, JSON.stringify(pianteSesto));
-  const rigaPiante = await pagU.evaluate(() => {
-    // Le prove che seguono scrivono nel modulo: si fanno su una bozza, e il
-    // preventivo accettato si rimette com'era in fondo.
+  // Le prove che seguono scrivono nel modulo: si fanno su una bozza, e il
+  // preventivo accettato si rimette com'era in fondo.
+  await pagU.evaluate(() => {
     window.__tenuto = { stato: PREVENTIVO.doc.stato };
     PREVENTIVO.doc.stato = 'bozza';
     disegnaPreventivo();
-    document.getElementById('sesto-metri').value = '36';
-    document.getElementById('sesto-passo').value = '0,4';
-    mostraPianteDaSesto();
-    const detto = document.getElementById('piante-calcolate').textContent;
-    aggiungiPianteDaSesto();
-    const r = PREVENTIVO.doc.righe[PREVENTIVO.doc.righe.length - 1];
-    return { detto, quantita: r.quantita, descrizione: r.descrizione };
   });
-  ok('il conto si legge prima di metterlo in una riga', rigaPiante.detto === '91 piante', rigaPiante.detto);
-  // Fra sei mesi «91 piante» da solo non dice se il sesto era 0,40 o 0,50.
-  ok('e la riga si porta dietro da dove esce quel numero',
-    rigaPiante.quantita === 91 && rigaPiante.descrizione.includes('36') &&
-    rigaPiante.descrizione.includes('0,4'), JSON.stringify(rigaPiante));
 
   // La virgola è come si scrivono i decimali qui. Un `type="number"` la rifiuta e
   // lascia la casella vuota: «0,4» diventa niente e il conto non si fa. Il listino
   // usava già campi di testo apposta, questi no — e si vedeva solo provando a
   // scrivere un prezzo come lo si scrive davvero.
   const virgole = await pagU.evaluate(() => {
-    const campi = [...document.querySelectorAll('#pagina-preventivo input.stretto, ' +
-      '#sesto-metri, #sesto-passo')];
+    const campi = [...document.querySelectorAll('#pagina-preventivo input.stretto')];
     const numerici = campi.filter(c => c.type === 'number').length;
     // E la prova vera: scriverci dentro una virgola e vedere se arriva al modello.
     const prezzo = document.querySelector('#pagina-preventivo input.prezzo');
@@ -6494,6 +6481,98 @@ try {
   ok('rifatto da un rilievo corretto non si salva da solo all\'apertura: lo dice, e si salva con un clic',
     daSolo.rifatto && daSolo.rifattoSalvato, JSON.stringify(daSolo));
   ok('eliminato con una modifica in attesa, il file non ricompare', daSolo.eliminato, JSON.stringify(daSolo));
+
+  // ── LA PULIZIA DEL PREVENTIVO ──
+  // Un solo menù per aggiungere, le note del sopralluogo in cima, le frasi accanto
+  // a qualsiasi larghezza, le ore di cantiere che dicono cosa sono, e niente più
+  // «Dai metri alle piante»: il sesto si scrive nella riga della pianta.
+  const pulizia = await pagU.evaluate(async () => {
+    const prima = PREVENTIVO;
+    let scelta = null;
+    try { scelta = localStorage.getItem(CHIAVE_FRASI_A_VISTA); localStorage.removeItem(CHIAVE_FRASI_A_VISTA); } catch (e) {}
+    const r = {};
+    const rilievo = leggiRilievo({ tipo: 'rilievo', versione: 1, id: 'ril-pulizia', revisione: 1, origine: 'ufficio',
+      creato: '2026-11-16T08:00:00Z', cliente: { nome: 'Prova Pulizia' }, note: 'Il camion resta in strada',
+      lavorazioni: [{ id: 's1', genere: 'insieme', nome: 'Siepe', unita: 'm', misura: 10, ore: 4, stile: 'lauro',
+        insieme: { id: 'siepe', nome: 'Siepe', componenti: [
+          { tipoID: 'piantumazione', nome: 'Piantumazione', voceID: 'piante', voce: 'Piante', unita: 'n' }] } }] });
+    const d = costruisciPreventivo(rilievo, null);
+    PREVENTIVO = { doc: d, file: '', anno: '' };
+    vaiA('preventivo');
+    const pagina = document.getElementById('pagina-preventivo');
+    // Un menù solo, e nessun bottone «+ …» accanto.
+    const menu = document.getElementById('aggiungi-al-preventivo');
+    r.menu = !!menu && [...menu.querySelectorAll('optgroup[label="Da scrivere"] option')].map(o => o.value).join() ===
+      'libera,capitolo,sezione,irrigazione' &&
+      ![...pagina.querySelectorAll('.aggiungi-voci button, .aggiungi-voci label')].length;
+    const scegli = v => { menu2().value = v; menu2().dispatchEvent(new Event('change', { bubbles: true })); };
+    const menu2 = () => document.getElementById('aggiungi-al-preventivo');
+    const righePrima = d.righe.length;
+    scegli('libera');
+    scegli('capitolo');
+    scegli('sezione');
+    const nuove = d.righe.slice(righePrima);
+    r.aggiunge = nuove.length === 3 && nuove[0].libera === true && Array.isArray(nuove[1].componenti) && nuove[2].tipo === 'sezione';
+    r.capitoloAperto = PREVENTIVO.aperta === nuove[1];
+    // L'impianto apre la scelta del file del progetto.
+    let aperto = 0;
+    document.getElementById('file-irrigazione').click = () => { aperto++; };
+    scegli('irrigazione');
+    r.irrigazione = aperto === 1 && d.righe.length === righePrima + 3;
+    // Le note del sopralluogo stanno in cima, prima delle voci.
+    const nota = pagina.querySelector('.dal-sopralluogo');
+    const tabella = pagina.querySelector('table.tabella-voci');
+    r.notaInCima = !!nota && nota.textContent.includes('Il camion resta in strada') &&
+      !!(nota.compareDocumentPosition(tabella) & Node.DOCUMENT_POSITION_FOLLOWING) &&
+      pagina.querySelectorAll('.nota-rilievo').length === 1;
+    // «Dai metri alle piante» non c'è più.
+    r.senzaMetri = !document.getElementById('sesto-metri') && !pagina.textContent.includes('Dai metri alle piante');
+    // Le ore di cantiere e la loro somma dicono cosa sono.
+    const mano = pagina.querySelector('tr.mano-settore');
+    r.didascalie = [...mano.querySelectorAll('.didascalia')].map(x => x.textContent).join() === 'di cantiere,in tutto' &&
+      mano.querySelector('td.qta span').textContent === '4';
+    // Le frasi: a 1280 px chiuse, con un bottone per aprirle; aperte stanno accanto, non sotto.
+    const blocco = pagina.querySelector('.preventivo-con-frasi');
+    const pannello = document.getElementById('pannello-frasi');
+    const bottone = pagina.querySelector('button.apri-frasi');
+    r.larghezza = window.innerWidth;
+    r.chiuse = blocco.classList.contains('senza-frasi') && getComputedStyle(pannello).display === 'none' &&
+      getComputedStyle(bottone).display !== 'none';
+    bottone.click();
+    const colonna = pagina.querySelector('.preventivo-colonna').getBoundingClientRect();
+    const p = pannello.getBoundingClientRect();
+    r.accanto = !blocco.classList.contains('senza-frasi') && p.width > 200 && p.left >= colonna.right - 1 &&
+      p.top < colonna.top + 200 && getComputedStyle(bottone).display === 'none';
+    // E la tabella sta ancora tutta nella sua colonna: niente da scorrere di lato.
+    const righe = pagina.querySelector('.preventivo-righe');
+    r.tabellaIntera = righe.scrollWidth <= righe.clientWidth + 1;
+    r.strette = righe.scrollWidth + '/' + righe.clientWidth;
+    // La scelta resta, anche ridisegnando.
+    disegnaPreventivo();
+    r.resta = !document.querySelector('#pagina-preventivo .preventivo-con-frasi').classList.contains('senza-frasi') &&
+      localStorage.getItem(CHIAVE_FRASI_A_VISTA) === 'si';
+    document.querySelector('#pannello-frasi .testa-frasi button').click();
+    r.richiuse = document.querySelector('#pagina-preventivo .preventivo-con-frasi').classList.contains('senza-frasi') &&
+      localStorage.getItem(CHIAVE_FRASI_A_VISTA) === 'no';
+    // Niente di questa prova deve finire nella cartella.
+    clearTimeout(TIMER_PREVENTIVO);
+    PREVENTIVO.daSalvare = false;
+    try { if (scelta == null) localStorage.removeItem(CHIAVE_FRASI_A_VISTA); else localStorage.setItem(CHIAVE_FRASI_A_VISTA, scelta); } catch (e) {}
+    PREVENTIVO = prima;
+    vaiA('preventivi');
+    return r;
+  });
+  ok('per aggiungere al preventivo c\'è un menù solo, con in cima quello che si scrive a mano', pulizia.menu, JSON.stringify(pulizia));
+  ok('dal menù nascono voce libera, capitolo (aperto) e titolo di sezione', pulizia.aggiunge && pulizia.capitoloAperto, JSON.stringify(pulizia));
+  ok('e l\'impianto di irrigazione apre la scelta del file del progetto', pulizia.irrigazione, JSON.stringify(pulizia));
+  ok('le note del sopralluogo stanno in cima, prima delle voci, una volta sola', pulizia.notaInCima, JSON.stringify(pulizia));
+  ok('«Dai metri alle piante» non c\'è più', pulizia.senzaMetri, JSON.stringify(pulizia));
+  ok('le ore di cantiere e il loro totale dicono cosa sono', pulizia.didascalie, JSON.stringify(pulizia));
+  ok('su uno schermo stretto le frasi stanno chiuse, con un bottone per aprirle', pulizia.chiuse, JSON.stringify(pulizia));
+  ok('aperte stanno accanto al preventivo e non sotto', pulizia.accanto, JSON.stringify(pulizia));
+  ok('e con le frasi aperte la tabella sta ancora tutta nella sua colonna, senza scorrere di lato',
+    pulizia.tabellaIntera, pulizia.strette + ' a ' + pulizia.larghezza + ' px');
+  ok('la scelta resta ridisegnando, e la ✕ le richiude', pulizia.resta && pulizia.richiuse, JSON.stringify(pulizia));
 
   // ── L'IMPIANTO DI IRRIGAZIONE: DAL TOOL DEI SETTORI AL PREVENTIVO ──
   // Il tool conta i materiali dal progetto e li salva col progetto; l'ufficio li

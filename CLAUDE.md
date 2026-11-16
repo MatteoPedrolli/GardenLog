@@ -831,7 +831,8 @@ scritta da chi programma. Una lavorazione senza voce è manodopera, ed è già n
 
 Le note sono quello che si vede **solo stando lì** — accesso, dove resta il
 camion, il rubinetto, la pendenza. Sono anche la cosa che non si può più chiedere
-dopo, e quella che l'anagrafica non sa.
+dopo, e quella che l'anagrafica non sa. Nel preventivo stanno **in cima**, sotto il
+nome («Dal sopralluogo»): erano in fondo alla pagina, e si leggono prima di scrivere.
 
 In ufficio un rilievo arrivato dal telefono **si legge e non si tocca**: un file, un
 solo autore, come `rapportini/`. Dice anche chi non è in anagrafica, perché telefono e mail — quello
@@ -923,8 +924,10 @@ colonne della voce (sotto, *Cose da sapere*).
 **In un settore ogni voce ha le sue ore**, scritte in ufficio (`ore` sul
 componente), e **la manodopera in fondo è una somma** (`manodoperaSettore()`): le
 **ore di cantiere** — quelle che non stanno in nessuna voce: scaricare, pulire —
-più le ore delle voci. Le ore di cantiere partono da quelle stimate in giardino e
-si correggono (`oreCantiere`, `oreCantiereMano`); la quantità della manodopera non
+più le ore delle voci. Sotto i due numeri c'è scritto cosa sono — «di cantiere» e «in
+tutto»: affiancati e senza niente accanto erano due «10» da indovinare. Le ore di
+cantiere partono da quelle stimate in giardino e si correggono (`oreCantiere`,
+`oreCantiereMano`); la quantità della manodopera non
 si scrive, si fa, o la riga direbbe un numero e le voci un altro. **Una voce senza
 ore non è un errore**: certe lavorazioni sono questione di minuti, e non contano
 fra i componenti senza prezzo. Una lavorazione del settore **senza voce** — il
@@ -1046,10 +1049,12 @@ accettato e nemmeno partito — l'app sa di averlo messo in posta, come il conto
 archivio.
 
 **Dai metri al numero di piante** è la formula del foglio della segretaria:
-metri / sesto + 1, arrotondato per difetto. Il **più uno** è la pianta di testa —
-24 m a sesto 0,40 ne vogliono 61, non 60, perché ce n'è una a ogni estremo. La
-riga che ne esce si porta dietro i metri e il sesto: fra sei mesi «91 piante» da
-solo non dice da dove viene.
+metri / sesto + 1, arrotondato per difetto (`pianteDaSesto()`). Il **più uno** è la
+pianta di testa — 24 m a sesto 0,40 ne vogliono 61, non 60, perché ce n'è una a ogni
+estremo. Si scrive il sesto **nella riga della pianta**, che si porta dietro metri e
+sesto: fra sei mesi «91 piante» da solo non dice da dove viene. C'era anche un riquadro
+a parte, «Dai metri alle piante», per farlo fuori da una voce: era un doppione, ed è
+stato tolto.
 
 **Quattro mucchi: aperti, inviati, confermati, rifiutati.** Il mucchio è lo stato
 scritto nel file (`gruppoPreventivo()`), non una cartella: spostare file su Drive
@@ -1092,7 +1097,10 @@ deciso qui: le righe del campo si rifanno al loro posto, quelle dell'ufficio res
 — prima finivano tutte in fondo, e un titolo di sezione si staccava dalle righe che
 introduceva — e una lavorazione nuova entra dopo l'ultima del campo. Una riga del campo tolta
 si ricorda in `tolte` sul preventivo e non torna; si riprende dal menù «+ Aggiungi», fra
-«Dal rilievo, tolte». Un componente tolto si ricorda in `tolti` sulla riga, uno aggiunto porta
+«Dal rilievo, tolte». **Per aggiungere c'è un menù solo** (`aggiungiDalListinoPreventivo()`):
+erano un menù e quattro bottoni in fila — voce libera, capitolo, titolo, impianto — per dire
+la stessa cosa. In cima quello che si scrive a mano, poi quello che si sceglie da un elenco;
+l'impianto apre da lì la scelta del file del progetto. Un componente tolto si ricorda in `tolti` sulla riga, uno aggiunto porta
 `aggiunta` e resta. Tutti campi arrivati senza alzare `VERSIONE_PREVENTIVO`. I componenti dei
 capitoli scritti in ufficio vanno fra i **materiali da ordinare**, come quelli dei settori.
 
@@ -1109,8 +1117,16 @@ il clic sulla frase non toglie il fuoco alla descrizione). La categoria del sett
 scelta viene prima, aperta. Si aggiungono, si correggono e si tolgono dal pannello, e si
 salvano subito; **«Salva la descrizione come frase»** fa di una descrizione scritta bene una
 frase, ed è il modo più svelto di riempire il pannello. La descrizione di ogni riga è un campo
-che **si allarga col testo**, e sul foglio va a capo dove l'ha messa chi l'ha scritta. Sotto i
-1400 px il pannello sta sotto il preventivo; sopra, la pagina si allarga quanto lui.
+che **si allarga col testo**, e sul foglio va a capo dove l'ha messa chi l'ha scritta.
+
+**Le frasi stanno accanto al preventivo a qualsiasi larghezza, o chiuse** (`mostraFrasi()`,
+`frasiAVista()`). Sotto i 1400 px il pannello andava sotto il preventivo: in fondo alla
+pagina, dopo i bottoni, a duemila pixel dalle descrizioni — cioè su quasi tutti i portatili
+non c'era. Si chiude con la ✕ e si riapre da «Frasi per le descrizioni ›», in alto a destra;
+la scelta è di **questo PC** (`localStorage`, come le novità lette), e senza una scelta decide
+la larghezza: aperte da 1340 px in su. Aprire e chiudere non ridisegna. Perché ci stiano
+accanto la tabella deve potersi stringere: il riepilogo dei componenti va a capo, e il menù
+«Nel totale» sta sotto la descrizione, a destra di «dal campo», non nella riga del prezzo.
 
 **Il preventivo si salva da solo**, come il conto. C'era «Salva» in fondo alla pagina, e
 passando a un'altra schermata senza premerlo le modifiche sparivano senza che niente lo
