@@ -2681,6 +2681,15 @@ function riassuntoRicontrolla() {
 // non si legge, e quello che non si legge tanto vale non scriverlo.
 const NOVITA = [
   {
+    versione: '2026-11-16d',
+    data: '2026-11-16',
+    titolo: 'I dati del cliente nel preventivo',
+    righe: [
+      'Sul preventivo, accanto ai contatti, c\'è **«✎ Modifica i dati»**: nome, via, paese, telefono e mail si correggono lì. Se il cliente è in anagrafica, si corregge **anche lì** (si può togliere la spunta).',
+      'I dati corretti restano anche quando dal telefono arriva il rilievo corretto. Un preventivo già mandato non si corregge da qui: nome e via sono sul foglio che il cliente ha in mano.',
+    ],
+  },
+  {
     versione: '2026-11-16c',
     data: '2026-11-16',
     titolo: 'Da pagare più larga, e il meteo che si fa trovare',
@@ -4085,7 +4094,10 @@ function costruisciPreventivo(rilievo, precedente) {
     rilievo: Number(rilievo.revisione) || 1,
     creato: (precedente && precedente.creato) || new Date().toISOString(),
     aggiornato: new Date().toISOString(),
-    cliente: rilievo.cliente,
+    // I dati corretti in ufficio vincono su quelli del campo, anche quando arriva
+    // il rilievo corretto: come i prezzi decisi qui.
+    cliente: { ...(rilievo.cliente || {}), ...((precedente && precedente.clienteUfficio) || {}) },
+    ...(precedente && precedente.clienteUfficio ? { clienteUfficio: precedente.clienteUfficio } : {}),
     disegno: !!rilievo.disegno,
     mezze: Number(rilievo.mezze) || 0,
     stato: (precedente && precedente.stato) || 'bozza',
@@ -4298,6 +4310,71 @@ function clienteDelPreventivo(d) {
 const CAMPI_DAL_PREVENTIVO = [
   ['indirizzo', 'via'], ['citta', 'paese'], ['telefono', 'telefono'], ['email', 'mail'],
 ];
+
+const CAMPI_CLIENTE_PREVENTIVO = [
+  ['nome', 'Nome'], ['indirizzo', 'Via'], ['citta', 'Paese'], ['telefono', 'Telefono'], ['email', 'Mail'],
+];
+
+// I dati del cliente si correggono sul preventivo, non sul rilievo: quello del
+// telefono non si tocca, un file un solo autore. Quello che l'ufficio scrive sta
+// in `clienteUfficio` e vince sul rilievo, anche quando ne arriva uno corretto —
+// come i prezzi decisi qui. Chi c'è in anagrafica si corregge anche lì, se si
+// vuole: il numero giusto serve anche ai conti e all'agenda.
+function modificaClientePreventivo() {
+  if (!PREVENTIVO || preventivoConsegnato(PREVENTIVO.doc)) return;
+  const d = PREVENTIVO.doc;
+  const cc = d.cliente || {};
+  const noto = clienteDelPreventivo(d);
+  const valore = k => cc[k] || (k !== 'nome' && noto && noto[k]) || '';
+  const pannello = document.getElementById('pannello-posta');
+  window.__clientePreventivo = async ok => {
+    if (ok) {
+      const scritti = {};
+      CAMPI_CLIENTE_PREVENTIVO.forEach(([k]) => {
+        const el = pannello.querySelector('[data-campo="' + k + '"]');
+        if (el) scritti[k] = el.value.trim();
+      });
+      if (!scritti.nome) { avvisa('Il nome del cliente non può restare vuoto', true); return; }
+      const anche = pannello.querySelector('#cliente-anche-anagrafica');
+      const inAnagrafica = !!(anche && anche.checked && noto);
+      const cambiati = {};
+      CAMPI_CLIENTE_PREVENTIVO.forEach(([k]) => { if (scritti[k] !== valore(k)) cambiati[k] = scritti[k]; });
+      chiudi();
+      if (!Object.keys(cambiati).length) return;
+      d.cliente = { ...cc, ...cambiati };
+      d.clienteUfficio = { ...(d.clienteUfficio || {}), ...cambiati };
+      if (inAnagrafica) {
+        Object.assign(noto, cambiati);
+        CLIENTI_DA_SALVARE = true;
+        if (!(await salvaClienti())) { disegnaPreventivo(); return; }
+      }
+      disegnaPreventivo();
+      avvisa(inAnagrafica ? 'Dati del cliente corretti, anche in anagrafica' : 'Dati del cliente corretti');
+      return;
+    }
+    chiudi();
+  };
+  const chiudi = () => {
+    pannello.classList.remove('aperto');
+    pannello.innerHTML = '';
+    delete window.__clientePreventivo;
+  };
+  pannello.innerHTML = '<div class="scheda-novita dati-cliente-preventivo" style="min-width:360px;max-width:480px">' +
+    '<div class="titolo-novita">Dati del cliente</div>' +
+    CAMPI_CLIENTE_PREVENTIVO.map(([k, nome]) => '<label class="etichetta-campo" style="display:block;margin-top:10px">' +
+      nome + '<input type="text" data-campo="' + k + '" value="' + perValore(valore(k)) + '"></label>').join('') +
+    (noto ? '<label style="display:flex;gap:8px;align-items:center;margin-top:14px">' +
+      '<input type="checkbox" id="cliente-anche-anagrafica" checked style="width:auto"> Correggi anche in anagrafica (' +
+      perValore(noto.nome) + ')</label>'
+      : '<p class="meta" style="margin-top:12px">Non è in anagrafica: i dati restano sul preventivo, e da lì si aggiunge.</p>') +
+    '<div class="bottoni" style="margin-top:14px">' +
+      '<button class="principale" onclick="__clientePreventivo(true)">Salva</button>' +
+      '<button class="secondaria" onclick="__clientePreventivo(false)">Annulla</button>' +
+    '</div></div>';
+  pannello.classList.add('aperto');
+  const primo = pannello.querySelector('input[data-campo]');
+  if (primo) primo.focus();
+}
 
 function cosaPortaInAnagrafica(d) {
   const c = d.cliente || {};
@@ -5829,9 +5906,15 @@ function testataPreventivo(d) {
     cc.telefono || (noto && noto.telefono),
     cc.email || (noto && noto.email),
   ].filter(x => x);
-  if (contatti.length || d.daRilievo?.sopralluogo) {
-    html += '<p class="meta" style="margin-top:-6px">' + contatti.map(perValore).join(' · ') +
-      (d.daRilievo?.sopralluogo ? (contatti.length ? ' · ' : '') + '📍 dal sopralluogo' : '') + '</p>';
+  // Un preventivo ancora aperto corregge i dati del cliente: un numero sbagliato
+  // dal campo, la via scritta di fretta. Uno uscito no — nome e via sono sul foglio
+  // che il cliente ha in mano —: lì si corregge l'anagrafica.
+  const modificabile = !preventivoConsegnato(d) && !VISTA_CANTIERE;
+  if (contatti.length || d.daRilievo?.sopralluogo || modificabile) {
+    html += '<p class="meta contatti-preventivo" style="margin-top:-6px">' + contatti.map(perValore).join(' · ') +
+      (d.daRilievo?.sopralluogo ? (contatti.length ? ' · ' : '') + '📍 dal sopralluogo' : '') +
+      (modificabile ? ' <button class="secondaria piccola" onclick="modificaClientePreventivo()">✎ Modifica i dati</button>' : '') +
+      '</p>';
   }
   const inAnagrafica = cosaPortaInAnagrafica(d);
   if (inAnagrafica) {

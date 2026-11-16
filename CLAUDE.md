@@ -1169,6 +1169,14 @@ preventivo torna fra gli aperti da rifare; uno scritto in ufficio se ne va con l
 tornerebbe a chiederlo; senza rilievo, il file era l'ultima copia. Un lavoro già messo
 in lavagna da un sì resta dov'è.
 
+**I dati del cliente si correggono sul preventivo** («✎ Modifica i dati» accanto ai
+contatti, `modificaClientePreventivo()`), non sul rilievo: quello del telefono non si
+tocca. Quello che l'ufficio scrive sta in `clienteUfficio` e **vince sul rilievo** anche
+quando ne arriva uno corretto, come i prezzi decisi qui; il resto segue il campo. Chi è in
+anagrafica si corregge anche lì, con una spunta già messa che si può togliere: il numero
+giusto serve anche ai conti e all'agenda. Un preventivo uscito no — nome e via stanno sul
+foglio che il cliente ha in mano. Campo arrivato senza alzare `VERSIONE_PREVENTIVO`.
+
 **Dal preventivo all'anagrafica**: chi non c'è si aggiunge con un clic, a chi c'è
 si riempie **solo quello che manca**. Il numero corretto in ufficio non lo riscrive
 un rilievo, come non lo riscrive un'importazione. Il riquadro sta in cima, coi

@@ -6676,6 +6676,74 @@ try {
   ok('un rilievo corretto non la toglie', settorePrev.resta, JSON.stringify(settorePrev));
   ok('un settore scritto a mano, come l\'irrigazione, diventa un capitolo col suo nome', settorePrev.libero, JSON.stringify(settorePrev));
 
+  // ── I DATI DEL CLIENTE SI CORREGGONO SUL PREVENTIVO ──
+  // Un numero sbagliato dal campo si corregge sul preventivo aperto, resta quando
+  // arriva il rilievo corretto, e se il cliente è in anagrafica si corregge anche lì.
+  const datiCliente = await pagU.evaluate(async () => {
+    const prima = PREVENTIVO;
+    const r = {};
+    const attesa = () => new Promise(x => setTimeout(x, 50));
+    const rilievo = leggiRilievo({ tipo: 'rilievo', versione: 1, id: 'ril-dati-cliente', revisione: 1, origine: 'ufficio',
+      creato: '2026-11-16T08:00:00Z', cliente: { nome: 'Prova Dati Cliente', telefono: '333 111', citta: 'Lavis' },
+      lavorazioni: [{ id: 'm1', genere: 'manodopera', nome: 'Pulizia', ore: 2 }] });
+    const d = costruisciPreventivo(rilievo, null);
+    PREVENTIVO = { doc: d, file: '', anno: '' };
+    vaiA('preventivo');
+    const pagina = document.getElementById('pagina-preventivo');
+    const pannello = document.getElementById('pannello-posta');
+    const scrivi = (k, v) => { pannello.querySelector('[data-campo="' + k + '"]').value = v; };
+    const bottone = () => [...pagina.querySelectorAll('.contatti-preventivo button')].find(b => b.textContent.includes('Modifica i dati'));
+    r.bottone = !!bottone();
+    bottone().click();
+    r.pannello = pannello.classList.contains('aperto') && pannello.querySelectorAll('input[data-campo]').length === 5 &&
+      pannello.querySelector('[data-campo="telefono"]').value === '333 111' && !pannello.querySelector('#cliente-anche-anagrafica');
+    // Annullando non cambia niente.
+    scrivi('telefono', '999');
+    pannello.querySelector('button.secondaria').click();
+    await attesa();
+    r.annulla = d.cliente.telefono === '333 111' && !d.clienteUfficio;
+    bottone().click();
+    scrivi('telefono', '333 222'); scrivi('indirizzo', 'Via Nuova 3');
+    pannello.querySelector('button.principale').click();
+    await attesa();
+    r.corretto = d.cliente.telefono === '333 222' && d.cliente.indirizzo === 'Via Nuova 3' && d.cliente.citta === 'Lavis' &&
+      d.clienteUfficio && d.clienteUfficio.telefono === '333 222' && !('citta' in d.clienteUfficio) &&
+      document.querySelector('#pagina-preventivo .contatti-preventivo').textContent.includes('333 222');
+    // Il rilievo corretto porta un numero suo e un paese nuovo: vince quello dell'ufficio, il resto segue il campo.
+    const rifatto = costruisciPreventivo({ ...rilievo, revisione: 2, cliente: { ...rilievo.cliente, telefono: '333 000', citta: 'Trento' } }, d);
+    r.resta = rifatto.cliente.telefono === '333 222' && rifatto.cliente.indirizzo === 'Via Nuova 3' && rifatto.cliente.citta === 'Trento';
+    // Uno uscito non si corregge da qui.
+    d.stato = 'mandato'; d.mandato = new Date().toISOString();
+    disegnaPreventivo();
+    r.uscito = !bottone();
+    d.stato = 'bozza'; d.mandato = '';
+    // In anagrafica: si corregge anche lì, se lo si lascia spuntato.
+    const noto = sistemaCliente({ nome: 'Prova Dati Cliente', telefono: '333 111' });
+    CLIENTI.push(noto);
+    disegnaPreventivo();
+    bottone().click();
+    r.spunta = !!pannello.querySelector('#cliente-anche-anagrafica:checked');
+    scrivi('email', 'prova@example.com');
+    pannello.querySelector('button.principale').click();
+    await new Promise(x => setTimeout(x, 300));
+    r.anagrafica = noto.email === 'prova@example.com' && !CLIENTI_DA_SALVARE;
+    CLIENTI.splice(CLIENTI.indexOf(noto), 1);
+    await salvaClienti();
+    clearTimeout(TIMER_PREVENTIVO);
+    PREVENTIVO.daSalvare = false;
+    PREVENTIVO = prima;
+    vaiA('preventivi');
+    return r;
+  });
+  ok('sul preventivo aperto c\'è «✎ Modifica i dati» del cliente, coi dati già scritti',
+    datiCliente.bottone && datiCliente.pannello, JSON.stringify(datiCliente));
+  ok('annullando non cambia niente; salvando, il preventivo dice i dati nuovi', datiCliente.annulla && datiCliente.corretto,
+    JSON.stringify(datiCliente));
+  ok('i dati corretti in ufficio restano quando arriva il rilievo corretto', datiCliente.resta, JSON.stringify(datiCliente));
+  ok('un preventivo uscito non li corregge da qui', datiCliente.uscito, JSON.stringify(datiCliente));
+  ok('chi è in anagrafica si corregge anche lì, se lo si lascia spuntato', datiCliente.spunta && datiCliente.anagrafica,
+    JSON.stringify(datiCliente));
+
   // ── L'IMPIANTO DI IRRIGAZIONE: DAL TOOL DEI SETTORI AL PREVENTIVO ──
   // Il tool conta i materiali dal progetto e li salva col progetto; l'ufficio li
   // prende e ci mette i prezzi d'acquisto del listino dell'irrigazione, per codice,
