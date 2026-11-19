@@ -1221,6 +1221,9 @@ programmi si scambiano un file, e due programmi che lo fanno da posti diversi pr
 poi smettono di capirsi senza che nessuno lo noti. Resta **un file solo, senza
 dipendenze**, che si apre anche con un doppio clic: non carica `rapportino.js`, e il
 service worker del telefono lo lascia stare come lascia stare `/ufficio/`.
+Dall'ufficio si apre con **💧 Irrigazione** nella barra, sotto Conferimenti, **in una scheda
+nuova**: andandoci nella stessa l'ufficio si ricaricherebbe, e la cartella collegata va
+riaperta a ogni ricarica.
 
 **Le regole dei materiali stanno nel tool**, non in ufficio: sensore pioggia, quale
 centralina, quanti metri di tubo si capiscono col progetto sotto mano, ed è lì che si

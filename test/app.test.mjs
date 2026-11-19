@@ -6945,6 +6945,21 @@ try {
   ok('chi è in anagrafica si corregge anche lì, se lo si lascia spuntato', datiCliente.spunta && datiCliente.anagrafica,
     JSON.stringify(datiCliente));
 
+  // Il tool dell'irrigazione si apre dalla barra dell'ufficio, in una scheda sua.
+  const linkIrrigazione = await pagU.evaluate(() => {
+    const a = document.getElementById('v-irrigazione');
+    const conf = document.getElementById('v-conferimenti');
+    return { c: !!a, href: a && a.href, target: a && a.target,
+      dopo: !!(a && conf && (conf.compareDocumentPosition(a) & Node.DOCUMENT_POSITION_FOLLOWING)) };
+  });
+  ok('nella barra dell\'ufficio, sotto Conferimenti, c\'è il tool dell\'irrigazione, in una scheda nuova',
+    linkIrrigazione.c && linkIrrigazione.dopo && linkIrrigazione.target === '_blank' &&
+    new URL(linkIrrigazione.href).pathname.endsWith('/irrigazione/'), JSON.stringify(linkIrrigazione));
+  {
+    const r = await fetch(linkIrrigazione.href);
+    ok('e l\'indirizzo porta davvero al tool', r.ok && (await r.text()).includes('progettoPerIlPreventivo'), String(r.status));
+  }
+
   // ── L'IMPIANTO DI IRRIGAZIONE: DAL TOOL DEI SETTORI AL PREVENTIVO ──
   // Il tool conta i materiali dal progetto e li salva col progetto; l'ufficio li
   // prende e ci mette i prezzi d'acquisto del listino dell'irrigazione, per codice,
