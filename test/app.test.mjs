@@ -7070,6 +7070,59 @@ PE25;Tubo PE ø25;m;;;`, 'applica');
   const vecchio = await pagI.evaluate(() => progettoPerIlPreventivo().materiali.map(m => m.descrizione + ' ' + m.quantita));
   ok('un progetto salvato col tool di prima si apre, e i materiali escono dalle regole', vecchio.includes('Ugello Hunter PS 12A Verde 2') &&
     vecchio.some(x => x.startsWith('Elettrovalvola')), vecchio.join(', '));
+  // L'ala gocciolante: una riga del catalogo senza portata. Occupa un settore — e
+  // quindi vuole l'elettrovalvola — ma non è un irrigatore e non conta nell'acqua.
+  // E i T della linea: in ogni settore gli irrigatori meno uno.
+  const ala = await pagI.evaluate(() => {
+    const prima = { rows: rows.map(x => ({ ...x })), mat: materialiToText(), stato: JSON.parse(JSON.stringify(statoMateriali)) };
+    const r = {};
+    r.inCatalogo = catalog.some(x => x.serie === 'Ala gocciolante' && x.q === 0) &&
+      parseCatalog(catalogToText()).some(x => x.serie === 'Ala gocciolante');
+    statoMateriali = { mano: {}, tolti: [], aggiunti: [] };
+    applicaMateriali(`Codice;Descrizione;Unità;Per;Ogni;Quanti
+PROS-04;Corpo statico;n;irrigatore;1;1
+PGV-101;Elettrovalvola 1";n;settore;1;1
+T20;Raccordo a T 20;n;irrigatore-1;1;1
+T25;Raccordo a T 25;n;irrigatore-1 Hunter PS;1;1`, 'applica');
+    rows = [
+      {id:1, settore:1, serie:'Hunter Rotator', modello:'MP2000', arco:'90°', qta:4},
+      {id:2, settore:1, serie:'Hunter Rotator', modello:'MP2000', arco:'180°', qta:2},
+      {id:3, settore:2, serie:'Hunter PS', modello:'12A', arco:'180°', qta:3},
+      {id:4, settore:3, serie:'Hunter Rotator', modello:'MP2000', arco:'90°', qta:1},
+    ];
+    uid = 5;
+    // L'ala si sceglie dalla serie: modello e posa vengono da soli, una scelta sola com'è.
+    rows.push({id:5, settore:4, serie:'', modello:'', arco:'', qta:1});
+    renderRows();
+    const sel = document.querySelector('#rows tr[data-id="5"] select[data-f=serie]');
+    sel.value = 'Ala gocciolante'; sel.dispatchEvent(new Event('input', { bubbles: true }));
+    const riga = rows.find(x => x.id === 5);
+    r.daSola = riga.modello === 'Standard' && riga.arco === 'in linea';
+    const m = () => progettoPerIlPreventivo().materiali;
+    const trova = d => m().find(x => x.descrizione === d) || {};
+    r.valvole = trova('Elettrovalvola 1"').quantita === 4;
+    r.corpi = trova('Corpo statico').quantita === 10;
+    r.niente = !m().some(x => /ala gocciolante/i.test(x.descrizione)) &&
+      !document.getElementById('distinta').textContent.includes('Ala gocciolante');
+    const riepilogo = document.getElementById('summary').textContent;
+    r.portata = !riepilogo.includes('qdisp') && conteggiProgetto().irrigatori === 10 && conteggiProgetto().settori === 4;
+    // T: settore 1 sei irrigatori → 5, settore 2 tre → 2, settore 3 uno → 0, l'ala → niente.
+    r.t20 = trova('Raccordo a T 20').quantita === 7;
+    r.t20calcolo = trova('Raccordo a T 20').calcolo;
+    // Con la serie, solo quella: tre PS nel settore 2 → 2.
+    r.t25 = trova('Raccordo a T 25').quantita === 2;
+    // Rimesso com'era, per il resto del giro.
+    rows = prima.rows; statoMateriali = prima.stato;
+    applicaMateriali(prima.mat, 'applica');
+    renderRows();
+    return r;
+  });
+  ok('nel catalogo ugelli c\'è l\'ala gocciolante, senza portata, e si sceglie dalla sola serie', ala.inCatalogo && ala.daSola,
+    JSON.stringify(ala));
+  ok('un settore di sola ala gocciolante vuole la sua elettrovalvola, ma l\'ala non è un irrigatore né un ugello',
+    ala.valvole && ala.corpi && ala.niente && ala.portata, JSON.stringify(ala));
+  ok('i T si contano settore per settore, irrigatori meno uno, anche per una serie sola', ala.t20 && ala.t25, JSON.stringify(ala));
+
   ok('nessun errore JavaScript nel tool dei settori', erroriI.length === 0, erroriI.join(' | '));
   await pagI.close();
 

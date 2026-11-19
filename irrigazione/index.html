@@ -168,7 +168,9 @@ tr.mano td input.q{background:#FBF1DC}
       <summary>Catalogo materiali e regole (<span id="matCount">0</span> voci)</summary>
       <p class="small">Formato: Codice;Descrizione;Unità;Per;Ogni;Quanti. <b>Codice</b> è quello del fornitore: è con quello che
         l'ufficio trova il prezzo. <b>Per</b> dice da cosa si contano: <code>irrigatore</code> (tutti),
-        <code>irrigatore Hunter PS</code> (solo quella serie), <code>settore</code>, <code>impianto</code>; vuoto vuol dire che
+        <code>irrigatore Hunter PS</code> (solo quella serie), <code>irrigatore-1</code> (in ogni settore gli irrigatori meno uno:
+        i T della linea; <code>irrigatore-1 Hunter PS</code> solo per quella serie), <code>settore</code> (conta anche un
+        settore di sola ala gocciolante), <code>impianto</code>; vuoto vuol dire che
         si aggiunge a mano. <b>Ogni</b> e <b>Quanti</b>: «settore;3;1» è un pozzetto ogni tre settori, «settore;1;2» due raccordi
         per settore. Il codice di un ugello si scrive come ottava colonna del catalogo ugelli.</p>
       <textarea id="matText"></textarea>
@@ -335,7 +337,8 @@ Hunter SRM;Ug. 3.0;;3 bar;3;9,4;12
 Hunter SRM;Ug. 3.0;;3,5 bar;3,5;9,4;13,1
 Hunter SRM;Ug. 4.0;;2,5 bar;2,5;10,1;14,8
 Hunter SRM;Ug. 4.0;;3 bar;3;10,4;15,7
-Hunter SRM;Ug. 4.0;;3,5 bar;3,5;10,4;16,3`;
+Hunter SRM;Ug. 4.0;;3,5 bar;3,5;10,4;16,3
+Ala gocciolante;Standard;;in linea;;;0`;
 
 let catalog = [], rows = [], uid = 1;
 let prove = [{l:'',s:'',p:''},{l:'',s:'',p:''},{l:'',s:'',p:''}];
@@ -353,7 +356,10 @@ function parseCatalog(text){
     const c = line.split(line.includes('\t') ? '\t' : ';').map(s => s.trim());
     if (c.length < 7) return;
     const q = num(c[6]);
-    if (!q) return; // salta intestazione e righe non valide
+    // Portata zero si accetta solo scritta come numero: è una linea che occupa un
+    // settore senza contare nell'acqua — l'ala gocciolante. L'intestazione, con
+    // «Portata» al posto del numero, resta fuori.
+    if (!q && !/^0+([.,]0+)?$/.test(c[6])) return; // salta intestazione e righe non valide
     out.push({serie:c[0], modello:c[1], colore:c[2], arco:c[3], pressione:c[4], raggio:c[5], q, codice:c[7] || ''});
   });
   return out;
@@ -363,6 +369,10 @@ function parseCatalog(text){
 const catalogToText = () => 'Serie;Modello;Colore;Arco;Pressione;Raggio;Portata;Codice\n' +
   catalog.map(x => [x.serie,x.modello,x.colore,x.arco,x.pressione,x.raggio,String(x.q).replace('.',','),x.codice || ''].join(';')).join('\n');
 
+// Una voce senza portata — l'ala gocciolante — vuole la sua elettrovalvola, e quindi
+// conta come settore, ma non consuma acqua che valga la pena contare e non è un
+// irrigatore: niente ugello in distinta, niente corpo, presa o T.
+const senzaPortata = it => !!it && !(it.q > 0);
 const serieList = () => uniq(catalog.map(x => x.serie));
 const modelli = s => uniq(catalog.filter(x => x.serie === s).map(x => x.modello));
 const archi = (s, m) => uniq(catalog.filter(x => x.serie === s && x.modello === m).map(x => x.arco));
@@ -380,7 +390,8 @@ function addRow(settore){
 function renderRows(){
   $('rows').innerHTML = rows.map(r => {
     const it = item(r), u = it ? it.q : 0;
-    const info = it ? `${esc(it.colore)} · ${esc(it.raggio)} m · ${esc(it.pressione)} bar` : '';
+    const info = senzaPortata(it) ? 'occupa il settore, non conta nella portata'
+      : it ? `${esc(it.colore)} · ${esc(it.raggio)} m · ${esc(it.pressione)} bar` : '';
     return `<tr data-id="${r.id}">
       <td><input class="n" type="number" min="1" data-f="settore" value="${r.settore}"></td>
       <td><select data-f="serie">${options(serieList(), r.serie)}</select></td>
@@ -408,6 +419,7 @@ function renderSummary(){
     const g = groups[r.settore] ||= {tot:0, n:0, incompleti:0, serie:new Set(), press:new Set()};
     const it = item(r);
     if (!it) { g.incompleti++; return; }
+    if (senzaPortata(it)) { g.linee = (g.linee || []).concat([it.serie]); return; }
     g.tot += it.q * r.qta; g.n += r.qta;
     g.serie.add(it.serie); g.press.add(num(it.pressione));
   });
@@ -425,7 +437,7 @@ function renderSummary(){
       return `<div class="sect ${cls}">
         <div class="sect-head"><strong>Settore ${esc(k)}</strong><span class="pct num">${fmt(pct)}%</span></div>
         <div class="gauge"><i style="width:${Math.min(pct, 100)}%"></i></div>
-        <div class="small">${stato} · ${fmt(g.tot)} l/min · ${g.n} ugelli · margine ${fmt(disp - g.tot)} l/min</div>
+        <div class="small">${stato} · ${fmt(g.tot)} l/min · ${g.n} ugelli · margine ${fmt(disp - g.tot)} l/min${g.linee ? ' · ' + uniq(g.linee).map(esc).join(', ') + ' (fuori dalla portata)' : ''}</div>
         ${g.serie.size > 1 ? `<div class="alert">Serie diverse nello stesso settore: ${[...g.serie].map(esc).join(', ')}</div>` : ''}
         ${pl && pMax > pl ? `<div class="alert">Pressione nominale ugelli (${fmt(pMax)} bar) superiore a quella di lavoro</div>` : ''}
         ${g.incompleti ? `<div class="alert">${g.incompleti} righe senza modello o arco</div>` : ''}
@@ -438,7 +450,7 @@ function renderDistinta(){
   const map = new Map();
   let tot = 0;
   rows.forEach(r => {
-    const it = item(r); if (!it) return;
+    const it = item(r); if (!it || senzaPortata(it)) return;
     const k = `${it.serie}|${it.modello}|${it.colore}`;
     if (!map.has(k)) map.set(k, {serie:it.serie, modello:it.modello, colore:it.colore, archi:new Set(), n:0});
     const v = map.get(k);
@@ -473,6 +485,7 @@ function renderGittate(){
   rows.forEach(r => { const k = chiave(r); inSett[k] = (inSett[k] || 0) + r.qta; });
   const modelliMap = new Map();
   catalog.forEach(x => {
+    if (senzaPortata(x)) return;
     const k = chiave(x);
     if (!modelliMap.has(k)) modelliMap.set(k, {serie:x.serie, modello:x.modello, colori:[], raggi:[]});
     const m = modelliMap.get(k);
@@ -550,6 +563,10 @@ $('rows').addEventListener('input', e => {
   else r[f] = e.target.value;
   if (f === 'serie') { r.modello = ''; r.arco = ''; }
   if (f === 'modello') { r.arco = ''; }
+  // Dove la scelta è una sola — l'ala gocciolante, «Standard», «in linea» — la fa il
+  // programma: due menù con una voce sola da aprire sono due clic per niente.
+  if (f === 'serie' && modelli(r.serie).length === 1) r.modello = modelli(r.serie)[0];
+  if ((f === 'serie' || f === 'modello') && r.modello && archi(r.serie, r.modello).length === 1) r.arco = archi(r.serie, r.modello)[0];
   if (e.target.tagName === 'SELECT') renderRows();
   else {
     const it = item(r);
@@ -628,7 +645,8 @@ $('openFile').onchange = e => {
       const d = JSON.parse(t);
       $('cliente').value = d.cliente || ''; $('qdisp').value = d.qdisp || '';
       $('pdisp').value = d.pdisp || ''; $('soglia').value = d.soglia || 85;
-      prove = d.prove || prove; catalog = (d.catalog || catalog).map(x => ({codice: '', ...x})); rows = d.rows || []; conta = {};
+      prove = d.prove || prove; catalog = completaCatalogo((d.catalog || catalog).map(x => ({codice: '', ...x}))).catalogo;
+      rows = d.rows || []; conta = {};
       progettoID = d.id || nuovoID();
       statoMateriali = {mano: {}, tolti: [], aggiunti: [], ...(d.statoMateriali || {})};
       if (d.catalogoMateriali) applicaMateriali(d.catalogoMateriali, 'apertura');
@@ -644,14 +662,21 @@ $('openFile').onchange = e => {
 
 /* All'avvio: catalogo salvato nel browser, completato con le eventuali voci
    nuove del file (le voci aggiunte a mano restano). */
-function avvioCatalogo(){
-  const salvato = leggiCatalogo();
-  if (!salvato) { applyCatalog(CATALOGO_BASE, 'avvio'); return; }
-  const miei = parseCatalog(salvato);
+// Le voci del file che mancano si aggiungono, le altre restano come sono: vale
+// all'avvio e aprendo un progetto salvato prima — col catalogo di allora, senza
+// l'ala gocciolante, che altrimenti sparirebbe dal browser.
+function completaCatalogo(miei){
   const k = x => `${x.serie}|${x.modello}|${x.arco}`;
   const presenti = new Set(miei.map(k));
   const mancanti = parseCatalog(CATALOGO_BASE).filter(x => !presenti.has(k(x)));
-  catalog = miei.concat(mancanti);
+  return {catalogo: miei.concat(mancanti), mancanti};
+}
+
+function avvioCatalogo(){
+  const salvato = leggiCatalogo();
+  if (!salvato) { applyCatalog(CATALOGO_BASE, 'avvio'); return; }
+  const {catalogo, mancanti} = completaCatalogo(parseCatalog(salvato));
+  catalog = catalogo;
   $('catCount').textContent = catalog.length;
   $('catText').value = catalogToText();
   if (mancanti.length) { salvaCatalogo(); $('catMsg').textContent = `Aggiunte ${mancanti.length} voci nuove dal file.`; }
@@ -674,7 +699,7 @@ const MATERIALI_BASE = `Codice;Descrizione;Unità;Per;Ogni;Quanti
 ;Corpo statico a scomparsa 10 cm;n;irrigatore Rainbird HeVan;1;1
 ;Rotore PGP-ADJ;n;irrigatore Hunter PGP-ADJ;1;1
 ;Rotore SRM;n;irrigatore Hunter SRM;1;1
-;Presa a staffa;n;irrigatore;1;1
+;Raccordo a T;n;irrigatore-1;1;1
 ;Raccordo snodato;n;irrigatore;1;1
 ;Elettrovalvola 1";n;settore;1;1
 ;Raccordo maschio 1";n;settore;1;2
@@ -723,17 +748,23 @@ function applicaMateriali(text, modo){
 // danno lo stesso articolo — il corpo statico per tre serie — fanno una riga sola.
 const chiaveMateriale = m => (m.codice ? 'c:' + m.codice : 'd:' + m.descrizione).toLowerCase();
 
-// Quello che il progetto conta: irrigatori (per serie) e settori.
+// Quello che il progetto conta: irrigatori (per serie, e per settore) e settori. Un
+// settore di sola ala gocciolante è un settore — vuole la sua elettrovalvola — ma
+// non ha irrigatori.
 function conteggiProgetto(){
-  const perSerie = {}, settori = new Set();
+  const perSerie = {}, settori = new Set(), perSettore = {};
   let irrigatori = 0;
   rows.forEach(r => {
     const it = item(r); if (!it || !r.qta) return;
+    settori.add(r.settore);
+    if (senzaPortata(it)) return;
     irrigatori += r.qta;
     perSerie[it.serie] = (perSerie[it.serie] || 0) + r.qta;
-    settori.add(r.settore);
+    const ps = perSettore[r.settore] ||= {tutti: 0, perSerie: {}};
+    ps.tutti += r.qta;
+    ps.perSerie[it.serie] = (ps.perSerie[it.serie] || 0) + r.qta;
   });
-  return {irrigatori, perSerie, settori: settori.size};
+  return {irrigatori, perSerie, settori: settori.size, perSettore};
 }
 
 const plurale = (n, uno, tanti) => n + ' ' + (n === 1 ? uno : tanti);
@@ -755,7 +786,7 @@ function materialiProposti(){
   // serie, modello e colore, che è come si chiedono al fornitore.
   const ugelli = new Map();
   rows.forEach(r => {
-    const it = item(r); if (!it || !r.qta) return;
+    const it = item(r); if (!it || !r.qta || senzaPortata(it)) return;
     const k = `${it.serie}|${it.modello}|${it.colore}`;
     if (!ugelli.has(k)) ugelli.set(k, {it, n: 0});
     ugelli.get(k).n += r.qta;
@@ -769,6 +800,22 @@ function materialiProposti(){
     const per = m.per.toLowerCase();
     if (!per) return;
     let quanti = 0, cosa = '';
+    // I T della linea: in un settore con n irrigatori ce ne vogliono n − 1, perché
+    // l'ultimo irrigatore chiude la linea. Si contano settore per settore, e con la
+    // serie solo quelli di quella serie — il T20 su una linea, il T25 sull'altra.
+    const meno1 = /^irrigator[ei]\s*-\s*1(?:\s+(.+))?$/.exec(per);
+    if (meno1) {
+      const serie = meno1[1] ? m.per.replace(/^irrigator[ei]\s*-\s*1\s+/i, '').trim() : '';
+      const parti = Object.values(c.perSettore).map(ps => serie
+        ? Object.entries(ps.perSerie).filter(([s]) => s.toLowerCase() === serie.toLowerCase()).reduce((a, [, n]) => a + n, 0)
+        : ps.tutti).filter(n => n > 0);
+      quanti = parti.reduce((a, n) => a + n - 1, 0);
+      if (!quanti) return;
+      const q = Math.ceil(quanti / m.ogni) * m.quanti;
+      metti(m, q, `irrigatori${serie ? ' ' + serie : ''} meno uno, per settore: ${parti.map(n => n - 1).join(' + ')}` +
+        (m.ogni > 1 || m.quanti !== 1 ? ` · ${fmt(m.quanti)} ogni ${m.ogni}` : ''));
+      return;
+    }
     if (per === 'irrigatore') { quanti = c.irrigatori; cosa = plurale(quanti, 'irrigatore', 'irrigatori'); }
     else if (per.startsWith('irrigatore ')) {
       const serie = m.per.slice(11).trim();

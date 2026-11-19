@@ -1234,7 +1234,16 @@ arrotondato per eccesso) (`materialiProposti()`). Gli ugelli escono dalla distin
 codice come ottava colonna del catalogo ugelli, facoltativa: i cataloghi di prima ne
 hanno sette. Lo stesso articolo da due regole — il corpo statico per tre serie — è una
 riga sola (`chiaveMateriale()`: il codice, o il nome). Quello che non ha regola si
-aggiunge a mano. Una quantità corretta, una proposta tolta, una riga aggiunta stanno in
+aggiunge a mano. **I T della linea** si contano con `irrigatore-1`: in ogni settore gli
+irrigatori meno uno, perché l'ultimo chiude la linea; `irrigatore-1 <serie>` conta solo
+quella serie (il T20 su una linea, il T25 sull'altra). **L'ala gocciolante** è una riga del
+catalogo ugelli con **portata 0** (`senzaPortata()`): occupa il suo settore — che vuole la
+sua elettrovalvola, `settore` la conta — ma non è un irrigatore né un ugello, e non entra
+nella portata: niente distinta, niente corpi, prese o T. Portata zero si accetta solo
+scritta come numero, o l'intestazione passerebbe per una voce. Aprendo un progetto salvato
+prima, il catalogo di allora si completa con le voci di base che mancano
+(`completaCatalogo()`), come all'avvio: l'ala non sparisce dal browser. Una quantità
+corretta, una proposta tolta, una riga aggiunta stanno in
 `statoMateriali` e restano quando cambiano i settori. Nelle caselle niente separatore
 delle migliaia (`scrivi()`): «1.200» metri di tubo si rileggevano come 1,2.
 
