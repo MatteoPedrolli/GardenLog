@@ -283,8 +283,19 @@ tr.componenti.aggiungi-componente td { border-bottom: none; padding-top: 6px; }
 body:has(#pagina-preventivo.attiva .barra-preventivo) #avviso { bottom: 132px; }
 button.torna-indietro { background: none; border: none; padding: 0 0 6px; color: var(--text-light); font-size: 0.86rem; cursor: pointer; }
 button.torna-indietro:hover { color: var(--inchiostro-tenue); }
-.pannello-frasi { position: sticky; top: 12px; max-height: calc(100vh - 24px); overflow-y: auto;
+.colonna-laterale { position: sticky; top: 12px; max-height: calc(100vh - 24px); overflow-y: auto;
+  display: flex; flex-direction: column; gap: 12px; }
+.pannello-frasi, .pannello-strumenti {
   background: var(--white); border: 1px solid var(--border); border-radius: var(--radius-sm); padding: 12px; }
+.pannello-strumenti .strumento { margin-top: 10px; }
+.pannello-strumenti .strumento + .strumento { border-top: 1px solid var(--border); padding-top: 10px; }
+.pannello-strumenti .nome-strumento { font-weight: 600; font-size: 0.85rem; margin-bottom: 6px; }
+.pannello-strumenti label { display: flex; align-items: center; gap: 6px; font-size: 0.8rem; color: var(--text-mid); margin: 4px 0; }
+.pannello-strumenti label span.cosa { flex: 0 0 64px; }
+.pannello-strumenti input[type=text] { font-size: 0.85rem; padding: 5px 8px; }
+.pannello-strumenti .risultato { font-family: var(--font-display); font-size: 1.1rem; font-weight: 700; margin-top: 6px; }
+.pannello-strumenti .risultato .meta { font-family: inherit; font-size: 0.75rem; font-weight: 400; display: block; }
+.pannello-strumenti .risultato.vuoto { color: var(--text-light); font-size: 0.85rem; font-weight: 400; }
 /* La tabella del preventivo vuole circa 780 px: sotto, il pannello passa sotto
    invece di finirle sopra. */
 @media (max-width: 1500px) {
@@ -294,7 +305,8 @@ button.torna-indietro:hover { color: var(--inchiostro-tenue); }
    sotto i 1400 px finivano in fondo alla pagina, sotto i bottoni, a duemila pixel
    dalle descrizioni — cioè su quasi tutti i portatili non c'erano. */
 .preventivo-con-frasi.senza-frasi { grid-template-columns: minmax(0, 1fr); }
-.preventivo-con-frasi.senza-frasi .pannello-frasi { display: none; }
+.preventivo-con-frasi.senza-frasi .pannello-frasi,
+.preventivo-con-frasi.senza-frasi .colonna-laterale { display: none; }
 .preventivo-con-frasi:not(.senza-frasi) .apri-frasi { display: none; }
 .testa-preventivo { display: flex; justify-content: space-between; align-items: flex-start; gap: 10px; }
 .testa-frasi { display: flex; justify-content: space-between; align-items: center; }
@@ -2687,6 +2699,15 @@ function riassuntoRicontrolla() {
 // La più recente per prima. Le righe sono poche e corte apposta: un elenco lungo
 // non si legge, e quello che non si legge tanto vale non scriverlo.
 const NOVITA = [
+  {
+    versione: '2026-11-19',
+    data: '2026-11-19',
+    titolo: 'Calcolatrice e piante dal sesto, accanto al preventivo',
+    righe: [
+      'Nel preventivo, **sotto le frasi**, ci sono gli **strumenti**: una **calcolatrice** (si scrive «24 x 0,4 + 3», con la virgola) e le **piante dal sesto**, **in fila** (metri e sesto) e **su un\'area** (m² e sesto, in quadro e a quinconce).',
+      'I conti restano mentre lavori sul preventivo, e non finiscono nel file. Il bottone in alto a destra adesso si chiama **«Frasi e strumenti ›»**.',
+    ],
+  },
   {
     versione: '2026-11-16f',
     data: '2026-11-16',
@@ -5515,7 +5536,7 @@ function pannelloFrasi() {
     return a.localeCompare(b);
   });
   let html = '<div class="testa-frasi"><div class="titolo-sezione" style="margin:0">Frasi</div>' +
-      '<button onclick="mostraFrasi(false)" title="Chiudi le frasi: il preventivo prende tutta la larghezza">✕</button></div>' +
+      '<button onclick="mostraFrasi(false)" title="Chiudi frasi e strumenti: il preventivo prende tutta la larghezza">✕</button></div>' +
     '<div class="dove-frasi" id="dove-frasi"></div>' +
     '<input type="search" placeholder="Cerca una frase…" value="' + perValore(FRASI_CERCA) + '" ' +
       'oninput="FRASI_CERCA = this.value; ridisegnaFrasi(true)" style="margin-bottom:8px">';
@@ -5582,6 +5603,118 @@ function mostraFrasi(si) {
   const el = document.querySelector('#pagina-preventivo .preventivo-con-frasi');
   if (el) el.classList.toggle('senza-frasi', !si);
   document.querySelectorAll('#pagina-preventivo textarea.descrizione-riga').forEach(allargaDescrizione);
+}
+
+// ── GLI STRUMENTI, SOTTO LE FRASI ──
+// Una calcolatrice e le piante dal sesto, accanto al preventivo: i conti a margine si
+// facevano con la calcolatrice del telefono o sul foglio della segretaria, cioè fuori
+// da dove poi si scrive il numero. Non sono dati del preventivo: stanno in memoria
+// (`STRUMENTI`), sopravvivono ai ridisegni — il preventivo si ridisegna a ogni clic, e
+// un conto a metà che sparisce da sotto le dita non si usa due volte — e non si salvano.
+let STRUMENTI = { conto: '', metri: '', sestoFila: '', area: '', sestoArea: '' };
+
+// Il conto si scrive come si dice: virgola per i decimali, x e : per per e diviso.
+// Niente eval: una cosa scritta in una casella non deve poter fare altro che un conto.
+function valutaConto(testo) {
+  const t = String(testo || '').replace(/\s+/g, '').replace(/[x×]/gi, '*').replace(/[:÷]/g, '/').replace(/,/g, '.');
+  if (!t) return null;
+  let i = 0;
+  const numero = () => {
+    const m = /^\d*\.?\d+|^\d+\./.exec(t.slice(i));
+    if (!m) throw new Error('numero');
+    i += m[0].length;
+    return parseFloat(m[0]);
+  };
+  const fattore = () => {
+    if (t[i] === '-') { i++; return -fattore(); }
+    if (t[i] === '+') { i++; return fattore(); }
+    if (t[i] === '(') { i++; const v = somma(); if (t[i] !== ')') throw new Error('parentesi'); i++; return v; }
+    let v = numero();
+    if (t[i] === '%') { i++; v = v / 100; }
+    return v;
+  };
+  const prodotto = () => {
+    let v = fattore();
+    while (t[i] === '*' || t[i] === '/') {
+      const op = t[i++];
+      const w = fattore();
+      v = op === '*' ? v * w : v / w;
+    }
+    return v;
+  };
+  const somma = () => {
+    let v = prodotto();
+    while (t[i] === '+' || t[i] === '-') {
+      const op = t[i++];
+      const w = prodotto();
+      v = op === '+' ? v + w : v - w;
+    }
+    return v;
+  };
+  try {
+    const v = somma();
+    return i === t.length && isFinite(v) ? v : null;
+  } catch (e) { return null; }
+}
+
+const numeroStrumento = v => String(Math.round(v * 1000) / 1000).replace('.', ',');
+
+// In un'area il sesto è la distanza fra due piante in tutte e due le direzioni: in
+// quadro ognuna occupa sesto × sesto; a quinconce, sfalsate a triangolo, ne entrano
+// di più, sesto × sesto × √3/2 a pianta. Per eccesso: la pianta che manca si vede.
+function pianteInArea(area, sesto) {
+  const a = numeroScritto(area), s = numeroScritto(sesto);
+  if (!(a > 0) || !(s > 0)) return null;
+  return {
+    quadro: Math.ceil(a / (s * s) - 1e-9),
+    quinconce: Math.ceil(a / (s * s * Math.sqrt(3) / 2) - 1e-9),
+  };
+}
+
+function risultatiStrumenti() {
+  const conto = valutaConto(STRUMENTI.conto);
+  const fila = pianteDaSesto(STRUMENTI.metri, STRUMENTI.sestoFila);
+  const area = pianteInArea(STRUMENTI.area, STRUMENTI.sestoArea);
+  return {
+    conto: conto == null
+      ? '<div class="risultato vuoto">' + (STRUMENTI.conto.trim() ? 'conto da finire' : 'es. 24 x 0,4 + 3') + '</div>'
+      : '<div class="risultato">= ' + numeroStrumento(conto) + '</div>',
+    fila: fila == null ? '<div class="risultato vuoto">metri e sesto</div>'
+      : '<div class="risultato">' + fila + (fila === 1 ? ' pianta' : ' piante') +
+        '<span class="meta">metri / sesto + 1: una a ogni capo della fila</span></div>',
+    area: area == null ? '<div class="risultato vuoto">superficie e sesto</div>'
+      : '<div class="risultato">' + area.quadro + ' in quadro' +
+        '<span class="meta">' + area.quinconce + ' a quinconce, sfalsate a triangolo</span></div>',
+  };
+}
+
+function pannelloStrumenti() {
+  const r = risultatiStrumenti();
+  const campo = (k, cosa, unita, segnaposto) => '<label><span class="cosa">' + cosa + '</span>' +
+    '<input type="text" inputmode="decimal" data-strumento="' + k + '" value="' + perValore(STRUMENTI[k]) + '"' +
+    (segnaposto ? ' placeholder="' + perValore(segnaposto) + '"' : '') +
+    ' oninput="scriviStrumento(\'' + k + '\', this.value)">' + (unita ? unita : '') + '</label>';
+  return '<div class="titolo-sezione" style="margin:0">Strumenti</div>' +
+    '<div class="strumento"><div class="nome-strumento">Calcolatrice</div>' +
+      '<input type="text" inputmode="decimal" data-strumento="conto" value="' + perValore(STRUMENTI.conto) + '" ' +
+        'placeholder="24 x 0,4 + 3" oninput="scriviStrumento(\'conto\', this.value)" aria-label="conto">' +
+      '<div id="strumento-conto">' + r.conto + '</div></div>' +
+    '<div class="strumento"><div class="nome-strumento">Piante in fila</div>' +
+      campo('metri', 'lunghezza', 'm', '24') + campo('sestoFila', 'sesto', 'm', '0,4') +
+      '<div id="strumento-fila">' + r.fila + '</div></div>' +
+    '<div class="strumento"><div class="nome-strumento">Piante su un\'area</div>' +
+      campo('area', 'superficie', 'm²', '18') + campo('sestoArea', 'sesto', 'm', '0,3') +
+      '<div id="strumento-area">' + r.area + '</div></div>';
+}
+
+// Non si ridisegna mentre si scrive: si aggiornano i risultati, e il campo resta.
+function scriviStrumento(k, valore) {
+  STRUMENTI[k] = valore;
+  const r = risultatiStrumenti();
+  ['conto', 'fila', 'area'].forEach(x => {
+    const el = document.getElementById('strumento-' + x);
+    if (el) el.innerHTML = r[x];
+  });
 }
 
 function ridisegnaFrasi(tieniCerca) {
@@ -5669,7 +5802,8 @@ function disegnaPreventivo() {
   let html = '<div class="testa-preventivo">' +
       '<button class="torna-indietro" onclick="vaiA(\'preventivi\')">‹ Tutti i preventivi</button>' +
       '<button class="secondaria piccola apri-frasi" onclick="mostraFrasi(true)" ' +
-        'title="Le frasi già pronte per le descrizioni, accanto al preventivo">Frasi per le descrizioni ›</button>' +
+        'title="Le frasi già pronte per le descrizioni, la calcolatrice e le piante dal sesto, accanto al preventivo">' +
+        'Frasi e strumenti ›</button>' +
     '</div>' + testataPreventivo(d);
 
   // Quello che il campo ha visto e che qui non si può più chiedere — l'accesso,
@@ -5784,7 +5918,8 @@ function disegnaPreventivo() {
   c.innerHTML = '<div class="preventivo-con-frasi' + (frasiAVista() ? '' : ' senza-frasi') + '"><div class="preventivo-colonna">' +
     '<div class="preventivo-righe">' + html + '</div>' +
     '<div class="barra-preventivo" id="barra-preventivo"></div></div>' +
-    '<aside class="pannello-frasi" id="pannello-frasi">' + pannelloFrasi() + '</aside></div>';
+    '<aside class="colonna-laterale"><div class="pannello-frasi" id="pannello-frasi">' + pannelloFrasi() + '</div>' +
+    '<div class="pannello-strumenti" id="pannello-strumenti">' + pannelloStrumenti() + '</div></aside></div>';
   document.querySelectorAll('#pagina-preventivo textarea.descrizione-riga').forEach(allargaDescrizione);
   segnaRigaFrasi();
   aggiornaCodaPreventivo();

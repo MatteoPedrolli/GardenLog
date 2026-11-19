@@ -1053,8 +1053,8 @@ metri / sesto + 1, arrotondato per difetto (`pianteDaSesto()`). Il **più uno** 
 pianta di testa — 24 m a sesto 0,40 ne vogliono 61, non 60, perché ce n'è una a ogni
 estremo. Si scrive il sesto **nella riga della pianta**, che si porta dietro metri e
 sesto: fra sei mesi «91 piante» da solo non dice da dove viene. C'era anche un riquadro
-a parte, «Dai metri alle piante», per farlo fuori da una voce: era un doppione, ed è
-stato tolto.
+«Dai metri alle piante» in fondo alla pagina, tolto perché doppione; il conto fuori da una
+voce è tornato fra gli **strumenti** accanto alle frasi, insieme a quello su un'area.
 
 **Quattro mucchi: aperti, inviati, confermati, rifiutati.** Il mucchio è lo stato
 scritto nel file (`gruppoPreventivo()`), non una cartella: spostare file su Drive
@@ -1129,11 +1129,24 @@ che **si allarga col testo**, e sul foglio va a capo dove l'ha messa chi l'ha sc
 **Le frasi stanno accanto al preventivo a qualsiasi larghezza, o chiuse** (`mostraFrasi()`,
 `frasiAVista()`). Sotto i 1400 px il pannello andava sotto il preventivo: in fondo alla
 pagina, dopo i bottoni, a duemila pixel dalle descrizioni — cioè su quasi tutti i portatili
-non c'era. Si chiude con la ✕ e si riapre da «Frasi per le descrizioni ›», in alto a destra;
+non c'era. Si chiude con la ✕ e si riapre da «Frasi e strumenti ›», in alto a destra;
 la scelta è di **questo PC** (`localStorage`, come le novità lette), e senza una scelta decide
 la larghezza: aperte da 1340 px in su. Aprire e chiudere non ridisegna. Perché ci stiano
 accanto la tabella deve potersi stringere: il riepilogo dei componenti va a capo, e il menù
 «Nel totale» sta sotto la descrizione, a destra di «dal campo», non nella riga del prezzo.
+
+**Sotto le frasi, gli strumenti** (`pannelloStrumenti()`), nella stessa colonna che si
+chiude con la ✕: una **calcolatrice** che legge il conto come si dice — virgola, «x» e «:»,
+parentesi, percento — con un suo piccolo parser (`valutaConto()`), non con `eval`: una
+casella deve poter fare solo conti; e le **piante dal sesto**, **in fila** (`pianteDaSesto()`,
+metri / sesto + 1) e **su un'area** (`pianteInArea()`: in quadro area / sesto², a quinconce
+area / (sesto² · √3/2), per eccesso). I conti a margine si facevano col telefono o sul foglio
+della segretaria, lontano da dove poi si scrive il numero. Non sono dati del preventivo:
+stanno in `STRUMENTI`, in memoria, e restano ai ridisegni — il preventivo si ridisegna a ogni
+clic — ma non nel file. Scrivendo si aggiornano solo i risultati (`scriviStrumento()`), o il
+campo sparirebbe da sotto le dita. La colonna è `aside.colonna-laterale`, che scorre e resta
+a vista; frasi e strumenti sono due riquadri dentro, e ridisegnare le frasi non tocca gli
+strumenti.
 
 **Il preventivo si salva da solo**, come il conto. C'era «Salva» in fondo alla pagina, e
 passando a un'altra schermata senza premerlo le modifiche sparivano senza che niente lo

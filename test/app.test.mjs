@@ -6646,6 +6646,63 @@ try {
     pulizia.tabellaIntera, pulizia.strette + ' a ' + pulizia.larghezza + ' px');
   ok('la scelta resta ridisegnando, e la ✕ le richiude', pulizia.resta && pulizia.richiuse, JSON.stringify(pulizia));
 
+  // ── GLI STRUMENTI SOTTO LE FRASI ──
+  // Una calcolatrice e le piante dal sesto, in fila e su un'area, accanto al
+  // preventivo. Non sono dati: restano ridisegnando e non finiscono nel file.
+  const strumenti = await pagU.evaluate(async () => {
+    const prima = PREVENTIVO;
+    let scelta = null;
+    try { scelta = localStorage.getItem(CHIAVE_FRASI_A_VISTA); localStorage.setItem(CHIAVE_FRASI_A_VISTA, 'si'); } catch (e) {}
+    const r = {};
+    const rilievo = leggiRilievo({ tipo: 'rilievo', versione: 1, id: 'ril-strumenti', revisione: 1, origine: 'ufficio',
+      creato: '2026-11-19T08:00:00Z', cliente: { nome: 'Prova Strumenti' },
+      lavorazioni: [{ id: 'm1', genere: 'manodopera', nome: 'Pulizia', ore: 2 }] });
+    const d = costruisciPreventivo(rilievo, null);
+    PREVENTIVO = { doc: d, file: '', anno: '' };
+    vaiA('preventivo');
+    const pannello = () => document.getElementById('pannello-strumenti');
+    const frasi = document.getElementById('pannello-frasi').getBoundingClientRect();
+    const st = pannello().getBoundingClientRect();
+    r.sotto = !!pannello().closest('.colonna-laterale') && st.top >= frasi.bottom - 1 && st.width > 200;
+    const scrivi = (k, v) => { const el = pannello().querySelector('[data-strumento="' + k + '"]'); el.value = v;
+      el.dispatchEvent(new Event('input', { bubbles: true })); };
+    const testo = id => document.getElementById(id).textContent;
+    scrivi('conto', '24 x 0,4 + 3');
+    r.conto = testo('strumento-conto');
+    scrivi('metri', '24'); scrivi('sestoFila', '0,4');
+    r.fila = testo('strumento-fila');
+    scrivi('area', '18'); scrivi('sestoArea', '0,3');
+    r.area = testo('strumento-area');
+    // Ridisegnando il preventivo i conti restano, e il preventivo non ne sa niente.
+    const impronta = improntaPreventivo(d);
+    disegnaPreventivo();
+    r.restano = pannello().querySelector('[data-strumento="conto"]').value === '24 x 0,4 + 3' &&
+      testo('strumento-fila').startsWith('61') && improntaPreventivo(d) === impronta;
+    scrivi('conto', '2 +');
+    r.aMeta = testo('strumento-conto');
+    r.regole = valutaConto('(2+3) x 2') === 10 && valutaConto('120 : 4') === 30 && valutaConto('10%') === 0.1 &&
+      valutaConto('-3 + 5') === 2 && valutaConto('alert(1)') === null && valutaConto('') === null;
+    // Chiudendo la colonna se ne vanno anche gli strumenti.
+    mostraFrasi(false);
+    r.chiusi = getComputedStyle(document.querySelector('#pagina-preventivo .colonna-laterale')).display === 'none';
+    STRUMENTI = { conto: '', metri: '', sestoFila: '', area: '', sestoArea: '' };
+    clearTimeout(TIMER_PREVENTIVO);
+    PREVENTIVO.daSalvare = false;
+    try { if (scelta == null) localStorage.removeItem(CHIAVE_FRASI_A_VISTA); else localStorage.setItem(CHIAVE_FRASI_A_VISTA, scelta); } catch (e) {}
+    PREVENTIVO = prima;
+    vaiA('preventivi');
+    return r;
+  });
+  ok('sotto le frasi ci sono gli strumenti, nella stessa colonna', strumenti.sotto, JSON.stringify(strumenti));
+  ok('la calcolatrice fa il conto scritto come si dice, con la virgola e la x', strumenti.conto === '= 12,6', strumenti.conto);
+  ok('le piante in fila: 24 m a sesto 0,4 sono 61', strumenti.fila.startsWith('61 piante'), strumenti.fila);
+  ok('le piante su un\'area: 18 m² a sesto 0,3 sono 200 in quadro e 231 a quinconce',
+    strumenti.area.startsWith('200 in quadro') && strumenti.area.includes('231 a quinconce'), strumenti.area);
+  ok('i conti restano ridisegnando il preventivo, e non entrano nel suo file', strumenti.restano, JSON.stringify(strumenti));
+  ok('un conto a metà lo dice, e la calcolatrice fa solo conti', strumenti.aMeta === 'conto da finire' && strumenti.regole,
+    JSON.stringify(strumenti));
+  ok('chiudendo la colonna se ne vanno anche gli strumenti', strumenti.chiusi, JSON.stringify(strumenti));
+
   // ── UN SETTORE INTERO NEL PREVENTIVO ──
   // Dal menù «+ Aggiungi» si sceglie un settore, se ne spuntano le lavorazioni e
   // nasce la stessa voce a corpo di un rilievo: materiali quanto la misura, ore per
