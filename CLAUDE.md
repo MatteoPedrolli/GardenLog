@@ -936,6 +936,17 @@ né prezzo. Le ore scritte qui restano quando il campo rimanda il rilievo. Un
 preventivo di prima, con la manodopera in mezzo agli altri, all'apertura la porta
 in fondo con le sue ore come ore di cantiere (`preparaRigaSettore()`).
 
+**La misura del campo si corregge sulla voce** (`misuraUfficio`, «misura [ ]» accanto a «dal
+campo»): una siepe presa a 26 m che rimisurata è 28. Si eliminava la voce e la si rifaceva,
+perdendo prezzi, piante e ore già scritti. La lavorazione resta com'è arrivata — il rilievo
+del telefono non si tocca, e «dal campo» dice quello che il campo ha detto — e i conti si
+fanno su quella corretta (`lavorazioneDellaRiga()`): i materiali «come la misura», le piante
+dal sesto, la scheda di cantiere. Quello ritoccato a mano resta, e la descrizione segue solo
+se è ancora quella proposta. Mentre si scrive cambia il dato (`scriviMisuraRiga()`), uscendo
+dalla casella la voce si rifà (`rifaiMisuraRiga()`). Resta quando arriva il rilievo corretto,
+come i prezzi decisi qui; nelle righe a misura — il verde — è la quantità stessa, che prima
+il rilievo corretto riscriveva. Campo arrivato senza alzare `VERSIONE_PREVENTIVO`.
+
 Ogni componente dice **da dove esce la sua quantità** («24 m a sesto 0,4», «come la
 misura: 18 m²», «ore stimate in giardino»): fra sei mesi «61» da solo non dice niente. Una
 quantità ritoccata o un prezzo deciso in ufficio (`quantitaMano`, `prezzoMano`)

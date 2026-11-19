@@ -6703,6 +6703,79 @@ try {
     JSON.stringify(strumenti));
   ok('chiudendo la colonna se ne vanno anche gli strumenti', strumenti.chiusi, JSON.stringify(strumenti));
 
+  // ── LA MISURA DEL CAMPO SI CORREGGE IN UFFICIO ──
+  // Una siepe presa a 26 m che rimisurata è 28: la misura si scrive sulla voce, e i
+  // materiali «come la misura» e le piante dal sesto la seguono. Resta quando arriva
+  // il rilievo corretto; il campo continua a dire quello che ha detto.
+  const misuraUfficio = await pagU.evaluate(async () => {
+    const prima = PREVENTIVO;
+    const r = {};
+    const voce = LISTINO.voci.find(v => v.voceID && v.voceID !== VOCE_MANODOPERA && v.voceID !== 'piante' && !v.aCorpo);
+    const rilievo = leggiRilievo({ tipo: 'rilievo', versione: 1, id: 'ril-misura', revisione: 1, origine: 'ufficio',
+      creato: '2026-11-19T08:00:00Z', cliente: { nome: 'Prova Misura' },
+      lavorazioni: [
+        { id: 's1', genere: 'insieme', nome: 'Siepe', unita: 'm', misura: 26, ore: 6, stile: 'lauro',
+          insieme: { id: 'siepe', nome: 'Siepe', componenti: [
+            { tipoID: 'piantumazione', nome: 'Piantumazione', voceID: 'piante', voce: 'Piante', unita: 'n' },
+            { tipoID: 'telo', nome: 'Telo', voceID: voce.voceID, voce: voce.voce, unita: 'm' }] } },
+        { id: 'v1', genere: 'voce', nome: 'Smaltimento verde', voceID: voce.voceID, unita: 'kg', misura: 300 }] });
+    const d = costruisciPreventivo(rilievo, null);
+    PREVENTIVO = { doc: d, file: '', anno: '' };
+    vaiA('preventivo');
+    const i = d.righe.findIndex(x => x.chiave === 's1');
+    const comp = () => d.righe[i].componenti;
+    const jp = comp().findIndex(c => c.voceID === 'piante');
+    modificaSestoComponente(i, jp, '0,5');
+    r.primaPiante = comp()[jp].quantita;
+    r.descrizionePrima = d.righe[i].descrizione;
+    // Il campo misura c'è, accanto a «dal campo», con 26.
+    const campo = () => document.querySelector('#pagina-preventivo tbody.voce[data-voce="' + i + '"] input.misura-riga');
+    r.casella = !!campo() && campo().value === '26';
+    campo().value = '28';
+    campo().dispatchEvent(new Event('input', { bubbles: true }));
+    campo().dispatchEvent(new Event('change', { bubbles: true }));
+    const riga = d.righe[i];
+    const telo = riga.componenti.find(c => c.voceID === voce.voceID);
+    const piante = riga.componenti.find(c => c.voceID === 'piante');
+    r.segue = riga.misuraUfficio === 28 && telo.quantita === 28 && piante.quantita === 57 &&
+      riga.lavorazione.misura === 26 && riga.descrizione === 'Siepe — 28 ml';
+    r.visti = { telo: telo.quantita, piante: piante.quantita, descrizione: riga.descrizione };
+    const testa = document.querySelector('#pagina-preventivo tbody.voce[data-voce="' + i + '"]').textContent;
+    r.dice = testa.includes('dal campo: Siepe · 26 m') && testa.includes('corretta in ufficio');
+    // La scheda di cantiere dice 28.
+    r.scheda = costruisciSchedaCantiere(d).includes('>28<');
+    // Il verde a misura: scritto in ufficio, resta.
+    const iv = d.righe.findIndex(x => x.chiave === 'v1');
+    modificaRigaPreventivo(iv, 'quantita', '420');
+    // Arriva il rilievo corretto, col campo che dice ancora 26 e 300.
+    const rifatto = costruisciPreventivo({ ...rilievo, revisione: 2 }, d);
+    const rs = rifatto.righe.find(x => x.chiave === 's1');
+    const rv = rifatto.righe.find(x => x.chiave === 'v1');
+    r.resta = rs.misuraUfficio === 28 && rs.componenti.find(c => c.voceID === voce.voceID).quantita === 28 &&
+      rs.componenti.find(c => c.voceID === 'piante').quantita === 57 && rv.quantita === 420;
+    // Tolta la correzione, si torna alla misura del campo.
+    const ic = d.righe.findIndex(x => x.chiave === 's1');
+    campo().value = '';
+    campo().dispatchEvent(new Event('input', { bubbles: true }));
+    campo().dispatchEvent(new Event('change', { bubbles: true }));
+    const torna = d.righe[ic];
+    r.torna = !torna.misuraUfficio && torna.componenti.find(c => c.voceID === voce.voceID).quantita === 26 &&
+      torna.descrizione === 'Siepe — 26 ml';
+    clearTimeout(TIMER_PREVENTIVO);
+    PREVENTIVO.daSalvare = false;
+    PREVENTIVO = prima;
+    vaiA('preventivi');
+    return r;
+  });
+  ok('accanto a «dal campo» la misura si corregge, con quella del campo già scritta', misuraUfficio.casella,
+    JSON.stringify(misuraUfficio));
+  ok('scritta la misura giusta, materiali, piante dal sesto e descrizione la seguono; il campo resta com\'era',
+    misuraUfficio.segue && misuraUfficio.dice, JSON.stringify(misuraUfficio));
+  ok('la scheda di cantiere dice la misura corretta', misuraUfficio.scheda, JSON.stringify(misuraUfficio));
+  ok('la misura corretta in ufficio resta quando arriva il rilievo corretto, anche nelle righe a misura',
+    misuraUfficio.resta, JSON.stringify(misuraUfficio));
+  ok('vuotando la casella si torna alla misura del campo', misuraUfficio.torna, JSON.stringify(misuraUfficio));
+
   // ── UN SETTORE INTERO NEL PREVENTIVO ──
   // Dal menù «+ Aggiungi» si sceglie un settore, se ne spuntano le lavorazioni e
   // nasce la stessa voce a corpo di un rilievo: materiali quanto la misura, ore per

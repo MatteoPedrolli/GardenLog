@@ -361,6 +361,8 @@ table.elenco tr.mano-settore td.qta { font-weight: 600; color: var(--text); padd
    se la riga sta nel totale a destra. Su due righe raddoppiavano l'altezza. */
 .sotto-riga { display: flex; align-items: center; gap: 10px; margin-top: 3px; }
 .sotto-riga .dal-campo { flex: 1; min-width: 0; }
+input[type=text].misura-riga { width: 70px; padding: 2px 6px; font-size: 0.8rem; display: inline-block; }
+input[type=text].misura-riga.corretta { border-color: var(--ocra); }
 /* L'importo non sta attaccato al prezzo né al ✓: una colonna sua, con aria. */
 table.elenco td.importo, table.elenco th.importo { padding-left: 16px; white-space: nowrap; }
 table.elenco td.conferma-col { width: 34px; padding-left: 6px; padding-right: 0; }
@@ -2700,6 +2702,15 @@ function riassuntoRicontrolla() {
 // non si legge, e quello che non si legge tanto vale non scriverlo.
 const NOVITA = [
   {
+    versione: '2026-11-19b',
+    data: '2026-11-19',
+    titolo: 'La misura del campo si corregge nel preventivo',
+    righe: [
+      'Su ogni voce che si misura — una siepe, un\'aiuola — accanto a «dal campo» c\'è la casella **misura**: se il campo ha preso 26 m e sono 28, scrivi **28**. I materiali che vanno come la misura e le **piante dal sesto** si rifanno, e la descrizione segue se non l\'avevi toccata.',
+      'Quello che avevi ritoccato a mano resta. La misura corretta resta anche quando dal telefono arriva il rilievo corretto; vuotando la casella si torna a quella del campo.',
+    ],
+  },
+  {
     versione: '2026-11-19',
     data: '2026-11-19',
     titolo: 'Calcolatrice e piante dal sesto, accanto al preventivo',
@@ -4055,7 +4066,21 @@ function descrizioneProposta(l) {
 // Una lavorazione diventa una riga a corpo, tranne una voce a misura senza ore —
 // il verde da smaltire, 800 kg — che resta una riga a misura col suo prezzo
 // unitario: è così che sta sui preventivi veri, e spesso diventa una tariffa.
-function rigaDaLavorazione(l, giaFatta) {
+// La misura del campo si corregge in ufficio, sulla riga (`misuraUfficio`): una siepe
+// presa a 26 m che rimisurata è 28. La lavorazione resta com'è arrivata — il rilievo
+// del telefono non si tocca, e «dal campo» deve dire quello che il campo ha detto —
+// e i conti si fanno sulla misura corretta. Come i prezzi decisi qui, resta quando
+// arriva il rilievo corretto.
+function lavorazioneDellaRiga(r) {
+  const l = r && r.lavorazione;
+  if (!l) return l;
+  const m = numeroScritto(r.misuraUfficio);
+  return m > 0 ? { ...l, misura: m } : l;
+}
+
+function rigaDaLavorazione(campo, giaFatta) {
+  const misuraUfficio = giaFatta && numeroScritto(giaFatta.misuraUfficio) > 0 ? numeroScritto(giaFatta.misuraUfficio) : '';
+  const l = misuraUfficio ? { ...campo, misura: misuraUfficio } : campo;
   const aMisura = (l.genere === 'voce' || l.genere === 'libera') && !(l.ore > 0);
   if (aMisura) {
     // Una voce a corpo — il trattamento — vale 1, come nei rapportini.
@@ -4064,7 +4089,7 @@ function rigaDaLavorazione(l, giaFatta) {
     const unita = corpo ? '' : (l.unita || '');
     // Un prezzo già guardato non torna indietro a essere una proposta: chi l'ha
     // messo sapeva qualcosa che il listino non sa.
-    if (giaFatta) return { ...giaFatta, quantita, unita, lavorazione: l };
+    if (giaFatta) return { ...giaFatta, quantita, unita, lavorazione: campo };
     const prezzo = prezzoDiListino(l.voceID);
     return {
       chiave: l.id, voceID: l.voceID || '', voce: l.nome || '',
@@ -4078,7 +4103,7 @@ function rigaDaLavorazione(l, giaFatta) {
       // Comune: entra nel totale di tutte le soluzioni. Chi la vuole in una sola
       // la sposta, ed è la scelta rara.
       soluzione: '',
-      lavorazione: l,
+      lavorazione: campo,
     };
   }
   const tolti = (giaFatta && Array.isArray(giaFatta.tolti)) ? giaFatta.tolti : [];
@@ -4096,10 +4121,44 @@ function rigaDaLavorazione(l, giaFatta) {
     proposto: !deciso && prezzo !== '',
     tipo: (giaFatta && giaFatta.tipo) || 'totale',
     soluzione: (giaFatta && giaFatta.soluzione) || '',
-    lavorazione: l,
+    lavorazione: campo,
     componenti,
     ...(tolti.length ? { tolti } : {}),
+    ...(misuraUfficio ? { misuraUfficio } : {}),
   };
+}
+
+// La misura giusta si scrive sulla voce: i materiali che vanno «come la misura» e le
+// piante dal sesto la seguono, quello ritoccato a mano no. Mentre si scrive cambia
+// solo il dato; uscendo dalla casella la voce si rifà, o il campo sparirebbe da sotto
+// le dita a ogni cifra.
+// La misura di prima, per sapere se la descrizione la diceva: a schermo, non nel file.
+let MISURA_PRIMA = null;
+
+function scriviMisuraRiga(i, valore) {
+  const r = PREVENTIVO && PREVENTIVO.doc.righe[i];
+  if (!r || !r.lavorazione) return;
+  if (!MISURA_PRIMA || MISURA_PRIMA.riga !== r) MISURA_PRIMA = { riga: r, misura: lavorazioneDellaRiga(r).misura };
+  const m = numeroScritto(valore);
+  if (m > 0 && m !== numeroScritto(r.lavorazione.misura)) r.misuraUfficio = m;
+  else delete r.misuraUfficio;
+}
+
+function rifaiMisuraRiga(i) {
+  const d = PREVENTIVO && PREVENTIVO.doc;
+  const r = d && d.righe[i];
+  if (!r || !r.lavorazione) return;
+  // Una descrizione mai toccata dice ancora la misura vecchia: segue la nuova. Una
+  // scritta da qualcuno resta com'è.
+  const prima = MISURA_PRIMA && MISURA_PRIMA.riga === r ? MISURA_PRIMA.misura : lavorazioneDellaRiga(r).misura;
+  MISURA_PRIMA = null;
+  const primaVoleva = r.descrizione === descrizioneProposta({ ...r.lavorazione, misura: prima });
+  const nuova = { ...r, ...rigaDaLavorazione(r.lavorazione, r), chiave: r.chiave };
+  if (!r.misuraUfficio) delete nuova.misuraUfficio;
+  if (primaVoleva && Array.isArray(nuova.componenti)) nuova.descrizione = descrizioneProposta(lavorazioneDellaRiga(nuova));
+  d.righe[i] = nuova;
+  if (PREVENTIVO.aperta === r) PREVENTIVO.aperta = nuova;
+  disegnaPreventivo();
 }
 
 // Rifacendo il preventivo da un rilievo corretto **l'ordine resta quello deciso
@@ -4634,6 +4693,17 @@ function vocePreventivo(d, r, i, soluzioni) {
       ' · ricarico <input type="text" inputmode="decimal" class="stretto ricarico-riga" value="' +
       perValore(formattaQuantita(r.irrigazione.ricarico)) + '" oninput="modificaRicaricoRiga(' + i + ', this.value)" ' +
       'onchange="disegnaPreventivo()" aria-label="ricarico"> %' : '';
+  // La misura si corregge qui, accanto a quella del campo: 26 m presi in giardino, 28
+  // rimisurati. Solo dove la misura fa i conti — una voce a corpo coi suoi componenti;
+  // in una riga a misura è la quantità stessa.
+  const lc = r.lavorazione;
+  const misuraCorreggibile = corpo && lc && lc.genere !== 'manodopera' && lc.unita && !lavorazioneACorpo(lc);
+  const misura = misuraCorreggibile
+    ? ' · misura <input type="text" inputmode="decimal" class="stretto misura-riga' + (r.misuraUfficio ? ' corretta' : '') + '" value="' +
+      perValore(formattaQuantita(lavorazioneDellaRiga(r).misura)) + '" oninput="scriviMisuraRiga(' + i + ', this.value)" ' +
+      'onchange="rifaiMisuraRiga(' + i + ')" aria-label="misura"> ' + perValore(lc.unita) +
+      (r.misuraUfficio ? ' <span class="da-definire">corretta in ufficio</span>' : '')
+    : '';
   let html = '<tbody class="voce' + (sezione ? ' sezione' : '') + (corpo ? ' corpo' : '') + (aperta ? ' aperta' : '') +
       (tariffa ? ' tariffa' : '') + '" data-voce="' + i + '">' +
     '<tr class="testa-voce' + (corpo ? ' riga-corpo' : '') + (tariffa ? ' riga-tariffa' : '') + (sezione ? ' riga-sezione' : '') + '">' +
@@ -4648,7 +4718,7 @@ function vocePreventivo(d, r, i, soluzioni) {
         // Sotto la descrizione: quello che il campo ha misurato a sinistra, e a destra
         // se la voce sta nel totale — sempre lì, per ogni voce. Nella riga del prezzo
         // toglieva posto al riepilogo dei componenti, che con le frasi aperte si troncava.
-        '<div class="sotto-riga"><span class="meta dal-campo">' + dalCampo + '</span>' +
+        '<div class="sotto-riga"><span class="meta dal-campo">' + dalCampo + misura + '</span>' +
           '<span class="scelte-voce">' + menuTipoRiga(r, i) +
           // Il menù della soluzione compare solo quando ci sono alternative: finché
           // il preventivo ha un totale solo sarebbe una scelta che non si fa mai.
@@ -4767,7 +4837,7 @@ function modificaSestoComponente(i, j, valore) {
   if (!c) return;
   c.sesto = numeroScritto(valore);
   c.sestoMano = true;
-  const l = r.lavorazione || {};
+  const l = lavorazioneDellaRiga(r) || {};
   const n = pianteDaSesto(l.misura, c.sesto);
   if (n != null) {
     c.quantita = n;
@@ -5010,6 +5080,9 @@ function modificaRigaPreventivo(i, campo, valore) {
   const r = PREVENTIVO.doc.righe[i];
   if (!r) return;
   r[campo] = campo === 'quantita' ? numeroScritto(valore) : valore;
+  // In una riga a misura dal campo — il verde, 800 kg — la quantità è la misura: scritta
+  // qui, resta anche quando arriva il rilievo corretto.
+  if (campo === 'quantita' && r.lavorazione && !Array.isArray(r.componenti)) scriviMisuraRiga(i, valore);
   if (campo === 'quantita') aggiornaTotalePreventivo();
 }
 
@@ -6496,7 +6569,7 @@ function costruisciSchedaCantiere(d) {
   html += '<table><thead><tr><th>Lavorazione</th><th class="num">Q.tà</th><th>UM</th>' +
     '<th class="num">Ore</th></tr></thead><tbody>';
   righe.forEach(({ r, soluzione }) => {
-    const l = r.lavorazione;
+    const l = lavorazioneDellaRiga(r);
     html += '<tr class="riga-blocco"><td colspan="4">' + perValore(l ? l.nome : (r.descrizione || r.voce)) +
       (soluzione ? ' <span class="da-definire">· solo in ' + perValore(soluzione) + '</span>' : '') +
       // Cosa c'è da fare, anche quello che non lascia materiali — il livellamento,
