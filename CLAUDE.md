@@ -1269,6 +1269,12 @@ non ha è un buco, e il Listino lo elenca fra «Nei preventivi e non in listino�
 **per codice**; per nome solo se il progetto il codice non ce l'ha — due articoli con lo
 stesso nome e codici diversi sono due prezzi.
 
+**Il ricarico si vede mentre si scrive**: i prezzi dei materiali cambiano nelle loro
+caselle (`modificaRicaricoRiga()`), e **senza prezzi d'acquisto lo dice** accanto al campo
+(`avvisoRicarico()`) — il listino del fornitore non importato, o prezzi tutti scritti a
+mano. Prima cambiava solo la somma, a voce chiusa, e con un listino vuoto niente: sembrava
+un campo che non faceva niente.
+
 **Reimportato, il progetto corretto aggiorna la stessa riga** (stesso `id`): le
 quantità seguono il progetto, e restano quello che l'ufficio ha deciso — prezzi scritti
 a mano, quantità ritoccate, componenti tolti (`tolti`) o aggiunti, ore, descrizione,

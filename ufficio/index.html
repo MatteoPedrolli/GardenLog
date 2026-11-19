@@ -2709,6 +2709,15 @@ function riassuntoRicontrolla() {
 // non si legge, e quello che non si legge tanto vale non scriverlo.
 const NOVITA = [
   {
+    versione: '2026-11-19e',
+    data: '2026-11-19',
+    titolo: 'Il ricarico dell\'impianto si vede',
+    righe: [
+      'Nella voce dell\'**impianto di irrigazione**, scrivendo il **ricarico** i prezzi dei materiali cambiano subito nelle loro caselle.',
+      'Se nessun materiale ha un **prezzo d\'acquisto**, accanto al ricarico c\'è scritto: va importato il listino del fornitore nella pagina **Listino**.',
+    ],
+  },
+  {
     versione: '2026-11-19d',
     data: '2026-11-19',
     titolo: 'Tool irrigazione: ala gocciolante e T',
@@ -4663,7 +4672,7 @@ function righeComponenti(r, i) {
       '<td>' + (c.libera ? '<input type="text" class="stretto" value="' + perValore(c.unita) + '" placeholder="UM" ' +
           'oninput="modificaTestoComponente(' + i + ', ' + j + ', \'unita\', this.value)" aria-label="unità">'
         : perValore(c.unita)) + '</td>' +
-      '<td class="num">' + (c.soloOre ? '' : '<input type="text" inputmode="decimal" class="stretto" value="' +
+      '<td class="num">' + (c.soloOre ? '' : '<input type="text" inputmode="decimal" class="stretto" id="prezzo-comp-' + i + '-' + j + '" value="' +
         perValore(formattaQuantita(c.prezzo)) + '" ' +
         'oninput="modificaComponente(' + i + ', ' + j + ', \'prezzo\', this.value)" aria-label="prezzo">') + '</td>' +
       '<td></td>' +
@@ -4716,7 +4725,8 @@ function vocePreventivo(d, r, i, soluzioni) {
     : r.irrigazione ? 'dal progetto: ' + perValore(riassuntoIrrigazione(r.irrigazione)) +
       ' · ricarico <input type="text" inputmode="decimal" class="stretto ricarico-riga" value="' +
       perValore(formattaQuantita(r.irrigazione.ricarico)) + '" oninput="modificaRicaricoRiga(' + i + ', this.value)" ' +
-      'onchange="disegnaPreventivo()" aria-label="ricarico"> %' : '';
+      'onchange="disegnaPreventivo()" aria-label="ricarico"> %' +
+      '<span class="manca" id="ricarico-avviso-' + i + '">' + perValore(avvisoRicarico(r)) + '</span>' : '';
   // La misura si corregge qui, accanto a quella del campo: 26 m presi in giardino, 28
   // rimisurati. Solo dove la misura fa i conti — una voce a corpo coi suoi componenti;
   // in una riga a misura è la quantità stessa.
@@ -5454,12 +5464,38 @@ function riassuntoIrrigazione(x) {
 // Il ricarico è della riga: il margine lo decide chi firma, preventivo per
 // preventivo. Mentre si scrive seguono la somma e il prezzo proposto; uscendo dal
 // campo si ridisegnano i prezzi dei componenti.
+//
+// I prezzi dei materiali seguono il numero sotto le dita, nelle loro caselle: si
+// ridisegnavano solo uscendo dal campo, e a voce chiusa cambiava soltanto la
+// somma — scrivendo il ricarico sembrava che non facesse niente.
 function modificaRicaricoRiga(i, valore) {
   const r = PREVENTIVO && PREVENTIVO.doc.righe[i];
   if (!r || !r.irrigazione) return;
   r.irrigazione.ricarico = String(valore).trim() === '' ? '' : numeroScritto(valore);
   preparaRigaIrrigazione(r);
+  r.componenti.forEach((c, j) => {
+    if (!c.irrigazione) return;
+    const prezzo = document.getElementById('prezzo-comp-' + i + '-' + j);
+    if (prezzo && !c.prezzoMano) prezzo.value = formattaQuantita(c.prezzo);
+    const calc = document.getElementById('calc-comp-' + i + '-' + j);
+    if (calc) calc.textContent = c.calcolo;
+  });
+  const avviso = document.getElementById('ricarico-avviso-' + i);
+  if (avviso) avviso.textContent = avvisoRicarico(r);
   aggiornaRigaACorpo(i);
+}
+
+// Il ricarico lavora sui prezzi d'acquisto. Senza — il listino del fornitore non
+// importato, o codici che non ci sono — non ha niente da ricaricare, e il campo
+// cambiava senza che cambiasse niente, senza dire perché.
+function avvisoRicarico(r) {
+  const materiali = (r.componenti || []).filter(c => c.irrigazione);
+  if (!materiali.length) return '';
+  const conCosto = materiali.filter(c => c.costo !== '' && c.costo != null);
+  if (!conCosto.length) return ' · nessun materiale ha un prezzo d\'acquisto: il ricarico non ha su cosa lavorare. ' +
+    'Importa il listino del fornitore nella pagina Listino, in «Irrigazione · prezzi d\'acquisto»';
+  if (conCosto.every(c => c.prezzoMano)) return ' · i prezzi sono tutti scritti a mano, e il ricarico non li tocca';
+  return '';
 }
 
 const normaleNome = t => pulisciTesto(t).normalize('NFD').replace(/[\u0300-\u036f]/g, '');

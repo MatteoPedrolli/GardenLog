@@ -7174,8 +7174,20 @@ T25;Raccordo a T 25;n;irrigatore-1 Hunter PS;1;1`, 'applica');
     comp('PROS-04').prezzo = 5; comp('PROS-04').prezzoMano = true;
     window.confirm = () => true;
     togliComponente(i, riga.componenti.findIndex(c => c.codice === 'PZ-RECT'));
+    disegnaPreventivo();
+    const jValvola = riga.componenti.findIndex(c => c.codice === 'PGV-101');
     modificaRicaricoRiga(i, '50');
     r.ricarico = comp('PGV-101').prezzo === 45 && comp('PROS-04').prezzo === 5;
+    // Mentre si scrive il ricarico, i prezzi cambiano nelle loro caselle e il
+    // calcolo lo dice: prima cambiava solo la somma, e sembrava non fare niente.
+    r.ricaricoVisto = document.getElementById('prezzo-comp-' + i + '-' + jValvola).value === '45' &&
+      /\+ 50%/.test(document.getElementById('calc-comp-' + i + '-' + jValvola).textContent) &&
+      document.getElementById('ricarico-avviso-' + i).textContent === '';
+    // Senza prezzi d'acquisto il ricarico non ha su cosa lavorare, e lo dice.
+    r.senzaCosti = /nessun materiale ha un prezzo d'acquisto/.test(avvisoRicarico({ componenti: [
+      { irrigazione: true, costo: '' }, { chiave: CHIAVE_MANODOPERA_IRRIGAZIONE }] })) &&
+      /scritti a mano/.test(avvisoRicarico({ componenti: [{ irrigazione: true, costo: 3, prezzoMano: true }] })) &&
+      avvisoRicarico({ componenti: [{ irrigazione: true, costo: 3 }, { irrigazione: true, costo: '' }] }) === '';
     // Il progetto corretto: 6 valvole invece di 5. Stesso id, stessa riga.
     const corretto = JSON.parse(testo);
     corretto.materiali.find(m => m.codice === 'PGV-101').quantita = 6;
@@ -7232,6 +7244,8 @@ T25;Raccordo a T 25;n;irrigatore-1 Hunter PS;1;1`, 'applica');
   ok('il prezzo a corpo è la somma proposta, e le ore scritte qui fanno le mezze giornate',
     irrUff.proposto && irrUff.mezze, JSON.stringify(irrUff));
   ok('il ricarico della riga cambia i prezzi, non quello scritto a mano', irrUff.ricarico, JSON.stringify(irrUff));
+  ok('scrivendo il ricarico i prezzi dei materiali cambiano nelle loro caselle', irrUff.ricaricoVisto, JSON.stringify(irrUff));
+  ok('senza prezzi d\'acquisto il ricarico dice che non ha su cosa lavorare', irrUff.senzaCosti, JSON.stringify(irrUff));
   ok('il progetto corretto aggiorna la stessa riga: quantità nuove, e restano prezzo, tolti, ricarico e ore',
     irrUff.reimport, JSON.stringify(irrUff));
   ok('la scheda di cantiere dice cosa va su quale settore, senza prezzi', irrUff.scheda, JSON.stringify(irrUff));
