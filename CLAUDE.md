@@ -1806,8 +1806,15 @@ c'era — per questo sembrava capitare solo ogni tanto.
 così: **logo in alto a sinistra, intestazione a destra**, «Spett.le» a destra come
 in una lettera, «Lavis, 5 ottobre 2026» (`localitaAzienda()`, il paese senza CAP né
 provincia), la frase d'apertura, e le righe in una **tabella a griglia** con le
-colonne nell'ordine dei fogli veri — Descrizione, UM, Q.tà, Costo un., Totale — e la
-firma in fondo a destra. Un titolo «Preventivo» in grande non c'era, e non c'è.
+colonne nell'ordine dei fogli veri — Descrizione, UM, Q.tà, Costo un., Totale — e il
+nome dell'azienda in fondo a destra. Un titolo «Preventivo» in grande non c'era, e non c'è.
+Sotto il nome c'era una **riga per la firma**, ed è stata tolta: il preventivo parte per
+mail, e non lo firma nessuno.
+
+**Gli importi stanno su una riga**, sul conto come sul preventivo: `white-space: nowrap`
+sulle celle numeriche, e un margine a sinistra. Sul conto «467,50» andava a capo col suo «€»
+sotto, e prezzo e importo affiancati si leggevano «467,50467,50 €». Il giro di prova lo
+misura sul testo, con cifre grosse e un foglio largo quanto la pagina.
 
 **Accanto a ogni «Stampa» c'è «Stampa senza intestazione»**, per la carta
 intestata: i dati dell'azienda ci sono già stampati, e ripeterli sopra li

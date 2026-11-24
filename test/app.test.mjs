@@ -5300,7 +5300,8 @@ try {
       aziendaDopo: testata && testata.lastElementChild.textContent.includes('Giardini Prova'),
       colonne: [...f.querySelectorAll('table.griglia thead th')].slice(0, 5).map(th => th.textContent).join('|'),
       luogo: (f.querySelector('.prev-luogo-data') || {}).textContent,
-      firma: !!f.querySelector('.prev-firma'),
+      firma: !!f.querySelector('.prev-firma') && f.querySelector('.prev-firma').textContent.includes('Giardini Prova') &&
+        !f.querySelector('.prev-firma div:empty'),
       titolone: !!f.querySelector('h1'),
       prontoPreventivo,
     };
@@ -5331,7 +5332,7 @@ try {
   ok('e stampando senza intestazione il logo non esce', formaPrev.contoSenza, JSON.stringify(formaPrev));
   ok('la tabella è quella dei preventivi veri: Descrizione, UM, Q.tà, Costo un., Totale',
     formaPrev.colonne === 'Descrizione|UM|Q.tà|Costo un.|Totale', formaPrev.colonne);
-  ok('con la località senza CAP e la data per esteso, e la firma in fondo',
+  ok('con la località senza CAP e la data per esteso, e il nome dell\'azienda in fondo senza la riga per la firma',
     formaPrev.luogo === 'Lavis, 5 ottobre 2026' && formaPrev.firma, formaPrev.luogo);
   ok('la tariffa sta sotto il totale, fuori da esso',
     foglioPrev.html.includes('Non compreso nel totale') &&
@@ -5378,6 +5379,37 @@ try {
   });
   ok('un numero allineato a destra non si incolla al testo che lo segue',
     distanze.length === 0, distanze.join(' | ') || 'tutte staccate');
+
+  // Sul conto gli importi andavano a capo col loro «€» sotto, e prezzo e importo
+  // affiancati si leggevano come un numero solo: «467,50467,50 €». Si misura il
+  // testo su un foglio largo quanto la pagina stampata, con voci lunghe e cifre grosse.
+  const contoLargo = await pagU.evaluate(() => {
+    const f = document.getElementById('foglio');
+    f.innerHTML = costruisciFoglio({ cliente: { nome: 'Oratorio' }, data: '2026-11-23', righe: [
+      { voce: 'Noleggio piattaforma aerea per abbattimento di un gelso, senza pulizia area, compresa la manodopera necessaria',
+        quantita: 1, unita: 'a corpo', prezzo: 12430 },
+      { voce: 'Pulizia area compreso smaltimento verde presso discarica autorizzata, con trasporto e conferimento',
+        quantita: 1250.5, unita: 'kg', prezzo: 1467.5 }] });
+    f.style.display = 'block';
+    f.style.width = '180mm';
+    const testo = el => { const r = document.createRange(); r.selectNodeContents(el); return r; };
+    const problemi = [];
+    [...f.querySelectorAll('td.num')].forEach(cella => {
+      if (!cella.textContent.trim()) return;
+      // Una riga sola: tutti i pezzi del testo alla stessa altezza.
+      const pezzi = [...testo(cella).getClientRects()].filter(x => x.width);
+      if (new Set(pezzi.map(x => Math.round(x.top))).size > 1) problemi.push('a capo: ' + cella.textContent.trim());
+      const prima = cella.previousElementSibling;
+      if (prima && prima.textContent.trim()) {
+        const a = testo(prima).getBoundingClientRect(), b = testo(cella).getBoundingClientRect();
+        if (Math.abs(a.top - b.top) < 4 && b.left - a.right < 6) problemi.push('attaccato: ' + prima.textContent.trim() + '|' + cella.textContent.trim());
+      }
+    });
+    f.style.display = ''; f.style.width = '';
+    return problemi;
+  });
+  ok('sul conto gli importi grossi stanno su una riga, staccati fra loro',
+    contoLargo.length === 0, contoLargo.join(' | ') || 'su una riga');
 
   // Salvato nella cartella, e da lì rientra: il preventivo è un file come
   // l'archivio, perché il PC dell'ufficio ha già il suo backup.

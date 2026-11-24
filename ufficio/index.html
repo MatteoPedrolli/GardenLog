@@ -802,6 +802,10 @@ details.gruppo-chiusi .dentro-gruppo { padding-left: 14px; }
 }
 :is(#foglio, .anteprima) td { padding: 7px 8px 7px 0; border-bottom: 1px solid #ccc; }
 :is(#foglio, .anteprima) td.num, :is(#foglio, .anteprima) th.num { text-align: right; padding-right: 0; }
+/* Importi su una riga, e staccati da quello che hanno a sinistra: sul conto
+   «467,50» andava a capo col suo «€» sotto, e due importi affiancati si
+   leggevano come un numero solo, «467,50467,50 €». */
+:is(#foglio, .anteprima) td.num, :is(#foglio, .anteprima) th.num { white-space: nowrap; padding-left: 14px; }
 :is(#foglio, .anteprima) .da-definire { color: #555; }
 :is(#foglio, .anteprima) .riga-blocco td { padding-top: 16px; font-weight: 700; border-bottom: 1px solid #000; }
 :is(#foglio, .anteprima) .riga-subtotale td { color: #333; border-bottom: none; }
@@ -838,7 +842,6 @@ details.gruppo-chiusi .dentro-gruppo { padding-left: 14px; }
 :is(#foglio, .anteprima) .prev table.griglia .riga-totale td { border: 1px solid #000; border-top: 2px solid #000; padding-top: 7px; font-size: 0.98rem; }
 :is(#foglio, .anteprima) .prev table.griglia tr.sezione-foglio td { padding-top: 10px; background: #f6f6f6; }
 :is(#foglio, .anteprima) .prev-firma { margin: 40px 0 0 auto; width: 45%; text-align: center; font-size: 0.95rem; }
-:is(#foglio, .anteprima) .prev-riga-firma { border-bottom: 1px solid #000; height: 34px; }
 
 /* Lo stesso foglio a schermo: il preventivo come l'ha ricevuto il cliente, e la
    scheda di cantiere com'esce dalla stampante. */
@@ -2708,6 +2711,15 @@ function riassuntoRicontrolla() {
 // La più recente per prima. Le righe sono poche e corte apposta: un elenco lungo
 // non si legge, e quello che non si legge tanto vale non scriverlo.
 const NOVITA = [
+  {
+    versione: '2026-11-24',
+    data: '2026-11-24',
+    titolo: 'Conti più leggibili, preventivi senza riga per la firma',
+    righe: [
+      'Sul **conto stampato** prezzi e importi stanno su una riga, anche le cifre grosse: l\'**€** non va più a capo, e le due colonne non si attaccano.',
+      'In fondo al **preventivo** resta il nome dell\'azienda, **senza la riga per la firma**.',
+    ],
+  },
   {
     versione: '2026-11-19e',
     data: '2026-11-19',
@@ -6823,9 +6835,9 @@ function costruisciFoglioPreventivo(d) {
   if (IMPOSTAZIONI.condizioni) {
     html += '<div class="nota-sotto">' + perValore(IMPOSTAZIONI.condizioni) + '</div>';
   }
-  // La firma, in basso a destra, col nome dell'azienda sopra la riga.
-  html += '<div class="prev-firma"><div>' + perValore(IMPOSTAZIONI.azienda) + '</div>' +
-    '<div class="prev-riga-firma"></div></div>';
+  // In basso a destra il nome dell'azienda. Sotto c'era la riga per la firma, e
+  // l'hanno voluta togliere: il preventivo esce per mail, e non lo firma nessuno.
+  html += '<div class="prev-firma"><div>' + perValore(IMPOSTAZIONI.azienda) + '</div></div>';
   html += '</div>';
   return html;
 }
