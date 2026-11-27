@@ -901,7 +901,9 @@ segue finché nessuno l'ha guardato; deciso, resta, e la somma gli sta accanto c
 «Usa la somma». Una voce a misura senza ore — il verde da smaltire — resta una riga
 a misura col suo prezzo unitario: spesso diventa una tariffa.
 
-**Ogni voce è una scheda** (`vocePreventivo()`): in testa la descrizione per il
+**Ogni voce è una scheda** (`vocePreventivo()`), col **bordo più scuro** di quello dei
+campi (`--bordo-voce`): col grigio chiaro di prima le schede si confondevano fra loro, e
+non si capiva dove finiva una voce. In testa la descrizione per il
 cliente, e subito sotto la **riga del prezzo** — quantità, unità, prezzo, importo
 (`rigaPrezzoVoce()`) — **sempre lì**, per una voce a corpo come per una a misura. Erano
 due impaginazioni: il prezzo in fondo ai componenti per l'una, a destra della
@@ -1037,7 +1039,13 @@ Le **condizioni** in fondo al foglio — validità, caparra, esclusioni — vivo
 quelle che i preventivi veri hanno e una lista di righe non sa rappresentare:
 
 - **Le soluzioni alternative.** «Siepe nuda o con telo e porfido»: due varianti
-  con due totali, che **si escludono**. Una riga **senza soluzione è comune** ed
+  con due totali, che **si escludono**. Nascono dal **⧉** in cima ai comandi di una voce
+  (`alternativaDaVoce()`): la voce si copia subito sotto, in una soluzione nuova, e
+  l'originale, se era comune, va nella prima — o il cliente le pagherebbe tutte e due.
+  Prima si creavano in fondo alla pagina e poi ogni voce andava assegnata col suo menù:
+  tre passaggi lontani dalla voce. Il riquadro «Soluzioni alternative» c'è solo quando ce
+  ne sono, per dare i nomi e toglierle; il menù «Solo in…» sulla voce resta, per mettere
+  nella stessa variante le altre voci. Un titolo o una tariffa il ⧉ non ce l'hanno. Una riga **senza soluzione è comune** ed
   entra nel totale di tutte — così la parte uguale si scrive una volta sola
   invece di ribatterla in ogni variante e sbagliarne una. Sul foglio ogni
   soluzione ha il suo totale col suo nome, e sopra c'è scritto a parole che sono
@@ -1091,9 +1099,14 @@ toglie non se lo ritrova riaprendo; senza prezzo in listino è un buco, non una 
 con quantità 1 anche quando il listino ne ha il prezzo: per un po' lì restava senza
 quantità, fuori dal totale, sotto la scritta «1 riga senza prezzo».
 
-**Il preventivo si modifica tutto, e un rilievo corretto non lo disfa.** Ogni riga ha
-**▲ ▼** accanto alla ✕ (`spostaRigaPreventivo()`): l'ordine è quello del foglio che va al
-cliente, e una voce a corpo si porta dietro i suoi componenti. **«+ Voce libera»**
+**Il preventivo si modifica tutto, e un rilievo corretto non lo disfa.** Ogni voce ha a
+destra una **maniglia a puntini** sopra la ✕: si trascina su e giù (`iniziaTrascinaVoce()`,
+`spostaVoceA()`), e una riga ocra dice dove cadrà, come in lavagna. Erano due frecce ▲ ▼
+attorno alla ✕ — tre segni uguali per voce, e cinque clic per spostarne una di cinque posti.
+Si prende **la maniglia e non la voce**: dentro ci sono descrizione e prezzi, e prendere il
+testo col mouse deve restare prendere il testo. Dalla tastiera la maniglia si sposta con le
+frecce (`tastoManiglia()`). L'ordine è quello del foglio che va al cliente, e una voce a
+corpo si porta dietro i suoi componenti. **«+ Voce libera»**
 (`libera`) è quello che non sta né fra le operazioni né in listino, con l'unità scritta a
 mano; **«+ Capitolo a corpo»** è una voce a corpo vuota, da riempire, col prezzo che segue
 la somma finché nessuno lo decide. La ✕ di riga e di componente **chiede conferma**: sta fra

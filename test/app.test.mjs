@@ -6266,9 +6266,11 @@ try {
     r.inizio = ordine();
     // Su e giù: il titolo di sezione aggiunto in fondo sale in cima.
     aggiungiSezionePreventivo();
-    const frecce = [...document.querySelectorAll('#pagina-preventivo .comandi-riga')];
-    r.frecce = frecce.length === d.righe.length && frecce[0].querySelector('button.sposta').disabled &&
-      frecce[frecce.length - 1].querySelectorAll('button.sposta')[1].disabled;
+    // Ogni voce ha la sua maniglia da trascinare, e le frecce ▲ ▼ non ci sono più.
+    const comandi = [...document.querySelectorAll('#pagina-preventivo .comandi-riga')];
+    r.frecce = comandi.length === d.righe.length &&
+      comandi.every(c => c.querySelector('button.maniglia[draggable="true"]')) &&
+      !document.querySelector('#pagina-preventivo button.sposta');
     for (let i = d.righe.length - 1; i > 0; i--) spostaRigaPreventivo(i, -1);
     r.sezioneSu = ordine();
     spostaRigaPreventivo(0, -1);   // la prima non sale oltre
@@ -6346,7 +6348,7 @@ try {
     disegnaPreventivo();
     return r;
   });
-  ok('le righe del preventivo si spostano su e giù, e la prima non sale oltre',
+  ok('le righe del preventivo hanno la maniglia al posto delle frecce, e la prima non sale oltre',
     modifiche.frecce && modifiche.sezioneSu.startsWith('sezione,') && modifiche.ferma, JSON.stringify(modifiche));
   ok('una voce libera si scrive tutta a mano, anche l\'unità', modifiche.libera, JSON.stringify(modifiche));
   ok('un capitolo a corpo scritto in ufficio si riempie coi suoi componenti, e il prezzo segue la somma',
@@ -6356,6 +6358,77 @@ try {
   ok('una riga del campo tolta si ricorda, e si riprende dal menù', modifiche.tolta && modifiche.rimessa, JSON.stringify(modifiche));
   ok('togliere una riga o un componente chiede conferma; una riga vuota appena aggiunta no',
     modifiche.chiedeComponente && modifiche.chiedeRiga && modifiche.vuotaSenzaDomanda, JSON.stringify(modifiche));
+
+  // ── TRASCINARE UNA VOCE, E COPIARLA COME ALTERNATIVA ──
+  // Le voci si spostano trascinando la maniglia — col mouse vero, qui — o con le
+  // frecce della tastiera sulla maniglia; il ⧉ copia una voce come soluzione
+  // alternativa, sotto l'originale.
+  const tieni = await pagU.evaluate(() => {
+    window.__primaTrascina = PREVENTIVO;
+    const rilievo = leggiRilievo({ tipo: 'rilievo', versione: 1, id: 'ril-trascina', revisione: 1, origine: 'ufficio',
+      creato: '2026-11-12T08:00:00Z', cliente: { nome: 'Prova Trascina' }, lavorazioni: [
+        { id: 'a', genere: 'manodopera', nome: 'Alfa', ore: 1 },
+        { id: 'b', genere: 'manodopera', nome: 'Beta', ore: 1 },
+        { id: 'c', genere: 'manodopera', nome: 'Gamma', ore: 1 }] });
+    PREVENTIVO = { doc: costruisciPreventivo(rilievo, null), file: '', anno: '' };
+    vaiA('preventivo');
+    return PREVENTIVO.doc.righe.map(r => r.chiave || r.voceID).join(',');
+  });
+  // Alfa sotto Gamma: si prende la maniglia della prima e la si lascia sulla metà
+  // bassa della terza.
+  const terza = pagU.locator('#pagina-preventivo tbody.voce[data-voce="2"]');
+  // Al centro della finestra: in fondo la copre la barra del preventivo, che resta lì.
+  await terza.evaluate(el => el.scrollIntoView({ block: 'center' }));
+  const scatola = await terza.boundingBox();
+  await pagU.locator('#pagina-preventivo button.maniglia[data-riga="0"]').dragTo(terza,
+    { targetPosition: { x: 40, y: scatola.height - 12 } });
+  await pagU.waitForTimeout(100);
+  const trascina = await pagU.evaluate(() => {
+    const d = PREVENTIVO.doc;
+    const ordine = () => d.righe.map(r => r.chiave || r.voceID).join(',');
+    const r = { trascinato: ordine() };
+    r.segniTolti = !document.querySelector('#pagina-preventivo .prima-qui, #pagina-preventivo .dopo-qui, #pagina-preventivo .trascinata');
+    // Dalla tastiera: la freccia su sulla maniglia, e la maniglia resta sotto le dita.
+    const ultima = d.righe.length - 1;
+    document.querySelector('#pagina-preventivo button.maniglia[data-riga="' + ultima + '"]')
+      .dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowUp', bubbles: true }));
+    r.tastiera = ordine();
+    r.fuoco = document.activeElement && document.activeElement.dataset.riga === String(ultima - 1);
+    // Il bordo delle voci è più scuro di quello dei campi: si vede dove finisce una voce.
+    const bordo = getComputedStyle(document.querySelector('#pagina-preventivo tbody.voce > tr.testa-voce > td')).borderTopColor;
+    const chiaro = getComputedStyle(document.documentElement).getPropertyValue('--border').trim();
+    r.bordo = bordo;
+    r.bordoScuro = (() => {
+      const n = c => (c.match(/\d+/g) || []).slice(0, 3).map(Number).reduce((a, b) => a + b, 0);
+      const t = document.createElement('div'); t.style.color = chiaro; document.body.appendChild(t);
+      const c = getComputedStyle(t).color; t.remove();
+      return n(bordo) < n(c) - 60;
+    })();
+    // Il ⧉ su Beta: due soluzioni, Beta nella prima, la copia nella seconda e subito sotto.
+    const iBeta = d.righe.findIndex(x => x.chiave === 'b');
+    r.titoloSenzaCopia = !document.querySelector('#pagina-preventivo tbody.voce.sezione button.copia-alternativa');
+    document.querySelector('#pagina-preventivo tbody.voce[data-voce="' + iBeta + '"] button.copia-alternativa').click();
+    const [s1, s2] = d.soluzioni || [];
+    const copia = d.righe[iBeta + 1];
+    r.copia = d.soluzioni.length === 2 && d.righe[iBeta].soluzione === s1.id && copia.soluzione === s2.id &&
+      copia.chiave === '' && copia.descrizione === d.righe[iBeta].descrizione;
+    r.riquadro = document.getElementById('pagina-preventivo').textContent.includes('Soluzioni alternative');
+    // Un'altra copia, della copia: una terza soluzione, e la seconda resta della copia.
+    alternativaDaVoce(iBeta + 1);
+    r.terza = d.soluzioni.length === 3 && d.righe[iBeta + 1].soluzione === s2.id && d.righe[iBeta + 2].soluzione === d.soluzioni[2].id;
+    PREVENTIVO = window.__primaTrascina;
+    disegnaPreventivo();
+    return r;
+  });
+  ok('una voce si trascina dalla maniglia e cade dove la si lascia',
+    tieni === 'a,b,c,trasferimento' && trascina.trascinato === 'b,c,a,trasferimento' && trascina.segniTolti,
+    tieni + ' → ' + trascina.trascinato);
+  ok('e dalla tastiera si sposta con le frecce sulla maniglia, che resta sotto le dita',
+    trascina.tastiera === 'b,c,trasferimento,a' && trascina.fuoco, trascina.tastiera);
+  ok('il bordo di ogni voce è più scuro di quello dei campi', trascina.bordoScuro, trascina.bordo);
+  ok('il ⧉ copia una voce come soluzione alternativa, subito sotto, e l\'originale va nella prima',
+    trascina.copia && trascina.riquadro && trascina.titoloSenzaCopia, JSON.stringify(trascina));
+  ok('e copiando ancora nasce una terza soluzione', trascina.terza, JSON.stringify(trascina));
 
   // Le frasi per le descrizioni: a destra, per categoria o senza, e con un clic
   // nella voce scelta, al punto del cursore. Stanno in un file dell'ufficio.

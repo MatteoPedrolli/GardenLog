@@ -28,6 +28,9 @@
   --text-mid: #4a443a;
   --text-light: #8a8175;
   --border: #e2dccd;
+  /* Il bordo di una voce del preventivo: col grigio chiaro dei campi le schede si
+     confondevano fra loro, e non si capiva dove finiva una voce e cominciava l'altra. */
+  --bordo-voce: #b3a891;
   --red: #b03a2e;
   --yellow: #c87f0a;
   --radius: 14px;
@@ -213,16 +216,16 @@ table.tabella-voci thead th { border-bottom: none; padding-bottom: 6px; }
 table.tabella-voci thead th:first-child { padding-left: 15px; }
 table.tabella-voci thead th:last-child { padding-right: 10px; }
 table.tabella-voci tbody.voce > tr > td { background: var(--white); }
-table.tabella-voci tbody.voce > tr > td:first-child { border-left: 1px solid var(--border); padding-left: 14px; }
-table.tabella-voci tbody.voce > tr > td:last-child { border-right: 1px solid var(--border); padding-right: 10px; }
-table.tabella-voci tbody.voce > tr.testa-voce > td { border-top: 1px solid var(--border); border-bottom: none;
+table.tabella-voci tbody.voce > tr > td:first-child { border-left: 1px solid var(--bordo-voce); padding-left: 14px; }
+table.tabella-voci tbody.voce > tr > td:last-child { border-right: 1px solid var(--bordo-voce); padding-right: 10px; }
+table.tabella-voci tbody.voce > tr.testa-voce > td { border-top: 1px solid var(--bordo-voce); border-bottom: none;
   padding-top: 12px; padding-bottom: 2px; }
 table.tabella-voci tbody.voce > tr.testa-voce > td:first-child { border-top-left-radius: var(--radius-sm); }
 table.tabella-voci tbody.voce > tr.testa-voce > td:last-child { border-top-right-radius: var(--radius-sm); }
 table.tabella-voci tbody.voce > tr.prezzo-voce > td { border-bottom: none; padding-top: 4px; padding-bottom: 6px; }
 /* Le ore della voce non stanno attaccate alla casella della quantità: «10 h1». */
 table.tabella-voci tbody.voce > tr.prezzo-voce > td.ore { padding-right: 12px; white-space: nowrap; color: var(--text-mid); font-size: 0.86rem; }
-table.tabella-voci tbody.voce > tr.piede-voce > td { height: 8px; padding: 0; border-bottom: 1px solid var(--border);
+table.tabella-voci tbody.voce > tr.piede-voce > td { height: 8px; padding: 0; border-bottom: 1px solid var(--bordo-voce);
   border-radius: 0 0 var(--radius-sm) var(--radius-sm); }
 table.tabella-voci tbody.stacco td { height: 10px; padding: 0; border: none; }
 /* Il riepilogo va a capo dove serve: con le frasi aperte su un portatile la colonna
@@ -251,13 +254,23 @@ tbody.voce.sezione textarea.descrizione-riga:hover, tbody.voce.sezione textarea.
   border-color: var(--border); background: var(--white); }
 table.tabella-voci tbody.totali td { border-bottom: none; padding-left: 15px; font-weight: 600; font-size: 1rem; }
 table.tabella-voci tbody.totali td.importo { padding-left: 0; font-family: var(--font-display); font-size: 1.15rem; }
-/* Su e giù accanto alla ✕: l'ordine delle righe è quello del foglio che va al
-   cliente, e si decide qui. */
+/* A destra di ogni voce: in cima la copia come alternativa, poi la maniglia per
+   trascinarla su e giù — l'ordine è quello del foglio che va al cliente —, in fondo
+   la ✕. Erano due frecce ▲ ▼ attorno alla ✕: tre segni uguali per ogni voce, e
+   spostarne una di cinque posti voleva dire cinque clic. */
 .comandi-riga { display: flex; flex-direction: column; align-items: center; gap: 6px; }
-.comandi-riga button.sposta { border: none; background: none; cursor: pointer; padding: 1px 6px;
-  font-size: 0.9rem; color: var(--text-mid); line-height: 1.1; }
-.comandi-riga button.sposta:hover:not(:disabled) { color: var(--inchiostro); }
-.comandi-riga button.sposta:disabled { opacity: 0.25; cursor: default; }
+.comandi-riga button.copia-alternativa, .comandi-riga button.maniglia {
+  border: none; background: none; padding: 2px 5px; color: var(--text-light); line-height: 1; border-radius: 5px; }
+.comandi-riga button.copia-alternativa { cursor: pointer; font-size: 0.95rem; }
+.comandi-riga button.copia-alternativa:hover { color: var(--inchiostro); background: var(--foglio); }
+.comandi-riga button.maniglia { cursor: grab; }
+.comandi-riga button.maniglia:hover, .comandi-riga button.maniglia:focus-visible { color: var(--inchiostro); background: var(--foglio); }
+.comandi-riga button.maniglia svg { display: block; }
+/* Mentre la si porta, la voce si sbiadisce e una riga ocra dice dove cadrà: la
+   stessa riga della lavagna quando si riordina una mezza giornata. */
+table.tabella-voci tbody.voce.trascinata > tr > td { opacity: 0.45; }
+table.tabella-voci tbody.voce.prima-qui > tr.testa-voce > td { box-shadow: inset 0 3px 0 var(--ocra); }
+table.tabella-voci tbody.voce.dopo-qui > tr.piede-voce > td { box-shadow: inset 0 -3px 0 var(--ocra); }
 tr.componenti.aggiungi-componente td { border-bottom: none; padding-top: 6px; }
 /* Il preventivo a sinistra, le frasi a destra: si scrive guardando le frasi. */
 .preventivo-con-frasi { display: grid; grid-template-columns: minmax(0, 1fr) 300px; gap: 16px; align-items: start; }
@@ -2712,6 +2725,16 @@ function riassuntoRicontrolla() {
 // non si legge, e quello che non si legge tanto vale non scriverlo.
 const NOVITA = [
   {
+    versione: '2026-11-27',
+    data: '2026-11-27',
+    titolo: 'Preventivo: voci più chiare, da trascinare',
+    righe: [
+      'Ogni voce del preventivo ha un **bordo più scuro**: si vede dove finisce una e comincia l\'altra.',
+      'Al posto delle frecce ▲ ▼ c\'è una **maniglia a puntini**: si prende e si **trascina** la voce dove serve.',
+      'Il **⧉** in cima a una voce la **copia come soluzione alternativa**, subito sotto. I nomi delle soluzioni si danno in fondo, in «Soluzioni alternative».',
+    ],
+  },
+  {
     versione: '2026-11-24',
     data: '2026-11-24',
     titolo: 'Conti più leggibili, preventivi senza riga per la firma',
@@ -4751,7 +4774,9 @@ function vocePreventivo(d, r, i, soluzioni) {
       (r.misuraUfficio ? ' <span class="da-definire">corretta in ufficio</span>' : '')
     : '';
   let html = '<tbody class="voce' + (sezione ? ' sezione' : '') + (corpo ? ' corpo' : '') + (aperta ? ' aperta' : '') +
-      (tariffa ? ' tariffa' : '') + '" data-voce="' + i + '">' +
+      (tariffa ? ' tariffa' : '') + '" data-voce="' + i + '" ' +
+      'ondragover="sopraVoce(event, ' + i + ')" ondragleave="this.classList.remove(\'prima-qui\', \'dopo-qui\')" ' +
+      'ondrop="lasciaSuVoce(event, ' + i + ')">' +
     '<tr class="testa-voce' + (corpo ? ' riga-corpo' : '') + (tariffa ? ' riga-tariffa' : '') + (sezione ? ' riga-sezione' : '') + '">' +
       // La descrizione si allarga col testo: le frasi per il cliente sono lunghe, e in
       // una casella di una riga se ne leggeva l'inizio. Cliccandoci dentro diventa la
@@ -4775,10 +4800,15 @@ function vocePreventivo(d, r, i, soluzioni) {
             '</select>' : '') +
           '</span></div></td>' +
       '<td class="via-col"><div class="comandi-riga">' +
-        '<button class="sposta" onclick="spostaRigaPreventivo(' + i + ', -1)" title="Sposta su"' + (i === 0 ? ' disabled' : '') + '>▲</button>' +
+        // Un titolo o una tariffa non hanno un'alternativa: la copia c'è solo dove
+        // c'è un prezzo che il cliente sceglie.
+        (sezione || tariffa ? '' : '<button class="copia-alternativa" onclick="alternativaDaVoce(' + i + ')" ' +
+          'title="Copia come soluzione alternativa" aria-label="Copia come soluzione alternativa">⧉</button>') +
+        '<button class="maniglia" draggable="true" data-riga="' + i + '" ' +
+          'ondragstart="iniziaTrascinaVoce(event, ' + i + ')" ondragend="fineTrascinaVoce()" ' +
+          'onkeydown="tastoManiglia(event, ' + i + ')" ' +
+          'title="Trascina per spostare la voce (o frecce ↑ ↓)" aria-label="Sposta la voce">' + PUNTINI_MANIGLIA + '</button>' +
         '<button class="via" onclick="togliRigaPreventivo(' + i + ')" title="Togli">✕</button>' +
-        '<button class="sposta" onclick="spostaRigaPreventivo(' + i + ', 1)" title="Sposta giù"' +
-          (i === d.righe.length - 1 ? ' disabled' : '') + '>▼</button>' +
       '</div></td>' +
     '</tr>';
   if (!sezione) html += rigaPrezzoVoce(r, i, corpo, aperta, soluzioni);
@@ -5332,6 +5362,117 @@ function spostaRigaPreventivo(i, verso) {
   [righe[i], righe[j]] = [righe[j], righe[i]];
   // La voce scelta per le frasi la segue.
   if (FRASE_DOVE === i) FRASE_DOVE = j; else if (FRASE_DOVE === j) FRASE_DOVE = i;
+  disegnaPreventivo();
+}
+
+// Sei puntini: la maniglia che si prende per trascinare, come nei programmi che si
+// usano tutti i giorni.
+const PUNTINI_MANIGLIA = '<svg width="10" height="16" viewBox="0 0 10 16" aria-hidden="true" fill="currentColor">' +
+  [3, 8, 13].map(y => '<circle cx="2.5" cy="' + y + '" r="1.5"/><circle cx="7.5" cy="' + y + '" r="1.5"/>').join('') + '</svg>';
+
+// Si trascina dalla maniglia, non da tutta la voce: dentro ci sono descrizione e
+// prezzi, e prendere il testo col mouse deve restare prendere il testo.
+let VOCE_TRASCINATA = null;
+
+function iniziaTrascinaVoce(e, i) {
+  VOCE_TRASCINATA = i;
+  e.dataTransfer.effectAllowed = 'move';
+  e.dataTransfer.setData('text/plain', String(i));
+  const tb = e.target.closest('tbody.voce');
+  if (tb) {
+    e.dataTransfer.setDragImage(tb.querySelector('tr.testa-voce') || tb, 20, 20);
+    setTimeout(() => tb.classList.add('trascinata'), 0);
+  }
+}
+
+function fineTrascinaVoce() {
+  VOCE_TRASCINATA = null;
+  document.querySelectorAll('#pagina-preventivo tbody.voce').forEach(tb =>
+    tb.classList.remove('trascinata', 'prima-qui', 'dopo-qui'));
+}
+
+// Sopra la metà alta di una voce si cade prima di lei, sulla metà bassa dopo.
+function dovePosaVoce(e, tb) {
+  const r = tb.getBoundingClientRect();
+  return e.clientY < r.top + r.height / 2 ? 'prima' : 'dopo';
+}
+
+function sopraVoce(e, i) {
+  if (VOCE_TRASCINATA == null) return;
+  e.preventDefault();
+  e.dataTransfer.dropEffect = 'move';
+  const tb = e.currentTarget;
+  const dove = dovePosaVoce(e, tb);
+  document.querySelectorAll('#pagina-preventivo tbody.voce').forEach(x => {
+    x.classList.toggle('prima-qui', x === tb && dove === 'prima');
+    x.classList.toggle('dopo-qui', x === tb && dove === 'dopo');
+  });
+}
+
+function lasciaSuVoce(e, i) {
+  if (VOCE_TRASCINATA == null) return;
+  e.preventDefault();
+  const da = VOCE_TRASCINATA;
+  const dove = dovePosaVoce(e, e.currentTarget);
+  fineTrascinaVoce();
+  spostaVoceA(da, dove === 'prima' ? i : i + 1);
+}
+
+// Porta la voce `da` al posto `a` (contato prima di toglierla), coi componenti che
+// ha dentro. La voce scelta per le frasi la segue.
+function spostaVoceA(da, a) {
+  const righe = PREVENTIVO && PREVENTIVO.doc.righe;
+  if (!righe || !righe[da]) return;
+  const scelta = FRASE_DOVE != null ? righe[FRASE_DOVE] : null;
+  const [riga] = righe.splice(da, 1);
+  const dove = Math.max(0, Math.min(righe.length, a > da ? a - 1 : a));
+  righe.splice(dove, 0, riga);
+  if (scelta) FRASE_DOVE = righe.indexOf(scelta);
+  if (dove !== da) disegnaPreventivo();
+}
+
+// Dalla tastiera la maniglia si sposta con le frecce, e resta sotto le dita.
+function tastoManiglia(e, i) {
+  const verso = e.key === 'ArrowUp' ? -1 : e.key === 'ArrowDown' ? 1 : 0;
+  if (!verso) return;
+  e.preventDefault();
+  const j = i + verso;
+  if (j < 0 || j >= PREVENTIVO.doc.righe.length) return;
+  spostaRigaPreventivo(i, verso);
+  const m = document.querySelector('#pagina-preventivo button.maniglia[data-riga="' + j + '"]');
+  if (m) m.focus();
+}
+
+// «Siepe nuda o con telo»: si scrive la voce una volta, e la si copia come
+// alternativa. Le soluzioni si creavano in fondo alla pagina, e poi ogni voce
+// andava assegnata col suo menù: tre passaggi lontani dalla voce. Adesso la copia
+// nasce sotto l'originale, in una soluzione sua; l'originale, se era comune, va
+// nella prima — o il cliente pagherebbe le due cose insieme. I nomi si danno in
+// fondo, in «Soluzioni alternative», e il menù «Solo in…» resta per spostare le
+// altre voci di una variante.
+function alternativaDaVoce(i) {
+  const d = PREVENTIVO && PREVENTIVO.doc;
+  const r = d && d.righe[i];
+  if (!r || r.tipo === 'sezione' || r.tipo === 'tariffa') return;
+  if (!Array.isArray(d.soluzioni)) d.soluzioni = [];
+  const nuova = () => {
+    const n = d.soluzioni.length + 1;
+    const sol = { id: 'sol' + Date.now().toString(36) + n, nome: 'Soluzione ' + n };
+    d.soluzioni.push(sol);
+    return sol;
+  };
+  if (!r.soluzione || !d.soluzioni.some(x => x.id === r.soluzione)) r.soluzione = (d.soluzioni[0] || nuova()).id;
+  const sol = nuova();
+  // Una copia dell'ufficio: senza la chiave del campo, o rifacendo il preventivo
+  // da un rilievo corretto la si scambierebbe per la riga originale.
+  const copia = JSON.parse(JSON.stringify(r));
+  copia.chiave = '';
+  copia.soluzione = sol.id;
+  d.righe.splice(i + 1, 0, copia);
+  if (FRASE_DOVE != null && FRASE_DOVE > i) FRASE_DOVE++;
+  if (PREVENTIVO.aperta === r) PREVENTIVO.aperta = copia;
+  const prima = d.soluzioni.find(x => x.id === r.soluzione);
+  avvisa('Copiata come «' + sol.nome + '», alternativa a «' + (prima ? prima.nome : '') + '»: i nomi si danno in fondo');
   disegnaPreventivo();
 }
 
@@ -6021,21 +6162,16 @@ function disegnaPreventivo() {
   html += '</div>';
 
   // «Siepe nuda o con telo e porfido»: due varianti dello stesso lavoro con due
-  // totali che si escludono. Quasi nessun preventivo ne ha, quindi il bottone
-  // resta e il resto compare solo quando servono.
-  // Si aprono quando servono, e restano come le si è lasciate: la schermata si
-  // ridisegna a ogni conferma, e un riquadro che si richiude da solo fa perdere il
-  // segno.
-  const aperto = k => (SCHEDE_APERTE_PREVENTIVO.has(k) ? ' open' : '');
+  // totali che si escludono.
   const ricorda = k => ' ontoggle="ricordaSchedaPreventivo(\'' + k + '\', this.open)"';
-  html += '<details class="scheda"' + (soluzioni.length ? ' open' : aperto('soluzioni')) + ricorda('soluzioni') + '>' +
-    '<summary class="titolo-sezione">Soluzioni alternative' +
-    (soluzioni.length ? ' <span class="meta">· ' + soluzioni.length + '</span>' : '') + '</summary>';
-  if (!soluzioni.length) {
-    html += '<p class="sottotitolo" style="margin:0 0 10px">Due varianti dello stesso lavoro, ' +
-      'ognuna col suo totale: il cliente ne sceglie una. Le righe che restano comuni entrano ' +
-      'nel totale di tutte.</p>';
-  } else {
+  // Le soluzioni nascono dal ⧉ di una voce; qui si danno i nomi e si tolgono.
+  // Senza alternative il riquadro non c'è: era un bottone in più in fondo alla
+  // pagina, per una cosa che si fa da un'altra parte.
+  if (soluzioni.length) {
+    html += '<details class="scheda" open' + ricorda('soluzioni') + '>' +
+      '<summary class="titolo-sezione">Soluzioni alternative <span class="meta">· ' + soluzioni.length + '</span></summary>' +
+      '<p class="sottotitolo" style="margin:0 0 10px">Il cliente ne sceglie una. Le voci comuni entrano nel totale di tutte; ' +
+      'il ⧉ di una voce ne fa un\'altra alternativa.</p>';
     html += '<table class="elenco"><tbody>';
     soluzioni.forEach(sol => {
       const quante = d.righe.filter(r => r.soluzione === sol.id).length;
@@ -6046,9 +6182,9 @@ function disegnaPreventivo() {
           'title="Togli">✕</button></td></tr>';
     });
     html += '</tbody></table>';
+    html += '<button class="secondaria" onclick="aggiungiSoluzione()">+ Una soluzione vuota</button>';
+    html += '</details>';
   }
-  html += '<button class="secondaria" onclick="aggiungiSoluzione()">+ Aggiungi una soluzione</button>';
-  html += '</details>';
 
   html += '<div class="scheda"><div class="titolo-sezione">Note sul preventivo</div>' +
     '<textarea rows="3" oninput="PREVENTIVO.doc.note = this.value">' + perValore(d.note) + '</textarea>' +
